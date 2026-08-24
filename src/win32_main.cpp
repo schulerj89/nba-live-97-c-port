@@ -317,6 +317,14 @@ private:
         for (const char* tag : common) load_one(tag);
         if (rosters) {
             load_one("ba24");
+            load_one("ba35");
+            load_one("dflt");
+            static constexpr const char* team_logos[] = {
+                "atlR","bosR","chaR","chiR","cleR","dalR","denR","detR","golR","houR",
+                "indR","lacR","lalR","miaR","milR","minR","nwjR","nwyR","orlR","phiR",
+                "phoR","porR","sacR","sanR","seaR","torR","utaR","vanR","wasR"
+            };
+            for (const char* tag : team_logos) load_one(tag);
             for (int i = 0; i < 16; ++i) {
                 char tag[8]{};
                 sprintf_s(tag, "c%02dd", i);
@@ -408,6 +416,27 @@ private:
             recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
         if (roster_a.rgba == roster_b.rgba || recovered_menu.count() != 8)
             throw std::runtime_error("Rosters original-card navigation self-test failed");
+        nba97::RosterViewer roster_viewer_test;
+        roster_viewer_test.open(roster_database_);
+        const auto view_a = nba97::renderRosterViewer(
+            roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
+        if (!roster_viewer_test.move(1, 0, roster_database_) ||
+            roster_viewer_test.teamIndex() != 1 ||
+            !roster_viewer_test.move(0, 1, roster_database_) ||
+            roster_viewer_test.playerIndex() != 1)
+            throw std::runtime_error("View Rosters team/player navigation self-test failed");
+        roster_viewer_test.activate(roster_database_);
+        const auto view_b = nba97::renderRosterViewer(
+            roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 137);
+        if (roster_viewer_test.mode() != nba97::RosterViewMode::PlayerCard ||
+            view_a.rgba == view_b.rgba || !roster_viewer_test.back())
+            throw std::runtime_error("View Rosters player-card self-test failed");
+        roster_viewer_test.activate(roster_database_);
+        if (!roster_viewer_test.move(0, 1, roster_database_) ||
+            roster_viewer_test.detailPage() != 1 ||
+            nba97::renderRosterViewer(roster_viewer_test, roster_database_, menu_font_,
+                                      roster_sprites_, 0).rgba == view_b.rgba)
+            throw std::runtime_error("View Rosters all-ratings page self-test failed");
         recovered_menu.open(nba97::FrontendPage::Card);
         const auto card_a = nba97::renderRecoveredBottomMenu(
             recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
@@ -465,7 +494,7 @@ private:
             throw std::runtime_error("profile generation/update self-test failed");
         std::filesystem::remove(profile_test_path, cleanup_error);
         std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
-        trace_.log("SELF-TEST", "PASS: boot, menus/settings, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
+        trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters/player cards, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
         return 0;
     }
 
@@ -516,10 +545,14 @@ private:
             if ((static_cast<std::uintptr_t>(lparam) & (1u << 30)) != 0) return 0;
             if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                 frontend_page_ != nba97::FrontendPage::GameSetup &&
-                frontend_page_ != nba97::FrontendPage::ProfileSetup)
+                frontend_page_ != nba97::FrontendPage::ProfileSetup &&
+                frontend_page_ != nba97::FrontendPage::ViewRosters)
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      frontend_page_ == nba97::FrontendPage::ProfileSetup)
+                handleMenuKey(wparam);
+            else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
+                     frontend_page_ == nba97::FrontendPage::ViewRosters)
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE) DestroyWindow(window_);
             else if (wparam == VK_SPACE && intro_player_.isPlaying())
@@ -552,6 +585,14 @@ private:
                 else if (frontend_page_ == nba97::FrontendPage::Rules ||
                          frontend_page_ == nba97::FrontendPage::Options)
                     adjustSetting(GET_X_LPARAM(lparam) < 512 ? -1 : 1);
+                else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
+                    roster_viewer_.activate(roster_database_);
+                    logRosterViewFocus("mouse activation");
+                    rebuildMenuFrame();
+                    InvalidateRect(window_, nullptr, FALSE);
+                }
+                else if (frontend_page_ == nba97::FrontendPage::Rosters)
+                    activateRecoveredBottomSelection();
                 else
                     trace_.log("MENU-BLOCK", std::string(bottom_menu_.selectedLabel()) +
                                              " child flow not yet decompiled");
@@ -729,6 +770,10 @@ private:
             handleProfileKey(key);
             return;
         }
+        if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
+            handleRosterViewKey(key);
+            return;
+        }
         if (frontend_page_ != nba97::FrontendPage::GameSetup &&
             frontend_page_ != nba97::FrontendPage::Rules &&
             frontend_page_ != nba97::FrontendPage::Options) {
@@ -741,13 +786,7 @@ private:
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
                 return;
             } else if (key == VK_RETURN || key == VK_SPACE) {
-                if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 0) {
-                    const auto* team = roster_database_.team(0);
-                    trace_.log("ROSTER-QUERY", team ? team->city + " " + team->nickname +
-                        " roster=" + std::to_string(team->roster.size()) : "team 0 unavailable");
-                }
-                trace_.log("MENU-BLOCK", std::string(bottom_menu_.selectedLabel()) +
-                                         " child flow not yet decompiled");
+                activateRecoveredBottomSelection();
                 return;
             }
             if (changed) {
@@ -787,6 +826,55 @@ private:
         if (changed) {
             trace_.log("MENU-HOVER", std::string(menu_.row() == nba97::MenuRow::GameOptions
                                       ? "option=" : "button=") + menu_.selectedLabel());
+            rebuildMenuFrame();
+            InvalidateRect(window_, nullptr, FALSE);
+        }
+    }
+
+    void activateRecoveredBottomSelection() {
+        if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 4) {
+            beginFrontendTransition(nba97::FrontendPage::ViewRosters,
+                "view rosters selected; FUN_80057CE4 return=6 pushes state 0x10 FUN_800592C4");
+            return;
+        }
+        trace_.log("MENU-BLOCK", std::string(bottom_menu_.selectedLabel()) +
+                                 " child flow not yet decompiled");
+    }
+
+    void logRosterViewFocus(const char* reason) {
+        const auto* team = roster_viewer_.selectedTeam(roster_database_);
+        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
+        trace_.log(roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster
+                       ? "ROSTER-FOCUS" : "PLAYER-CARD",
+            std::string(reason) + "; team=" +
+            (team ? team->city + " " + team->nickname : "<none>") +
+            " player=" + (player ? player->displayName() : "<none>") +
+            (player ? " id=" + std::to_string(player->id) + " number=" +
+                std::to_string(player->jersey_number) + " position=" +
+                nba97::positionName(player->position) : ""));
+    }
+
+    void handleRosterViewKey(WPARAM key) {
+        bool changed = false;
+        if (key == VK_LEFT) changed = roster_viewer_.move(-1, 0, roster_database_);
+        else if (key == VK_RIGHT) changed = roster_viewer_.move(1, 0, roster_database_);
+        else if (key == VK_UP) changed = roster_viewer_.move(0, -1, roster_database_);
+        else if (key == VK_DOWN) changed = roster_viewer_.move(0, 1, roster_database_);
+        else if (key == VK_RETURN || key == VK_SPACE) {
+            roster_viewer_.activate(roster_database_);
+            changed = true;
+        } else if (key == VK_ESCAPE || key == VK_BACK) {
+            if (roster_viewer_.back()) {
+                trace_.log("ROSTER-BACK", "player card -> team roster");
+                changed = true;
+            } else {
+                beginFrontendTransition(nba97::FrontendPage::Rosters,
+                                        "View Rosters back input");
+                return;
+            }
+        }
+        if (changed) {
+            logRosterViewFocus(key == VK_RETURN || key == VK_SPACE ? "player view" : "navigation");
             rebuildMenuFrame();
             InvalidateRect(window_, nullptr, FALSE);
         }
@@ -861,6 +949,9 @@ private:
                    frontend_page_ == nba97::FrontendPage::Options) {
             if (!settings_menu_.hover(psx_x, psx_y)) return;
             trace_.log("SETTINGS-FOCUS", settings_menu_.selectedLabel());
+        } else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
+            if (!roster_viewer_.hover(psx_x, psx_y, roster_database_)) return;
+            logRosterViewFocus("mouse hover");
         } else {
             if (!bottom_menu_.hover(psx_x, psx_y)) return;
             trace_.log("SUBMENU-FOCUS", bottom_menu_.selectedLabel());
@@ -876,6 +967,9 @@ private:
         else if (frontend_page_ == nba97::FrontendPage::ProfileSetup)
             menu_frame_ = makeFrame(nba97::renderUserProfileSetup(
                 profile_menu_, profile_store_, menu_font_, menu_sprites_, menu_elapsed_ms_));
+        else if (frontend_page_ == nba97::FrontendPage::ViewRosters)
+            menu_frame_ = makeFrame(nba97::renderRosterViewer(
+                roster_viewer_, roster_database_, menu_font_, roster_sprites_, menu_elapsed_ms_));
         else if (frontend_page_ == nba97::FrontendPage::Rules ||
                  frontend_page_ == nba97::FrontendPage::Options)
             menu_frame_ = makeFrame(nba97::renderSettingsMenu(
@@ -891,6 +985,7 @@ private:
         if (page == nba97::FrontendPage::ProfileSetup) return "User Setup";
         if (page == nba97::FrontendPage::Options) return "Options";
         if (page == nba97::FrontendPage::Rosters) return "Rosters";
+        if (page == nba97::FrontendPage::ViewRosters) return "View Rosters";
         if (page == nba97::FrontendPage::Users) return "Users";
         if (page == nba97::FrontendPage::Card) return "Memory Card";
         return "Game Setup";
@@ -918,19 +1013,29 @@ private:
     void beginFrontendTransition(nba97::FrontendPage target, const std::string& reason) {
         if (frontend_transition_active_ || target == frontend_page_) return;
         transition_source_ = menu_frame_;
+        const auto previous_page = frontend_page_;
         frontend_page_ = target;
         if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
+        else if (target == nba97::FrontendPage::ViewRosters) {
+            roster_viewer_.open(roster_database_);
+            logRosterViewFocus("FUN_800592C4 restored selection");
+        }
         else if (target == nba97::FrontendPage::Rules || target == nba97::FrontendPage::Options)
             settings_menu_.open(target);
-        else if (target != nba97::FrontendPage::GameSetup)
+        else if (target != nba97::FrontendPage::GameSetup) {
             bottom_menu_.open(target);
+            if (target == nba97::FrontendPage::Rosters &&
+                previous_page == nba97::FrontendPage::ViewRosters)
+                bottom_menu_.setSelected(4);
+        }
         rebuildMenuFrame();
         frontend_transition_tick_ = GetTickCount();
         frontend_transition_active_ = true;
         transition_frame_ = transition_source_;
         trace_.log("TRANSITION", reason + "; recovered FE state=" +
             std::to_string(target == nba97::FrontendPage::ProfileSetup ? 0x37010 :
+                           target == nba97::FrontendPage::ViewRosters ? 0x10 :
                            target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
@@ -972,6 +1077,7 @@ private:
     nba97::FrontendSettings settings_;
     nba97::SettingsMenu settings_menu_;
     nba97::RecoveredBottomMenu bottom_menu_;
+    nba97::RosterViewer roster_viewer_;
     nba97::RosterDatabase roster_database_;
     nba97::UserProfileStore profile_store_;
     nba97::UserProfileMenu profile_menu_;

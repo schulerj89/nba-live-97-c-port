@@ -13,6 +13,7 @@ enum class FrontendPage : std::uint8_t {
     Rules,
     Options,
     Rosters,
+    ViewRosters,
     Users,
     Card
 };

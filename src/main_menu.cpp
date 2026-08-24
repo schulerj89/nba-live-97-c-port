@@ -489,6 +489,10 @@ void RecoveredBottomMenu::open(FrontendPage page) noexcept {
     selected_ = 0;
 }
 
+void RecoveredBottomMenu::setSelected(int selected) noexcept {
+    selected_ = std::clamp(selected, 0, count() - 1);
+}
+
 int RecoveredBottomMenu::count() const noexcept {
     if (page_ == FrontendPage::Rosters) return 8;
     if (page_ == FrontendPage::Card) return 3;
@@ -531,6 +535,83 @@ bool RecoveredBottomMenu::hover(int psx_x, int psx_y) noexcept {
     const bool changed = candidate != selected_;
     selected_ = candidate;
     return changed;
+}
+
+void RosterViewer::clamp(const RosterDatabase& database) noexcept {
+    if (database.teams().empty()) { team_index_ = player_index_ = 0; return; }
+    team_index_ = (std::min)(team_index_, database.teams().size() - 1);
+    const auto& roster = database.teams()[team_index_].roster;
+    player_index_ = roster.empty() ? 0 : (std::min)(player_index_, roster.size() - 1);
+}
+
+void RosterViewer::open(const RosterDatabase& database) noexcept {
+    mode_ = RosterViewMode::TeamRoster;
+    detail_page_ = 0;
+    clamp(database);
+}
+
+const TeamRecord* RosterViewer::selectedTeam(const RosterDatabase& database) const noexcept {
+    return team_index_ < database.teams().size() ? &database.teams()[team_index_] : nullptr;
+}
+
+const PlayerRecord* RosterViewer::selectedPlayer(const RosterDatabase& database) const noexcept {
+    const TeamRecord* team = selectedTeam(database);
+    return team && player_index_ < team->roster.size()
+        ? database.player(team->roster[player_index_]) : nullptr;
+}
+
+bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& database) noexcept {
+    if (database.teams().empty()) return false;
+    const std::size_t previous_team = team_index_;
+    const std::size_t previous_player = player_index_;
+    const int previous_detail_page = detail_page_;
+    if (mode_ == RosterViewMode::TeamRoster && horizontal) {
+        if (horizontal < 0) team_index_ = team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1;
+        else team_index_ = (team_index_ + 1) % database.teams().size();
+        player_index_ = 0;
+    } else {
+        const TeamRecord* team = selectedTeam(database);
+        if (team && !team->roster.empty()) {
+            const int direction = mode_ == RosterViewMode::PlayerCard ? horizontal : vertical;
+            if (direction < 0)
+                player_index_ = player_index_ == 0 ? team->roster.size() - 1 : player_index_ - 1;
+            else if (direction > 0)
+                player_index_ = (player_index_ + 1) % team->roster.size();
+        }
+        if (mode_ == RosterViewMode::PlayerCard && vertical)
+            detail_page_ = detail_page_ == 0 ? 1 : 0;
+    }
+    clamp(database);
+    return previous_team != team_index_ || previous_player != player_index_ ||
+           previous_detail_page != detail_page_;
+}
+
+bool RosterViewer::hover(int psx_x, int psx_y, const RosterDatabase& database) noexcept {
+    if (mode_ != RosterViewMode::TeamRoster) return false;
+    if (psx_y >= 72 && psx_y < 198 && psx_x >= 151) {
+        const TeamRecord* team = selectedTeam(database);
+        if (!team || team->roster.empty()) return false;
+        const std::size_t first = player_index_ >= 12 ? player_index_ - 11 : 0;
+        const std::size_t candidate = (std::min)(team->roster.size() - 1,
+            first + static_cast<std::size_t>((psx_y - 72) / 10));
+        const bool changed = candidate != player_index_;
+        player_index_ = candidate;
+        return changed;
+    }
+    return false;
+}
+
+void RosterViewer::activate(const RosterDatabase& database) noexcept {
+    if (!selectedPlayer(database)) return;
+    if (mode_ == RosterViewMode::PlayerCard) detail_page_ = detail_page_ == 0 ? 1 : 0;
+    else { mode_ = RosterViewMode::PlayerCard; detail_page_ = 0; }
+}
+
+bool RosterViewer::back() noexcept {
+    if (mode_ != RosterViewMode::PlayerCard) return false;
+    mode_ = RosterViewMode::TeamRoster;
+    detail_page_ = 0;
+    return true;
 }
 
 PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
@@ -643,6 +724,118 @@ PshImage renderUserProfileSetup(const UserProfileMenu& menu,
     else
         drawCenteredText(image, font, std::to_string(profiles.size()) + " / 20 users", 256, 218,
                          1, 210, 210, 60, false, 0, 72);
+    return image;
+}
+
+PshImage renderRosterViewer(const RosterViewer& viewer,
+                            const RosterDatabase& database,
+                            const PshFont& font,
+                            const MenuSpritePack& sprites,
+                            std::uint32_t elapsed_ms) {
+    PshImage image;
+    image.width = kWidth;
+    image.height = kHeight;
+    image.tag = viewer.mode() == RosterViewMode::TeamRoster ? "VROS" : "PLCR";
+    image.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+    blitAt(image, sprites, "Bkge", 0, 0);
+    blitAt(image, sprites, "Bkgf", 128, 0);
+    blitAt(image, sprites, "Bkgg", 256, 0);
+    blitAt(image, sprites, "Bkgh", 384, 0);
+    for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}})
+        blitBlueBorder(image, sprites, std::get<0>(border), std::get<1>(border), std::get<2>(border));
+    blitAt(image, sprites, "XXL1", 30, 16);
+    blitAt(image, sprites, "XXR2", 404, 16);
+    blitAt(image, sprites, "ba35", 153, 10);
+
+    const TeamRecord* team = viewer.selectedTeam(database);
+    const PlayerRecord* selected = viewer.selectedPlayer(database);
+    if (!team) return image;
+    static constexpr std::array<const char*, 29> logo_tags{
+        "atlR","bosR","chaR","chiR","cleR","dalR","denR","detR","golR","houR",
+        "indR","lacR","lalR","miaR","milR","minR","nwjR","nwyR","orlR","phiR",
+        "phoR","porR","sacR","sanR","seaR","torR","utaR","vanR","wasR"};
+    if (team->id < logo_tags.size()) blitAt(image, sprites, logo_tags[team->id], 25, 68);
+    drawCenteredText(image, font, team->city, 78, 146, 1, 235, 235, 235, false, 0, 68);
+    drawCenteredText(image, font, team->nickname, 78, 159, 1, 255, 218, 35,
+                     true, elapsed_ms, 68);
+    drawCenteredText(image, font, "<  team  >", 78, 181, 1, 185, 190, 215, false, 0, 68);
+
+    if (viewer.mode() == RosterViewMode::TeamRoster) {
+        drawText(image, font, "#", 159, 66, 1, 205, 205, 220, false, 0, 70);
+        drawText(image, font, "player", 184, 66, 1, 205, 205, 220, false, 0, 70);
+        drawText(image, font, "position", 388, 66, 1, 205, 205, 220, false, 0, 60);
+        const std::size_t first = viewer.playerIndex() >= 12 ? viewer.playerIndex() - 11 : 0;
+        const std::size_t end = (std::min)(team->roster.size(), first + 12);
+        for (std::size_t index = first; index < end; ++index) {
+            const std::size_t row = index - first;
+            const PlayerRecord* player = database.player(team->roster[index]);
+            if (!player) continue;
+            const bool focused = index == viewer.playerIndex();
+            const int y = 78 + static_cast<int>(row) * 10;
+            const int jiggle = focused ? static_cast<int>(std::lround(
+                std::sin(elapsed_ms * 0.014) * 1.0)) : 0;
+            const std::uint8_t r = focused ? 255 : 215;
+            const std::uint8_t g = focused ? 218 : 215;
+            const std::uint8_t b = focused ? 35 : 215;
+            drawText(image, font, focused ? ">" : " ", 148 + jiggle, y, 1, r, g, b);
+            drawText(image, font, std::to_string(player->jersey_number), 162 + jiggle, y, 1, r, g, b,
+                     false, 0, 66);
+            drawText(image, font, player->displayName(), 184 + jiggle, y, 1, r, g, b,
+                     focused, elapsed_ms, 62);
+            drawText(image, font, positionName(player->position), 388 + jiggle, y, 1, r, g, b,
+                     false, 0, 48);
+        }
+        drawCenteredText(image, font, "arrows browse   enter view player   back return", 256, 220,
+                         1, 205, 205, 90, false, 0, 58);
+    } else if (selected && viewer.detailPage() == 0) {
+        blitAt(image, sprites, "dflt", 181, 72);
+        drawText(image, font, selected->displayName(), 283, 78, 1, 255, 218, 35,
+                 true, elapsed_ms, 68);
+        drawText(image, font, "number", 283, 92, 1, 190, 190, 205, false, 0, 64);
+        drawText(image, font, std::to_string(selected->jersey_number), 380, 92, 1, 235, 235, 235);
+        drawText(image, font, "position", 283, 104, 1, 190, 190, 205, false, 0, 64);
+        drawText(image, font, positionName(selected->position), 380, 104, 1, 235, 235, 235, false, 0, 54);
+        drawText(image, font, "height", 283, 116, 1, 190, 190, 205, false, 0, 64);
+        drawText(image, font, std::to_string(selected->height_inches / 12) + "'" +
+                 std::to_string(selected->height_inches % 12) + "\"", 380, 116, 1, 235, 235, 235);
+        drawText(image, font, "weight", 283, 128, 1, 190, 190, 205, false, 0, 64);
+        drawText(image, font, std::to_string(selected->weightPounds()) + " lbs", 380, 128, 1, 235, 235, 235);
+        drawText(image, font, "birthdate", 181, 151, 1, 190, 190, 205, false, 0, 62);
+        drawText(image, font, selected->birthdate, 277, 151, 1, 235, 235, 235, false, 0, 58);
+        drawText(image, font, "birthplace", 181, 164, 1, 190, 190, 205, false, 0, 62);
+        drawText(image, font, selected->birthplace, 277, 164, 1, 235, 235, 235, false, 0, 52);
+        for (int rating = 0; rating < 6; ++rating) {
+            const int column = rating / 3;
+            const int row = rating % 3;
+            const auto value = selected->ratings[static_cast<std::size_t>(rating)];
+            const int x = 175 + column * 155;
+            const int y = 180 + row * 10;
+            drawText(image, font, playerRatingName(static_cast<PlayerRating>(rating)), x, y, 1,
+                     185, 185, 200, false, 0, 42);
+            drawText(image, font, std::to_string(value), x + 116, y, 1, 245, 215, 45);
+        }
+        drawCenteredText(image, font, "left right player   up down ratings   back roster", 256, 220,
+                         1, 205, 205, 90, false, 0, 62);
+    } else if (selected) {
+        drawCenteredText(image, font, selected->displayName(), 256, 70, 1, 255, 218, 35,
+                         true, elapsed_ms, 68);
+        drawCenteredText(image, font, "player ratings", 256, 84, 1, 205, 205, 220, false, 0, 68);
+        for (int rating = 0; rating < static_cast<int>(PlayerRating::Count); ++rating) {
+            const int column = rating / 9;
+            const int row = rating % 9;
+            const int x = 105 + column * 205;
+            const int y = 99 + row * 12;
+            drawText(image, font, playerRatingName(static_cast<PlayerRating>(rating)), x, y, 1,
+                     205, 205, 215, false, 0, 48);
+            drawText(image, font, std::to_string(selected->ratings[static_cast<std::size_t>(rating)]),
+                     x + 158, y, 1, 255, 218, 35);
+        }
+        drawCenteredText(image, font, "left right player   up down bio   back roster", 256, 220,
+                         1, 205, 205, 90, false, 0, 62);
+    }
     return image;
 }
 

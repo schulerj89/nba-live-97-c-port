@@ -64,7 +64,15 @@ bottom-menu roots are now recovered too: Rosters opens frontend state 9 with
 all eight original `ZSET4.PSP` normal/highlight cards, and Card opens state 11
 with the three original `ZSET1.PSP` memory-card choices. Arrow keys and mouse
 hover change their highlighted cards; their deeper child flows remain outside
-this slice.
+this slice except View Rosters. View Rosters follows the recovered card-4
+return code into frontend state `0x10` (`FUN_800592C4`), preserves its team and
+player selections, and uses the original `ZSET4.PSP` Team Rosters heading and
+all 29 team-art sprites. Left/right wraps through teams, up/down browses a
+scrolling 15-slot-capable roster, mouse hover selects rows, and Enter opens a
+player card. The card exposes biography/physical data and all 17 source ratings
+from the private external roster database; left/right changes players and
+up/down or Enter switches biography/ratings. It is read-only and performs no
+roster mutations.
 
 The original first-boot Users rule is preserved. `0x8005CD88` scans twenty
 0x6c-byte profile records; byte +0x5d is the first byte of the trailing user
@@ -152,6 +160,8 @@ headless Ghidra analysis:
   the engine's 0-127 volume
 - `0x8005770C` resolves 15 roster IDs per team into `0x68`-byte team records
 - `0x8005FE14` maps original player IDs below `0x1ed` through the player index
+- `0x800592C4` restores the View Rosters team/list position and
+  `0x800590B8` constructs its recovered state-`0x10` browser
 
 Extract the private boot, frontend, font, and menu asset packs and build:
 

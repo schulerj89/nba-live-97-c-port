@@ -3,6 +3,7 @@
 #include "psh_font.hpp"
 #include "psh_image.hpp"
 #include "frontend_settings.hpp"
+#include "roster_database.hpp"
 #include "user_profiles.hpp"
 
 #include <cstdint>
@@ -37,6 +38,7 @@ private:
 class RecoveredBottomMenu final {
 public:
     void open(FrontendPage page) noexcept;
+    void setSelected(int selected) noexcept;
     bool move(int horizontal, int vertical) noexcept;
     bool hover(int psx_x, int psx_y) noexcept;
 
@@ -48,6 +50,31 @@ public:
 private:
     FrontendPage page_ = FrontendPage::Rosters;
     int selected_ = 0;
+};
+
+enum class RosterViewMode : std::uint8_t { TeamRoster, PlayerCard };
+
+class RosterViewer final {
+public:
+    void open(const RosterDatabase& database) noexcept;
+    bool move(int horizontal, int vertical, const RosterDatabase& database) noexcept;
+    bool hover(int psx_x, int psx_y, const RosterDatabase& database) noexcept;
+    void activate(const RosterDatabase& database) noexcept;
+    bool back() noexcept;
+
+    [[nodiscard]] RosterViewMode mode() const noexcept { return mode_; }
+    [[nodiscard]] std::size_t teamIndex() const noexcept { return team_index_; }
+    [[nodiscard]] std::size_t playerIndex() const noexcept { return player_index_; }
+    [[nodiscard]] int detailPage() const noexcept { return detail_page_; }
+    [[nodiscard]] const TeamRecord* selectedTeam(const RosterDatabase& database) const noexcept;
+    [[nodiscard]] const PlayerRecord* selectedPlayer(const RosterDatabase& database) const noexcept;
+
+private:
+    void clamp(const RosterDatabase& database) noexcept;
+    RosterViewMode mode_ = RosterViewMode::TeamRoster;
+    std::size_t team_index_ = 0;
+    std::size_t player_index_ = 0;
+    int detail_page_ = 0;
 };
 
 using MenuSpritePack = std::unordered_map<std::string, PshImage>;
@@ -76,5 +103,11 @@ PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const PshFont& font,
                                 const MenuSpritePack& sprites,
                                 std::uint32_t elapsed_ms);
+
+PshImage renderRosterViewer(const RosterViewer& viewer,
+                            const RosterDatabase& database,
+                            const PshFont& font,
+                            const MenuSpritePack& sprites,
+                            std::uint32_t elapsed_ms);
 
 } // namespace nba97
