@@ -1,0 +1,17 @@
+# Local copyrighted inputs and all files derived directly from them.
+.local/
+
+# Local tool installations and build products.
+build/
+build-*/
+out/
+.cache/
+log.txt
+
+# IDE and operating-system files.
+.vs/
+.vscode/
+.idea/
+*.user
+Thumbs.db
+.DS_Store

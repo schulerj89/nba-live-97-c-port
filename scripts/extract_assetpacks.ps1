@@ -1,0 +1,44 @@
+param(
+    [string]$DiscImage
+)
+$ErrorActionPreference = 'Stop'
+$repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if (-not $DiscImage) {
+    $DiscImage = Join-Path $repo '.local\input\nba-live-97-slus-00267.bin'
+}
+if (-not (Test-Path -LiteralPath $DiscImage)) { throw "Missing private disc image: $DiscImage" }
+
+$boot = Join-Path $repo '.local\assetpacks\boot'
+$frontend = Join-Path $repo '.local\assetpacks\frontend'
+$fonts = Join-Path $repo '.local\assetpacks\fonts'
+$menu = Join-Path $repo '.local\assetpacks\menu'
+New-Item -ItemType Directory -Force -Path $boot, $frontend, $fonts, $menu | Out-Null
+$extractor = Join-Path $repo 'tools\extract_raw_cd_file.py'
+python $extractor $DiscImage (Join-Path $boot 'ZLOADSCR.PSH') --lba 249235 --size 245812
+python $extractor $DiscImage (Join-Path $boot 'ZLOADING.PSH') --lba 249232 --size 5784
+python $extractor $DiscImage (Join-Path $frontend 'ZLEGAL.PSH') --lba 249114 --size 123460
+python $extractor $DiscImage (Join-Path $frontend 'ZCPYRT97.PSH') --lba 235008 --size 245812
+python $extractor $DiscImage (Join-Path $fonts 'ZFONT0.PSH') --lba 249009 --size 33016
+python $extractor $DiscImage (Join-Path $fonts 'ZFONT1.PSH') --lba 249026 --size 31704
+python $extractor $DiscImage (Join-Path $fonts 'ZFONT2.PSH') --lba 249042 --size 38256
+python $extractor $DiscImage (Join-Path $menu 'ZFEMOCAP.BIN') --lba 248918 --size 22188
+python $extractor $DiscImage (Join-Path $menu 'ZFEMODEL.BIN') --lba 248929 --size 44288
+python $extractor $DiscImage (Join-Path $menu 'ZFEPLAYR.ART') --lba 248951 --size 73984
+python $extractor $DiscImage (Join-Path $menu 'ZLOGOS.PSH') --lba 249370 --size 99848
+python $extractor $DiscImage (Join-Path $menu 'ZTMPAL.PSH') --lba 267022 --size 21544
+python $extractor $DiscImage (Join-Path $menu 'ZBPAL.PSH') --lba 234694 --size 17264
+python $extractor $DiscImage (Join-Path $menu 'ZCARD.BIN') --lba 234703 --size 474240
+python $extractor $DiscImage (Join-Path $menu 'ZTMENU1.CNK') --lba 252406 --size 8522396
+python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 342448
+python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
+python $extractor $DiscImage (Join-Path $menu 'ZSET7.PSP') --lba 252102 --size 323444
+if ($LASTEXITCODE -ne 0) { throw 'Private asset extraction failed.' }
+& (Join-Path $PSScriptRoot 'decode_menu_assets.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET4
+if ($LASTEXITCODE -ne 0) { throw 'Private Rosters sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET7
+if ($LASTEXITCODE -ne 0) { throw 'Private Users sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_card_assets.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup card decoding failed.' }
+Write-Host 'Created local-only boot, frontend, font, and Game Setup asset packs from the original disc.'
