@@ -9,6 +9,7 @@ namespace nba97 {
 
 enum class FrontendPage : std::uint8_t {
     GameSetup,
+    ProfileSetup,
     Rules,
     Options,
     Rosters,

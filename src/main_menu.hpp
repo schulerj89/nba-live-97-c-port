@@ -3,6 +3,7 @@
 #include "psh_font.hpp"
 #include "psh_image.hpp"
 #include "frontend_settings.hpp"
+#include "user_profiles.hpp"
 
 #include <cstdint>
 #include <array>
@@ -69,5 +70,11 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    const MenuSpritePack& zset4,
                                    const MenuSpritePack& zset7,
                                    std::uint32_t elapsed_ms);
+
+PshImage renderUserProfileSetup(const UserProfileMenu& menu,
+                                const UserProfileStore& store,
+                                const PshFont& font,
+                                const MenuSpritePack& sprites,
+                                std::uint32_t elapsed_ms);
 
 } // namespace nba97

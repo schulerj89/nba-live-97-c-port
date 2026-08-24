@@ -12,8 +12,12 @@ $boot = Join-Path $repo '.local\assetpacks\boot'
 $frontend = Join-Path $repo '.local\assetpacks\frontend'
 $fonts = Join-Path $repo '.local\assetpacks\fonts'
 $menu = Join-Path $repo '.local\assetpacks\menu'
-New-Item -ItemType Directory -Force -Path $boot, $frontend, $fonts, $menu | Out-Null
+$database = Join-Path $repo '.local\assetpacks\database'
+New-Item -ItemType Directory -Force -Path $boot, $frontend, $fonts, $menu, $database | Out-Null
 $extractor = Join-Path $repo 'tools\extract_raw_cd_file.py'
+$feonly = Join-Path $repo '.local\extracted\FEONLY.BIN'
+New-Item -ItemType Directory -Force -Path (Split-Path $feonly) | Out-Null
+python $extractor $DiscImage $feonly --lba 56 --size 959960
 python $extractor $DiscImage (Join-Path $boot 'ZLOADSCR.PSH') --lba 249235 --size 245812
 python $extractor $DiscImage (Join-Path $boot 'ZLOADING.PSH') --lba 249232 --size 5784
 python $extractor $DiscImage (Join-Path $frontend 'ZLEGAL.PSH') --lba 249114 --size 123460
@@ -33,6 +37,8 @@ python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 3
 python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
 python $extractor $DiscImage (Join-Path $menu 'ZSET7.PSP') --lba 252102 --size 323444
 if ($LASTEXITCODE -ne 0) { throw 'Private asset extraction failed.' }
+python (Join-Path $repo 'tools\extract_roster_database.py') $feonly (Join-Path $database 'roster.n97db')
+if ($LASTEXITCODE -ne 0) { throw 'Private roster database extraction failed.' }
 & (Join-Path $PSScriptRoot 'decode_menu_assets.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET4
@@ -41,4 +47,4 @@ if ($LASTEXITCODE -ne 0) { throw 'Private Rosters sprite decoding failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Private Users sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_card_assets.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup card decoding failed.' }
-Write-Host 'Created local-only boot, frontend, font, and Game Setup asset packs from the original disc.'
+Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'

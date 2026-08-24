@@ -586,4 +586,64 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
     return image;
 }
 
+PshImage renderUserProfileSetup(const UserProfileMenu& menu,
+                                const UserProfileStore& store,
+                                const PshFont& font,
+                                const MenuSpritePack& sprites,
+                                std::uint32_t elapsed_ms) {
+    PshImage image;
+    image.width = kWidth;
+    image.height = kHeight;
+    image.tag = "UPRF";
+    image.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+    blitAt(image, sprites, "Bkge", 0, 0);
+    blitAt(image, sprites, "Bkgf", 128, 0);
+    blitAt(image, sprites, "Bkgg", 256, 0);
+    blitAt(image, sprites, "Bkgh", 384, 0);
+    for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}})
+        blitBlueBorder(image, sprites, std::get<0>(border), std::get<1>(border), std::get<2>(border));
+    blitAt(image, sprites, "XXL1", 30, 16);
+    blitAt(image, sprites, "XXR2", 404, 16);
+    drawCenteredText(image, font, "user setup", 256, 31, 2, 255, 218, 24,
+                     true, elapsed_ms, 76);
+
+    const auto& profiles = store.profiles();
+    const int first = menu.selected() >= 8 ? static_cast<int>(menu.selected()) - 7 : 0;
+    const int final = (std::min)(static_cast<int>(profiles.size()), first + 8);
+    for (int index = first; index <= final; ++index) {
+        const bool start_new = index == static_cast<int>(profiles.size());
+        const bool selected = menu.selected() == static_cast<std::size_t>(index);
+        const int y = 74 + (index - first) * 15;
+        const std::string label = start_new ? "start new" : profiles[static_cast<std::size_t>(index)].name;
+        const int jiggle = selected ? static_cast<int>(std::lround(
+            std::sin(elapsed_ms * 0.014) * 1.0)) : 0;
+        drawText(image, font, selected ? ">" : " ", 142 + jiggle, y, 1,
+                 selected ? 255 : 190, selected ? 220 : 190, selected ? 35 : 190);
+        drawText(image, font, label, 165 + jiggle, y, 1,
+                 selected ? 255 : 205, selected ? 220 : 205, selected ? 35 : 205,
+                 selected, elapsed_ms, 78);
+    }
+
+    if (menu.editing()) {
+        fillRect(image, 110, 181, 402, 211, 3, 5, 20);
+        outlineRect(image, 110, 181, 402, 211, 2, 90, 92, 145);
+        drawCenteredText(image, font, "enter user name", 256, 191, 1, 220, 220, 220, false, 0, 74);
+        drawCenteredText(image, font, menu.draft() + "_", 256, 205, 1, 255, 220, 35, false, 0, 80);
+    } else {
+        drawCenteredText(image, font, "enter edit   delete remove   back return", 256, 203,
+                         1, 195, 195, 205, false, 0, 62);
+    }
+    if (!menu.message().empty())
+        drawCenteredText(image, font, menu.message(), 256, 218, 1,
+                         menu.deletePending() ? 255 : 210, menu.deletePending() ? 90 : 210,
+                         menu.deletePending() ? 45 : 60, false, 0, 65);
+    else
+        drawCenteredText(image, font, std::to_string(profiles.size()) + " / 20 users", 256, 218,
+                         1, 210, 210, 60, false, 0, 72);
+    return image;
+}
+
 } // namespace nba97

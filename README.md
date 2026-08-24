@@ -67,13 +67,61 @@ hover change their highlighted cards; their deeper child flows remain outside
 this slice.
 
 The original first-boot Users rule is preserved. `0x8005CD88` scans twenty
-0x6c-byte profile records and counts records whose byte at +0x5d is active.
+0x6c-byte profile records; byte +0x5d is the first byte of the trailing user
+name, so a non-empty name makes a record active.
 `0x8003F43C` passes that count and layout object `0x2b` to `0x800399C4`, which
 applies disabled flags `0x06` when the count is zero. The generic navigator
 skips objects whose flags match `0x86`. The native menu therefore dims Users
-and moves directly from Rosters to Card on a zero-profile first boot. Local
-future profile records can enable it through ignored
-`.local/config/user_profiles.ini` entries containing `active=1` (maximum 20).
+and moves directly from Rosters to Card on a zero-profile first boot.
+
+Accepting any top Game Setup card enters the recovered user-assignment/profile
+stage from `FUN_80037010`. Its in-window editor uses the original font and
+enforces the recovered limit of twenty unique profiles and thirteen visible
+characters per name. Existing profiles can be renamed; Delete requires a
+second press and then removes the full logical record, matching
+`FUN_80036D48`'s zero-on-delete behavior. Profile changes immediately update
+the Users enabled state and the CLI trace.
+
+Profiles persist outside emulated memory cards in the ignored local file
+`.local/saves/user_profiles.n97sav`. This is a compact, little-endian,
+sectioned container with stable 64-bit profile IDs, explicit major/minor
+versioning, length-aware records, a separate extensible statistics section,
+generation counter, whole-file CRC32, atomic replacement, and `.bak` recovery.
+Unknown future sections can be skipped, while a new incompatible major version
+is rejected instead of being misread. No profile names or save data are
+compiled into the executable or committed to the repository. Use `--profiles`
+to select another local save path.
+
+### Private roster database
+
+Team and player data is not compiled into the executable. The asset extraction
+script reads the owned copy of `FEONLY.BIN` and creates the ignored, versioned
+`.local/assetpacks/database/roster.n97db` pack. The public C++ loader validates
+its magic, version, byte order, section directory, string bounds, unique IDs,
+team/player references, and one-team-per-player ownership before publishing its
+database snapshot. There is intentionally no sample-name or built-in fallback
+roster.
+
+Static recompilation and headless Ghidra agree that `FUN_8005FE14` treats IDs
+below `0x1ed` as the 493 original players. `FUN_8005770C` resolves 15 slots per
+team into the table at `0x80023AB0`, whose records have a recovered `0x68` byte
+stride; the first 29 records are the NBA teams. The recovered source records
+produce 348 assigned players (12 per team) and 145 original free agents. The
+pack retains stable IDs, names, biography strings, physical attributes, the 17
+source ratings, team identity strings, roster membership, and still-unknown raw
+metadata without inventing semantics. Its sectioned container can add historical
+or current-stat sections later without breaking version-one readers.
+
+### Native frontend music
+
+The frontend decodes the original private `ZTMENU1.CNK` directly in-process.
+Its fixed EA `SCHl/PATl/TMxl` header identifies 44.1 kHz stereo PlayStation ADPCM
+(`codec 0x06`) with 7,421,609 samples. The C++ decoder validates every chunk,
+decodes all 2,524 `SCDl` blocks to PCM, and plays/loops them through WinMM; no
+external player, FFmpeg process, emulator, or published converted audio is used.
+The Options music-volume value is applied live through the recovered
+`value * 15`, clamped-to-127 rule from `FUN_8002F258`. Decoder format, block
+count, playback state, and volume changes are written to the existing CLI trace.
 
 The call chain is grounded in both the generated recompilation and independent
 headless Ghidra analysis:
@@ -95,9 +143,15 @@ headless Ghidra analysis:
   `0x8005CF78`, and Card state 11 to `0x80053F4C`
 - `0x8005CD88`, `0x8003F43C`, and `0x800399C4` implement the active-profile
   count and first-boot Users disabled flag
+- `0x80036D48` clears one 0x6c-byte user record; `0x80037010` implements
+  Start New, duplicate-name checks, the twenty-user ceiling, editing, and delete
 - `0x8003E698` applies Arcade, `0x8003E714` applies Simulation, and
   `0x8003E620` restores the saved Custom-rule snapshot
 - `0x80035D88` supplies the recovered first-boot Options defaults
+- `0x8002F258` selects `ZTMENU1.CNK` and converts the frontend music value to
+  the engine's 0-127 volume
+- `0x8005770C` resolves 15 roster IDs per team into `0x68`-byte team records
+- `0x8005FE14` maps original player IDs below `0x1ed` through the player index
 
 Extract the private boot, frontend, font, and menu asset packs and build:
 
@@ -111,6 +165,11 @@ pwsh -File scripts/run.ps1
 `extract_assetpacks.ps1` decodes `ZSET1.PSP`, `ZSET4.PSP`, and `ZSET7.PSP`
 locally. Their generated PNGs and source packs remain under
 `.local/assetpacks/menu/` and are excluded from Git.
+
+On User Setup, Up/Down selects an existing profile or `Start New`, Enter begins
+editing, typing uses the recovered-compatible uppercase character set,
+Backspace edits, Enter saves, Escape cancels/returns, and Delete twice removes
+the selected profile.
 
 The default build is a native Win32 executable so the desktop shortcut does
 not depend on WSLg window placement. `scripts/build_wsl.ps1` retains the SDL2

@@ -4,11 +4,14 @@
 #include <objbase.h>
 
 #include "boot_flow.hpp"
+#include "frontend_music.hpp"
 #include "intro_player.hpp"
 #include "main_menu.hpp"
 #include "png_image.hpp"
 #include "psh_image.hpp"
 #include "psh_font.hpp"
+#include "roster_database.hpp"
+#include "user_profiles.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -34,6 +37,7 @@ struct Options {
     std::filesystem::path asset_root = ".local/assetpacks";
     std::filesystem::path trace_path = ".local/logs/boot_decomp_trace.log";
     std::filesystem::path settings_path = ".local/config/frontend_settings.ini";
+    std::filesystem::path profiles_path = ".local/saves/user_profiles.n97sav";
     std::uint32_t transition_ms = 3000;
     bool self_test = false;
 };
@@ -99,6 +103,7 @@ Options parseOptions(int argc, char** argv) {
                 std::strtoul(argv[++i], nullptr, 10));
         else if (arg == "--trace" && i + 1 < argc) options.trace_path = argv[++i];
         else if (arg == "--settings" && i + 1 < argc) options.settings_path = argv[++i];
+        else if (arg == "--profiles" && i + 1 < argc) options.profiles_path = argv[++i];
     }
     return options;
 }
@@ -219,18 +224,32 @@ private:
         trace_.log("RECOVERED", "0x8002F258 selects ZTMENU1.CNK frontend audio");
         trace_.log("RECOVERED", "0x8002FDA4 loads 33 ZTMPAL.PSH palettes; 0x80030308 loads ZBPAL.PSH");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
+        roster_database_.load(options_.asset_root / "database" / "roster.n97db");
+        trace_.log("ROSTER-DB", "external private pack version=" +
+            std::to_string(roster_database_.version()) + " teams=" +
+            std::to_string(roster_database_.teams().size()) + " players=" +
+            std::to_string(roster_database_.players().size()));
+        trace_.log("ROSTER-INDEX", "FUN_8005FE14 boundary=0x1ED; assigned=" +
+            std::to_string(roster_database_.assignedPlayerCount()) + " free-agents=" +
+            std::to_string(roster_database_.freeAgentCount()) + "; all references validated");
+        trace_.log("RECOVERED", "FUN_8005770C resolves 15 slots/team; 0x80023AB0 stride=0x68 across 29 teams");
         menu_.reset();
-        active_user_profiles_ = countActiveUserProfiles(
-            options_.settings_path.parent_path() / "user_profiles.ini");
+        const auto profile_status = profile_store_.load(options_.profiles_path);
+        active_user_profiles_ = static_cast<int>(profile_store_.profiles().size());
         menu_.setActiveUserProfiles(active_user_profiles_);
         const bool restored = settings_.load(options_.settings_path);
         trace_.log("SETTINGS", std::string(restored ? "restored " : "defaults; save target ") +
                                options_.settings_path.string());
         trace_.log("RECOVERED", "Rules state=1 control 0x80098194; Options state=2 control 0x80098258");
         trace_.log("RECOVERED", "Rosters state=9 FUN_80057CE4; Users state=19 FUN_8005CF78; Card state=11 FUN_80053F4C");
+        trace_.log("PROFILE-LOAD", std::string(
+            profile_status == nba97::ProfileLoadStatus::NewStore ? "new store" :
+            profile_status == nba97::ProfileLoadStatus::RecoveredBackup ? "recovered backup" : "loaded") +
+            " generation=" + std::to_string(profile_store_.generation()) + " path=" +
+            options_.profiles_path.string());
         trace_.log("PROFILE-SCAN", std::to_string(active_user_profiles_) +
-                                   "/20 active records; FUN_8005CD88 + object 0x2B Users " +
-                                   (active_user_profiles_ == 0 ? "disabled" : "enabled"));
+            "/20 named records; FUN_8005CD88 stride=0x6C name=+0x5D; Users " +
+            (active_user_profiles_ == 0 ? "disabled" : "enabled"));
         trace_.log("RECOVERED", "0x8003E698 arcade; 0x8003E714 simulation; 0x8003E620 restores custom snapshot");
         menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
             menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, 0));
@@ -312,15 +331,6 @@ private:
                                   std::to_string(destination.size()) + " sprites");
     }
 
-    static int countActiveUserProfiles(const std::filesystem::path& path) {
-        std::ifstream input(path);
-        int active = 0;
-        std::string line;
-        while (active < 20 && std::getline(input, line))
-            if (line == "active=1") ++active;
-        return active;
-    }
-
     void validateMenuAsset(const std::filesystem::path& path,
                            std::uintmax_t expected_size) {
         if (!std::filesystem::exists(path) || std::filesystem::file_size(path) != expected_size)
@@ -362,6 +372,17 @@ private:
             throw std::runtime_error("intro-video -> title self-test failed");
         if (!flow_.enterMainMenu() || flow_.screen() != nba97::BootScreen::MainMenu)
             throw std::runtime_error("title -> game-setup self-test failed");
+        if (roster_database_.teams().size() != 29 || roster_database_.players().size() != 493 ||
+            roster_database_.assignedPlayerCount() != 348 || roster_database_.freeAgentCount() != 145 ||
+            !roster_database_.player(0) || !roster_database_.team(28))
+            throw std::runtime_error("external roster database validation self-test failed");
+        frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", 0);
+        const auto music_info = frontend_music_.info();
+        if (music_info.codec != 0x06 || music_info.channels != 2 ||
+            music_info.sample_rate != 44100 || music_info.sample_count != 7421609 ||
+            music_info.data_blocks != 2524)
+            throw std::runtime_error("frontend SCHl/PSX-ADPCM decoder self-test failed");
+        frontend_music_.stop();
         menu_.reset();
         menu_.setActiveUserProfiles(active_user_profiles_);
         const auto jiggle_a = nba97::renderGameSetupMenu(
@@ -423,7 +444,28 @@ private:
             throw std::runtime_error("settings relaunch persistence self-test failed");
         std::error_code cleanup_error;
         std::filesystem::remove(test_path, cleanup_error);
-        trace_.log("SELF-TEST", "PASS: boot, Game Setup, Rules/Options persistence, Rosters/Card original-card navigation, and zero-profile Users gate validated");
+        const auto profile_test_path = options_.profiles_path.parent_path() / "user_profiles.selftest.n97sav";
+        std::filesystem::remove(profile_test_path, cleanup_error);
+        std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
+        nba97::UserProfileStore profile_test;
+        if (profile_test.load(profile_test_path) != nba97::ProfileLoadStatus::NewStore ||
+            !profile_test.create("PLAYER ONE") || profile_test.create("player one") ||
+            !profile_test.create("PLAYER TWO") || profile_test.profiles().size() != 2)
+            throw std::runtime_error("profile create/duplicate validation self-test failed");
+        nba97::UserProfileStore profile_restored;
+        if (profile_restored.load(profile_test_path) != nba97::ProfileLoadStatus::Loaded ||
+            profile_restored.profiles().size() != 2 ||
+            profile_restored.profiles()[0].name != "PLAYER ONE" ||
+            !profile_restored.rename(0, "CAPTAIN") || !profile_restored.erase(1))
+            throw std::runtime_error("versioned profile persistence self-test failed");
+        nba97::UserProfileStore profile_final;
+        if (profile_final.load(profile_test_path) != nba97::ProfileLoadStatus::Loaded ||
+            profile_final.profiles().size() != 1 || profile_final.profiles()[0].name != "CAPTAIN" ||
+            profile_final.generation() != 4)
+            throw std::runtime_error("profile generation/update self-test failed");
+        std::filesystem::remove(profile_test_path, cleanup_error);
+        std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
+        trace_.log("SELF-TEST", "PASS: boot, menus/settings, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
         return 0;
     }
 
@@ -473,8 +515,12 @@ private:
             // (bit 30 reports that the key was already down).
             if ((static_cast<std::uintptr_t>(lparam) & (1u << 30)) != 0) return 0;
             if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
-                frontend_page_ != nba97::FrontendPage::GameSetup)
+                frontend_page_ != nba97::FrontendPage::GameSetup &&
+                frontend_page_ != nba97::FrontendPage::ProfileSetup)
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
+            else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
+                     frontend_page_ == nba97::FrontendPage::ProfileSetup)
+                handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE) DestroyWindow(window_);
             else if (wparam == VK_SPACE && intro_player_.isPlaying())
                 finishIntro("skipped by player input", 0);
@@ -485,6 +531,15 @@ private:
                 handleMenuKey(wparam);
             else if (wparam == VK_SPACE)
                 flow_.requestAdvance(options_.transition_ms);
+            return 0;
+        case WM_CHAR:
+            if (flow_.screen() == nba97::BootScreen::MainMenu &&
+                frontend_page_ == nba97::FrontendPage::ProfileSetup &&
+                profile_menu_.editing() && wparam >= 32 && wparam < 127 &&
+                profile_menu_.append(static_cast<char>(wparam))) {
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+            }
             return 0;
         case WM_MOUSEMOVE:
             if (flow_.screen() == nba97::BootScreen::MainMenu)
@@ -519,6 +574,7 @@ private:
         case WM_DESTROY:
             KillTimer(window_, kFrameTimer);
             intro_player_.stop();
+            frontend_music_.stop();
             PostQuitMessage(0);
             return 0;
         default:
@@ -650,11 +706,29 @@ private:
                                  "; title loop -> Game Setup frontend state");
         trace_.log("MENU", "quarter=3 min, mode=exhibition, style=arcade, level=rookie");
         trace_.log("MENU-FOCUS", "game option quarter selected; arrows/mouse hover enabled");
+        try {
+            const auto recovered_volume = static_cast<std::uint8_t>((std::min)(127,
+                static_cast<int>(settings_.option(1)) * 15));
+            frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", recovered_volume);
+            const auto& audio = frontend_music_.info();
+            trace_.log("MUSIC-DECODER", frontend_music_.decoderName());
+            trace_.log("MUSIC-STREAM", "ZTMENU1.CNK blocks=" + std::to_string(audio.data_blocks) +
+                " rate=" + std::to_string(audio.sample_rate) + "Hz channels=" +
+                std::to_string(audio.channels) + " samples=" + std::to_string(audio.sample_count));
+            trace_.log("MUSIC-PLAY", "FUN_8002F258 recovered volume=" +
+                std::to_string(recovered_volume) + "/127; looped in-process");
+        } catch (const std::exception& error) {
+            trace_.log("MUSIC-ERROR", error.what());
+        }
         InvalidateRect(window_, nullptr, FALSE);
     }
 
     void handleMenuKey(WPARAM key) {
         if (frontend_transition_active_) return;
+        if (frontend_page_ == nba97::FrontendPage::ProfileSetup) {
+            handleProfileKey(key);
+            return;
+        }
         if (frontend_page_ != nba97::FrontendPage::GameSetup &&
             frontend_page_ != nba97::FrontendPage::Rules &&
             frontend_page_ != nba97::FrontendPage::Options) {
@@ -667,6 +741,11 @@ private:
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
                 return;
             } else if (key == VK_RETURN || key == VK_SPACE) {
+                if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 0) {
+                    const auto* team = roster_database_.team(0);
+                    trace_.log("ROSTER-QUERY", team ? team->city + " " + team->nickname +
+                        " roster=" + std::to_string(team->roster.size()) : "team 0 unavailable");
+                }
                 trace_.log("MENU-BLOCK", std::string(bottom_menu_.selectedLabel()) +
                                          " child flow not yet decompiled");
                 return;
@@ -713,6 +792,52 @@ private:
         }
     }
 
+    void handleProfileKey(WPARAM key) {
+        if (profile_menu_.editing()) {
+            if (key == VK_BACK && profile_menu_.backspace()) {
+                trace_.log("PROFILE-EDIT", "backspace; length=" +
+                    std::to_string(profile_menu_.draft().size()));
+            } else if (key == VK_RETURN) {
+                if (profile_menu_.commit(profile_store_)) {
+                    active_user_profiles_ = static_cast<int>(profile_store_.profiles().size());
+                    menu_.setActiveUserProfiles(active_user_profiles_);
+                    trace_.log("PROFILE-SAVE", profile_store_.profiles()[profile_menu_.selected()].name +
+                        " generation=" + std::to_string(profile_store_.generation()) +
+                        "; atomic CRC32 container updated");
+                } else {
+                    trace_.log("PROFILE-REJECT", profile_menu_.message());
+                }
+            } else if (key == VK_ESCAPE) {
+                profile_menu_.cancel();
+                trace_.log("PROFILE-EDIT", "name edit cancelled");
+            }
+        } else if (key == VK_UP || key == VK_DOWN) {
+            if (profile_menu_.move(key == VK_UP ? -1 : 1, profile_store_.profiles().size()))
+                trace_.log("PROFILE-FOCUS", profile_menu_.selected() == profile_store_.profiles().size()
+                    ? "Start New" : profile_store_.profiles()[profile_menu_.selected()].name);
+        } else if (key == VK_RETURN || key == VK_SPACE) {
+            profile_menu_.beginEdit(profile_store_);
+            trace_.log("PROFILE-EDIT", profile_menu_.selected() < profile_store_.profiles().size()
+                ? "edit existing name" : "Start New; recovered editor max=13");
+        } else if (key == VK_DELETE) {
+            const std::string name = profile_menu_.selected() < profile_store_.profiles().size()
+                ? profile_store_.profiles()[profile_menu_.selected()].name : std::string{};
+            if (profile_menu_.requestDelete(profile_store_)) {
+                active_user_profiles_ = static_cast<int>(profile_store_.profiles().size());
+                menu_.setActiveUserProfiles(active_user_profiles_);
+                trace_.log("PROFILE-DELETE", name + "; FUN_80036D48 zero-record semantic; generation=" +
+                    std::to_string(profile_store_.generation()));
+            } else if (!profile_menu_.message().empty()) {
+                trace_.log("PROFILE-CONFIRM", profile_menu_.message());
+            }
+        } else if (key == VK_ESCAPE || key == VK_BACK) {
+            beginFrontendTransition(nba97::FrontendPage::GameSetup, "user setup back input");
+            return;
+        }
+        rebuildMenuFrame();
+        InvalidateRect(window_, nullptr, FALSE);
+    }
+
     void handleMenuHover(int client_x, int client_y) {
         const bool genuinely_moved = last_mouse_x_ < 0 ||
             std::abs(client_x - last_mouse_x_) > 1 ||
@@ -748,6 +873,9 @@ private:
         if (frontend_page_ == nba97::FrontendPage::GameSetup)
             menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
                 menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, menu_elapsed_ms_));
+        else if (frontend_page_ == nba97::FrontendPage::ProfileSetup)
+            menu_frame_ = makeFrame(nba97::renderUserProfileSetup(
+                profile_menu_, profile_store_, menu_font_, menu_sprites_, menu_elapsed_ms_));
         else if (frontend_page_ == nba97::FrontendPage::Rules ||
                  frontend_page_ == nba97::FrontendPage::Options)
             menu_frame_ = makeFrame(nba97::renderSettingsMenu(
@@ -760,6 +888,7 @@ private:
 
     static std::string frontendPageName(nba97::FrontendPage page) {
         if (page == nba97::FrontendPage::Rules) return "Rules";
+        if (page == nba97::FrontendPage::ProfileSetup) return "User Setup";
         if (page == nba97::FrontendPage::Options) return "Options";
         if (page == nba97::FrontendPage::Rosters) return "Rosters";
         if (page == nba97::FrontendPage::Users) return "Users";
@@ -781,15 +910,18 @@ private:
                                     std::string(menu_.selectedLabel()) + " selected");
             return;
         }
-        trace_.log("MENU-BLOCK", std::string(menu_.selectedLabel()) +
-                                 " activation intentionally outside this slice");
+        beginFrontendTransition(nba97::FrontendPage::ProfileSetup,
+            std::string(menu_.selectedLabel()) +
+            " accepted; FUN_80037010 recovered user assignment/profile stage");
     }
 
     void beginFrontendTransition(nba97::FrontendPage target, const std::string& reason) {
         if (frontend_transition_active_ || target == frontend_page_) return;
         transition_source_ = menu_frame_;
         frontend_page_ = target;
-        if (target == nba97::FrontendPage::Rules || target == nba97::FrontendPage::Options)
+        if (target == nba97::FrontendPage::ProfileSetup)
+            profile_menu_.open(profile_store_.profiles().size());
+        else if (target == nba97::FrontendPage::Rules || target == nba97::FrontendPage::Options)
             settings_menu_.open(target);
         else if (target != nba97::FrontendPage::GameSetup)
             bottom_menu_.open(target);
@@ -798,7 +930,8 @@ private:
         frontend_transition_active_ = true;
         transition_frame_ = transition_source_;
         trace_.log("TRANSITION", reason + "; recovered FE state=" +
-            std::to_string(target == nba97::FrontendPage::Rules ? 1 :
+            std::to_string(target == nba97::FrontendPage::ProfileSetup ? 0x37010 :
+                           target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
                            target == nba97::FrontendPage::Users ? 19 :
@@ -818,6 +951,13 @@ private:
             ? settings_.ruleValue(index) : settings_.optionValue(index);
         trace_.log("SETTINGS-SAVE", std::string(settings_menu_.selectedLabel()) +
                                     "=" + value + " -> " + options_.settings_path.string());
+        if (frontend_page_ == nba97::FrontendPage::Options && index == 1) {
+            const auto recovered_volume = static_cast<std::uint8_t>((std::min)(127,
+                static_cast<int>(settings_.option(1)) * 15));
+            frontend_music_.setRecoveredVolume(recovered_volume);
+            trace_.log("MUSIC-VOLUME", "FUN_8002F258 value=" +
+                std::to_string(recovered_volume) + "/127 applied live");
+        }
         rebuildMenuFrame();
         InvalidateRect(window_, nullptr, FALSE);
     }
@@ -827,10 +967,14 @@ private:
     ComApartment com_apartment_;
     nba97::BootFlow flow_;
     nba97::IntroPlayer intro_player_;
+    nba97::FrontendMusicPlayer frontend_music_;
     nba97::MainMenu menu_;
     nba97::FrontendSettings settings_;
     nba97::SettingsMenu settings_menu_;
     nba97::RecoveredBottomMenu bottom_menu_;
+    nba97::RosterDatabase roster_database_;
+    nba97::UserProfileStore profile_store_;
+    nba97::UserProfileMenu profile_menu_;
     nba97::FrontendPage frontend_page_ = nba97::FrontendPage::GameSetup;
     nba97::PshFont menu_font_;
     nba97::MenuSpritePack menu_sprites_;
