@@ -14,8 +14,8 @@
 
 | Binary | Functions | Analyzed code bytes | Private input |
 |---|---:|---:|---|
-| PS-X EXE boot program | 272 | 49,280 | validated locally |
-| FEONLY frontend overlay | 1,497 | 416,088 | validated locally |
+| PS-X EXE boot program | 272 | 49,280 | private input (not distributed) |
+| FEONLY frontend overlay | 1,497 | 416,088 | private input (not distributed) |
 
 ## Evidence coverage by subsystem
 

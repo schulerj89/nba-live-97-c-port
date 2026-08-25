@@ -9,14 +9,14 @@
         "name": "PS-X EXE boot program",
         "functions": 272,
         "analyzed_code_bytes": 49280,
-        "input_status": "validated locally"
+        "input_status": "private input (not distributed)"
       },
       {
         "id": "feonly",
         "name": "FEONLY frontend overlay",
         "functions": 1497,
         "analyzed_code_bytes": 416088,
-        "input_status": "validated locally"
+        "input_status": "private input (not distributed)"
       }
     ],
     "discovered_functions": 1769,

@@ -48,14 +48,17 @@ def load_inventory(relative_path: str):
 def validate_private_input(binary: dict):
     path = ROOT / binary["local_path"]
     if not path.exists():
-        return "not present (allowed; private input)"
+        return "private input (not distributed)"
     data = path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     if len(data) != binary["file_size"]:
         raise ValueError(f"{path}: expected {binary['file_size']} bytes, got {len(data)}")
     if digest.lower() != binary["sha256"].lower():
         raise ValueError(f"{path}: SHA-256 does not match the canonical local input")
-    return "validated locally"
+    # Keep generated reports reproducible on machines that intentionally lack
+    # copyrighted inputs. Presence still enables strict local hash validation,
+    # but it must not change committed output.
+    return "private input (not distributed)"
 
 
 def build_report():
