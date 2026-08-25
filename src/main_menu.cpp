@@ -1176,9 +1176,12 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
         "indR","lacR","lalR","miaR","milR","minR","nwjR","nwyR","orlR","phiR",
         "phoR","porR","sacR","sanR","seaR","torR","utaR","vanR","wasR"};
     if (viewer.mode() == RosterViewMode::TeamRoster) {
-        blitAt(image, sprites, "frml", 30, 15);
+        // FE ordering-table insertion composites the team plate first and the
+        // authored frml template over it. Drawing the frame first lets the
+        // rectangular logo record cover its intended blue/purple edge mask.
         if (team->id < logo_tags.size())
             blitAt(image, sprites, logo_tags[team->id], 40, 16);
+        blitAt(image, sprites, "frml", 30, 15);
 
         // FUN_80059034 builds the centered team selector and both headings.
         const std::string team_name = team->city + " " + team->nickname;
