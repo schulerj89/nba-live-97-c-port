@@ -1119,7 +1119,10 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
     blitAt(image, sprites, "help", 235, 217);
 
     if (menu.page() == FrontendPage::Rosters) {
-        blitAt(image, sprites, "ba24", 166, 10);
+        // ba24 follows the generic FUN_8003186C/FUN_80034A5C frontend title
+        // deformation path. The original changes discrete corner records; it
+        // never uses the old smooth scanline wave approximation.
+        blitJumbledTitleSprite(image, sprites, "ba24", 166, 10, elapsed_ms);
         // FUN_80057CE4 gives each of the eight choices three consecutive
         // 0x6c-byte objects: normal plate, selected plate, then a flags=0x20
         // blk1 placeholder. FUN_80031F48 replaces that third object with a

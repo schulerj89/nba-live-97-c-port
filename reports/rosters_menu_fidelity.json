@@ -2,9 +2,9 @@
   "schema_version": 1,
   "scope": "Rosters eight-card selection screen only",
   "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
-  "fidelity_percent": 95.83,
-  "earned_points": 10.5412,
-  "possible_points": 11.0,
+  "fidelity_percent": 96.17,
+  "earned_points": 11.5408,
+  "possible_points": 12.0,
   "groups": {
     "behavior": {
       "earned": 1.0,
@@ -22,8 +22,8 @@
       "percent": 100.0
     },
     "animation": {
-      "earned": 1.5,
-      "possible": 1.5,
+      "earned": 2.5,
+      "possible": 2.5,
       "percent": 100.0
     },
     "audio": {
@@ -32,9 +32,9 @@
       "percent": 100.0
     },
     "visual": {
-      "earned": 1.5412,
+      "earned": 1.5408,
       "possible": 2.0,
-      "percent": 77.06
+      "percent": 77.04
     }
   },
   "checks": [
@@ -119,6 +119,15 @@
       "frame_count": 12
     },
     {
+      "id": "rosters_title_discrete_jumble",
+      "group": "animation",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "phase_count": 4,
+      "unique_title_states": 4
+    },
+    {
       "id": "zcursor_1_through_6",
       "group": "audio",
       "weight": 1.5,
@@ -127,25 +136,25 @@
       "sounds": [
         {
           "id": 1,
-          "role": "right",
+          "role": "down",
           "samples": 2852,
           "valid": true
         },
         {
           "id": 2,
-          "role": "left",
+          "role": "up",
           "samples": 1921,
           "valid": true
         },
         {
           "id": 3,
-          "role": "up",
+          "role": "left",
           "samples": 2200,
           "valid": true
         },
         {
           "id": 4,
-          "role": "down",
+          "role": "right",
           "samples": 3840,
           "valid": true
         },
@@ -164,10 +173,10 @@
       ],
       "all_waveforms_distinct": true,
       "direction_mapping": {
-        "right": 1,
-        "left": 2,
-        "up": 3,
-        "down": 4
+        "right": 4,
+        "left": 3,
+        "up": 2,
+        "down": 1
       },
       "repeated_right_byte_identical": true
     },
@@ -175,12 +184,12 @@
       "id": "original_screenshot_similarity",
       "group": "visual",
       "weight": 2,
-      "score_percent": 77.06,
-      "credit": 1.5412,
+      "score_percent": 77.04,
+      "credit": 1.5408,
       "status": "measured",
-      "similarity_percent": 77.06,
-      "color_similarity_percent": 77.52,
-      "edge_similarity_percent": 76.21,
+      "similarity_percent": 77.04,
+      "color_similarity_percent": 77.51,
+      "edge_similarity_percent": 76.18,
       "registration_offset": [
         4,
         -2

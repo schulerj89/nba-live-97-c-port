@@ -39,15 +39,15 @@ constexpr int kRecoveredPressStartWidth = 97;
 
 constexpr std::uint32_t recoveredMenuDirectionSound(int horizontal,
                                                     int vertical) noexcept {
-    // FUN_8003D930 stores callbacks as up/down/left/right at +0x20..+0x2C,
-    // setting its transient sound byte to 3/4/2/1 before FUN_8002F124.
-    if (horizontal < 0) return 2;
-    if (horizontal > 0) return 1;
-    if (vertical < 0) return 3;
-    if (vertical > 0) return 4;
+    // Live no$psx comparison identifies the four FUN_8003D930 transient IDs:
+    // down/up/left/right are 1/2/3/4 before FUN_8002F124.
+    if (horizontal < 0) return 3;
+    if (horizontal > 0) return 4;
+    if (vertical < 0) return 2;
+    if (vertical > 0) return 1;
     return 0;
 }
-static_assert(recoveredMenuDirectionSound(1, 0) == 1);
+static_assert(recoveredMenuDirectionSound(1, 0) == 4);
 
 struct Options {
     std::filesystem::path asset_root = ".local/assetpacks";
@@ -625,7 +625,7 @@ private:
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
         trace_.log("ROSTER-STACK", "plate x=49/154/259/364; recovered arch y=76/66/66/76 + 118/110/110/118; ZCARD offset=(12,23)");
         trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; red c06/c07/c14/c15 plates remain drawn while object predicates block focus");
-        trace_.log("ROSTER-SFX", "FUN_8003D930 callback order up/down/left/right maps ZCURSOR ids 3/4/2/1; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
+        trace_.log("ROSTER-SFX", "FUN_8003D930 + live no$psx: down/up/left/right map ZCURSOR ids 1/2/3/4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
     }
 
     int captureRostersMenu() {
@@ -635,10 +635,11 @@ private:
         menu.setRosterCapabilities(false, false);
         menu.setSelected(4);
         const auto render = [&](const std::filesystem::path& name,
-                                bool selected_overlay_visible = true) {
+                                bool selected_overlay_visible = true,
+                                std::uint32_t elapsed_ms = 0) {
             writePpm(nba97::renderRecoveredBottomMenu(
                 menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
-                roster_menu_cards_, 0, selected_overlay_visible), output / name);
+                roster_menu_cards_, elapsed_ms, selected_overlay_visible), output / name);
         };
         render("rosters_initial.ppm");
         menu.setSelected(3);
@@ -647,6 +648,11 @@ private:
             char name[48]{};
             sprintf_s(name, "rosters_select_phase_%02d.ppm", phase);
             render(name, (phase & 1) != 0);
+        }
+        for (int phase = 0; phase < 4; ++phase) {
+            char name[48]{};
+            sprintf_s(name, "rosters_title_phase_%02d.ppm", phase);
+            render(name, true, static_cast<std::uint32_t>(phase * 75));
         }
         menu.move(1, 0);
         render("rosters_reorder_focused.ppm");
@@ -658,7 +664,7 @@ private:
 
         const auto audio_root = options_.asset_root / "menu";
         static constexpr std::array<const char*, 6> sound_names{
-            "right", "left", "up", "down", "unused_05", "select_flash"};
+            "down", "up", "left", "right", "unused_05", "select_flash"};
         std::ofstream metadata(output / "capture.json", std::ios::trunc);
         if (!metadata) throw std::runtime_error("cannot write Rosters menu capture metadata");
         metadata << "{\n  \"schema_version\": 1,\n  \"function\": \"0x80057CE4\",\n"
@@ -682,10 +688,10 @@ private:
                 std::to_string(info.compressed_bytes));
         }
         const auto repeated_right = cursor_audio_.exportCursorSound(
-            audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", 1,
-            output / "zcursor_01_right_repeat.wav");
+            audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", 4,
+            output / "zcursor_04_right_repeat.wav");
         trace_.log("ROSTER-SFX-REPEAT", "three consecutive logical Right moves all route "
-            "FUN_8003D930 cue id=1; deterministic repeat samples=" +
+            "FUN_8003D930 cue id=4; deterministic repeat samples=" +
             std::to_string(repeated_right.sample_count) + " rate=" +
             std::to_string(repeated_right.sample_rate) + "Hz; runtime WinMM device reused");
         metadata << "  ],\n  \"availability\": {\"reset\":\"roster snapshot differs and no special-state override\","
@@ -871,10 +877,10 @@ private:
             !menu_.moveHorizontal(1) || std::string(menu_.selectedLabel()) != "card")
             throw std::runtime_error("disabled Users skip self-test failed");
         nba97::RecoveredBottomMenu recovered_menu;
-        if (recoveredMenuDirectionSound(1, 0) != 1 ||
-            recoveredMenuDirectionSound(-1, 0) != 2 ||
-            recoveredMenuDirectionSound(0, -1) != 3 ||
-            recoveredMenuDirectionSound(0, 1) != 4)
+        if (recoveredMenuDirectionSound(1, 0) != 4 ||
+            recoveredMenuDirectionSound(-1, 0) != 3 ||
+            recoveredMenuDirectionSound(0, -1) != 2 ||
+            recoveredMenuDirectionSound(0, 1) != 1)
             throw std::runtime_error("Rosters FUN_8003D930 direction sound mapping self-test failed");
         recovered_menu.open(nba97::FrontendPage::Rosters);
         const auto roster_a = nba97::renderRecoveredBottomMenu(

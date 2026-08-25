@@ -100,6 +100,20 @@ def main() -> int:
         100 if cadence_ok else 0, unique_frame_states=len(set(hashes)),
         frame_count=len(hashes))
 
+    title_phases = [capture / f"rosters_title_phase_{index:02d}.ppm"
+                    for index in range(4)]
+    title_hashes = []
+    try:
+        for path in title_phases:
+            title = Image.open(path).convert("RGB").crop((140, 4, 390, 66))
+            title_hashes.append(hashlib.sha256(title.tobytes()).hexdigest())
+        title_jumble_ok = len(set(title_hashes)) == 4
+    except (NameError, OSError):
+        title_jumble_ok = False
+    add(checks, "rosters_title_discrete_jumble", "animation", 1,
+        100 if title_jumble_ok else 0, phase_count=len(title_hashes),
+        unique_title_states=len(set(title_hashes)))
+
     sound_rows = metadata.get("sounds", [])
     sound_evidence = []
     audio_ok = len(sound_rows) == 6
@@ -117,17 +131,17 @@ def main() -> int:
         audio_ok = audio_ok and valid
         sound_evidence.append({"id": row.get("id"), "role": row.get("role"),
                                "samples": row.get("samples"), "valid": valid})
-    repeated_right = capture / "zcursor_01_right_repeat.wav"
-    right_sound = capture / "zcursor_01_right.wav"
+    repeated_right = capture / "zcursor_04_right_repeat.wav"
+    right_sound = capture / "zcursor_04_right.wav"
     repeated_right_ok = (repeated_right.is_file() and right_sound.is_file() and
                          digest(repeated_right) == digest(right_sound))
     recovered_roles_ok = [row.get("role") for row in sound_rows[:4]] == [
-        "right", "left", "up", "down"]
+        "down", "up", "left", "right"]
     audio_ok = (audio_ok and len(set(audio_hashes)) == 6 and repeated_right_ok and
                 recovered_roles_ok)
     add(checks, "zcursor_1_through_6", "audio", 1.5, 100 if audio_ok else 0,
         sounds=sound_evidence, all_waveforms_distinct=len(set(audio_hashes)) == 6,
-        direction_mapping={"right": 1, "left": 2, "up": 3, "down": 4},
+        direction_mapping={"right": 4, "left": 3, "up": 2, "down": 1},
         repeated_right_byte_identical=repeated_right_ok)
 
     visual_missing = not reference.is_file()
