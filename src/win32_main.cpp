@@ -640,6 +640,17 @@ private:
             roster_viewer_, roster_database_, menu_font_, roster_sprites_, elapsed + 340),
             output / "team_chicago_scrolled.ppm");
 
+        nba97::RosterViewer dallas_viewer;
+        dallas_viewer.open(roster_database_);
+        std::uint32_t dallas_elapsed = 100;
+        for (int team = 0; team < 5; ++team) {
+            dallas_viewer.scanTeam(1, roster_database_, dallas_elapsed);
+            dallas_elapsed += 340;
+        }
+        writePpm(nba97::renderRosterViewer(
+            dallas_viewer, roster_database_, menu_font_, roster_sprites_, dallas_elapsed),
+            output / "team_dallas_initial.ppm");
+
         roster_viewer_ = nba97::RosterViewer{};
         roster_viewer_.open(roster_database_);
         elapsed = 100;
@@ -709,7 +720,7 @@ private:
                  << "  \"visible_rows\": 6,\n"
                  << "  \"captures\": [\"team_atlanta_initial.ppm\", "
                     "\"team_chicago_initial.ppm\", \"team_chicago_help.ppm\", "
-                    "\"team_chicago_scrolled.ppm\", "
+                    "\"team_chicago_scrolled.ppm\", \"team_dallas_initial.ppm\", "
                     "\"player_chicago_initial.ppm\", "
                     "\"player_chicago_help.ppm\", \"player_chicago_layer_1.ppm\", "
                     "\"player_chicago_scrolled.ppm\"]\n"
@@ -743,6 +754,10 @@ private:
             roster_database_.assignedPlayerCount() != 362 || roster_database_.freeAgentCount() != 131 ||
             !roster_database_.player(0) || !roster_database_.team(28))
             throw std::runtime_error("external roster database validation self-test failed");
+        const auto* montross = roster_database_.player(66);
+        if (!montross || montross->last_name != "Montross" ||
+            montross->jersey_number != 0xff || montross->jerseyNumberText() != "00")
+            throw std::runtime_error("FEONLY jersey 00 sentinel formatting self-test failed");
         frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", 0);
         const auto music_info = frontend_music_.info();
         if (music_info.codec != 0x06 || music_info.channels != 2 ||
@@ -1746,7 +1761,7 @@ private:
             " stat-window=" + std::to_string(roster_viewer_.firstVisiblePlayerStat()) + ".." +
             std::to_string(roster_viewer_.firstVisiblePlayerStat() + 5) +
             (player ? " id=" + std::to_string(player->id) + " number=" +
-                std::to_string(player->jersey_number) + " position=" +
+                player->jerseyNumberText() + " position=" +
                 nba97::positionName(player->position) : ""));
     }
 

@@ -78,10 +78,11 @@ behavior: **100.00%** · rendering: **100.00%** · visual: **82.28%**
 | Player help modal produces a distinct deterministic frame | rendering | pass | 0.00/0.00 |
 | Changing the stat layer changes the rendered player-card frame | rendering | pass | 0.00/0.00 |
 | Crossing the six-row roster window changes the rendered frame | rendering | pass | 0.00/0.00 |
+| Distinct wide team-logo plates render through the shared authored frame aperture | rendering | pass | 0.00/0.00 |
 | Scrolling player statistics changes the rendered frame | rendering | pass | 0.00/0.00 |
 | Team Rosters title holds between recovered deformation records and changes discretely instead of waving every frame | rendering | pass | 0.00/0.00 |
-| Chicago team-logo plate and frame, isolated from the broader header score | visual | 82.73% similarity | 0.00/0.00 |
-| View Rosters title, team logo, EA logo and upper frame | visual | 80.09% similarity | 1.20/1.50 |
+| Chicago team-logo plate and frame, isolated from the broader header score | visual | 82.77% similarity | 0.00/0.00 |
+| View Rosters title, team logo, EA logo and upper frame | visual | 80.12% similarity | 1.20/1.50 |
 | Team name and left/right selector arrows | visual | 81.63% similarity | 1.22/1.50 |
 | Six player rows, selected pulse, stat headings and values | visual | 79.55% similarity | 1.19/1.50 |
 | Roster scroll arrow, lower frame and Help strip | visual | 83.87% similarity | 1.26/1.50 |

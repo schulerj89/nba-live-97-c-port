@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <deque>
 #include <tuple>
+#include <vector>
 
 namespace nba97 {
 namespace {
@@ -94,6 +96,97 @@ void blitAt(PshImage& destination, const MenuSpritePack& sprites,
     if (const PshImage* item = sprite(sprites, tag))
         blitScaled(destination, *item, 0, 0, item->width, item->height,
                    x, y, item->width, item->height);
+}
+
+void blitInsideFrame(PshImage& destination, const PshImage& source,
+                     const PshImage& frame, int source_x, int source_y,
+                     int frame_x, int frame_y) {
+    const int frame_size = frame.width * frame.height;
+    if (frame_size <= 0) return;
+
+    // The recovered `frml` record supplies its own irregular aperture. Treat
+    // opaque frame texels as walls, flood transparent texels from the outside,
+    // then retain the largest enclosed component. This matches the PS1
+    // ordering-table composite while preventing wide team plates (notably
+    // Chicago and Dallas) from showing through the frame's exterior cut-outs.
+    std::vector<std::uint8_t> outside(static_cast<std::size_t>(frame_size), 0);
+    std::deque<int> pending;
+    const auto frameOpaque = [&](int at) {
+        return frame.rgba[static_cast<std::size_t>(at) * 4 + 3] != 0;
+    };
+    const auto queueOutside = [&](int x, int y) {
+        const int at = y * frame.width + x;
+        if (!frameOpaque(at) && outside[static_cast<std::size_t>(at)] == 0) {
+            outside[static_cast<std::size_t>(at)] = 1;
+            pending.push_back(at);
+        }
+    };
+    for (int x = 0; x < frame.width; ++x) {
+        queueOutside(x, 0);
+        queueOutside(x, frame.height - 1);
+    }
+    for (int y = 0; y < frame.height; ++y) {
+        queueOutside(0, y);
+        queueOutside(frame.width - 1, y);
+    }
+    while (!pending.empty()) {
+        const int at = pending.front();
+        pending.pop_front();
+        const int x = at % frame.width;
+        const int y = at / frame.width;
+        if (x > 0) queueOutside(x - 1, y);
+        if (x + 1 < frame.width) queueOutside(x + 1, y);
+        if (y > 0) queueOutside(x, y - 1);
+        if (y + 1 < frame.height) queueOutside(x, y + 1);
+    }
+
+    std::vector<std::uint8_t> visited(static_cast<std::size_t>(frame_size), 0);
+    std::vector<int> aperture;
+    for (int seed = 0; seed < frame_size; ++seed) {
+        if (frameOpaque(seed) || outside[static_cast<std::size_t>(seed)] != 0 ||
+            visited[static_cast<std::size_t>(seed)] != 0)
+            continue;
+        std::vector<int> component;
+        pending.push_back(seed);
+        visited[static_cast<std::size_t>(seed)] = 1;
+        while (!pending.empty()) {
+            const int at = pending.front();
+            pending.pop_front();
+            component.push_back(at);
+            const int x = at % frame.width;
+            const int y = at / frame.width;
+            const auto queueComponent = [&](int next) {
+                if (!frameOpaque(next) && outside[static_cast<std::size_t>(next)] == 0 &&
+                    visited[static_cast<std::size_t>(next)] == 0) {
+                    visited[static_cast<std::size_t>(next)] = 1;
+                    pending.push_back(next);
+                }
+            };
+            if (x > 0) queueComponent(at - 1);
+            if (x + 1 < frame.width) queueComponent(at + 1);
+            if (y > 0) queueComponent(at - frame.width);
+            if (y + 1 < frame.height) queueComponent(at + frame.width);
+        }
+        if (component.size() > aperture.size()) aperture = std::move(component);
+    }
+
+    std::vector<std::uint8_t> aperture_mask(static_cast<std::size_t>(frame_size), 0);
+    for (const int at : aperture) aperture_mask[static_cast<std::size_t>(at)] = 1;
+    for (int sy = 0; sy < source.height; ++sy) {
+        for (int sx = 0; sx < source.width; ++sx) {
+            const int fx = source_x + sx - frame_x;
+            const int fy = source_y + sy - frame_y;
+            if (fx < 0 || fx >= frame.width || fy < 0 || fy >= frame.height ||
+                aperture_mask[static_cast<std::size_t>(fy * frame.width + fx)] == 0)
+                continue;
+            const std::size_t from =
+                (static_cast<std::size_t>(sy) * source.width + sx) * 4;
+            if (source.rgba[from + 3] == 0) continue;
+            putPixel(destination, source_x + sx, source_y + sy,
+                     source.rgba[from], source.rgba[from + 1],
+                     source.rgba[from + 2], source.rgba[from + 3]);
+        }
+    }
 }
 
 void blitPaletteCrossfade(PshImage& destination,
@@ -1176,11 +1269,13 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
         "indR","lacR","lalR","miaR","milR","minR","nwjR","nwyR","orlR","phiR",
         "phoR","porR","sacR","sanR","seaR","torR","utaR","vanR","wasR"};
     if (viewer.mode() == RosterViewMode::TeamRoster) {
-        // FE ordering-table insertion composites the team plate first and the
-        // authored frml template over it. Drawing the frame first lets the
-        // rectangular logo record cover its intended blue/purple edge mask.
-        if (team->id < logo_tags.size())
-            blitAt(image, sprites, logo_tags[team->id], 40, 16);
+        // FE ordering-table insertion composites the team plate through the
+        // authored frml aperture, then draws the frame over that plate.
+        const PshImage* frame = sprite(sprites, "frml");
+        if (frame && team->id < logo_tags.size()) {
+            if (const PshImage* logo = sprite(sprites, logo_tags[team->id]))
+                blitInsideFrame(image, *logo, *frame, 40, 16, 30, 15);
+        }
         blitAt(image, sprites, "frml", 30, 15);
 
         // FUN_80059034 builds the centered team selector and both headings.
@@ -1255,7 +1350,7 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
             // replaces the dynamic stat object.  Reproduce the original
             // fixed fields instead of concatenating text with guessed spaces.
             const std::string position_text = position;
-            const std::string number_text = std::to_string(player->jersey_number);
+            const std::string number_text = player->jerseyNumberText();
             drawText(row_layer, font, position_text,
                      list_x + 28 - scaledTextWidth(font, position_text, 1, 100), y, 1,
                      row_r, row_g, row_b, false, elapsed_ms, 100);
@@ -1312,7 +1407,7 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                  false, 0, player_text_width);
         drawText(image, font, "num.", 54, 75, 1, 238, 238, 238,
                  false, 0, player_text_width);
-        drawText(image, font, std::to_string(selected->jersey_number), 108, 75, 1,
+        drawText(image, font, selected->jerseyNumberText(), 108, 75, 1,
                  255, 255, 255, false, 0, player_text_width);
         drawText(image, font, "pos.", 54, 86, 1, 238, 238, 238,
                  false, 0, player_text_width);

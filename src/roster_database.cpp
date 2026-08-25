@@ -152,6 +152,13 @@ std::string PlayerRecord::displayName() const {
     return first_name.empty() ? last_name : first_name + " " + last_name;
 }
 
+std::string PlayerRecord::jerseyNumberText() const {
+    // FEONLY stores jersey 00 as the byte sentinel 0xff. Preserve that raw
+    // representation in the recovered database, but reproduce the frontend's
+    // two-character display instead of leaking unsigned decimal 255.
+    return jersey_number == 0xff ? "00" : std::to_string(jersey_number);
+}
+
 int PlayerRecord::overallRating() const noexcept {
     unsigned total = 0;
     for (std::size_t i = 0; i < 16; ++i) total += ratings[i];

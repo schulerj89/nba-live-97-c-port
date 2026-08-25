@@ -136,6 +136,9 @@ def build_pack(data: bytes) -> bytes:
     at = PLAYER_OFFSET
     for expected_id in range(PLAYER_COUNT):
         start = at
+        # Byte 7 is the original jersey field. NBA Live encodes jersey 00 as
+        # 0xff (Montross, Parish, Ostertag, et al.); keep that sentinel intact
+        # so the native model remains lossless and formats it at presentation.
         prefix = data[at:at + 41]
         if len(prefix) != 41:
             raise ValueError("truncated player prefix")

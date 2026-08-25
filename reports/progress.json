@@ -498,7 +498,7 @@
           "rosters.player_card"
         ],
         "method": "weighted behavioral checks and local-only normalized visual references",
-        "earned_points": 23.8737,
+        "earned_points": 23.8741,
         "possible_points": 26.0,
         "fidelity_percent": 91.82,
         "group_scores": {
@@ -513,7 +513,7 @@
             "percent": 100.0
           },
           "visual": {
-            "earned_points": 9.8737,
+            "earned_points": 9.8741,
             "possible_points": 12.0,
             "percent": 82.28
           }
@@ -647,8 +647,8 @@
             "weight": 0.0,
             "description": "Roster help modal produces a distinct deterministic frame",
             "status": "pass",
-            "baseline_sha256": "8a0f0f18b451b0d6cd2b8fa9203e0bac0d8669d1f23e1e9cda86138ef52e1dfd",
-            "changed_sha256": "00ea0d9837dd7e506c7d96793ab009875395f65d4ebc8b2d130ad21ee906d4eb",
+            "baseline_sha256": "2352c3d1a70ca570b972b1141d09507d6068e0d72fd8dc31ef79ccc353c8a83b",
+            "changed_sha256": "673a45506f1f86c9f94ec22dc035bba3c1d19fd9987d4d961c9658b3aae32069",
             "credit": 0.0
           },
           {
@@ -677,8 +677,18 @@
             "weight": 0.0,
             "description": "Crossing the six-row roster window changes the rendered frame",
             "status": "pass",
-            "baseline_sha256": "8a0f0f18b451b0d6cd2b8fa9203e0bac0d8669d1f23e1e9cda86138ef52e1dfd",
-            "changed_sha256": "e4664aa269b4a0af0952acb71b111cc520ba5ca41c80e8e89da1f2189ca99b68",
+            "baseline_sha256": "2352c3d1a70ca570b972b1141d09507d6068e0d72fd8dc31ef79ccc353c8a83b",
+            "changed_sha256": "1cd3c6abf15398d9e47c09205eee368c9a600ebe7c5e8f22b078a5c5c7f3b648",
+            "credit": 0.0
+          },
+          {
+            "id": "team_logo_variants_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Distinct wide team-logo plates render through the shared authored frame aperture",
+            "status": "pass",
+            "baseline_sha256": "2352c3d1a70ca570b972b1141d09507d6068e0d72fd8dc31ef79ccc353c8a83b",
+            "changed_sha256": "64d9d6f4bb9d1e3749afeb83d6fb31428e0d9ff9acfa8ba7c209df50ef7305a4",
             "credit": 0.0
           },
           {
@@ -697,12 +707,12 @@
             "weight": 0.0,
             "description": "Team Rosters title holds between recovered deformation records and changes discretely instead of waving every frame",
             "frame_crop_sha256": [
-              "d511bb1e351a6f11e80b5f810b92fe206001bd8c10cb05611d282ee15139115e",
-              "d511bb1e351a6f11e80b5f810b92fe206001bd8c10cb05611d282ee15139115e",
-              "b4dfe7dbb9c5f28a3c4919b1cb6735e701db080a4da72bd28c89388895468492",
-              "b4dfe7dbb9c5f28a3c4919b1cb6735e701db080a4da72bd28c89388895468492",
-              "84d82096c50b9c4a3fa56a2cbfb0dad409b5c22607890b660a7b57089085b063",
-              "84d82096c50b9c4a3fa56a2cbfb0dad409b5c22607890b660a7b57089085b063"
+              "559b57703d7465fb3afdb01f9fd2d5ba1ecd89924f138cf1883276743bcc83fb",
+              "559b57703d7465fb3afdb01f9fd2d5ba1ecd89924f138cf1883276743bcc83fb",
+              "967140d08bd64bbd6648a537e7443877a649856c24dc667877b6f4c1c9c08d7e",
+              "967140d08bd64bbd6648a537e7443877a649856c24dc667877b6f4c1c9c08d7e",
+              "01fc17ab2ead8d66cb9ade231e0c58174791aeb6cd9a4481e9f0f37a51cbbfd2",
+              "01fc17ab2ead8d66cb9ade231e0c58174791aeb6cd9a4481e9f0f37a51cbbfd2"
             ],
             "status": "pass",
             "credit": 0.0
@@ -713,16 +723,16 @@
             "weight": 0.0,
             "description": "Chicago team-logo plate and frame, isolated from the broader header score",
             "status": "measured",
-            "similarity_percent": 82.73,
-            "color_similarity_percent": 83.85,
-            "edge_similarity_percent": 80.66,
+            "similarity_percent": 82.77,
+            "color_similarity_percent": 83.99,
+            "edge_similarity_percent": 80.51,
             "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
             "matched_native_capture": "team_chicago_phase_31.ppm",
             "registration_offset": [
               3,
               4
             ],
-            "native_dark_pixel_percent": 24.21,
+            "native_dark_pixel_percent": 25.74,
             "reference_dark_pixel_percent": 17.32,
             "credit": 0.0
           },
@@ -732,18 +742,18 @@
             "weight": 1.5,
             "description": "View Rosters title, team logo, EA logo and upper frame",
             "status": "measured",
-            "similarity_percent": 80.09,
-            "color_similarity_percent": 81.76,
-            "edge_similarity_percent": 76.99,
+            "similarity_percent": 80.12,
+            "color_similarity_percent": 81.81,
+            "edge_similarity_percent": 76.96,
             "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
             "matched_native_capture": "team_chicago_phase_00.ppm",
             "registration_offset": [
               0,
               4
             ],
-            "native_dark_pixel_percent": 36.62,
+            "native_dark_pixel_percent": 37.02,
             "reference_dark_pixel_percent": 14.0,
-            "credit": 1.2014
+            "credit": 1.2018
           },
           {
             "id": "team_selector_visual",

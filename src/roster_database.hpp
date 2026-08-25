@@ -85,6 +85,7 @@ struct PlayerRecord {
     [[nodiscard]] std::uint8_t acquiredFromTeamId() const noexcept { return source_metadata[7]; }
     [[nodiscard]] const StatLine& stats(PlayerStatPeriod period) const noexcept;
     [[nodiscard]] std::string displayName() const;
+    [[nodiscard]] std::string jerseyNumberText() const;
 };
 
 struct TeamRecord {
