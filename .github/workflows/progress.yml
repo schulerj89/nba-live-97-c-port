@@ -18,6 +18,8 @@ jobs:
         run: python tools/verify_recovery.py
       - name: Verify instruction-semantic accounting
         run: python tools/verify_instruction_semantics.py --check
+      - name: Verify View Rosters scenario contract
+        run: python tools/verify_roster_scenarios.py --check-config
       - name: Ensure private asset directory is not tracked
         shell: bash
         run: |

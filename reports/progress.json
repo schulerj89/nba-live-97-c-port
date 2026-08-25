@@ -814,9 +814,9 @@
         "local_recomp_available": true
       },
       "original_trace_comparison": {
-        "equivalent_scenarios": 0,
-        "declared_scenarios": 0,
-        "status": "not_established"
+        "equivalent_scenarios": 2,
+        "declared_scenarios": 2,
+        "status": "established"
       },
       "binary_matching": {
         "matching_functions": 0,
@@ -931,7 +931,7 @@
         },
         {
           "address": "0x80059610",
-          "name": "Rosters_ScanTeams",
+          "name": "Player_ChangeStatLayer",
           "source": "src/main_menu.cpp",
           "source_mapped": true,
           "original_instruction_count": 126,

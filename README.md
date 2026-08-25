@@ -116,6 +116,8 @@ Refresh that structural inventory with
 original PC trace is available locally, compare its function-entry path with
 the native checkpoint sequence using
 `python tools/compare_semantic_traces.py --original <local-trace.txt>`.
+For state-aware scenario comparison, follow the
+[View Rosters semantic verification workflow](docs/view_rosters_verification_workflow.md).
 
 View Rosters also has a separate end-to-end fidelity score generated from
 recovered behavior checks and local screenshot comparisons. Run

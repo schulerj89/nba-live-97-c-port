@@ -78,9 +78,9 @@
     },
     {
       "address": "0x80059610",
-      "name": "Rosters_ScanTeams",
+      "name": "Player_ChangeStatLayer",
       "source": "src/main_menu.cpp",
-      "symbols": ["RosterViewer::scanTeam", "RosterViewer::move"],
+      "symbols": ["RosterViewer::cycleCategory"],
       "accounted_blocks": [],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x80059610"
@@ -114,5 +114,16 @@
       "native_checkpoint": "0x8005FE14"
     }
   ],
-  "trace_scenarios": []
+  "trace_scenarios": [
+    {
+      "id": "view_rosters_navigation",
+      "contract": "config/decomp/view_rosters_scenarios.json",
+      "status": "original_trace_equivalent"
+    },
+    {
+      "id": "view_player_wrap",
+      "contract": "config/decomp/view_rosters_scenarios.json",
+      "status": "original_trace_equivalent"
+    }
+  ]
 }

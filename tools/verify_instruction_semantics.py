@@ -46,6 +46,21 @@ def calculate(require_native: bool):
         raise ValueError("duplicate instruction-semantic function address")
     if set(originals) != set(mappings):
         raise ValueError("original and source-mapping function scopes differ")
+    trace_scenarios = mapping.get("trace_scenarios", [])
+    trace_ids = [item.get("id") for item in trace_scenarios]
+    if len(trace_ids) != len(set(trace_ids)) or any(not value for value in trace_ids):
+        raise ValueError("trace scenario IDs must be non-empty and unique")
+    allowed_trace_statuses = {
+        "native_verified_original_pending",
+        "original_trace_equivalent",
+    }
+    if any(item.get("status") not in allowed_trace_statuses
+           for item in trace_scenarios):
+        raise ValueError("invalid trace scenario status")
+    equivalent_scenarios = sum(
+        item["status"] == "original_trace_equivalent"
+        for item in trace_scenarios
+    )
 
     native_functions = {}
     native_available = NATIVE.is_file()
@@ -185,9 +200,14 @@ def calculate(require_native: bool):
             "local_recomp_available": recomp_available,
         },
         "original_trace_comparison": {
-            "equivalent_scenarios": 0,
-            "declared_scenarios": len(mapping.get("trace_scenarios", [])),
-            "status": "not_established",
+            "equivalent_scenarios": equivalent_scenarios,
+            "declared_scenarios": len(trace_scenarios),
+            "status": (
+                "established" if trace_scenarios and
+                equivalent_scenarios == len(trace_scenarios)
+                else "partially_established" if equivalent_scenarios
+                else "not_established"
+            ),
         },
         "binary_matching": {
             "matching_functions": 0,
@@ -242,11 +262,13 @@ def main() -> int:
         scope = result["original_scope"]
         accounting = result["instruction_accounting"]
         checkpoints = result["native_checkpoint_observation"]
+        traces = result["original_trace_comparison"]
         print(
             f"Instruction semantics {action}: {scope['instructions']} instructions, "
             f"{accounting['accounted_instructions']} explicitly accounted, "
             f"{checkpoints['observed_functions']}/{checkpoints['total_functions']} "
-            "native checkpoints observed; original trace equivalence not claimed"
+            f"native checkpoints observed; original trace equivalence "
+            f"{traces['equivalent_scenarios']}/{traces['declared_scenarios']} scenarios"
         )
         if args.check and (not native_was_local or not recomp_was_local):
             print("  asset-free check: static tiers recalculated; committed local runtime/recomp observations retained")

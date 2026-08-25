@@ -91,7 +91,7 @@ Original screenshots and generated heatmaps remain under `.local/`; the public r
 - Structurally verified: **0/111 CFG edges**.
 - Native semantic checkpoints observed: **11/11 functions**.
 - Static-recomp entry points found: **10/11**; missing: **0x80059034**.
-- Original/native trace-equivalent scenarios: **0**; exact MIPS matching is not configured.
+- Original/native trace-equivalent scenarios: **2/2**; exact MIPS matching is not configured.
 
 Source ownership, block accounting, CFG verification, runtime trace equivalence, and exact binary matching are independent tiers and are never blended into one score.
 

@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "scope": "view_rosters",
+  "comparison_policy": {
+    "native_state_events": "exact",
+    "native_function_sequence": "collapsed_exact",
+    "original_function_sequence": "required_subsequence",
+    "reason": "Native C may compile differently from MIPS, but observable states and original semantic entrypoint order must agree."
+  },
+  "scenarios": [
+    {
+      "id": "view_rosters_navigation",
+      "description": "Open View Rosters, scroll six rows, change team, inspect a player, change its stat layer, scroll stats, return, then verify cancel restoration.",
+      "inputs": [
+        {"control": "open_view_rosters", "repeat": 1},
+        {"control": "down", "repeat": 6},
+        {"control": "right", "repeat": 1},
+        {"control": "cross", "repeat": 1},
+        {"control": "r2_stat_layer", "repeat": 1},
+        {"control": "down", "repeat": 18},
+        {"control": "down", "repeat": 1},
+        {"control": "up", "repeat": 1},
+        {"control": "triangle", "repeat": 1},
+        {"control": "commit_change_cancel", "repeat": 1}
+      ],
+      "events": [
+        {"name": "open", "changed": true, "mode": "team_roster", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "down_6", "changed": true, "mode": "team_roster", "team": 0, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "team_next", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "activate_player", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "stat_layer_next", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32},
+        {"name": "stats_down_18", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 18, "category": 3, "display": 32},
+        {"name": "stats_down_boundary", "changed": false, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 18, "category": 3, "display": 32},
+        {"name": "stats_up", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 17, "category": 3, "display": 32},
+        {"name": "return_to_roster", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32},
+        {"name": "cancel_restores_commit", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32}
+      ],
+      "native_collapsed_sequence": [
+        "0x800592C4",
+        "0x800590B8",
+        "0x8005FE14",
+        "0x8005A538",
+        "0x80059610",
+        "0x8005FE14"
+      ],
+      "original_required_subsequence": [
+        "0x800592C4",
+        "0x800590B8",
+        "0x8005A538",
+        "0x80059610"
+      ]
+    },
+    {
+      "id": "view_player_wrap",
+      "description": "Open the first player card, move previous to the final valid roster slot, then next back to the first.",
+      "inputs": [
+        {"control": "open_view_rosters", "repeat": 1},
+        {"control": "cross", "repeat": 1},
+        {"control": "left", "repeat": 1},
+        {"control": "right", "repeat": 1}
+      ],
+      "events": [
+        {"name": "open", "changed": true, "mode": "team_roster", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "activate_player", "changed": true, "mode": "player_card", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "previous_from_first", "changed": true, "mode": "player_card", "team": 0, "player": 10, "first_visible": 5, "first_stat": 0, "category": 2, "display": 32},
+        {"name": "next_from_last", "changed": true, "mode": "player_card", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32}
+      ],
+      "native_collapsed_sequence": [
+        "0x800592C4",
+        "0x800590B8",
+        "0x8005FE14",
+        "0x8005A538",
+        "0x80059928",
+        "0x8005FE14",
+        "0x80059928",
+        "0x8005FE14"
+      ],
+      "original_required_subsequence": [
+        "0x800592C4",
+        "0x800590B8",
+        "0x8005A538",
+        "0x80059928",
+        "0x80059928"
+      ]
+    }
+  ]
+}

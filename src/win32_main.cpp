@@ -45,6 +45,8 @@ struct Options {
     std::filesystem::path view_rosters_capture_dir;
     std::filesystem::path semantic_report_path =
         ".local/reports/view_rosters_semantic_trace.json";
+    std::filesystem::path roster_scenario_report_path =
+        ".local/reports/view_rosters_scenario_trace.json";
     std::uint32_t transition_ms = 3000;
     bool self_test = false;
 };
@@ -129,6 +131,8 @@ Options parseOptions(int argc, char** argv) {
             options.view_rosters_capture_dir = argv[++i];
         else if (arg == "--semantic-report" && i + 1 < argc)
             options.semantic_report_path = argv[++i];
+        else if (arg == "--roster-scenario-report" && i + 1 < argc)
+            options.roster_scenario_report_path = argv[++i];
     }
     return options;
 }
@@ -280,7 +284,7 @@ private:
         trace_.log("ROSTER-PALETTE", "FUN_8002FE58 patches ZSET4 Bkg colors 0..159 from ZTMPAL.PSH and preserves local colors 160..255");
         trace_.log("ROSTER-LAYOUT", "state 0x10 / ZSET4: Bkga-d x=0/128/256/384, ba35=(142,10), frml=(30,15), dynamic team logo=(40,16), team arrows=ZFONT0 0x8D/0x8A at (157/381,66), scroll arrows=0x8B/0x8C at (48,108/168), help=(235,217)");
         trace_.log("ROSTER-ANIM", "FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
-        trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; Select/L2 category, R2/L1 field; six-row repeat=7/5/3/1 ticks");
+        trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; live no$psx confirms L2/R2 stat-layer change enters FUN_80059610; six-row repeat=7/5/3/1 ticks");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
         trace_.log("RECOVERED", "state 0x24 FUN_8005A538 loads Z1PORT.IDX/BIG and Z1COOL.IDX/BIG for View Player");
         trace_.log("PLAYER-LAYOUT", "FUN_8003F7C8 reloads gfx state 0x24 / ZSET8 LIVE: Bkge-h, brta-d/brba-d, ba41=(40,18), team *Z=(296,35), cros=(336,204), o18a=(356,198)");
@@ -917,8 +921,129 @@ private:
         std::filesystem::remove(profile_test_path, cleanup_error);
         std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
         writeSemanticTraceReport();
+        writeRosterScenarioReport();
         trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters state 0x10, View Player 24-row scroll and FUN_80059928 wrap, versioned profiles, external roster database, all 2,524 frontend-music blocks, and 11 native semantic checkpoints validated");
         return 0;
+    }
+
+    void writeRosterScenarioReport() {
+        struct ScenarioEvent {
+            std::string name;
+            bool changed;
+            std::size_t team;
+            std::size_t player;
+            std::size_t first_visible;
+            std::size_t first_stat;
+            int category;
+            int display;
+            const char* mode;
+        };
+        struct Scenario {
+            std::string id;
+            std::vector<ScenarioEvent> events;
+            std::vector<std::uint32_t> sequence;
+        };
+        std::vector<Scenario> scenarios;
+        const auto capture = [](const char* name, bool changed,
+                                const nba97::RosterViewer& viewer) {
+            return ScenarioEvent{
+                name, changed, viewer.teamIndex(), viewer.playerIndex(),
+                viewer.firstVisiblePlayer(), viewer.firstVisiblePlayerStat(),
+                viewer.category(), viewer.displayIndex(),
+                viewer.mode() == nba97::RosterViewMode::PlayerCard
+                    ? "player_card" : "team_roster"};
+        };
+        const auto finish_sequence = []() {
+            std::array<std::uint32_t, NBA97_SEMANTIC_TRACE_SEQUENCE_CAPACITY> values{};
+            const std::size_t count =
+                nba97_semantic_trace_copy(values.data(), values.size());
+            return std::vector<std::uint32_t>(values.begin(), values.begin() + count);
+        };
+
+        nba97_semantic_trace_reset();
+        Scenario navigation{"view_rosters_navigation", {}, {}};
+        nba97::RosterViewer viewer;
+        viewer.open(roster_database_);
+        navigation.events.push_back(capture("open", true, viewer));
+        bool six_down = true;
+        for (int row = 0; row < 6; ++row)
+            six_down &= viewer.move(0, 1, roster_database_);
+        navigation.events.push_back(capture("down_6", six_down, viewer));
+        navigation.events.push_back(capture(
+            "team_next", viewer.move(1, 0, roster_database_), viewer));
+        viewer.activate(roster_database_);
+        navigation.events.push_back(capture("activate_player", true, viewer));
+        navigation.events.push_back(capture(
+            "stat_layer_next", viewer.cycleCategory(1), viewer));
+        bool stats_down = true;
+        for (int row = 0; row < 18; ++row)
+            stats_down &= viewer.move(0, 1, roster_database_);
+        navigation.events.push_back(capture("stats_down_18", stats_down, viewer));
+        navigation.events.push_back(capture(
+            "stats_down_boundary", viewer.move(0, 1, roster_database_), viewer));
+        navigation.events.push_back(capture(
+            "stats_up", viewer.move(0, -1, roster_database_), viewer));
+        viewer.returnToRoster();
+        navigation.events.push_back(capture("return_to_roster", true, viewer));
+        viewer.commit();
+        viewer.move(1, 0, roster_database_);
+        viewer.move(0, 1, roster_database_);
+        viewer.cancel();
+        navigation.events.push_back(capture("cancel_restores_commit", true, viewer));
+        navigation.sequence = finish_sequence();
+        scenarios.push_back(std::move(navigation));
+
+        nba97_semantic_trace_reset();
+        Scenario wrap{"view_player_wrap", {}, {}};
+        nba97::RosterViewer wrap_viewer;
+        wrap_viewer.open(roster_database_);
+        wrap.events.push_back(capture("open", true, wrap_viewer));
+        wrap_viewer.activate(roster_database_);
+        wrap.events.push_back(capture("activate_player", true, wrap_viewer));
+        wrap.events.push_back(capture(
+            "previous_from_first", wrap_viewer.move(-1, 0, roster_database_),
+            wrap_viewer));
+        wrap.events.push_back(capture(
+            "next_from_last", wrap_viewer.move(1, 0, roster_database_),
+            wrap_viewer));
+        wrap.sequence = finish_sequence();
+        scenarios.push_back(std::move(wrap));
+
+        std::filesystem::create_directories(
+            options_.roster_scenario_report_path.parent_path());
+        std::ofstream output(options_.roster_scenario_report_path, std::ios::trunc);
+        if (!output) throw std::runtime_error("cannot write roster scenario report");
+        output << "{\n  \"schema_version\": 1,\n  \"scope\": \"view_rosters\",\n"
+               << "  \"scenarios\": [\n";
+        for (std::size_t scenario_index = 0; scenario_index < scenarios.size();
+             ++scenario_index) {
+            const auto& scenario = scenarios[scenario_index];
+            output << "    {\"id\": \"" << scenario.id << "\", \"events\": [\n";
+            for (std::size_t event_index = 0; event_index < scenario.events.size();
+                 ++event_index) {
+                const auto& event = scenario.events[event_index];
+                output << "      {\"name\": \"" << event.name
+                       << "\", \"changed\": " << (event.changed ? "true" : "false")
+                       << ", \"mode\": \"" << event.mode
+                       << "\", \"team\": " << event.team
+                       << ", \"player\": " << event.player
+                       << ", \"first_visible\": " << event.first_visible
+                       << ", \"first_stat\": " << event.first_stat
+                       << ", \"category\": " << event.category
+                       << ", \"display\": " << event.display << "}"
+                       << (event_index + 1 == scenario.events.size() ? "\n" : ",\n");
+            }
+            output << "    ], \"function_sequence\": [";
+            for (std::size_t index = 0; index < scenario.sequence.size(); ++index) {
+                char address[16]{};
+                sprintf_s(address, "\"0x%08X\"", scenario.sequence[index]);
+                output << (index == 0 ? "" : ", ") << address;
+            }
+            output << "]}" << (scenario_index + 1 == scenarios.size() ? "\n" : ",\n");
+        }
+        output << "  ]\n}\n";
+        if (!output) throw std::runtime_error("failed writing roster scenario report");
+        trace_.log("SEMANTIC", "native View Rosters scenario state trace written");
     }
 
     void writeSemanticTraceReport() {
@@ -934,7 +1059,7 @@ private:
             {0x80059034u, "Rosters_DrawTeamSelector"},
             {0x800590B8u, "Rosters_ConstructViewer"},
             {0x800592C4u, "Rosters_RunViewer"},
-            {0x80059610u, "Rosters_ScanTeams"},
+            {0x80059610u, "Player_ChangeStatLayer"},
             {0x80059928u, "Rosters_CyclePlayer"},
             {0x8005A538u, "Player_RunCard"},
             {0x8005FE14u, "Rosters_ResolvePlayerId"},
@@ -1515,18 +1640,18 @@ private:
         else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
                  (key == VK_OEM_4 || key == 'J')) {
             changed = roster_viewer_.scanTeam(-1, roster_database_, menu_elapsed_ms_);
-            trace_.log("PLAYER-TEAM-SCAN", "L1: previous team through FUN_80059610");
+            trace_.log("PLAYER-TEAM-SCAN", "L1: previous team");
         } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
                    (key == VK_OEM_6 || key == 'K')) {
             changed = roster_viewer_.scanTeam(1, roster_database_, menu_elapsed_ms_);
-            trace_.log("PLAYER-TEAM-SCAN", "R1: next team through FUN_80059610");
+            trace_.log("PLAYER-TEAM-SCAN", "R1: next team");
         }
         else if (key == 'Q') {
             changed = roster_viewer_.cycleCategory(-1);
-            trace_.log("PLAYER-STAT-LAYER", "L2/internal 0x1000: previous recovered descriptor layer");
+            trace_.log("PLAYER-STAT-LAYER", "L2/internal 0x1000: previous layer through FUN_80059610");
         } else if (key == 'E') {
             changed = roster_viewer_.cycleCategory(1);
-            trace_.log("PLAYER-STAT-LAYER", "R2/internal 0x2000: next recovered descriptor layer");
+            trace_.log("PLAYER-STAT-LAYER", "R2/internal 0x2000: next layer through FUN_80059610");
         } else if (key == 'Z') {
             changed = roster_viewer_.cycleDisplay(-1);
             trace_.log("ROSTER-DISPLAY", "R2/internal 0x0200: previous field");

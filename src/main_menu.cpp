@@ -802,6 +802,10 @@ void RosterViewer::open(const RosterDatabase& database) noexcept {
 
 bool RosterViewer::cycleCategory(int direction) noexcept {
     if (!direction) return false;
+    // Live no$psx breakpoint evidence: FUN_80059610 is entered by L2/R2
+    // while View Player changes between season/playoff stat layers. Ordinary
+    // roster team navigation and View Player L1/R1 team scans do not enter it.
+    nba97_semantic_trace_record(0x80059610u);
     category_ = (category_ + (direction < 0 ? 5 : 1)) % 6;
     first_visible_player_stat_ = 0;
     return true;
@@ -830,7 +834,6 @@ bool RosterViewer::cycleDisplay(int direction) noexcept {
 bool RosterViewer::scanTeam(int direction, const RosterDatabase& database,
                             std::uint32_t elapsed_ms) noexcept {
     if (!direction || database.teams().empty()) return false;
-    nba97_semantic_trace_record(0x80059610u);
     palette_from_team_index_ = team_index_;
     team_index_ = direction < 0
         ? (team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1)
@@ -861,7 +864,6 @@ bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& data
     const std::size_t previous_first_visible = first_visible_player_;
     const std::size_t previous_stat = first_visible_player_stat_;
     if (mode_ == RosterViewMode::TeamRoster && horizontal) {
-        nba97_semantic_trace_record(0x80059610u);
         palette_from_team_index_ = team_index_;
         if (horizontal < 0) team_index_ = team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1;
         else team_index_ = (team_index_ + 1) % database.teams().size();

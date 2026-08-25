@@ -361,6 +361,7 @@ def render_markdown(report: dict) -> str:
     structural = semantics["structural_verification"]
     checkpoints = semantics["native_checkpoint_observation"]
     recomp = semantics["recomp_crosscheck"]
+    trace_comparison = semantics["original_trace_comparison"]
     lines += [
         "",
         "## View Rosters instruction semantics",
@@ -373,7 +374,8 @@ def render_markdown(report: dict) -> str:
         f"- Native semantic checkpoints observed: **{checkpoints['observed_functions']}/{checkpoints['total_functions']} functions**.",
         f"- Static-recomp entry points found: **{recomp['entrypoints_found']}/{recomp['total_functions']}**; "
         f"missing: **{', '.join(recomp['missing_entrypoints']) or 'none'}**.",
-        "- Original/native trace-equivalent scenarios: **0**; exact MIPS matching is not configured.",
+        f"- Original/native trace-equivalent scenarios: **{trace_comparison['equivalent_scenarios']}/"
+        f"{trace_comparison['declared_scenarios']}**; exact MIPS matching is not configured.",
         "",
         "Source ownership, block accounting, CFG verification, runtime trace equivalence, and exact binary matching are independent tiers and are never blended into one score.",
     ]
