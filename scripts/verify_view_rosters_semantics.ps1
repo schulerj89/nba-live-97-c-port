@@ -38,7 +38,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'View Rosters semantic comparison failed.' }
 
     Write-Host 'VIEW ROSTERS SEMANTIC VERIFICATION PASS'
-    if (-not $NavigationOriginalTrace -or -not $WrapOriginalTrace) {
+    if ($RequireOriginal) {
+        Write-Host 'All required local original traces and all native scenarios verified.'
+    } elseif (-not $NavigationOriginalTrace -or -not $WrapOriginalTrace) {
         Write-Host 'Native state contract is verified; original equivalence remains partial until both local no$psx traces are supplied.'
     }
 } finally {

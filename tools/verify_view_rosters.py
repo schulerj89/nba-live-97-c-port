@@ -18,6 +18,12 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def image_crop_sha256(path: Path, crop) -> str:
+    from PIL import Image
+    image = Image.open(path).convert("RGB").crop(tuple(crop))
+    return hashlib.sha256(image.tobytes()).hexdigest()
+
+
 def visual_similarity(native_path: Path, reference_path: Path, crop, proof_dir: Path,
                       proof_name: str, comparison_region=None, write_proof: bool = True):
     try:
@@ -59,6 +65,11 @@ def visual_similarity(native_path: Path, reference_path: Path, crop, proof_dir: 
                 best = candidate
     score, color_score, edge_score, offset_x, offset_y, reference = best
     color_diff = ImageChops.difference(native, reference)
+    native_region = native.crop(comparison_box)
+    reference_region = reference.crop(comparison_box)
+    pixel_count = max(1, native_region.width * native_region.height)
+    native_dark = 100.0 * sum(max(pixel) < 32 for pixel in native_region.getdata()) / pixel_count
+    reference_dark = 100.0 * sum(max(pixel) < 32 for pixel in reference_region.getdata()) / pixel_count
 
     # The heatmap is diagnostic evidence and remains under .local/.
     if write_proof:
@@ -69,7 +80,7 @@ def visual_similarity(native_path: Path, reference_path: Path, crop, proof_dir: 
         heatmap = color_diff.convert("L").point(lambda value: min(255, value * 3))
         heatmap.save(proof_dir / f"{proof_name}_diff.png")
     return (round(score, 2), round(color_score, 2), round(edge_score, 2),
-            offset_x, offset_y)
+            offset_x, offset_y, round(native_dark, 2), round(reference_dark, 2))
 
 
 def main() -> int:
@@ -119,6 +130,31 @@ def main() -> int:
         elif check["source"] == "capture":
             score = 100.0 if capture_dimensions_pass else 0.0
             result["status"] = "pass" if capture_dimensions_pass else "fail"
+        elif check["source"] == "capture_difference":
+            baseline = capture_dir / check["baseline"]
+            changed = capture_dir / check["changed"]
+            passed = (baseline.is_file() and changed.is_file() and
+                      sha256(baseline) != sha256(changed))
+            score = 100.0 if passed else 0.0
+            result["status"] = "pass" if passed else "fail"
+            if baseline.is_file():
+                result["baseline_sha256"] = sha256(baseline)
+            if changed.is_file():
+                result["changed_sha256"] = sha256(changed)
+        elif check["source"] == "capture_cadence":
+            paths = [capture_dir / name for name in check["frames"]]
+            if all(path.is_file() for path in paths):
+                hashes = [image_crop_sha256(path, check["crop"]) for path in paths]
+                hold_pass = all(hashes[left] == hashes[right]
+                                for left, right in check["equal_pairs"])
+                jump_pass = all(hashes[left] != hashes[right]
+                                for left, right in check["different_pairs"])
+                passed = hold_pass and jump_pass
+                result["frame_crop_sha256"] = hashes
+            else:
+                passed = False
+            score = 100.0 if passed else 0.0
+            result["status"] = "pass" if passed else "fail"
         elif check["source"] == "visual_reference":
             native_paths = (
                 sorted(capture_dir.glob(check["native_pattern"]))
@@ -139,7 +175,8 @@ def main() -> int:
                     for path in native_paths
                 ]
                 (_, best_path) = max(measured, key=lambda item: item[0][0])
-                score, color_score, edge_score, offset_x, offset_y = visual_similarity(
+                (score, color_score, edge_score, offset_x, offset_y,
+                 native_dark, reference_dark) = visual_similarity(
                     best_path, reference_path, check.get("reference_crop"),
                     diff_dir, check["id"], check.get("comparison_region"), True)
                 result.update(
@@ -150,6 +187,8 @@ def main() -> int:
                     reference_sha256=sha256(reference_path),
                     matched_native_capture=best_path.name,
                     registration_offset=[offset_x, offset_y],
+                    native_dark_pixel_percent=native_dark,
+                    reference_dark_pixel_percent=reference_dark,
                 )
         else:
             raise ValueError(f"unknown verification source: {check['source']}")

@@ -283,7 +283,7 @@ private:
         trace_.log("RECOVERED", "0x8002FDA4 loads 33 ZTMPAL.PSH palettes; 0x80030308 loads ZBPAL.PSH");
         trace_.log("ROSTER-PALETTE", "FUN_8002FE58 patches ZSET4 Bkg colors 0..159 from ZTMPAL.PSH and preserves local colors 160..255");
         trace_.log("ROSTER-LAYOUT", "state 0x10 / ZSET4: Bkga-d x=0/128/256/384, ba35=(142,10), frml=(30,15), dynamic team logo=(40,16), team arrows=ZFONT0 0x8D/0x8A at (157/381,66), scroll arrows=0x8B/0x8C at (48,108/168), help=(235,217)");
-        trace_.log("ROSTER-ANIM", "FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
+        trace_.log("ROSTER-ANIM", "ba35 title uses FUN_8003186C/FUN_80034A5C discrete four-corner shake; FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
         trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; live no$psx confirms L2/R2 stat-layer change enters FUN_80059610; six-row repeat=7/5/3/1 ticks");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
         trace_.log("RECOVERED", "state 0x24 FUN_8005A538 loads Z1PORT.IDX/BIG and Z1COOL.IDX/BIG for View Player");
@@ -621,6 +621,11 @@ private:
         writePpm(nba97::renderRosterViewer(
             roster_viewer_, roster_database_, menu_font_, roster_sprites_, elapsed),
             output / "team_chicago_initial.ppm");
+        roster_viewer_.toggleHelp();
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, roster_sprites_, elapsed),
+            output / "team_chicago_help.ppm");
+        roster_viewer_.dismissHelp();
         for (int phase = 0; phase < 40; ++phase) {
             char name[48]{};
             sprintf_s(name, "team_chicago_phase_%02d.ppm", phase);
@@ -649,6 +654,20 @@ private:
             roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
             roster_cool_facts_available_, &control_font_),
             output / "player_chicago_initial.ppm");
+        roster_viewer_.toggleHelp();
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, player_sprites_, 340,
+            roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+            roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_help.ppm");
+        roster_viewer_.dismissHelp();
+        roster_viewer_.cycleCategory(-1);
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, player_sprites_, 340,
+            roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+            roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_layer_1.ppm");
+        roster_viewer_.cycleCategory(1);
         for (int phase = 0; phase < 40; ++phase) {
             char name[48]{};
             sprintf_s(name, "player_chicago_phase_%02d.ppm", phase);
@@ -689,8 +708,10 @@ private:
                  << "  \"team\": \"Chicago Bulls\",\n"
                  << "  \"visible_rows\": 6,\n"
                  << "  \"captures\": [\"team_atlanta_initial.ppm\", "
-                    "\"team_chicago_initial.ppm\", \"team_chicago_scrolled.ppm\", "
+                    "\"team_chicago_initial.ppm\", \"team_chicago_help.ppm\", "
+                    "\"team_chicago_scrolled.ppm\", "
                     "\"player_chicago_initial.ppm\", "
+                    "\"player_chicago_help.ppm\", \"player_chicago_layer_1.ppm\", "
                     "\"player_chicago_scrolled.ppm\"]\n"
                  << "}\n";
         trace_.log("VERIFY-CAPTURE", "deterministic View Rosters frames -> " + output.string());
@@ -847,6 +868,16 @@ private:
             wrap_test.playerIndex() != wrap_count - 1 ||
             !wrap_test.move(1, 0, roster_database_) || wrap_test.playerIndex() != 0)
             throw std::runtime_error("View Player FUN_80059928 wrapped cycling self-test failed");
+        nba97::RecoveredAudioPlayer cool_fact_test;
+        const auto cool_fact_info = cool_fact_test.inspectCoolFact(
+            options_.asset_root / "menu" / "Z1COOL.IDX",
+            options_.asset_root / "menu" / "Z1COOL.BIG", 0, 1);
+        if (cool_fact_info.record != 1 || cool_fact_info.sample_rate != 16000 ||
+            cool_fact_info.sample_count != 286001 || cool_fact_info.compressed_bytes != 163440 ||
+            cool_fact_test.isPlaying())
+            throw std::runtime_error("View Player Cool Fact archive/decode regression failed");
+        trace_.log("COOL-FACT-TEST",
+            "player=0 record=1 decoded PSX-ADPCM samples=286001 rate=16000 without playback");
         roster_viewer_test.returnToRoster();
         if (roster_viewer_test.mode() != nba97::RosterViewMode::TeamRoster ||
             roster_viewer_test.playerIndex() != 6 ||
@@ -937,6 +968,7 @@ private:
             int category;
             int display;
             const char* mode;
+            bool help_visible;
         };
         struct Scenario {
             std::string id;
@@ -951,7 +983,8 @@ private:
                 viewer.firstVisiblePlayer(), viewer.firstVisiblePlayerStat(),
                 viewer.category(), viewer.displayIndex(),
                 viewer.mode() == nba97::RosterViewMode::PlayerCard
-                    ? "player_card" : "team_roster"};
+                    ? "player_card" : "team_roster",
+                viewer.helpVisible()};
         };
         const auto finish_sequence = []() {
             std::array<std::uint32_t, NBA97_SEMANTIC_TRACE_SEQUENCE_CAPACITY> values{};
@@ -960,8 +993,75 @@ private:
             return std::vector<std::uint32_t>(values.begin(), values.begin() + count);
         };
 
-        nba97_semantic_trace_reset();
-        Scenario navigation{"view_rosters_navigation", {}, {}};
+        const auto begin = [&scenarios](const char* id) -> Scenario& {
+            scenarios.push_back(Scenario{id, {}, {}});
+            nba97_semantic_trace_reset();
+            return scenarios.back();
+        };
+        const auto finish = [&finish_sequence](Scenario& scenario) {
+            scenario.sequence = finish_sequence();
+        };
+
+        Scenario& opening = begin("open_defaults");
+        nba97::RosterViewer opening_viewer;
+        opening_viewer.open(roster_database_);
+        opening.events.push_back(capture("open", true, opening_viewer));
+        finish(opening);
+
+        Scenario& roster_scroll = begin("roster_scroll_boundaries");
+        nba97::RosterViewer roster_scroll_viewer;
+        roster_scroll_viewer.open(roster_database_);
+        roster_scroll.events.push_back(capture(
+            "up_at_top", roster_scroll_viewer.move(0, -1, roster_database_),
+            roster_scroll_viewer));
+        bool five_down = true;
+        for (int row = 0; row < 5; ++row)
+            five_down &= roster_scroll_viewer.move(0, 1, roster_database_);
+        roster_scroll.events.push_back(capture("down_5_no_scroll", five_down,
+                                                roster_scroll_viewer));
+        roster_scroll.events.push_back(capture(
+            "down_6_scrolls_window",
+            roster_scroll_viewer.move(0, 1, roster_database_), roster_scroll_viewer));
+        bool to_bottom = false;
+        while (roster_scroll_viewer.move(0, 1, roster_database_))
+            to_bottom = true;
+        roster_scroll.events.push_back(capture("at_last_valid_player", to_bottom,
+                                                roster_scroll_viewer));
+        roster_scroll.events.push_back(capture(
+            "down_at_bottom", roster_scroll_viewer.move(0, 1, roster_database_),
+            roster_scroll_viewer));
+        bool to_top = false;
+        while (roster_scroll_viewer.move(0, -1, roster_database_))
+            to_top = true;
+        roster_scroll.events.push_back(capture("returned_to_top", to_top,
+                                                roster_scroll_viewer));
+        finish(roster_scroll);
+
+        Scenario& team_wrap = begin("roster_team_wrap");
+        nba97::RosterViewer team_wrap_viewer;
+        team_wrap_viewer.open(roster_database_);
+        for (int row = 0; row < 6; ++row)
+            team_wrap_viewer.move(0, 1, roster_database_);
+        team_wrap.events.push_back(capture(
+            "previous_from_first", team_wrap_viewer.move(-1, 0, roster_database_),
+            team_wrap_viewer));
+        team_wrap.events.push_back(capture(
+            "next_from_last", team_wrap_viewer.move(1, 0, roster_database_),
+            team_wrap_viewer));
+        finish(team_wrap);
+
+        Scenario& transition = begin("player_enter_return");
+        nba97::RosterViewer transition_viewer;
+        transition_viewer.open(roster_database_);
+        for (int row = 0; row < 6; ++row)
+            transition_viewer.move(0, 1, roster_database_);
+        transition_viewer.activate(roster_database_);
+        transition.events.push_back(capture("enter_player", true, transition_viewer));
+        transition_viewer.returnToRoster();
+        transition.events.push_back(capture("return_preserves_row", true, transition_viewer));
+        finish(transition);
+
+        Scenario& navigation = begin("view_rosters_navigation");
         nba97::RosterViewer viewer;
         viewer.open(roster_database_);
         navigation.events.push_back(capture("open", true, viewer));
@@ -990,11 +1090,9 @@ private:
         viewer.move(0, 1, roster_database_);
         viewer.cancel();
         navigation.events.push_back(capture("cancel_restores_commit", true, viewer));
-        navigation.sequence = finish_sequence();
-        scenarios.push_back(std::move(navigation));
+        finish(navigation);
 
-        nba97_semantic_trace_reset();
-        Scenario wrap{"view_player_wrap", {}, {}};
+        Scenario& wrap = begin("view_player_wrap");
         nba97::RosterViewer wrap_viewer;
         wrap_viewer.open(roster_database_);
         wrap.events.push_back(capture("open", true, wrap_viewer));
@@ -1006,8 +1104,106 @@ private:
         wrap.events.push_back(capture(
             "next_from_last", wrap_viewer.move(1, 0, roster_database_),
             wrap_viewer));
-        wrap.sequence = finish_sequence();
-        scenarios.push_back(std::move(wrap));
+        finish(wrap);
+
+        Scenario& stat_scroll = begin("player_stat_scroll_boundaries");
+        nba97::RosterViewer stat_scroll_viewer;
+        stat_scroll_viewer.open(roster_database_);
+        stat_scroll_viewer.activate(roster_database_);
+        stat_scroll.events.push_back(capture(
+            "up_at_top", stat_scroll_viewer.move(0, -1, roster_database_),
+            stat_scroll_viewer));
+        bool stats_to_bottom = true;
+        for (int row = 0; row < 18; ++row)
+            stats_to_bottom &= stat_scroll_viewer.move(0, 1, roster_database_);
+        stat_scroll.events.push_back(capture("down_18", stats_to_bottom,
+                                              stat_scroll_viewer));
+        stat_scroll.events.push_back(capture(
+            "down_at_bottom", stat_scroll_viewer.move(0, 1, roster_database_),
+            stat_scroll_viewer));
+        bool stats_to_top = true;
+        for (int row = 0; row < 18; ++row)
+            stats_to_top &= stat_scroll_viewer.move(0, -1, roster_database_);
+        stat_scroll.events.push_back(capture("up_18", stats_to_top,
+                                              stat_scroll_viewer));
+        stat_scroll.events.push_back(capture(
+            "up_at_top_again", stat_scroll_viewer.move(0, -1, roster_database_),
+            stat_scroll_viewer));
+        finish(stat_scroll);
+
+        Scenario& layers = begin("player_stat_layer_wrap");
+        nba97::RosterViewer layer_viewer;
+        layer_viewer.open(roster_database_);
+        layer_viewer.activate(roster_database_);
+        layer_viewer.move(0, 1, roster_database_);
+        layers.events.push_back(capture(
+            "previous_to_layer_1", layer_viewer.cycleCategory(-1), layer_viewer));
+        layers.events.push_back(capture(
+            "previous_to_layer_0", layer_viewer.cycleCategory(-1), layer_viewer));
+        layers.events.push_back(capture(
+            "previous_wraps_to_layer_5", layer_viewer.cycleCategory(-1), layer_viewer));
+        layers.events.push_back(capture(
+            "next_wraps_to_layer_0", layer_viewer.cycleCategory(1), layer_viewer));
+        finish(layers);
+
+        Scenario& displays = begin("roster_display_wrap_memory");
+        nba97::RosterViewer display_viewer;
+        display_viewer.open(roster_database_);
+        displays.events.push_back(capture(
+            "previous_wraps_32_to_43", display_viewer.cycleDisplay(-1), display_viewer));
+        displays.events.push_back(capture(
+            "next_wraps_43_to_32", display_viewer.cycleDisplay(1), display_viewer));
+        displays.events.push_back(capture(
+            "next_to_33", display_viewer.cycleDisplay(1), display_viewer));
+        display_viewer.cycleCategory(1);
+        display_viewer.cycleDisplay(1);
+        displays.events.push_back(capture("layer_3_has_independent_33", true,
+                                          display_viewer));
+        display_viewer.cycleCategory(-1);
+        displays.events.push_back(capture("layer_2_restores_33", true,
+                                          display_viewer));
+        finish(displays);
+
+        Scenario& scan = begin("player_team_scan_wrap");
+        nba97::RosterViewer scan_viewer;
+        scan_viewer.open(roster_database_);
+        scan_viewer.activate(roster_database_);
+        scan.events.push_back(capture(
+            "previous_team_wrap", scan_viewer.scanTeam(-1, roster_database_), scan_viewer));
+        scan.events.push_back(capture(
+            "next_team_wrap", scan_viewer.scanTeam(1, roster_database_), scan_viewer));
+        finish(scan);
+
+        Scenario& help = begin("help_modal_both_modes");
+        nba97::RosterViewer help_viewer;
+        help_viewer.open(roster_database_);
+        help_viewer.toggleHelp();
+        help.events.push_back(capture("team_help_open", true, help_viewer));
+        help_viewer.dismissHelp();
+        help.events.push_back(capture("team_help_closed", true, help_viewer));
+        help_viewer.activate(roster_database_);
+        help_viewer.toggleHelp();
+        help.events.push_back(capture("player_help_open", true, help_viewer));
+        help_viewer.dismissHelp();
+        help.events.push_back(capture("player_help_closed", true, help_viewer));
+        finish(help);
+
+        Scenario& transaction = begin("roster_commit_cancel");
+        nba97::RosterViewer transaction_viewer;
+        transaction_viewer.open(roster_database_);
+        for (int row = 0; row < 6; ++row)
+            transaction_viewer.move(0, 1, roster_database_);
+        transaction_viewer.move(1, 0, roster_database_);
+        transaction_viewer.commit();
+        transaction.events.push_back(capture("committed", true, transaction_viewer));
+        transaction_viewer.move(1, 0, roster_database_);
+        transaction_viewer.move(0, 1, roster_database_);
+        transaction.events.push_back(capture("changed_after_commit", true,
+                                               transaction_viewer));
+        transaction_viewer.cancel();
+        transaction.events.push_back(capture("cancel_restores_commit", true,
+                                               transaction_viewer));
+        finish(transaction);
 
         std::filesystem::create_directories(
             options_.roster_scenario_report_path.parent_path());
@@ -1030,7 +1226,9 @@ private:
                        << ", \"first_visible\": " << event.first_visible
                        << ", \"first_stat\": " << event.first_stat
                        << ", \"category\": " << event.category
-                       << ", \"display\": " << event.display << "}"
+                       << ", \"display\": " << event.display
+                       << ", \"help_visible\": "
+                       << (event.help_visible ? "true" : "false") << "}"
                        << (event_index + 1 == scenario.events.size() ? "\n" : ",\n");
             }
             output << "    ], \"function_sequence\": [";

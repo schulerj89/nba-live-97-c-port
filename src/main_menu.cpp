@@ -250,7 +250,8 @@ void blitJumbledTitleSprite(PshImage& destination,
     const PshImage* item = sprite(sprites, tag);
     if (!item) return;
 
-    // FUN_8003186C walks the two GPU primitives that make up ba41 and
+    // FUN_8003186C walks the GPU primitives that make up the frontend title
+    // objects (including ba35 and ba41), and
     // FUN_80034A5C applies an eight-byte (four-corner) deformation record.
     // ZSET8's 221-pixel title crosses the PS1's 128-pixel texture-page edge,
     // so preserve that original two-piece construction.  The recovered menu
@@ -1164,7 +1165,9 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                std::get<1>(border), std::get<2>(border));
     if (roster_screen) {
         blitAt(image, sprites, "XXR2", 404, 16);
-        blitJiggledSprite(image, sprites, "ba35", 142, 10, elapsed_ms);
+        // State 0x10 uses the same discrete four-corner frontend deformation
+        // path as state 0x24. It shakes/jumbles; it is not a scanline wave.
+        blitJumbledTitleSprite(image, sprites, "ba35", 142, 10, elapsed_ms);
     }
 
     if (!team) return image;

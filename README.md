@@ -118,6 +118,11 @@ the native checkpoint sequence using
 `python tools/compare_semantic_traces.py --original <local-trace.txt>`.
 For state-aware scenario comparison, follow the
 [View Rosters semantic verification workflow](docs/view_rosters_verification_workflow.md).
+That contract currently runs 12 small native scenarios over 16 inventoried
+state interactions, while original no$psx trace equivalence remains a separate
+2-scenario evidence tier. Help modals, scrolling, stat layers, and Cool Fact
+decoding also have non-scoring pass/fail regressions so they cannot inflate the
+visual-fidelity percentage.
 
 View Rosters also has a separate end-to-end fidelity score generated from
 recovered behavior checks and local screenshot comparisons. Run

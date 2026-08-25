@@ -34,11 +34,20 @@ public:
                                    const std::filesystem::path& archive,
                                    std::uint16_t player_id,
                                    std::uint32_t preferred_variant = 0xffffffffu);
+    RecoveredClipInfo inspectCoolFact(const std::filesystem::path& index,
+                                      const std::filesystem::path& archive,
+                                      std::uint16_t player_id,
+                                      std::uint32_t preferred_variant = 0xffffffffu);
     void stop() noexcept;
     [[nodiscard]] bool isPlaying() const noexcept;
     [[nodiscard]] const RecoveredClipInfo& info() const noexcept { return info_; }
 
 private:
+    RecoveredClipInfo loadCoolFact(const std::filesystem::path& index,
+                                   const std::filesystem::path& archive,
+                                   std::uint16_t player_id,
+                                   std::uint32_t preferred_variant,
+                                   bool play);
     void playPcm(std::vector<std::int16_t> pcm, std::uint32_t sample_rate);
     HWAVEOUT wave_out_ = nullptr;
     WAVEHDR header_{};

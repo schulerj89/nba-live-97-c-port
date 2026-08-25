@@ -498,9 +498,9 @@
           "rosters.player_card"
         ],
         "method": "weighted behavioral checks and local-only normalized visual references",
-        "earned_points": 23.8729,
+        "earned_points": 23.8751,
         "possible_points": 26.0,
-        "fidelity_percent": 91.82,
+        "fidelity_percent": 91.83,
         "group_scores": {
           "behavior": {
             "earned_points": 13.0,
@@ -513,9 +513,9 @@
             "percent": 100.0
           },
           "visual": {
-            "earned_points": 9.8729,
+            "earned_points": 9.8751,
             "possible_points": 12.0,
-            "percent": 82.27
+            "percent": 82.29
           }
         },
         "behavior_self_test_passed": true,
@@ -626,6 +626,14 @@
             "credit": 1.0
           },
           {
+            "id": "cool_fact_decode",
+            "group": "behavior",
+            "weight": 0.0,
+            "description": "A known original Z1COOL record validates and decodes to the exact recovered PSX-ADPCM sample count without starting playback",
+            "status": "pass",
+            "credit": 0.0
+          },
+          {
             "id": "capture_dimensions",
             "group": "rendering",
             "weight": 1.0,
@@ -634,21 +642,108 @@
             "credit": 1.0
           },
           {
+            "id": "team_help_modal_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Roster help modal produces a distinct deterministic frame",
+            "status": "pass",
+            "baseline_sha256": "990b95a4981faa8c16324c2e78b84938cc089bcae0d7e29ff974de07f42e7dea",
+            "changed_sha256": "c490e90b897365c879ba51e72f11571d6c0985f2604e2db01ba8ff989ad55194",
+            "credit": 0.0
+          },
+          {
+            "id": "player_help_modal_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Player help modal produces a distinct deterministic frame",
+            "status": "pass",
+            "baseline_sha256": "d9c090b9016302bd0f68540f4c03d4e2f3fb6f5546cd240ad255fecc4bc3cbf3",
+            "changed_sha256": "af7e6e3335cc8c1a3ecdc9bb7ee32d5210b2a2476b974a8e923fea11443caf06",
+            "credit": 0.0
+          },
+          {
+            "id": "stat_layer_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Changing the stat layer changes the rendered player-card frame",
+            "status": "pass",
+            "baseline_sha256": "d9c090b9016302bd0f68540f4c03d4e2f3fb6f5546cd240ad255fecc4bc3cbf3",
+            "changed_sha256": "557f4a40f07d0995832655b612fff7fa1be35ea4f2bbb655a13363760ca91ec6",
+            "credit": 0.0
+          },
+          {
+            "id": "roster_scroll_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Crossing the six-row roster window changes the rendered frame",
+            "status": "pass",
+            "baseline_sha256": "990b95a4981faa8c16324c2e78b84938cc089bcae0d7e29ff974de07f42e7dea",
+            "changed_sha256": "dd49343d8eee331410b311066f0783fcc3f3c09643d38e2749821db63673f06c",
+            "credit": 0.0
+          },
+          {
+            "id": "player_stat_scroll_render",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Scrolling player statistics changes the rendered frame",
+            "status": "pass",
+            "baseline_sha256": "d9c090b9016302bd0f68540f4c03d4e2f3fb6f5546cd240ad255fecc4bc3cbf3",
+            "changed_sha256": "1fa03d253859ed028d695ca2126886d521f9ad56674d581d14d54d2cc9150505",
+            "credit": 0.0
+          },
+          {
+            "id": "team_title_shake_cadence",
+            "group": "rendering",
+            "weight": 0.0,
+            "description": "Team Rosters title holds between recovered deformation records and changes discretely instead of waving every frame",
+            "frame_crop_sha256": [
+              "9b0878a92645590dc35294b184810178397ce851f62718cf4280c932fb3291e0",
+              "9b0878a92645590dc35294b184810178397ce851f62718cf4280c932fb3291e0",
+              "1fb8ccd6af3c25ccececbe6101061214eabcd12920d8a178dec6a509c57ac45a",
+              "1fb8ccd6af3c25ccececbe6101061214eabcd12920d8a178dec6a509c57ac45a",
+              "e2e1ca0ec00058587e6a303ebafa58b75787e2516cdf9d2add8e541c5f325013",
+              "e2e1ca0ec00058587e6a303ebafa58b75787e2516cdf9d2add8e541c5f325013"
+            ],
+            "status": "pass",
+            "credit": 0.0
+          },
+          {
+            "id": "team_logo_visual",
+            "group": "visual",
+            "weight": 0.0,
+            "description": "Chicago team-logo plate and frame, isolated from the broader header score",
+            "status": "measured",
+            "similarity_percent": 81.27,
+            "color_similarity_percent": 81.91,
+            "edge_similarity_percent": 80.1,
+            "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
+            "matched_native_capture": "team_chicago_phase_31.ppm",
+            "registration_offset": [
+              3,
+              4
+            ],
+            "native_dark_pixel_percent": 10.36,
+            "reference_dark_pixel_percent": 17.32,
+            "credit": 0.0
+          },
+          {
             "id": "team_header_visual",
             "group": "visual",
             "weight": 1.5,
             "description": "View Rosters title, team logo, EA logo and upper frame",
             "status": "measured",
-            "similarity_percent": 80.04,
-            "color_similarity_percent": 81.62,
-            "edge_similarity_percent": 77.11,
+            "similarity_percent": 80.19,
+            "color_similarity_percent": 81.82,
+            "edge_similarity_percent": 77.15,
             "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
-            "matched_native_capture": "team_chicago_phase_17.ppm",
+            "matched_native_capture": "team_chicago_phase_00.ppm",
             "registration_offset": [
               0,
               4
             ],
-            "credit": 1.2006
+            "native_dark_pixel_percent": 33.58,
+            "reference_dark_pixel_percent": 14.0,
+            "credit": 1.2028
           },
           {
             "id": "team_selector_visual",
@@ -665,6 +760,8 @@
               1,
               4
             ],
+            "native_dark_pixel_percent": 38.64,
+            "reference_dark_pixel_percent": 25.8,
             "credit": 1.2245
           },
           {
@@ -682,6 +779,8 @@
               2,
               -4
             ],
+            "native_dark_pixel_percent": 33.05,
+            "reference_dark_pixel_percent": 20.01,
             "credit": 1.1932
           },
           {
@@ -699,6 +798,8 @@
               -1,
               -4
             ],
+            "native_dark_pixel_percent": 47.37,
+            "reference_dark_pixel_percent": 24.66,
             "credit": 1.2581
           },
           {
@@ -716,6 +817,8 @@
               -1,
               4
             ],
+            "native_dark_pixel_percent": 45.66,
+            "reference_dark_pixel_percent": 10.96,
             "credit": 1.2827
           },
           {
@@ -733,6 +836,8 @@
               0,
               0
             ],
+            "native_dark_pixel_percent": 31.93,
+            "reference_dark_pixel_percent": 10.62,
             "credit": 1.1949
           },
           {
@@ -750,6 +855,8 @@
               0,
               0
             ],
+            "native_dark_pixel_percent": 26.52,
+            "reference_dark_pixel_percent": 14.91,
             "credit": 1.2038
           },
           {
@@ -767,6 +874,8 @@
               0,
               -4
             ],
+            "native_dark_pixel_percent": 57.29,
+            "reference_dark_pixel_percent": 21.02,
             "credit": 1.3151
           }
         ]

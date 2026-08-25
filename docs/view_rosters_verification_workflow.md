@@ -5,18 +5,36 @@ MIPS instructions without treating different compiler output as a failure.
 
 ## What is compared
 
-The public contract is
+The schema-v2 public contract is
 `config/decomp/view_rosters_scenarios.json`. It declares:
 
-- the input sequence for each scenario;
-- the exact observable native state after each milestone;
+- a finite inventory of currently implemented interactions;
+- small scenarios that cover every inventory item;
+- an event count and canonical SHA-256 over every observable state field after
+  each milestone;
 - the exact collapsed native semantic-checkpoint sequence;
-- the required ordered original function-entry subsequence.
+- for the subset captured in no$psx, the required ordered original
+  function-entry subsequence.
 
-Native state and ordering must match exactly. An original no$psx trace may contain
+The digest is compact, but it is not a fuzzy score: any changed event name,
+change/no-change result, mode, team, player, list window, stat window, layer,
+display field, or help-modal state fails that scenario. Native state and ordering
+must match exactly. An original no$psx trace may contain
 extra calls, rendering loops, and repeated PCs; the required semantic entrypoints
 must occur in order. This is intentional because the native C representation is
 not instruction-identical MIPS.
+
+The current denominator is 12 scenarios covering 16 inventoried interactions.
+Do not interpret 100% of that denominator as visual identity or total game
+completion. Visual similarity, original-trace coverage, instruction accounting,
+and the overall port roadmap remain separate measurements.
+
+The asset-backed gate also captures distinct roster-help, player-help,
+stat-layer, roster-scroll, and player-stat-scroll frames. These are pass/fail
+render regressions with zero score weight: they can fail the workflow, but they
+cannot inflate visual fidelity. A known original Cool Fact record is likewise
+decoded to its exact PSX-ADPCM rate, sample count, and byte count without playing
+audio during the automated test.
 
 ## Private original evidence
 
@@ -39,7 +57,6 @@ The verified no$psx 2.3 Player 1 keyboard mapping is:
 | Circle | `V` |
 | Select | Right Shift |
 | Start | Enter |
-| L1 / L2 | `A` / `Z` |
 | L1 / L2 | `A` / `Z` |
 | R1 / R2 | `S` / `X` |
 
@@ -85,6 +102,9 @@ pwsh -NoProfile -File scripts/verify_view_rosters_semantics.ps1 `
 The native executable regenerates
 `.local/reports/view_rosters_scenario_trace.json`. The comparator writes
 `.local/reports/view_rosters_scenario_comparison.json`.
+When the two conventionally named trace files are present in the ignored local
+trace directory, the comparator discovers them automatically. Pass
+`--no-auto-original` to test native coverage without that local evidence.
 
 A pass means the declared state transitions and required original semantic path
 agree. It does not claim byte-identical code, full CFG equivalence, timing

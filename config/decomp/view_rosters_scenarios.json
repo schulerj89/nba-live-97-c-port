@@ -1,87 +1,32 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "scope": "view_rosters",
   "comparison_policy": {
-    "native_state_events": "exact",
+    "native_state_events": "canonical_sha256_exact",
     "native_function_sequence": "collapsed_exact",
     "original_function_sequence": "required_subsequence",
-    "reason": "Native C may compile differently from MIPS, but observable states and original semantic entrypoint order must agree."
+    "reason": "Every emitted state field is hashed into a compact exact contract. Native C may compile differently from MIPS, so original equivalence is separately limited to scenarios with captured no$psx traces."
   },
+  "state_fields": ["name", "changed", "mode", "team", "player", "first_visible", "first_stat", "category", "display", "help_visible"],
+  "interaction_inventory": [
+    "open defaults", "roster top boundary", "six-row roster window", "roster bottom boundary",
+    "roster team previous/next wrap", "player-card enter/return", "player previous/next wrap",
+    "stat top/bottom boundaries", "six stat-layer previous/next wrap", "stat-layer scroll reset",
+    "display previous/next wrap", "per-layer display memory", "player-card team scan wrap",
+    "team-roster help open/close", "player-card help open/close", "commit/cancel restoration"
+  ],
   "scenarios": [
-    {
-      "id": "view_rosters_navigation",
-      "description": "Open View Rosters, scroll six rows, change team, inspect a player, change its stat layer, scroll stats, return, then verify cancel restoration.",
-      "inputs": [
-        {"control": "open_view_rosters", "repeat": 1},
-        {"control": "down", "repeat": 6},
-        {"control": "right", "repeat": 1},
-        {"control": "cross", "repeat": 1},
-        {"control": "r2_stat_layer", "repeat": 1},
-        {"control": "down", "repeat": 18},
-        {"control": "down", "repeat": 1},
-        {"control": "up", "repeat": 1},
-        {"control": "triangle", "repeat": 1},
-        {"control": "commit_change_cancel", "repeat": 1}
-      ],
-      "events": [
-        {"name": "open", "changed": true, "mode": "team_roster", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "down_6", "changed": true, "mode": "team_roster", "team": 0, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "team_next", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "activate_player", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "stat_layer_next", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32},
-        {"name": "stats_down_18", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 18, "category": 3, "display": 32},
-        {"name": "stats_down_boundary", "changed": false, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 18, "category": 3, "display": 32},
-        {"name": "stats_up", "changed": true, "mode": "player_card", "team": 1, "player": 6, "first_visible": 1, "first_stat": 17, "category": 3, "display": 32},
-        {"name": "return_to_roster", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32},
-        {"name": "cancel_restores_commit", "changed": true, "mode": "team_roster", "team": 1, "player": 6, "first_visible": 1, "first_stat": 0, "category": 3, "display": 32}
-      ],
-      "native_collapsed_sequence": [
-        "0x800592C4",
-        "0x800590B8",
-        "0x8005FE14",
-        "0x8005A538",
-        "0x80059610",
-        "0x8005FE14"
-      ],
-      "original_required_subsequence": [
-        "0x800592C4",
-        "0x800590B8",
-        "0x8005A538",
-        "0x80059610"
-      ]
-    },
-    {
-      "id": "view_player_wrap",
-      "description": "Open the first player card, move previous to the final valid roster slot, then next back to the first.",
-      "inputs": [
-        {"control": "open_view_rosters", "repeat": 1},
-        {"control": "cross", "repeat": 1},
-        {"control": "left", "repeat": 1},
-        {"control": "right", "repeat": 1}
-      ],
-      "events": [
-        {"name": "open", "changed": true, "mode": "team_roster", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "activate_player", "changed": true, "mode": "player_card", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "previous_from_first", "changed": true, "mode": "player_card", "team": 0, "player": 10, "first_visible": 5, "first_stat": 0, "category": 2, "display": 32},
-        {"name": "next_from_last", "changed": true, "mode": "player_card", "team": 0, "player": 0, "first_visible": 0, "first_stat": 0, "category": 2, "display": 32}
-      ],
-      "native_collapsed_sequence": [
-        "0x800592C4",
-        "0x800590B8",
-        "0x8005FE14",
-        "0x8005A538",
-        "0x80059928",
-        "0x8005FE14",
-        "0x80059928",
-        "0x8005FE14"
-      ],
-      "original_required_subsequence": [
-        "0x800592C4",
-        "0x800590B8",
-        "0x8005A538",
-        "0x80059928",
-        "0x80059928"
-      ]
-    }
+    {"id":"open_defaults","description":"Open state 0x10 with all recovered defaults.","covers":["open defaults"],"expected_event_count":1,"expected_events_sha256":"4002f8d9f7019edd745d5840e0074652c6db50460bff0cbc381a85f3465f9d4f","native_collapsed_sequence":["0x800592C4","0x800590B8"],"original_trace":false},
+    {"id":"roster_scroll_boundaries","description":"Exercise both roster boundaries and the exact six-visible-row handoff down and back up.","covers":["roster top boundary","six-row roster window","roster bottom boundary"],"expected_event_count":6,"expected_events_sha256":"cba25908145adc342ef557712aff8f2a0dbfe0fff450cf34a947bb47e2783363","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14"],"original_trace":false},
+    {"id":"roster_team_wrap","description":"Wrap roster team selection both ways while preserving row/window position.","covers":["roster team previous/next wrap"],"expected_event_count":2,"expected_events_sha256":"ad5be655fc6ebcd7f045c7c699e955b44410204e27cdef2ed5848859d2992e1e","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14"],"original_trace":false},
+    {"id":"player_enter_return","description":"Enter state 0x24 from a scrolled row and return with selection preserved.","covers":["player-card enter/return"],"expected_event_count":2,"expected_events_sha256":"684c1d76cb619a33fa3bc38fa9b7ad6482b6a75e9cc4a8148f39d44c7c34e9de","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538"],"original_trace":false},
+    {"id":"view_rosters_navigation","description":"Original-traced composite navigation flow.","covers":["six-row roster window","player-card enter/return","stat-layer scroll reset","commit/cancel restoration"],"expected_event_count":10,"expected_events_sha256":"7c7160d2a5c2be384ffcda6aa7772af323fa19ff0987c2635c6615b11605ef0f","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538","0x80059610","0x8005FE14"],"original_trace":true,"original_required_subsequence":["0x800592C4","0x800590B8","0x8005A538","0x80059610"]},
+    {"id":"view_player_wrap","description":"Original-traced previous/next player wrap across valid slots.","covers":["player previous/next wrap"],"expected_event_count":4,"expected_events_sha256":"1f724ff43613719cb3b3915781f811fc892907d550c082e209bd2e70bfb880f2","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538","0x80059928","0x8005FE14","0x80059928","0x8005FE14"],"original_trace":true,"original_required_subsequence":["0x800592C4","0x800590B8","0x8005A538","0x80059928","0x80059928"]},
+    {"id":"player_stat_scroll_boundaries","description":"Exercise all 24 regular-season stat rows and both boundaries.","covers":["stat top/bottom boundaries"],"expected_event_count":5,"expected_events_sha256":"8cbcf736ab6b1b54d8e46306c3794336d4657623c45e1c71fdbe48aea03e49fa","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538","0x8005FE14"],"original_trace":false},
+    {"id":"player_stat_layer_wrap","description":"Walk both ways across all six stat layers, including wrap and scroll reset.","covers":["six stat-layer previous/next wrap","stat-layer scroll reset"],"expected_event_count":4,"expected_events_sha256":"6ef3bf6b449aa9ca96db4503d9fd682e568294498dd1e398035c28722788f1f6","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538","0x8005FE14","0x80059610"],"original_trace":false},
+    {"id":"roster_display_wrap_memory","description":"Wrap display fields and prove independent per-layer memory.","covers":["display previous/next wrap","per-layer display memory"],"expected_event_count":5,"expected_events_sha256":"3df82e2e1e5a02ab5fd448da821ea0e79a652499ed3fcdd60fe001e3b540785d","native_collapsed_sequence":["0x800592C4","0x800590B8","0x80059610"],"original_trace":false},
+    {"id":"player_team_scan_wrap","description":"Use player-card team scanning across both ends and confirm reset state.","covers":["player-card team scan wrap"],"expected_event_count":2,"expected_events_sha256":"bda610bcc6eedee1b4d0fbcc46e699b3ad72ba4e2074cd814d9d1283637cb2de","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538"],"original_trace":false},
+    {"id":"help_modal_both_modes","description":"Open and dismiss the modal independently in roster and player-card states.","covers":["team-roster help open/close","player-card help open/close"],"expected_event_count":4,"expected_events_sha256":"0879228ab69444929b757ac2e4c67c2d84e52d5aae2eebc22950476b6043bce0","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14","0x8005A538"],"original_trace":false},
+    {"id":"roster_commit_cancel","description":"Commit, mutate team/row/window, and restore the exact snapshot.","covers":["commit/cancel restoration"],"expected_event_count":3,"expected_events_sha256":"8b312e79232ae76c244c8a84f7376d9f78027c553d561fd62ad5becafac65c4c","native_collapsed_sequence":["0x800592C4","0x800590B8","0x8005FE14"],"original_trace":false}
   ]
 }

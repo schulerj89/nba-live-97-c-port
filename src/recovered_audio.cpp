@@ -126,6 +126,23 @@ RecoveredClipInfo RecoveredAudioPlayer::playCoolFact(
         const std::filesystem::path& archive_path,
         std::uint16_t player_id,
         std::uint32_t preferred_variant) {
+    return loadCoolFact(index_path, archive_path, player_id, preferred_variant, true);
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::inspectCoolFact(
+        const std::filesystem::path& index_path,
+        const std::filesystem::path& archive_path,
+        std::uint16_t player_id,
+        std::uint32_t preferred_variant) {
+    return loadCoolFact(index_path, archive_path, player_id, preferred_variant, false);
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::loadCoolFact(
+        const std::filesystem::path& index_path,
+        const std::filesystem::path& archive_path,
+        std::uint16_t player_id,
+        std::uint32_t preferred_variant,
+        bool play) {
     const auto index = readFile(index_path);
     const std::uint32_t count = u32(index, 0);
     std::uint32_t variant = preferred_variant;
@@ -176,7 +193,7 @@ RecoveredClipInfo RecoveredAudioPlayer::playCoolFact(
         clip.size() - (payload + compressed) != 2)
         throw std::runtime_error("invalid Cool Fact PSX ADPCM payload");
     auto pcm = decodePsxAdpcmMono(clip.data() + payload, compressed, sample_count);
-    playPcm(std::move(pcm), sample_rate);
+    if (play) playPcm(std::move(pcm), sample_rate);
     info_ = {record, sample_rate, sample_count, static_cast<std::uint32_t>(compressed),
              archive_path.filename().string() + " variant=" + std::to_string(variant)};
     return info_;
