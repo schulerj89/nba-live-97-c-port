@@ -61,6 +61,7 @@ private:
     HWAVEOUT wave_out_ = nullptr;
     WAVEHDR header_{};
     std::vector<std::int16_t> pcm_;
+    std::uint32_t wave_sample_rate_ = 0;
     RecoveredClipInfo info_{};
     std::uint32_t next_variant_ = 0;
 };

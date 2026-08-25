@@ -2,9 +2,9 @@
   "schema_version": 1,
   "scope": "Rosters eight-card selection screen only",
   "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
-  "fidelity_percent": 95.41,
-  "earned_points": 9.5412,
-  "possible_points": 10.0,
+  "fidelity_percent": 95.83,
+  "earned_points": 10.5412,
+  "possible_points": 11.0,
   "groups": {
     "behavior": {
       "earned": 1.0,
@@ -12,8 +12,8 @@
       "percent": 100.0
     },
     "layout": {
-      "earned": 2.0,
-      "possible": 2.0,
+      "earned": 3.0,
+      "possible": 3.0,
       "percent": 100.0
     },
     "availability": {
@@ -81,12 +81,24 @@
       "credit": 1.0
     },
     {
+      "id": "authored_red_locked_plates",
+      "group": "layout",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "red_dominant_pixels": {
+        "reset": 706,
+        "injuries": 714
+      },
+      "minimum_per_card": 500
+    },
+    {
       "id": "reset_locked_skip",
       "group": "availability",
       "weight": 1,
       "score_percent": 100,
       "credit": 1.0,
-      "predicate": "roster snapshot differs"
+      "predicate": "roster snapshot differs and no special-state override"
     },
     {
       "id": "dynamic_unlock_variants",
@@ -94,8 +106,8 @@
       "weight": 1,
       "score_percent": 100,
       "credit": 1.0,
-      "reset": "roster snapshot differs",
-      "injuries": "one or more non-zero injury bytes"
+      "reset": "roster snapshot differs and no special-state override",
+      "injuries": "active context plus one or more non-zero values among 536 injury bytes"
     },
     {
       "id": "selection_flash_12_vblanks",
@@ -115,25 +127,25 @@
       "sounds": [
         {
           "id": 1,
-          "role": "vertical_next",
+          "role": "right",
           "samples": 2852,
           "valid": true
         },
         {
           "id": 2,
-          "role": "vertical_previous",
+          "role": "left",
           "samples": 1921,
           "valid": true
         },
         {
           "id": 3,
-          "role": "horizontal_previous",
+          "role": "up",
           "samples": 2200,
           "valid": true
         },
         {
           "id": 4,
-          "role": "horizontal_next",
+          "role": "down",
           "samples": 3840,
           "valid": true
         },
@@ -150,7 +162,14 @@
           "valid": true
         }
       ],
-      "all_waveforms_distinct": true
+      "all_waveforms_distinct": true,
+      "direction_mapping": {
+        "right": 1,
+        "left": 2,
+        "up": 3,
+        "down": 4
+      },
+      "repeated_right_byte_identical": true
     },
     {
       "id": "original_screenshot_similarity",

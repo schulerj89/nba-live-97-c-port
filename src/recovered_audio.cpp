@@ -69,7 +69,18 @@ RecoveredAudioPlayer::~RecoveredAudioPlayer() { stop(); }
 
 void RecoveredAudioPlayer::playPcm(std::vector<std::int16_t> pcm,
                                    std::uint32_t sample_rate) {
-    stop();
+    // All ZCURSOR programs are 22.05 kHz. Reusing the WinMM device prevents
+    // close/open transients from making identical repeated cursor cues sound
+    // different. A new format still takes the full close/open path.
+    if (wave_out_ && wave_sample_rate_ == sample_rate) {
+        if (!(header_.dwFlags & WHDR_DONE)) waveOutReset(wave_out_);
+        if (header_.dwFlags & WHDR_PREPARED)
+            waveOutUnprepareHeader(wave_out_, &header_, sizeof(header_));
+        header_ = {};
+        pcm_.clear();
+    } else {
+        stop();
+    }
     pcm_ = std::move(pcm);
     WAVEFORMATEX format{};
     format.wFormatTag = WAVE_FORMAT_PCM;
@@ -78,11 +89,15 @@ void RecoveredAudioPlayer::playPcm(std::vector<std::int16_t> pcm,
     format.wBitsPerSample = 16;
     format.nBlockAlign = 2;
     format.nAvgBytesPerSec = sample_rate * 2;
-    MMRESULT result = waveOutOpen(&wave_out_, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL);
-    if (result != MMSYSERR_NOERROR) {
-        wave_out_ = nullptr;
-        pcm_.clear();
-        throw std::runtime_error("waveOutOpen recovered clip failed: " + std::to_string(result));
+    MMRESULT result = MMSYSERR_NOERROR;
+    if (!wave_out_) {
+        result = waveOutOpen(&wave_out_, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL);
+        if (result != MMSYSERR_NOERROR) {
+            wave_out_ = nullptr;
+            pcm_.clear();
+            throw std::runtime_error("waveOutOpen recovered clip failed: " + std::to_string(result));
+        }
+        wave_sample_rate_ = sample_rate;
     }
     header_ = {};
     header_.lpData = reinterpret_cast<LPSTR>(pcm_.data());
@@ -246,6 +261,7 @@ void RecoveredAudioPlayer::stop() noexcept {
         waveOutClose(wave_out_);
     }
     wave_out_ = nullptr;
+    wave_sample_rate_ = 0;
     header_ = {};
     pcm_.clear();
 }

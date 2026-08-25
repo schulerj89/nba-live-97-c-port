@@ -37,6 +37,18 @@ constexpr int kPressStartCenterX = 0x100;
 constexpr int kPressStartY = 0x1e;
 constexpr int kRecoveredPressStartWidth = 97;
 
+constexpr std::uint32_t recoveredMenuDirectionSound(int horizontal,
+                                                    int vertical) noexcept {
+    // FUN_8003D930 stores callbacks as up/down/left/right at +0x20..+0x2C,
+    // setting its transient sound byte to 3/4/2/1 before FUN_8002F124.
+    if (horizontal < 0) return 2;
+    if (horizontal > 0) return 1;
+    if (vertical < 0) return 3;
+    if (vertical > 0) return 4;
+    return 0;
+}
+static_assert(recoveredMenuDirectionSound(1, 0) == 1);
+
 struct Options {
     std::filesystem::path asset_root = ".local/assetpacks";
     std::filesystem::path trace_path = ".local/logs/boot_decomp_trace.log";
@@ -612,8 +624,8 @@ private:
         trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
         trace_.log("ROSTER-STACK", "plate x=49/154/259/364; recovered arch y=76/66/66/76 + 118/110/110/118; ZCARD offset=(12,23)");
-        trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta; FUN_80057A98 Injuries requires any non-zero injury byte; red c06/c07/c14/c15 artwork is categorical, not the lock flag");
-        trace_.log("ROSTER-SFX", "FUN_8003D930 directional cues use ZCURSOR ids 1..4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
+        trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; red c06/c07/c14/c15 plates remain drawn while object predicates block focus");
+        trace_.log("ROSTER-SFX", "FUN_8003D930 callback order up/down/left/right maps ZCURSOR ids 3/4/2/1; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
     }
 
     int captureRostersMenu() {
@@ -646,8 +658,7 @@ private:
 
         const auto audio_root = options_.asset_root / "menu";
         static constexpr std::array<const char*, 6> sound_names{
-            "vertical_next", "vertical_previous", "horizontal_previous",
-            "horizontal_next", "unused_05", "select_flash"};
+            "right", "left", "up", "down", "unused_05", "select_flash"};
         std::ofstream metadata(output / "capture.json", std::ios::trunc);
         if (!metadata) throw std::runtime_error("cannot write Rosters menu capture metadata");
         metadata << "{\n  \"schema_version\": 1,\n  \"function\": \"0x80057CE4\",\n"
@@ -670,8 +681,15 @@ private:
                 std::to_string(info.sample_count) + " bytes=" +
                 std::to_string(info.compressed_bytes));
         }
-        metadata << "  ],\n  \"availability\": {\"reset\":\"roster snapshot differs\","
-                    "\"injuries\":\"one or more non-zero injury bytes\"}\n}\n";
+        const auto repeated_right = cursor_audio_.exportCursorSound(
+            audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", 1,
+            output / "zcursor_01_right_repeat.wav");
+        trace_.log("ROSTER-SFX-REPEAT", "three consecutive logical Right moves all route "
+            "FUN_8003D930 cue id=1; deterministic repeat samples=" +
+            std::to_string(repeated_right.sample_count) + " rate=" +
+            std::to_string(repeated_right.sample_rate) + "Hz; runtime WinMM device reused");
+        metadata << "  ],\n  \"availability\": {\"reset\":\"roster snapshot differs and no special-state override\","
+                    "\"injuries\":\"active context plus one or more non-zero values among 536 injury bytes\"}\n}\n";
         trace_.log("ROSTER-CAPTURE", "deterministic stack, lock variants, 12 flash phases and six recovered WAVs -> " + output.string());
         return 0;
     }
@@ -853,6 +871,11 @@ private:
             !menu_.moveHorizontal(1) || std::string(menu_.selectedLabel()) != "card")
             throw std::runtime_error("disabled Users skip self-test failed");
         nba97::RecoveredBottomMenu recovered_menu;
+        if (recoveredMenuDirectionSound(1, 0) != 1 ||
+            recoveredMenuDirectionSound(-1, 0) != 2 ||
+            recoveredMenuDirectionSound(0, -1) != 3 ||
+            recoveredMenuDirectionSound(0, 1) != 4)
+            throw std::runtime_error("Rosters FUN_8003D930 direction sound mapping self-test failed");
         recovered_menu.open(nba97::FrontendPage::Rosters);
         const auto roster_a = nba97::renderRecoveredBottomMenu(
             recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
@@ -1781,13 +1804,17 @@ private:
             std::uint32_t sound_id = 0;
             const char* direction = "none";
             if (key == VK_LEFT) {
-                changed = bottom_menu_.move(-1, 0); sound_id = 3; direction = "left";
+                changed = bottom_menu_.move(-1, 0);
+                sound_id = recoveredMenuDirectionSound(-1, 0); direction = "left";
             } else if (key == VK_RIGHT) {
-                changed = bottom_menu_.move(1, 0); sound_id = 4; direction = "right";
+                changed = bottom_menu_.move(1, 0);
+                sound_id = recoveredMenuDirectionSound(1, 0); direction = "right";
             } else if (key == VK_UP) {
-                changed = bottom_menu_.move(0, -1); sound_id = 2; direction = "up";
+                changed = bottom_menu_.move(0, -1);
+                sound_id = recoveredMenuDirectionSound(0, -1); direction = "up";
             } else if (key == VK_DOWN) {
-                changed = bottom_menu_.move(0, 1); sound_id = 1; direction = "down";
+                changed = bottom_menu_.move(0, 1);
+                sound_id = recoveredMenuDirectionSound(0, 1); direction = "down";
             }
             else if (key == VK_BACK) {
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
@@ -2267,9 +2294,9 @@ private:
             bottom_menu_.open(target);
             if (target == nba97::FrontendPage::Rosters) {
                 bottom_menu_.setRosterCapabilities(false, false);
-                trace_.log("ROSTER-CARD-STATE", "Reset locked until roster snapshot changes; "
-                    "Injuries locked until injury table contains a non-zero record; red artwork "
-                    "is categorical and does not itself implement the lock");
+                trace_.log("ROSTER-CARD-STATE", "Reset locked until roster snapshot changes "
+                    "without the special-state override; Injuries locked until an active context "
+                    "has a non-zero entry among 536 injury bytes; authored red plates remain visible");
             }
             if (target == nba97::FrontendPage::Rosters &&
                 previous_page == nba97::FrontendPage::ViewRosters)

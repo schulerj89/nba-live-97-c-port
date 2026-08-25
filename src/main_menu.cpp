@@ -841,8 +841,9 @@ bool RecoveredBottomMenu::enabled(int index) const noexcept {
     if (index < 0 || index >= count()) return false;
     if (page_ != FrontendPage::Rosters) return true;
     // FUN_80057C48 enables Reset only after FUN_80058104 detects roster data
-    // differing from its entry snapshot. FUN_80057A98 enables Injuries only
-    // when at least one of the 536 recovered injury bytes is non-zero.
+    // differing from its entry snapshot (unless a special FE state forces it
+    // off). FUN_80057A98 also requires an active context before counting the
+    // 536 recovered injury bytes; at least one must be non-zero.
     if (index == 3) return roster_modified_;
     if (index == 7) return injuries_present_;
     return true;

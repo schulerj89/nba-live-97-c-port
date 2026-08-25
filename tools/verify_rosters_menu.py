@@ -63,6 +63,22 @@ def main() -> int:
         dimensions_ok = False
     add(checks, "capture_dimensions", "layout", 1, 100 if dimensions_ok else 0)
 
+    red_counts = {}
+    try:
+        initial = Image.open(required_frames[0]).convert("RGB")
+        for name, box in {"reset": (364, 76, 464, 170),
+                          "injuries": (364, 118, 464, 212)}.items():
+            red_counts[name] = sum(
+                1 for red, green, blue in initial.crop(box).getdata()
+                if red > 60 and red > green * 1.25 and red > blue * 1.25
+            )
+        red_plates_ok = all(count >= 500 for count in red_counts.values())
+    except (NameError, OSError):
+        red_plates_ok = False
+    add(checks, "authored_red_locked_plates", "layout", 1,
+        100 if red_plates_ok else 0, red_dominant_pixels=red_counts,
+        minimum_per_card=500)
+
     locked_same = (all(path.is_file() for path in required_frames[:2]) and
                    digest(required_frames[0]) == digest(required_frames[1]))
     enabled_distinct = (all(path.is_file() for path in required_frames) and
@@ -101,9 +117,18 @@ def main() -> int:
         audio_ok = audio_ok and valid
         sound_evidence.append({"id": row.get("id"), "role": row.get("role"),
                                "samples": row.get("samples"), "valid": valid})
-    audio_ok = audio_ok and len(set(audio_hashes)) == 6
+    repeated_right = capture / "zcursor_01_right_repeat.wav"
+    right_sound = capture / "zcursor_01_right.wav"
+    repeated_right_ok = (repeated_right.is_file() and right_sound.is_file() and
+                         digest(repeated_right) == digest(right_sound))
+    recovered_roles_ok = [row.get("role") for row in sound_rows[:4]] == [
+        "right", "left", "up", "down"]
+    audio_ok = (audio_ok and len(set(audio_hashes)) == 6 and repeated_right_ok and
+                recovered_roles_ok)
     add(checks, "zcursor_1_through_6", "audio", 1.5, 100 if audio_ok else 0,
-        sounds=sound_evidence, all_waveforms_distinct=len(set(audio_hashes)) == 6)
+        sounds=sound_evidence, all_waveforms_distinct=len(set(audio_hashes)) == 6,
+        direction_mapping={"right": 1, "left": 2, "up": 3, "down": 4},
+        repeated_right_byte_identical=repeated_right_ok)
 
     visual_missing = not reference.is_file()
     if visual_missing:
