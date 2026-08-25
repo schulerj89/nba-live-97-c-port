@@ -1128,11 +1128,13 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
         // blk1 placeholder. FUN_80031F48 replaces that third object with a
         // unique 69x63 ZCARD image. The plates are already authored at their
         // display size; the old 2/3 scaling caused the bunched-up layout.
-        // The two recovered rows are not a flat grid. The back row arches
-        // upward in the centre; the front row follows it 42-48 pixels lower
-        // and is composited last so each lower card overlaps its partner.
+        // The recovered rows are four paired groups, not a flat grid. Each
+        // back card is 15 pixels right of its front partner; both use a
+        // 105-pixel column pitch. The back row arches upward in the centre,
+        // and the front row composites last so each lower card overlaps its
+        // partner diagonally, matching the original registered frame geometry.
         static constexpr std::array<int, 8> card_x{
-            49, 154, 259, 364, 49, 154, 259, 364};
+            64, 169, 274, 379, 49, 154, 259, 364};
         static constexpr std::array<int, 8> card_y{
             76, 66, 66, 76, 118, 110, 110, 118};
         for (int i = 0; i < 8; ++i) {

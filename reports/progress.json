@@ -21,19 +21,19 @@
     ],
     "discovered_functions": 1769,
     "analyzed_code_bytes": 465368,
-    "evidence_tracked_functions": 56,
-    "evidence_tracked_bytes": 34224,
-    "evidence_coverage_percent": 3.17,
-    "evidence_byte_coverage_percent": 7.35,
+    "evidence_tracked_functions": 63,
+    "evidence_tracked_bytes": 38764,
+    "evidence_coverage_percent": 3.56,
+    "evidence_byte_coverage_percent": 8.33,
     "complete_functions": 0,
     "matching_functions": 0,
     "status_counts": {
-      "behavior_verified": 45,
+      "behavior_verified": 49,
       "implemented": 3,
-      "researched": 8
+      "researched": 11
     },
     "scope_counts": {
-      "partial": 56
+      "partial": 63
     },
     "subsystems": {
       "assets": {
@@ -72,13 +72,13 @@
         "verified": 5
       },
       "input": {
-        "functions": 1,
-        "bytes": 108,
-        "verified": 1
+        "functions": 2,
+        "bytes": 3420,
+        "verified": 2
       },
       "menus": {
-        "functions": 3,
-        "bytes": 5788,
+        "functions": 5,
+        "bytes": 6256,
         "verified": 3
       },
       "movie": {
@@ -92,9 +92,9 @@
         "verified": 3
       },
       "rosters": {
-        "functions": 11,
-        "bytes": 3912,
-        "verified": 11
+        "functions": 13,
+        "bytes": 4096,
+        "verified": 13
       },
       "settings": {
         "functions": 3,
@@ -102,9 +102,9 @@
         "verified": 3
       },
       "ui": {
-        "functions": 2,
-        "bytes": 392,
-        "verified": 2
+        "functions": 4,
+        "bytes": 968,
+        "verified": 3
       }
     }
   },

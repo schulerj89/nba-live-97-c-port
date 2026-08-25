@@ -2,8 +2,8 @@
   "schema_version": 1,
   "scope": "Rosters eight-card selection screen only",
   "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
-  "fidelity_percent": 96.19,
-  "earned_points": 11.5426,
+  "fidelity_percent": 96.3,
+  "earned_points": 11.5554,
   "possible_points": 12.0,
   "groups": {
     "behavior": {
@@ -32,9 +32,9 @@
       "percent": 100.0
     },
     "visual": {
-      "earned": 1.5426,
+      "earned": 1.5554,
       "possible": 2.0,
-      "percent": 77.13
+      "percent": 77.77
     }
   },
   "checks": [
@@ -52,7 +52,27 @@
       "weight": 1,
       "score_percent": 100,
       "credit": 1.0,
-      "expected": [
+      "expected_x": [
+        64,
+        169,
+        274,
+        379,
+        49,
+        154,
+        259,
+        364
+      ],
+      "actual_x": [
+        64,
+        169,
+        274,
+        379,
+        49,
+        154,
+        259,
+        364
+      ],
+      "expected_y": [
         76,
         66,
         66,
@@ -62,7 +82,7 @@
         110,
         118
       ],
-      "actual": [
+      "actual_y": [
         76,
         66,
         66,
@@ -71,7 +91,10 @@
         110,
         110,
         118
-      ]
+      ],
+      "column_pitch": 105,
+      "pair_stagger_x": 15,
+      "evidence": "FUN_80057CE4 grouped objects plus registered original frame geometry"
     },
     {
       "id": "capture_dimensions",
@@ -87,8 +110,8 @@
       "score_percent": 100,
       "credit": 1.0,
       "red_dominant_pixels": {
-        "reset": 2043,
-        "injuries": 2156
+        "reset": 1879,
+        "injuries": 2214
       },
       "minimum_per_card": 350,
       "evidence": "FUN_800399C4 disabled type-2 state 0x80 rendered through ZSET4 red1 CLUT"
@@ -120,8 +143,8 @@
       "frame_count": 12,
       "plate_present_both_phases": true,
       "selected_plate_rail_pixels": [
-        3097,
-        2435
+        3325,
+        2668
       ],
       "evidence": "FUN_8003F240 alternates normal/selected objects without removing the plate"
     },
@@ -277,12 +300,12 @@
       "id": "original_screenshot_similarity",
       "group": "visual",
       "weight": 2,
-      "score_percent": 77.13,
-      "credit": 1.5426,
+      "score_percent": 77.77,
+      "credit": 1.5554,
       "status": "measured",
-      "similarity_percent": 77.13,
-      "color_similarity_percent": 77.49,
-      "edge_similarity_percent": 76.45,
+      "similarity_percent": 77.77,
+      "color_similarity_percent": 78.31,
+      "edge_similarity_percent": 76.77,
       "registration_offset": [
         4,
         -2

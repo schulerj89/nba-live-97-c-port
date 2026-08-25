@@ -5,8 +5,8 @@
 ## Current baseline
 
 - **1,769** functions and **465,368** code bytes discovered by headless Ghidra in the currently scoped original binaries.
-- **56** functions (3.17%) have explicit recomp/Ghidra/source evidence records.
-- Evidence records touch **34,224** original code bytes (7.35%). Partial records do not mean the whole function is complete.
+- **63** functions (3.56%) have explicit recomp/Ghidra/source evidence records.
+- Evidence records touch **38,764** original code bytes (8.33%). Partial records do not mean the whole function is complete.
 - **0** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
 - Native-port roadmap estimate: **59.38%** across 48 catalogued features.
 - View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
@@ -30,13 +30,13 @@
 | database | 3 | 1,216 | 3 |
 | font | 2 | 3,636 | 2 |
 | graphics | 7 | 4,576 | 5 |
-| input | 1 | 108 | 1 |
-| menus | 3 | 5,788 | 3 |
+| input | 2 | 3,420 | 2 |
+| menus | 5 | 6,256 | 3 |
 | movie | 2 | 916 | 1 |
 | profiles | 4 | 7,472 | 3 |
-| rosters | 11 | 3,912 | 11 |
+| rosters | 13 | 4,096 | 13 |
 | settings | 3 | 332 | 3 |
-| ui | 2 | 392 | 2 |
+| ui | 4 | 968 | 3 |
 
 ## Native-port roadmap
 

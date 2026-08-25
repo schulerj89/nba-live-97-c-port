@@ -16,6 +16,7 @@ from verify_view_rosters import visual_similarity
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "reports" / "rosters_menu_fidelity.json"
 EXPECTED_Y = [76, 66, 66, 76, 118, 110, 110, 118]
+EXPECTED_X = [64, 169, 274, 379, 49, 154, 259, 364]
 
 
 def digest(path: Path) -> str:
@@ -50,8 +51,15 @@ def main() -> int:
     add(checks, "native_behavior", "behavior", 1, 100 if args.behavior_pass else 0,
         evidence="native self-test covers navigation, lock/unlock and overlay visibility")
     add(checks, "recovered_stack", "layout", 1,
-        100 if metadata.get("stack_y") == EXPECTED_Y else 0,
-        expected=EXPECTED_Y, actual=metadata.get("stack_y"))
+        100 if (metadata.get("stack_y") == EXPECTED_Y and
+                metadata.get("stack_x") == EXPECTED_X and
+                metadata.get("stack_column_pitch") == 105 and
+                metadata.get("stack_pair_stagger_x") == 15) else 0,
+        expected_x=EXPECTED_X, actual_x=metadata.get("stack_x"),
+        expected_y=EXPECTED_Y, actual_y=metadata.get("stack_y"),
+        column_pitch=metadata.get("stack_column_pitch"),
+        pair_stagger_x=metadata.get("stack_pair_stagger_x"),
+        evidence="FUN_80057CE4 grouped objects plus registered original frame geometry")
 
     required_frames = [capture / "rosters_initial.ppm",
                        capture / "rosters_reset_locked_attempt.ppm",
@@ -70,8 +78,8 @@ def main() -> int:
         # Count only the plate rails, not the random ZCARD aperture. This
         # prevents a red player photo from falsely proving the red1 state.
         for name, boxes in {
-                "reset": [(364, 76, 464, 101), (364, 101, 384, 170),
-                          (444, 101, 464, 170), (364, 150, 464, 170)],
+                "reset": [(379, 76, 479, 101), (379, 101, 399, 170),
+                          (459, 101, 479, 170), (379, 150, 479, 170)],
                 "injuries": [(364, 118, 464, 143), (364, 143, 384, 212),
                              (444, 143, 464, 212), (364, 192, 464, 212)],
         }.items():
