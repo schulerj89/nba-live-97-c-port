@@ -8,7 +8,9 @@
 - **56** functions (3.17%) have explicit recomp/Ghidra/source evidence records.
 - Evidence records touch **34,224** original code bytes (7.35%). Partial records do not mean the whole function is complete.
 - **0** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
-- Native-port roadmap estimate: **61.46%** across 48 catalogued features.
+- Native-port roadmap estimate: **59.38%** across 48 catalogued features.
+- View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
+- View Rosters original-MIPS accounting: **322/997 instructions** have explicit block-level accounting; this is not an instruction-match percentage.
 
 ## Original binary inventory
 
@@ -46,15 +48,59 @@
 | Gameplay path | 8 | 0.00% | not_started: 8 |
 | Native platform | 5 | 90.00% | partial: 1, verified: 4 |
 | Roster transactions | 7 | 0.00% | not_started: 7 |
-| Rosters | 6 | 100.00% | verified: 6 |
+| Rosters | 6 | 83.33% | partial: 2, verified: 4 |
 | Save and card | 3 | 33.33% | not_started: 1, partial: 2 |
 | User profiles | 3 | 100.00% | verified: 3 |
+
+## View Rosters fidelity
+
+**91.82%** · 23.87/26.00 weighted points
+behavior: **100.00%** · rendering: **100.00%** · visual: **82.27%**
+
+| Check | Group | Result | Credit |
+|---|---|---:|---:|
+| 29 teams, 493 players and recovered assignment counts validate | behavior | pass | 1.00/1.00 |
+| State 0x10 opens with recovered category, field and 15 slots | behavior | pass | 1.00/1.00 |
+| Category and field selection memory follows recovered descriptors | behavior | pass | 1.00/1.00 |
+| Team palette interpolates over the recovered 17 ticks | behavior | pass | 1.00/1.00 |
+| Roster selection does not wrap above the first player | behavior | pass | 1.00/1.00 |
+| Six visible rows and one-row window handoff validate | behavior | pass | 1.00/1.00 |
+| Changing teams preserves player and scroll slots | behavior | pass | 1.00/1.00 |
+| Roster action pushes recovered state 0x24 | behavior | pass | 1.00/1.00 |
+| View Player exposes and scrolls all 24 statistic rows | behavior | pass | 1.00/1.00 |
+| View Player statistic scrolling clamps at both ends | behavior | pass | 1.00/1.00 |
+| View Player previous/next wraps across the team roster | behavior | pass | 1.00/1.00 |
+| Returning from View Player preserves roster position | behavior | pass | 1.00/1.00 |
+| Cancel restores the committed View Rosters snapshot | behavior | pass | 1.00/1.00 |
+| All deterministic internal captures are exactly 512 by 240 | rendering | pass | 1.00/1.00 |
+| View Rosters title, team logo, EA logo and upper frame | visual | 80.04% similarity | 1.20/1.50 |
+| Team name and left/right selector arrows | visual | 81.63% similarity | 1.22/1.50 |
+| Six player rows, selected pulse, stat headings and values | visual | 79.55% similarity | 1.19/1.50 |
+| Roster scroll arrow, lower frame and Help strip | visual | 83.87% similarity | 1.26/1.50 |
+| View Player animated title and identity block | visual | 85.51% similarity | 1.28/1.50 |
+| View Player stat labels, values and scroll arrows in the reference's one-row-scrolled state | visual | 79.66% similarity | 1.19/1.50 |
+| Vertical team mark, portrait and photo frame | visual | 80.25% similarity | 1.20/1.50 |
+| Team name, Cool Facts control, lower frame and Help strip | visual | 87.67% similarity | 1.32/1.50 |
+
+Original screenshots and generated heatmaps remain under `.local/`; the public report contains only measurements and cryptographic reference hashes.
+
+## View Rosters instruction semantics
+
+- Original scope: **11 functions**, **997 MIPS instructions**, **83 basic blocks**, and **111 CFG edges**.
+- Explicitly accounted: **322/997 instructions** across **6/83 blocks**.
+- Structurally verified: **0/111 CFG edges**.
+- Native semantic checkpoints observed: **11/11 functions**.
+- Static-recomp entry points found: **10/11**; missing: **0x80059034**.
+- Original/native trace-equivalent scenarios: **0**; exact MIPS matching is not configured.
+
+Source ownership, block accounting, CFG verification, runtime trace equivalence, and exact binary matching are independent tiers and are never blended into one score.
 
 ## Methodology
 
 - Function progress measures the original PS1 binaries and never infers completion from native screens.
 - A partial function is evidence coverage, not a completed original function.
 - Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.
-- Matching means instruction-identical PS1 output; the native C++ build cannot satisfy that status.
+- Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.
+- Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status.
 
 The function inventories contain addresses, sizes, and generated names only. Original binaries, disc files, decoded images, audio, and all other copyrighted assets remain under `.local/` and are not published.

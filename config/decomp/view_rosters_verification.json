@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "feature_ids": ["rosters.viewer", "rosters.player_card"],
+  "description": "Weighted View Rosters end-to-end fidelity checks. Original reference pixels remain local-only.",
+  "checks": [
+    {"id":"database_shape","group":"behavior","weight":1,"source":"native_self_test","description":"29 teams, 493 players and recovered assignment counts validate"},
+    {"id":"initial_state","group":"behavior","weight":1,"source":"native_self_test","description":"State 0x10 opens with recovered category, field and 15 slots"},
+    {"id":"descriptor_memory","group":"behavior","weight":1,"source":"native_self_test","description":"Category and field selection memory follows recovered descriptors"},
+    {"id":"palette_transition","group":"behavior","weight":1,"source":"native_self_test","description":"Team palette interpolates over the recovered 17 ticks"},
+    {"id":"top_boundary","group":"behavior","weight":1,"source":"native_self_test","description":"Roster selection does not wrap above the first player"},
+    {"id":"six_row_scroll","group":"behavior","weight":1,"source":"native_self_test","description":"Six visible rows and one-row window handoff validate"},
+    {"id":"team_position_memory","group":"behavior","weight":1,"source":"native_self_test","description":"Changing teams preserves player and scroll slots"},
+    {"id":"player_card_transition","group":"behavior","weight":1,"source":"native_self_test","description":"Roster action pushes recovered state 0x24"},
+    {"id":"stat_scroll","group":"behavior","weight":1,"source":"native_self_test","description":"View Player exposes and scrolls all 24 statistic rows"},
+    {"id":"stat_boundaries","group":"behavior","weight":1,"source":"native_self_test","description":"View Player statistic scrolling clamps at both ends"},
+    {"id":"player_wrap","group":"behavior","weight":1,"source":"native_self_test","description":"View Player previous/next wraps across the team roster"},
+    {"id":"return_state","group":"behavior","weight":1,"source":"native_self_test","description":"Returning from View Player preserves roster position"},
+    {"id":"cancel_restore","group":"behavior","weight":1,"source":"native_self_test","description":"Cancel restores the committed View Rosters snapshot"},
+    {"id":"capture_dimensions","group":"rendering","weight":1,"source":"capture","description":"All deterministic internal captures are exactly 512 by 240"},
+    {"id":"team_header_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"team_chicago_phase_*.ppm","reference":"team_chicago_initial.png","reference_crop":[0,9,1122,851],"comparison_region":[6,4,250,58],"description":"View Rosters title, team logo, EA logo and upper frame"},
+    {"id":"team_selector_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"team_chicago_phase_*.ppm","reference":"team_chicago_initial.png","reference_crop":[0,9,1122,851],"comparison_region":[70,48,220,78],"description":"Team name and left/right selector arrows"},
+    {"id":"team_rows_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"team_chicago_phase_*.ppm","reference":"team_chicago_initial.png","reference_crop":[0,9,1122,851],"comparison_region":[18,72,250,150],"description":"Six player rows, selected pulse, stat headings and values"},
+    {"id":"team_footer_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"team_chicago_phase_*.ppm","reference":"team_chicago_initial.png","reference_crop":[0,9,1122,851],"comparison_region":[4,150,252,188],"description":"Roster scroll arrow, lower frame and Help strip"},
+    {"id":"player_identity_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"player_chicago_phase_*.ppm","reference":"player_chicago_initial.png","reference_crop":[4,52,1148,910],"comparison_region":[18,4,145,82],"description":"View Player animated title and identity block"},
+    {"id":"player_stats_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"player_chicago_scrolled_phase_*.ppm","reference":"player_chicago_initial.png","reference_crop":[4,52,1148,910],"comparison_region":[18,72,145,160],"description":"View Player stat labels, values and scroll arrows in the reference's one-row-scrolled state"},
+    {"id":"player_photo_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"player_chicago_phase_*.ppm","reference":"player_chicago_initial.png","reference_crop":[4,52,1148,910],"comparison_region":[140,24,244,161],"description":"Vertical team mark, portrait and photo frame"},
+    {"id":"player_footer_visual","group":"visual","weight":1.5,"source":"visual_reference","native_pattern":"player_chicago_phase_*.ppm","reference":"player_chicago_initial.png","reference_crop":[4,52,1148,910],"comparison_region":[4,155,252,188],"description":"Team name, Cool Facts control, lower frame and Help strip"}
+  ]
+}

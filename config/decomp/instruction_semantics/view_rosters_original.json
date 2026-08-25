@@ -1,0 +1,1694 @@
+{
+  "binary": "feonly",
+  "functions": [
+    {
+      "address": "0x8002FE58",
+      "basic_block_count": 11,
+      "blocks": [
+        {
+          "end": "0x8002FE73",
+          "instruction_count": 7,
+          "start": "0x8002FE58"
+        },
+        {
+          "end": "0x8002FE7F",
+          "instruction_count": 3,
+          "start": "0x8002FE74"
+        },
+        {
+          "end": "0x8002FE8F",
+          "instruction_count": 4,
+          "start": "0x8002FE80"
+        },
+        {
+          "end": "0x8002FE9F",
+          "instruction_count": 4,
+          "start": "0x8002FE90"
+        },
+        {
+          "end": "0x8002FEBB",
+          "instruction_count": 7,
+          "start": "0x8002FEA0"
+        },
+        {
+          "end": "0x8002FED7",
+          "instruction_count": 7,
+          "start": "0x8002FEBC"
+        },
+        {
+          "end": "0x8002FEEB",
+          "instruction_count": 5,
+          "start": "0x8002FED8"
+        },
+        {
+          "end": "0x8002FEF3",
+          "instruction_count": 2,
+          "start": "0x8002FEEC"
+        },
+        {
+          "end": "0x8002FEFF",
+          "instruction_count": 3,
+          "start": "0x8002FEF4"
+        },
+        {
+          "end": "0x8002FF23",
+          "instruction_count": 9,
+          "start": "0x8002FF00"
+        },
+        {
+          "end": "0x8002FF3F",
+          "instruction_count": 7,
+          "start": "0x8002FF24"
+        }
+      ],
+      "control_flow_edge_count": 15,
+      "delay_slot_instruction_count": 7,
+      "direct_call_site_count": 0,
+      "direct_calls": [],
+      "edges": [
+        {
+          "from": "0x8002FE58",
+          "to": "0x8002FE74",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FE58",
+          "to": "0x8002FED8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FE74",
+          "to": "0x8002FE80",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FE74",
+          "to": "0x8002FE90",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FE80",
+          "to": "0x8002FEA0",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FE90",
+          "to": "0x8002FEA0",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FEA0",
+          "to": "0x8002FEBC",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FEBC",
+          "to": "0x8002FEBC",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FEBC",
+          "to": "0x8002FED8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FED8",
+          "to": "0x8002FEEC",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FED8",
+          "to": "0x8002FEF4",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FEEC",
+          "to": "0x8002FEF4",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FEF4",
+          "to": "0x8002FF00",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8002FF00",
+          "to": "0x8002FF00",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8002FF00",
+          "to": "0x8002FF24",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x75D24EB5",
+        "0x80021D74",
+        "0x80021D78",
+        "0x800DED28",
+        "0x800F1488",
+        "0x800F148A",
+        "0x800F3DC8",
+        "0x800F3F08",
+        "0x800F404C",
+        "0x800F4050",
+        "0x800F4052",
+        "0x800F4190",
+        "0x800F4192",
+        "0x800F42D4"
+      ],
+      "ghidra_name": "FUN_8002fe58",
+      "instruction_count": 58,
+      "scalar_constants": [
+        -4824,
+        0,
+        1,
+        2,
+        6,
+        8,
+        16,
+        160,
+        320,
+        5256,
+        7540,
+        7544,
+        15816,
+        16460,
+        16464,
+        17108,
+        32770,
+        32782,
+        32783
+      ],
+      "size_bytes": 232
+    },
+    {
+      "address": "0x8005770C",
+      "basic_block_count": 10,
+      "blocks": [
+        {
+          "end": "0x8005773B",
+          "instruction_count": 12,
+          "start": "0x8005770C"
+        },
+        {
+          "end": "0x80057767",
+          "instruction_count": 11,
+          "start": "0x8005773C"
+        },
+        {
+          "end": "0x80057787",
+          "instruction_count": 8,
+          "start": "0x80057768"
+        },
+        {
+          "end": "0x8005778F",
+          "instruction_count": 2,
+          "start": "0x80057788"
+        },
+        {
+          "end": "0x800577A7",
+          "instruction_count": 6,
+          "start": "0x80057790"
+        },
+        {
+          "end": "0x800577B7",
+          "instruction_count": 4,
+          "start": "0x800577A8"
+        },
+        {
+          "end": "0x800577C3",
+          "instruction_count": 3,
+          "start": "0x800577B8"
+        },
+        {
+          "end": "0x800577C7",
+          "instruction_count": 1,
+          "start": "0x800577C4"
+        },
+        {
+          "end": "0x800577EF",
+          "instruction_count": 10,
+          "start": "0x800577C8"
+        },
+        {
+          "end": "0x8005780F",
+          "instruction_count": 8,
+          "start": "0x800577F0"
+        }
+      ],
+      "control_flow_edge_count": 14,
+      "delay_slot_instruction_count": 9,
+      "direct_call_site_count": 2,
+      "direct_calls": [
+        "0x8005768C",
+        "0x8005FE14"
+      ],
+      "edges": [
+        {
+          "from": "0x8005770C",
+          "to": "0x8005773C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005770C",
+          "to": "0x800577F0",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005773C",
+          "to": "0x80057768",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80057768",
+          "to": "0x80057788",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80057768",
+          "to": "0x80057790",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80057788",
+          "to": "0x800577C4",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80057790",
+          "to": "0x800577A8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80057790",
+          "to": "0x800577C4",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800577A8",
+          "to": "0x800577B8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800577A8",
+          "to": "0x800577C8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800577B8",
+          "to": "0x800577C4",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800577C4",
+          "to": "0x800577C8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800577C8",
+          "to": "0x80057768",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800577C8",
+          "to": "0x800577F0",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80023AB0",
+        "0xFFFFFFE8",
+        "0xFFFFFFEC",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_8005770c",
+      "instruction_count": 65,
+      "scalar_constants": [
+        -40,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        14,
+        15,
+        16,
+        20,
+        24,
+        28,
+        29,
+        32,
+        40,
+        1196,
+        1840,
+        15024,
+        28864,
+        32769,
+        32770
+      ],
+      "size_bytes": 260
+    },
+    {
+      "address": "0x80057864",
+      "basic_block_count": 5,
+      "blocks": [
+        {
+          "end": "0x80057897",
+          "instruction_count": 13,
+          "start": "0x80057864"
+        },
+        {
+          "end": "0x800578CF",
+          "instruction_count": 14,
+          "start": "0x80057898"
+        },
+        {
+          "end": "0x800578F7",
+          "instruction_count": 10,
+          "start": "0x800578D0"
+        },
+        {
+          "end": "0x8005792F",
+          "instruction_count": 14,
+          "start": "0x800578F8"
+        },
+        {
+          "end": "0x8005795F",
+          "instruction_count": 12,
+          "start": "0x80057930"
+        }
+      ],
+      "control_flow_edge_count": 7,
+      "delay_slot_instruction_count": 7,
+      "direct_call_site_count": 3,
+      "direct_calls": [
+        "0x80054CBC",
+        "0x8005770C",
+        "0x8005DB34"
+      ],
+      "edges": [
+        {
+          "from": "0x80057864",
+          "to": "0x80057898",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80057898",
+          "to": "0x80057898",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80057898",
+          "to": "0x800578D0",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800578D0",
+          "to": "0x80057898",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800578D0",
+          "to": "0x800578F8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800578F8",
+          "to": "0x800578F8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800578F8",
+          "to": "0x80057930",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x800C0CAC",
+        "0x800C0CAE",
+        "0x800C0CB0",
+        "0xFFFFFFE8",
+        "0xFFFFFFEC",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_80057864",
+      "instruction_count": 63,
+      "scalar_constants": [
+        -40,
+        0,
+        1,
+        2,
+        15,
+        16,
+        20,
+        24,
+        28,
+        29,
+        32,
+        40,
+        100,
+        1196,
+        1838,
+        3244,
+        28864,
+        32769,
+        32780
+      ],
+      "size_bytes": 252
+    },
+    {
+      "address": "0x80057CE4",
+      "basic_block_count": 1,
+      "blocks": [
+        {
+          "end": "0x80058103",
+          "instruction_count": 264,
+          "start": "0x80057CE4"
+        }
+      ],
+      "control_flow_edge_count": 0,
+      "delay_slot_instruction_count": 23,
+      "direct_call_site_count": 22,
+      "direct_calls": [
+        "0x800399C4",
+        "0x80039C18",
+        "0x80039DF8",
+        "0x8003D930",
+        "0x80057A98",
+        "0x80057B00",
+        "0x80057B6C",
+        "0x80057BB0",
+        "0x80057BDC",
+        "0x80057C48"
+      ],
+      "edges": [],
+      "external_data_references": [
+        "0x800170C0",
+        "0x8003EEC0",
+        "0x8003F0C4",
+        "0x8003F324",
+        "0x80057960",
+        "0x80057A68",
+        "0x80057C98",
+        "0x8009861C",
+        "0x800F1478",
+        "0xFFFFFFB8",
+        "0xFFFFFFBC",
+        "0xFFFFFFC0",
+        "0xFFFFFFC4",
+        "0xFFFFFFC8",
+        "0xFFFFFFCC",
+        "0xFFFFFFD0",
+        "0xFFFFFFD4",
+        "0xFFFFFFD8",
+        "0xFFFFFFE0",
+        "0xFFFFFFE4",
+        "0xFFFFFFE8",
+        "0xFFFFFFEC",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_80057ce4",
+      "instruction_count": 264,
+      "scalar_constants": [
+        -31204,
+        -4416,
+        -3900,
+        -3292,
+        -88,
+        -1,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        16,
+        19,
+        20,
+        22,
+        24,
+        25,
+        28,
+        32,
+        34,
+        36,
+        37,
+        40,
+        44,
+        48,
+        56,
+        60,
+        64,
+        68,
+        70,
+        72,
+        76,
+        80,
+        88,
+        200,
+        1728,
+        1810,
+        1812,
+        2052,
+        2376,
+        2700,
+        3024,
+        3348,
+        3672,
+        3996,
+        5240,
+        28864,
+        31072,
+        31336,
+        31896,
+        32769,
+        32772,
+        32773,
+        32778,
+        32783
+      ],
+      "size_bytes": 1056
+    },
+    {
+      "address": "0x80059034",
+      "basic_block_count": 1,
+      "blocks": [
+        {
+          "end": "0x800590B7",
+          "instruction_count": 33,
+          "start": "0x80059034"
+        }
+      ],
+      "control_flow_edge_count": 0,
+      "delay_slot_instruction_count": 6,
+      "direct_call_site_count": 5,
+      "direct_calls": [
+        "0x8003D690",
+        "0x8003F7B0",
+        "0x80058B8C"
+      ],
+      "edges": [],
+      "external_data_references": [
+        "0x80022088",
+        "0x8009352C",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_80059034",
+      "instruction_count": 33,
+      "scalar_constants": [
+        -24,
+        4,
+        15,
+        16,
+        17,
+        24,
+        28,
+        38,
+        52,
+        64,
+        80,
+        92,
+        138,
+        256,
+        8328,
+        13612,
+        32770,
+        32777
+      ],
+      "size_bytes": 132
+    },
+    {
+      "address": "0x800590B8",
+      "basic_block_count": 7,
+      "blocks": [
+        {
+          "end": "0x800590EB",
+          "instruction_count": 13,
+          "start": "0x800590B8"
+        },
+        {
+          "end": "0x8005912B",
+          "instruction_count": 16,
+          "start": "0x800590EC"
+        },
+        {
+          "end": "0x80059143",
+          "instruction_count": 6,
+          "start": "0x8005912C"
+        },
+        {
+          "end": "0x8005915B",
+          "instruction_count": 6,
+          "start": "0x80059144"
+        },
+        {
+          "end": "0x80059167",
+          "instruction_count": 3,
+          "start": "0x8005915C"
+        },
+        {
+          "end": "0x8005916B",
+          "instruction_count": 1,
+          "start": "0x80059168"
+        },
+        {
+          "end": "0x8005921F",
+          "instruction_count": 45,
+          "start": "0x8005916C"
+        }
+      ],
+      "control_flow_edge_count": 9,
+      "delay_slot_instruction_count": 5,
+      "direct_call_site_count": 1,
+      "direct_calls": [
+        "0x80039D88"
+      ],
+      "edges": [
+        {
+          "from": "0x800590B8",
+          "to": "0x800590EC",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800590EC",
+          "to": "0x800590EC",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800590EC",
+          "to": "0x8005912C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005912C",
+          "to": "0x80059144",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005912C",
+          "to": "0x80059168",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059144",
+          "to": "0x8005915C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059144",
+          "to": "0x8005916C",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005915C",
+          "to": "0x80059168",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059168",
+          "to": "0x8005916C",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80022088",
+        "0x800A4088",
+        "0x800A4094",
+        "0x800A436C",
+        "0x800A4384",
+        "0x800A4385",
+        "0x800A43F4",
+        "0x800A444E",
+        "0x800EFCE4",
+        "0xFFFFFFF0",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_800590b8",
+      "instruction_count": 90,
+      "scalar_constants": [
+        -796,
+        -32,
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        10,
+        14,
+        16,
+        17,
+        18,
+        20,
+        22,
+        24,
+        28,
+        32,
+        120,
+        1196,
+        8328,
+        12227,
+        16520,
+        16588,
+        17260,
+        17284,
+        17285,
+        17396,
+        28864,
+        32769,
+        32770,
+        32778,
+        32783
+      ],
+      "size_bytes": 360
+    },
+    {
+      "address": "0x800592C4",
+      "basic_block_count": 10,
+      "blocks": [
+        {
+          "end": "0x800592E7",
+          "instruction_count": 9,
+          "start": "0x800592C4"
+        },
+        {
+          "end": "0x800592EF",
+          "instruction_count": 2,
+          "start": "0x800592E8"
+        },
+        {
+          "end": "0x80059323",
+          "instruction_count": 13,
+          "start": "0x800592F0"
+        },
+        {
+          "end": "0x80059333",
+          "instruction_count": 4,
+          "start": "0x80059324"
+        },
+        {
+          "end": "0x8005934F",
+          "instruction_count": 7,
+          "start": "0x80059334"
+        },
+        {
+          "end": "0x80059353",
+          "instruction_count": 1,
+          "start": "0x80059350"
+        },
+        {
+          "end": "0x8005935B",
+          "instruction_count": 2,
+          "start": "0x80059354"
+        },
+        {
+          "end": "0x800593A3",
+          "instruction_count": 18,
+          "start": "0x8005935C"
+        },
+        {
+          "end": "0x800593D7",
+          "instruction_count": 13,
+          "start": "0x800593A4"
+        },
+        {
+          "end": "0x800593EF",
+          "instruction_count": 6,
+          "start": "0x800593D8"
+        }
+      ],
+      "control_flow_edge_count": 13,
+      "delay_slot_instruction_count": 8,
+      "direct_call_site_count": 2,
+      "direct_calls": [
+        "0x8003D930",
+        "0x800590B8"
+      ],
+      "edges": [
+        {
+          "from": "0x800592C4",
+          "to": "0x800592E8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800592C4",
+          "to": "0x800592F0",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800592E8",
+          "to": "0x800592F0",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800592F0",
+          "to": "0x80059324",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800592F0",
+          "to": "0x8005935C",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059324",
+          "to": "0x80059334",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059324",
+          "to": "0x80059350",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059334",
+          "to": "0x80059354",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059350",
+          "to": "0x80059354",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059354",
+          "to": "0x8005935C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005935C",
+          "to": "0x800593A4",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005935C",
+          "to": "0x800593D8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800593A4",
+          "to": "0x800593D8",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80022088",
+        "0x80059034",
+        "0x800EDCB4",
+        "0x800F0D2C",
+        "0x800F8FD0",
+        "0xFFFFFFD0",
+        "0xFFFFFFDC",
+        "0xFFFFFFF0",
+        "0xFFFFFFF8",
+        "0xFFFFFFFC"
+      ],
+      "ghidra_name": "FUN_800592c4",
+      "instruction_count": 75,
+      "scalar_constants": [
+        -28720,
+        -28620,
+        -9036,
+        -64,
+        -1,
+        2,
+        3,
+        4,
+        6,
+        16,
+        20,
+        24,
+        28,
+        29,
+        48,
+        56,
+        60,
+        64,
+        120,
+        256,
+        1806,
+        1810,
+        1814,
+        3372,
+        8328,
+        12130,
+        28864,
+        32769,
+        32770,
+        32774,
+        32783,
+        32784
+      ],
+      "size_bytes": 300
+    },
+    {
+      "address": "0x80059610",
+      "basic_block_count": 19,
+      "blocks": [
+        {
+          "end": "0x8005963B",
+          "instruction_count": 11,
+          "start": "0x80059610"
+        },
+        {
+          "end": "0x8005964F",
+          "instruction_count": 5,
+          "start": "0x8005963C"
+        },
+        {
+          "end": "0x80059657",
+          "instruction_count": 2,
+          "start": "0x80059650"
+        },
+        {
+          "end": "0x80059663",
+          "instruction_count": 3,
+          "start": "0x80059658"
+        },
+        {
+          "end": "0x80059673",
+          "instruction_count": 4,
+          "start": "0x80059664"
+        },
+        {
+          "end": "0x80059677",
+          "instruction_count": 1,
+          "start": "0x80059674"
+        },
+        {
+          "end": "0x8005967B",
+          "instruction_count": 1,
+          "start": "0x80059678"
+        },
+        {
+          "end": "0x8005968B",
+          "instruction_count": 4,
+          "start": "0x8005967C"
+        },
+        {
+          "end": "0x800596AF",
+          "instruction_count": 9,
+          "start": "0x8005968C"
+        },
+        {
+          "end": "0x800596E3",
+          "instruction_count": 13,
+          "start": "0x800596B0"
+        },
+        {
+          "end": "0x80059703",
+          "instruction_count": 8,
+          "start": "0x800596E4"
+        },
+        {
+          "end": "0x8005971F",
+          "instruction_count": 7,
+          "start": "0x80059704"
+        },
+        {
+          "end": "0x8005974F",
+          "instruction_count": 12,
+          "start": "0x80059720"
+        },
+        {
+          "end": "0x8005975F",
+          "instruction_count": 4,
+          "start": "0x80059750"
+        },
+        {
+          "end": "0x80059767",
+          "instruction_count": 2,
+          "start": "0x80059760"
+        },
+        {
+          "end": "0x8005978B",
+          "instruction_count": 9,
+          "start": "0x80059768"
+        },
+        {
+          "end": "0x800597A7",
+          "instruction_count": 7,
+          "start": "0x8005978C"
+        },
+        {
+          "end": "0x800597D7",
+          "instruction_count": 12,
+          "start": "0x800597A8"
+        },
+        {
+          "end": "0x80059807",
+          "instruction_count": 12,
+          "start": "0x800597D8"
+        }
+      ],
+      "control_flow_edge_count": 30,
+      "delay_slot_instruction_count": 21,
+      "direct_call_site_count": 7,
+      "direct_calls": [
+        "0x8003A224",
+        "0x8003B26C",
+        "0x8003CF70",
+        "0x8003D71C",
+        "0x800594F0"
+      ],
+      "edges": [
+        {
+          "from": "0x80059610",
+          "to": "0x8005963C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005963C",
+          "to": "0x80059650",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005963C",
+          "to": "0x80059664",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059650",
+          "to": "0x80059658",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059650",
+          "to": "0x80059678",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059658",
+          "to": "0x8005967C",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059664",
+          "to": "0x80059674",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059664",
+          "to": "0x80059678",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059674",
+          "to": "0x80059678",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059678",
+          "to": "0x8005967C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005967C",
+          "to": "0x8005968C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005967C",
+          "to": "0x800596B0",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005968C",
+          "to": "0x8005963C",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005968C",
+          "to": "0x800596B0",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800596B0",
+          "to": "0x800596E4",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800596B0",
+          "to": "0x80059704",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800596E4",
+          "to": "0x80059704",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059704",
+          "to": "0x80059720",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059704",
+          "to": "0x80059750",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059720",
+          "to": "0x80059720",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059720",
+          "to": "0x80059750",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059750",
+          "to": "0x80059760",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059750",
+          "to": "0x800597D8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059760",
+          "to": "0x80059768",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059760",
+          "to": "0x8005978C",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059768",
+          "to": "0x8005978C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005978C",
+          "to": "0x800597A8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005978C",
+          "to": "0x800597D8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800597A8",
+          "to": "0x800597A8",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800597A8",
+          "to": "0x800597D8",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80022088",
+        "0x800EFCE4",
+        "0x800F8FD0",
+        "0xFFFFFFE0",
+        "0xFFFFFFE8",
+        "0xFFFFFFEC",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_80059610",
+      "instruction_count": 126,
+      "scalar_constants": [
+        -28720,
+        -796,
+        -48,
+        -1,
+        1,
+        4,
+        5,
+        6,
+        7,
+        9,
+        14,
+        15,
+        16,
+        18,
+        20,
+        24,
+        27,
+        28,
+        32,
+        33,
+        35,
+        36,
+        40,
+        48,
+        52,
+        255,
+        4096,
+        8328,
+        12129,
+        28864,
+        32769,
+        32770,
+        32783,
+        32784
+      ],
+      "size_bytes": 504
+    },
+    {
+      "address": "0x80059928",
+      "basic_block_count": 12,
+      "blocks": [
+        {
+          "end": "0x8005995F",
+          "instruction_count": 14,
+          "start": "0x80059928"
+        },
+        {
+          "end": "0x8005997B",
+          "instruction_count": 7,
+          "start": "0x80059960"
+        },
+        {
+          "end": "0x80059983",
+          "instruction_count": 2,
+          "start": "0x8005997C"
+        },
+        {
+          "end": "0x8005999F",
+          "instruction_count": 7,
+          "start": "0x80059984"
+        },
+        {
+          "end": "0x800599A7",
+          "instruction_count": 2,
+          "start": "0x800599A0"
+        },
+        {
+          "end": "0x800599AF",
+          "instruction_count": 2,
+          "start": "0x800599A8"
+        },
+        {
+          "end": "0x800599CF",
+          "instruction_count": 8,
+          "start": "0x800599B0"
+        },
+        {
+          "end": "0x800599FF",
+          "instruction_count": 12,
+          "start": "0x800599D0"
+        },
+        {
+          "end": "0x80059A03",
+          "instruction_count": 1,
+          "start": "0x80059A00"
+        },
+        {
+          "end": "0x80059A07",
+          "instruction_count": 1,
+          "start": "0x80059A04"
+        },
+        {
+          "end": "0x80059A6F",
+          "instruction_count": 26,
+          "start": "0x80059A08"
+        },
+        {
+          "end": "0x80059A87",
+          "instruction_count": 6,
+          "start": "0x80059A70"
+        }
+      ],
+      "control_flow_edge_count": 16,
+      "delay_slot_instruction_count": 11,
+      "direct_call_site_count": 2,
+      "direct_calls": [
+        "0x80039574",
+        "0x80059808"
+      ],
+      "edges": [
+        {
+          "from": "0x80059928",
+          "to": "0x80059960",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059928",
+          "to": "0x80059984",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059960",
+          "to": "0x8005997C",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059960",
+          "to": "0x80059984",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005997C",
+          "to": "0x80059A70",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059984",
+          "to": "0x800599A0",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059984",
+          "to": "0x800599D0",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800599A0",
+          "to": "0x800599A8",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800599A0",
+          "to": "0x800599B0",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800599A8",
+          "to": "0x80059A04",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800599B0",
+          "to": "0x80059A04",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x800599D0",
+          "to": "0x80059A00",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x800599D0",
+          "to": "0x80059A08",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x80059A00",
+          "to": "0x80059A04",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059A04",
+          "to": "0x80059A08",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x80059A08",
+          "to": "0x80059A70",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80022088",
+        "0x800F8FD0",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8"
+      ],
+      "ghidra_name": "FUN_80059928",
+      "instruction_count": 88,
+      "scalar_constants": [
+        -28720,
+        -32,
+        -1,
+        0,
+        1,
+        2,
+        4,
+        8,
+        15,
+        16,
+        20,
+        24,
+        27,
+        29,
+        32,
+        52,
+        1196,
+        1742,
+        1800,
+        8328,
+        28864,
+        32769,
+        32770,
+        32784
+      ],
+      "size_bytes": 352
+    },
+    {
+      "address": "0x8005A538",
+      "basic_block_count": 3,
+      "blocks": [
+        {
+          "end": "0x8005A64F",
+          "instruction_count": 70,
+          "start": "0x8005A538"
+        },
+        {
+          "end": "0x8005A67B",
+          "instruction_count": 11,
+          "start": "0x8005A650"
+        },
+        {
+          "end": "0x8005A6EF",
+          "instruction_count": 29,
+          "start": "0x8005A67C"
+        }
+      ],
+      "control_flow_edge_count": 3,
+      "delay_slot_instruction_count": 9,
+      "direct_call_site_count": 7,
+      "direct_calls": [
+        "0x80030D14",
+        "0x8003122C",
+        "0x80039D88",
+        "0x8003D930",
+        "0x800594F0",
+        "0x8005A074",
+        "0x8005A1EC"
+      ],
+      "edges": [
+        {
+          "from": "0x8005A538",
+          "to": "0x8005A650",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005A650",
+          "to": "0x8005A650",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005A650",
+          "to": "0x8005A67C",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x800170C0",
+        "0x80022088",
+        "0x80026664",
+        "0x80026670",
+        "0x8002667C",
+        "0x80026688",
+        "0x8005A280",
+        "0x8005A3FC",
+        "0x800A4822",
+        "0x800A4827",
+        "0x800A482C",
+        "0x800A482D",
+        "0x800A482E",
+        "0x800A483A",
+        "0x800A4840",
+        "0x800A4842",
+        "0x800A4844",
+        "0x800A4845",
+        "0x800A4864",
+        "0x800A4866",
+        "0x800A486C",
+        "0x800A486E",
+        "0x800A4878",
+        "0x800A4888",
+        "0x800A48B4",
+        "0x800A4914",
+        "0x800A4918",
+        "0x800A491C",
+        "0x800A49AE",
+        "0x800A5408",
+        "0x800A5428",
+        "0x800A5448",
+        "0xFFFFFFC0",
+        "0xFFFFFFDA",
+        "0xFFFFFFF0",
+        "0xFFFFFFF4",
+        "0xFFFFFFF8",
+        "0xFFFFFFFC"
+      ],
+      "ghidra_name": "FUN_8005a538",
+      "instruction_count": 110,
+      "scalar_constants": [
+        -23936,
+        -23556,
+        -80,
+        -1,
+        0,
+        1,
+        2,
+        4,
+        6,
+        13,
+        14,
+        15,
+        16,
+        17,
+        24,
+        29,
+        36,
+        42,
+        54,
+        56,
+        57,
+        64,
+        68,
+        72,
+        76,
+        80,
+        92,
+        112,
+        239,
+        8328,
+        18466,
+        18471,
+        18476,
+        18477,
+        18478,
+        18490,
+        18496,
+        18498,
+        18500,
+        18501,
+        18612,
+        18708,
+        18712,
+        18716,
+        26212,
+        26224,
+        26236,
+        26248,
+        28864,
+        32769,
+        32770,
+        32774,
+        32778
+      ],
+      "size_bytes": 440
+    },
+    {
+      "address": "0x8005FE14",
+      "basic_block_count": 4,
+      "blocks": [
+        {
+          "end": "0x8005FE2F",
+          "instruction_count": 7,
+          "start": "0x8005FE14"
+        },
+        {
+          "end": "0x8005FE4F",
+          "instruction_count": 8,
+          "start": "0x8005FE30"
+        },
+        {
+          "end": "0x8005FE63",
+          "instruction_count": 5,
+          "start": "0x8005FE50"
+        },
+        {
+          "end": "0x8005FE77",
+          "instruction_count": 5,
+          "start": "0x8005FE64"
+        }
+      ],
+      "control_flow_edge_count": 4,
+      "delay_slot_instruction_count": 4,
+      "direct_call_site_count": 1,
+      "direct_calls": [
+        "0x8005FDC4"
+      ],
+      "edges": [
+        {
+          "from": "0x8005FE14",
+          "to": "0x8005FE30",
+          "type": "FALL_THROUGH"
+        },
+        {
+          "from": "0x8005FE14",
+          "to": "0x8005FE50",
+          "type": "CONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005FE30",
+          "to": "0x8005FE64",
+          "type": "UNCONDITIONAL_JUMP"
+        },
+        {
+          "from": "0x8005FE50",
+          "to": "0x8005FE64",
+          "type": "FALL_THROUGH"
+        }
+      ],
+      "external_data_references": [
+        "0x80015030",
+        "0xFFFFFFF8",
+        "0xFFFFFFFC"
+      ],
+      "ghidra_name": "FUN_8005fe14",
+      "instruction_count": 25,
+      "scalar_constants": [
+        -493,
+        -24,
+        0,
+        2,
+        4,
+        16,
+        20,
+        24,
+        493,
+        20528,
+        32769
+      ],
+      "size_bytes": 100
+    }
+  ],
+  "processor": "MIPS:LE:32:default",
+  "schema_version": 1
+}

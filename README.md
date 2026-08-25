@@ -1,6 +1,6 @@
 # NBA Live 97 PS1 decompilation
 
-An experimental, native C++ reconstruction of the US PlayStation release of
+An experimental, native C/C++ reconstruction of the US PlayStation release of
 NBA Live 97 (`SLUS-00267`). The project uses static recompilation evidence,
 headless Ghidra analysis, and runtime comparison with the original game.
 
@@ -26,6 +26,11 @@ The native Windows build currently covers:
 This is not yet a complete game. Gameplay, roster transactions, and several
 deeper frontend paths remain unfinished. See the generated
 [progress report](docs/progress.md) for the measured breakdown.
+
+Recovered game behavior is moving into portable C modules under
+`src/recovered/`. The existing C++ code remains the native Win32 platform shell
+for rendering, input, movies, audio devices, and resource ownership. A recovered
+C function replaces its C++ approximation rather than creating a second copy.
 
 ## Assets and legal notice
 
@@ -99,6 +104,38 @@ python tools/report_progress.py --check
 GitHub Actions rejects stale generated reports and any tracked `.local/` file.
 Function coverage is intentionally conservative: partial behavioral evidence
 does not count as a complete or instruction-matching decompilation.
+
+View Rosters additionally tracks the original MIPS denominator—functions,
+instructions, basic blocks, CFG edges, and call sites—from headless Ghidra.
+Source ownership, explicit block accounting, native semantic checkpoints,
+original-trace equivalence, and exact MIPS matching are reported separately so
+a working native feature is never mislabeled as matching original code.
+
+Refresh that structural inventory with
+`pwsh -File scripts/update_instruction_semantics.ps1`. Once a same-scenario
+original PC trace is available locally, compare its function-entry path with
+the native checkpoint sequence using
+`python tools/compare_semantic_traces.py --original <local-trace.txt>`.
+
+View Rosters also has a separate end-to-end fidelity score generated from
+recovered behavior checks and local screenshot comparisons. Run
+`python tools/verify_view_rosters.py --behavior-pass --require-references` after
+deterministic capture to refresh it. The score is useful regression evidence,
+not a byte-match claim: emulator scaling, color presentation, and animation
+phase can prevent identical pixels even when the recovered layout agrees.
+
+Run the complete local verification pipeline with:
+
+```powershell
+pwsh -File scripts/verify.ps1
+```
+
+It checks progress metadata, validates C recovery ownership, builds the mixed
+C/C++ application, and runs the asset-backed behavioral self-test. Optional raw
+PS1 function candidates belong under `.local/build/ps1/functions/`; the verifier
+compares eligible candidates against the owned original bytes. A normal
+verification pass never implies byte matching—use `-RequireMatching` when exact
+PS1 matches have been configured.
 
 ## Local-only layout
 

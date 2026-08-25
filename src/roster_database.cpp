@@ -1,4 +1,5 @@
 #include "roster_database.hpp"
+#include "recovered/semantic_trace.h"
 
 #include <algorithm>
 #include <cstring>
@@ -284,13 +285,16 @@ void RosterDatabase::load(const std::filesystem::path& path) {
         if (!new_team_index.emplace(value.id, new_teams.size()).second)
             throw std::runtime_error("duplicate team ID");
         new_teams.push_back(std::move(value));
+        nba97_semantic_trace_record(0x8005770Cu);
     }
     source_path_ = path; version_ = version;
     players_ = std::move(new_players); teams_ = std::move(new_teams);
     player_index_ = std::move(new_player_index); team_index_ = std::move(new_team_index);
+    nba97_semantic_trace_record(0x80057864u);
 }
 
 const PlayerRecord* RosterDatabase::player(std::uint16_t id) const noexcept {
+    nba97_semantic_trace_record(0x8005FE14u);
     const auto found = player_index_.find(id);
     return found == player_index_.end() ? nullptr : &players_[found->second];
 }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(nba_live_97_decomp LANGUAGES CXX)
+project(nba_live_97_decomp LANGUAGES C CXX)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
@@ -22,6 +22,8 @@ if(WIN32)
         src/frontend_music.cpp
         src/psx_adpcm.cpp
         src/recovered_audio.cpp
+        src/recovered/frontend_audio.c
+        src/recovered/semantic_trace.c
         src/boot_flow.cpp
         src/main_menu.cpp
         src/frontend_settings.cpp
@@ -44,13 +46,14 @@ else()
         src/frontend_settings.cpp
         src/roster_database.cpp
         src/user_profiles.cpp
+        src/recovered/semantic_trace.c
         src/psh_image.cpp
         src/psh_font.cpp
     )
     target_link_libraries(nba97_boot_decomp PRIVATE SDL2::SDL2)
 endif()
 
-target_compile_features(nba97_boot_decomp PRIVATE cxx_std_17)
+target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 if(MSVC)
     target_compile_options(nba97_boot_decomp PRIVATE /W4 /permissive-)
 else()

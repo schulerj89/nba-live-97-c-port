@@ -6,6 +6,8 @@
 #include "boot_flow.hpp"
 #include "frontend_music.hpp"
 #include "recovered_audio.hpp"
+#include "recovered/frontend_audio.h"
+#include "recovered/semantic_trace.h"
 #include "intro_player.hpp"
 #include "main_menu.hpp"
 #include "png_image.hpp"
@@ -40,6 +42,9 @@ struct Options {
     std::filesystem::path trace_path = ".local/logs/boot_decomp_trace.log";
     std::filesystem::path settings_path = ".local/config/frontend_settings.ini";
     std::filesystem::path profiles_path = ".local/saves/user_profiles.n97sav";
+    std::filesystem::path view_rosters_capture_dir;
+    std::filesystem::path semantic_report_path =
+        ".local/reports/view_rosters_semantic_trace.json";
     std::uint32_t transition_ms = 3000;
     bool self_test = false;
 };
@@ -120,6 +125,10 @@ Options parseOptions(int argc, char** argv) {
         else if (arg == "--trace" && i + 1 < argc) options.trace_path = argv[++i];
         else if (arg == "--settings" && i + 1 < argc) options.settings_path = argv[++i];
         else if (arg == "--profiles" && i + 1 < argc) options.profiles_path = argv[++i];
+        else if (arg == "--capture-view-rosters" && i + 1 < argc)
+            options.view_rosters_capture_dir = argv[++i];
+        else if (arg == "--semantic-report" && i + 1 < argc)
+            options.semantic_report_path = argv[++i];
     }
     return options;
 }
@@ -148,6 +157,21 @@ void validateFullscreen(const PshImage& image, const char* name) {
         throw std::runtime_error(std::string(name) + " must be 512x240");
 }
 
+void writePpm(const PshImage& image, const std::filesystem::path& path) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output) throw std::runtime_error("cannot write verification capture: " + path.string());
+    output << "P6\n" << image.width << ' ' << image.height << "\n255\n";
+    for (std::size_t at = 0; at < image.rgba.size(); at += 4) {
+        const char rgb[3]{
+            static_cast<char>(image.rgba[at]),
+            static_cast<char>(image.rgba[at + 1]),
+            static_cast<char>(image.rgba[at + 2])};
+        output.write(rgb, sizeof(rgb));
+    }
+    if (!output) throw std::runtime_error("failed writing verification capture: " + path.string());
+}
+
 class BootApplication final {
 public:
     explicit BootApplication(Options options)
@@ -162,6 +186,8 @@ public:
 
     int run() {
         if (options_.self_test) return runSelfTest();
+        if (!options_.view_rosters_capture_dir.empty())
+            return captureViewRosters();
         registerWindowClass();
         createMainWindow();
         ShowWindow(window_, SW_SHOWNORMAL);
@@ -481,6 +507,7 @@ private:
     }
 
     void loadTeamRosterBackgrounds(const std::filesystem::path& root) {
+        nba97_semantic_trace_record(0x8002FE58u);
         static constexpr const char* teams[] = {
             "atl","bos","cha","chi","cle","dal","den","det","gol","hou",
             "ind","lac","lal","mia","mil","min","nwj","nwy","orl","phi",
@@ -574,7 +601,107 @@ private:
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); native plates at x=49/154/259/364 y=56/122; art offset=(12,23)");
     }
 
+    int captureViewRosters() {
+        const auto output = options_.view_rosters_capture_dir;
+        roster_viewer_ = nba97::RosterViewer{};
+        roster_viewer_.open(roster_database_);
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, roster_sprites_, 340),
+            output / "team_atlanta_initial.ppm");
+
+        std::uint32_t elapsed = 100;
+        for (int team = 0; team < 3; ++team) {
+            roster_viewer_.scanTeam(1, roster_database_, elapsed);
+            elapsed += 340;
+        }
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, roster_sprites_, elapsed),
+            output / "team_chicago_initial.ppm");
+        for (int phase = 0; phase < 40; ++phase) {
+            char name[48]{};
+            sprintf_s(name, "team_chicago_phase_%02d.ppm", phase);
+            writePpm(nba97::renderRosterViewer(
+                roster_viewer_, roster_database_, menu_font_, roster_sprites_,
+                static_cast<std::uint32_t>(phase * 17)), output / name);
+        }
+
+        for (int row = 0; row < 6; ++row)
+            roster_viewer_.move(0, 1, roster_database_, elapsed + row * 34);
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, roster_sprites_, elapsed + 340),
+            output / "team_chicago_scrolled.ppm");
+
+        roster_viewer_ = nba97::RosterViewer{};
+        roster_viewer_.open(roster_database_);
+        elapsed = 100;
+        for (int team = 0; team < 3; ++team) {
+            roster_viewer_.scanTeam(1, roster_database_, elapsed);
+            elapsed += 340;
+        }
+        roster_viewer_.activate(roster_database_);
+        loadSelectedPlayerCardAssets();
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, player_sprites_, 340,
+            roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+            roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_initial.ppm");
+        for (int phase = 0; phase < 40; ++phase) {
+            char name[48]{};
+            sprintf_s(name, "player_chicago_phase_%02d.ppm", phase);
+            writePpm(nba97::renderRosterViewer(
+                roster_viewer_, roster_database_, menu_font_, player_sprites_,
+                static_cast<std::uint32_t>(phase * 17),
+                roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+                roster_cool_facts_available_, &control_font_), output / name);
+        }
+
+        // The user's original no$psx reference was captured one row below the
+        // recovered initial state: "games started" has scrolled out and the
+        // upper marker is visible beside "games played". Capture that exact
+        // scenario separately so visual verification never rewards changing
+        // the correct initial list to fit a scrolled reference frame.
+        roster_viewer_.move(0, 1, roster_database_, 680);
+        writePpm(nba97::renderRosterViewer(
+            roster_viewer_, roster_database_, menu_font_, player_sprites_, 680,
+            roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+            roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_scrolled.ppm");
+        for (int phase = 0; phase < 40; ++phase) {
+            char name[56]{};
+            sprintf_s(name, "player_chicago_scrolled_phase_%02d.ppm", phase);
+            writePpm(nba97::renderRosterViewer(
+                roster_viewer_, roster_database_, menu_font_, player_sprites_,
+                static_cast<std::uint32_t>(phase * 17),
+                roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+                roster_cool_facts_available_, &control_font_), output / name);
+        }
+
+        std::ofstream metadata(output / "capture.json", std::ios::trunc);
+        if (!metadata) throw std::runtime_error("cannot write View Rosters capture metadata");
+        metadata << "{\n"
+                 << "  \"schema_version\": 1,\n"
+                 << "  \"width\": 512,\n"
+                 << "  \"height\": 240,\n"
+                 << "  \"team\": \"Chicago Bulls\",\n"
+                 << "  \"visible_rows\": 6,\n"
+                 << "  \"captures\": [\"team_atlanta_initial.ppm\", "
+                    "\"team_chicago_initial.ppm\", \"team_chicago_scrolled.ppm\", "
+                    "\"player_chicago_initial.ppm\", "
+                    "\"player_chicago_scrolled.ppm\"]\n"
+                 << "}\n";
+        trace_.log("VERIFY-CAPTURE", "deterministic View Rosters frames -> " + output.string());
+        return 0;
+    }
+
     int runSelfTest() {
+        if (nba97_frontend_sfx_volume(0) != 0 ||
+            nba97_frontend_sfx_volume(9) != 108 ||
+            nba97_frontend_sfx_volume(11) != 127 ||
+            nba97_frontend_music_volume(0) != 0 ||
+            nba97_frontend_music_volume(8) != 120 ||
+            nba97_frontend_music_volume(9) != 127)
+            throw std::runtime_error("shared C frontend-volume recovery self-test failed");
+        trace_.log("SELF-TEST", "shared C recovery boundary values validated for FUN_8002F124/FUN_8002F258");
         if (!flow_.update(options_.transition_ms, options_.transition_ms) ||
             flow_.screen() != nba97::BootScreen::LegalScreen)
             throw std::runtime_error("load -> legal self-test failed");
@@ -789,8 +916,63 @@ private:
             throw std::runtime_error("profile generation/update self-test failed");
         std::filesystem::remove(profile_test_path, cleanup_error);
         std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
-        trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters state 0x10, View Player 24-row scroll and FUN_80059928 wrap, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
+        writeSemanticTraceReport();
+        trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters state 0x10, View Player 24-row scroll and FUN_80059928 wrap, versioned profiles, external roster database, all 2,524 frontend-music blocks, and 11 native semantic checkpoints validated");
         return 0;
+    }
+
+    void writeSemanticTraceReport() {
+        struct SemanticFunction {
+            std::uint32_t address;
+            const char* name;
+        };
+        static constexpr std::array<SemanticFunction, 11> functions{{
+            {0x8002FE58u, "Frontend_PatchTeamPalette"},
+            {0x8005770Cu, "Rosters_ResolveTeamSlots"},
+            {0x80057864u, "Rosters_CopySlotTable"},
+            {0x80057CE4u, "Frontend_RunRostersMenu"},
+            {0x80059034u, "Rosters_DrawTeamSelector"},
+            {0x800590B8u, "Rosters_ConstructViewer"},
+            {0x800592C4u, "Rosters_RunViewer"},
+            {0x80059610u, "Rosters_ScanTeams"},
+            {0x80059928u, "Rosters_CyclePlayer"},
+            {0x8005A538u, "Player_RunCard"},
+            {0x8005FE14u, "Rosters_ResolvePlayerId"},
+        }};
+        for (const auto& function : functions) {
+            if (nba97_semantic_trace_count(function.address) == 0)
+                throw std::runtime_error(std::string("missing native semantic checkpoint: ") +
+                                         function.name);
+        }
+        std::filesystem::create_directories(options_.semantic_report_path.parent_path());
+        std::ofstream output(options_.semantic_report_path, std::ios::trunc);
+        if (!output) throw std::runtime_error("cannot write semantic trace report");
+        output << "{\n  \"schema_version\": 1,\n"
+               << "  \"scope\": \"view_rosters\",\n"
+               << "  \"dropped_events\": " << nba97_semantic_trace_dropped() << ",\n"
+               << "  \"captured_sequence_events\": " << nba97_semantic_trace_size()
+               << ",\n  \"functions\": [\n";
+        for (std::size_t index = 0; index < functions.size(); ++index) {
+            const auto& function = functions[index];
+            char address[16]{};
+            sprintf_s(address, "0x%08X", function.address);
+            output << "    {\"address\": \"" << address << "\", \"name\": \""
+                   << function.name << "\", \"native_event_count\": "
+                   << nba97_semantic_trace_count(function.address) << "}"
+                   << (index + 1 == functions.size() ? "\n" : ",\n");
+        }
+        std::array<std::uint32_t, NBA97_SEMANTIC_TRACE_SEQUENCE_CAPACITY> sequence{};
+        const std::size_t sequence_size =
+            nba97_semantic_trace_copy(sequence.data(), sequence.size());
+        output << "  ],\n  \"sequence\": [";
+        for (std::size_t index = 0; index < sequence_size; ++index) {
+            char address[16]{};
+            sprintf_s(address, "\"0x%08X\"", sequence[index]);
+            output << (index == 0 ? "" : ", ") << address;
+        }
+        output << "]\n}\n";
+        if (!output) throw std::runtime_error("failed writing semantic trace report");
+        trace_.log("SEMANTIC", "11/11 mapped View Rosters function checkpoints observed; original trace comparison remains unclaimed");
     }
 
     void registerWindowClass() {
@@ -1133,8 +1315,8 @@ private:
         trace_.log("MENU", "quarter=3 min, mode=exhibition, style=arcade, level=rookie");
         trace_.log("MENU-FOCUS", "game option quarter selected; arrows/mouse hover enabled");
         try {
-            const auto recovered_volume = static_cast<std::uint8_t>((std::min)(127,
-                static_cast<int>(settings_.option(1)) * 15));
+            const auto recovered_volume =
+                nba97_frontend_music_volume(settings_.option(1));
             frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", recovered_volume);
             const auto& audio = frontend_music_.info();
             trace_.log("MUSIC-DECODER", frontend_music_.decoderName());
@@ -1621,8 +1803,8 @@ private:
         trace_.log("SETTINGS-SAVE", std::string(settings_menu_.selectedLabel()) +
                                     "=" + value + " -> " + options_.settings_path.string());
         if (frontend_page_ == nba97::FrontendPage::Options && index == 1) {
-            const auto recovered_volume = static_cast<std::uint8_t>((std::min)(127,
-                static_cast<int>(settings_.option(1)) * 15));
+            const auto recovered_volume =
+                nba97_frontend_music_volume(settings_.option(1));
             frontend_music_.setRecoveredVolume(recovered_volume);
             trace_.log("MUSIC-VOLUME", "FUN_8002F258 value=" +
                 std::to_string(recovered_volume) + "/127 applied live");

@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "scope": "view_rosters",
+  "method": "tiered original-MIPS structural accounting; tiers are never combined",
+  "original_scope": {
+    "functions": 11,
+    "bytes": 3988,
+    "instructions": 997,
+    "basic_blocks": 83,
+    "control_flow_edges": 111,
+    "direct_call_sites": 52
+  },
+  "source_ownership": {
+    "mapped_functions": 11,
+    "total_functions": 11,
+    "instructions_with_source_owner": 997,
+    "total_instructions": 997
+  },
+  "instruction_accounting": {
+    "accounted_instructions": 322,
+    "total_instructions": 997,
+    "accounted_basic_blocks": 6,
+    "total_basic_blocks": 83
+  },
+  "structural_verification": {
+    "verified_control_flow_edges": 0,
+    "total_control_flow_edges": 111
+  },
+  "native_checkpoint_observation": {
+    "observed_functions": 11,
+    "total_functions": 11,
+    "native_report_available": true
+  },
+  "recomp_crosscheck": {
+    "entrypoints_found": 10,
+    "total_functions": 11,
+    "missing_entrypoints": [
+      "0x80059034"
+    ],
+    "local_recomp_available": true
+  },
+  "original_trace_comparison": {
+    "equivalent_scenarios": 0,
+    "declared_scenarios": 0,
+    "status": "not_established"
+  },
+  "binary_matching": {
+    "matching_functions": 0,
+    "eligible_functions": 0,
+    "status": "not_configured"
+  },
+  "functions": [
+    {
+      "address": "0x8002FE58",
+      "name": "Frontend_PatchTeamPalette",
+      "source": "src/win32_main.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 58,
+      "original_basic_block_count": 11,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x8005770C",
+      "name": "Rosters_ResolveTeamSlots",
+      "source": "src/roster_database.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 65,
+      "original_basic_block_count": 10,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x80057864",
+      "name": "Rosters_CopySlotTable",
+      "source": "src/roster_database.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 63,
+      "original_basic_block_count": 5,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x80057CE4",
+      "name": "Frontend_RunRostersMenu",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 264,
+      "original_basic_block_count": 1,
+      "accounted_instruction_count": 264,
+      "accounted_basic_block_count": 1,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x80059034",
+      "name": "Rosters_DrawTeamSelector",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 33,
+      "original_basic_block_count": 1,
+      "accounted_instruction_count": 33,
+      "accounted_basic_block_count": 1,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": false,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x800590B8",
+      "name": "Rosters_ConstructViewer",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 90,
+      "original_basic_block_count": 7,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x800592C4",
+      "name": "Rosters_RunViewer",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 75,
+      "original_basic_block_count": 10,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x80059610",
+      "name": "Rosters_ScanTeams",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 126,
+      "original_basic_block_count": 19,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x80059928",
+      "name": "Rosters_CyclePlayer",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 88,
+      "original_basic_block_count": 12,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x8005A538",
+      "name": "Player_RunCard",
+      "source": "src/main_menu.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 110,
+      "original_basic_block_count": 3,
+      "accounted_instruction_count": 0,
+      "accounted_basic_block_count": 0,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    },
+    {
+      "address": "0x8005FE14",
+      "name": "Rosters_ResolvePlayerId",
+      "source": "src/roster_database.cpp",
+      "source_mapped": true,
+      "original_instruction_count": 25,
+      "original_basic_block_count": 4,
+      "accounted_instruction_count": 25,
+      "accounted_basic_block_count": 4,
+      "structurally_verified_edge_count": 0,
+      "native_checkpoint_observed": true,
+      "recomp_entrypoint_found": true,
+      "original_trace_equivalent": false,
+      "binary_matching": false
+    }
+  ]
+}

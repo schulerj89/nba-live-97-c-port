@@ -1,4 +1,5 @@
 #include "main_menu.hpp"
+#include "recovered/semantic_trace.h"
 
 #include <algorithm>
 #include <array>
@@ -781,6 +782,8 @@ void RosterViewer::clamp(const RosterDatabase& database) noexcept {
 }
 
 void RosterViewer::open(const RosterDatabase& database) noexcept {
+    nba97_semantic_trace_record(0x800592C4u);
+    nba97_semantic_trace_record(0x800590B8u);
     mode_ = RosterViewMode::TeamRoster;
     help_visible_ = false;
     first_visible_player_stat_ = 0;
@@ -827,6 +830,7 @@ bool RosterViewer::cycleDisplay(int direction) noexcept {
 bool RosterViewer::scanTeam(int direction, const RosterDatabase& database,
                             std::uint32_t elapsed_ms) noexcept {
     if (!direction || database.teams().empty()) return false;
+    nba97_semantic_trace_record(0x80059610u);
     palette_from_team_index_ = team_index_;
     team_index_ = direction < 0
         ? (team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1)
@@ -857,11 +861,13 @@ bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& data
     const std::size_t previous_first_visible = first_visible_player_;
     const std::size_t previous_stat = first_visible_player_stat_;
     if (mode_ == RosterViewMode::TeamRoster && horizontal) {
+        nba97_semantic_trace_record(0x80059610u);
         palette_from_team_index_ = team_index_;
         if (horizontal < 0) team_index_ = team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1;
         else team_index_ = (team_index_ + 1) % database.teams().size();
         palette_transition_start_ms_ = elapsed_ms;
     } else if (mode_ == RosterViewMode::PlayerCard) {
+        if (horizontal) nba97_semantic_trace_record(0x80059928u);
         const TeamRecord* team = selectedTeam(database);
         if (team && !team->roster.empty()) {
             std::size_t roster_count = 0;
@@ -922,6 +928,7 @@ void RosterViewer::activate(const RosterDatabase& database) noexcept {
     // FUN_80058F0C action 0x10 returns 2 for a valid slot.  The frontend then
     // pushes nested state 0x24 (FUN_8005A538) and returns to state 0x10.
     if (selectedPlayer(database)) {
+        nba97_semantic_trace_record(0x8005A538u);
         mode_ = RosterViewMode::PlayerCard;
         first_visible_player_stat_ = 0;
         help_visible_ = false;
@@ -957,6 +964,8 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    std::uint32_t elapsed_ms) {
     const MenuSpritePack& sprites = menu.page() == FrontendPage::Rosters ? zset4 :
                                     menu.page() == FrontendPage::Users ? zset7 : zset1;
+    if (menu.page() == FrontendPage::Rosters)
+        nba97_semantic_trace_record(0x80057CE4u);
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;
@@ -1083,6 +1092,10 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                             const PshFont* control_font,
                             int stat_flash_direction,
                             bool cool_fact_playing) {
+    if (viewer.mode() == RosterViewMode::TeamRoster)
+        nba97_semantic_trace_record(0x80059034u);
+    else
+        nba97_semantic_trace_record(0x8005A538u);
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;

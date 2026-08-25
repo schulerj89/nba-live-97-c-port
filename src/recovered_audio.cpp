@@ -1,6 +1,7 @@
 #include "recovered_audio.hpp"
 
 #include "psx_adpcm.hpp"
+#include "recovered/frontend_audio.h"
 
 #include <algorithm>
 #include <cstring>
@@ -108,7 +109,7 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
     const std::uint32_t tone_volume = header[tone + 18];
     // FUN_8002F124 passes min(frontend SFX setting * 12, 127) to the bank
     // player. The recovered frontend initializes that setting to 9.
-    constexpr std::uint32_t playback_volume = 9 * 12;
+    const std::uint32_t playback_volume = nba97_frontend_sfx_volume(9);
     auto pcm = decodePsxAdpcmMono(body.data() + offset, bytes, sample_count);
     applyPsxGain(pcm, program_volume, tone_volume, playback_volume);
     playPcm(std::move(pcm), sample_rate);

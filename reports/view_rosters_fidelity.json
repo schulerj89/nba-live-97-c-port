@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "feature_ids": [
+    "rosters.viewer",
+    "rosters.player_card"
+  ],
+  "method": "weighted behavioral checks and local-only normalized visual references",
+  "earned_points": 23.8729,
+  "possible_points": 26.0,
+  "fidelity_percent": 91.82,
+  "group_scores": {
+    "behavior": {
+      "earned_points": 13.0,
+      "possible_points": 13.0,
+      "percent": 100.0
+    },
+    "rendering": {
+      "earned_points": 1.0,
+      "possible_points": 1.0,
+      "percent": 100.0
+    },
+    "visual": {
+      "earned_points": 9.8729,
+      "possible_points": 12.0,
+      "percent": 82.27
+    }
+  },
+  "behavior_self_test_passed": true,
+  "missing_reference_checks": [],
+  "checks": [
+    {
+      "id": "database_shape",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "29 teams, 493 players and recovered assignment counts validate",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "initial_state",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "State 0x10 opens with recovered category, field and 15 slots",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "descriptor_memory",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Category and field selection memory follows recovered descriptors",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "palette_transition",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Team palette interpolates over the recovered 17 ticks",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "top_boundary",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Roster selection does not wrap above the first player",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "six_row_scroll",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Six visible rows and one-row window handoff validate",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "team_position_memory",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Changing teams preserves player and scroll slots",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "player_card_transition",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Roster action pushes recovered state 0x24",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "stat_scroll",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "View Player exposes and scrolls all 24 statistic rows",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "stat_boundaries",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "View Player statistic scrolling clamps at both ends",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "player_wrap",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "View Player previous/next wraps across the team roster",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "return_state",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Returning from View Player preserves roster position",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "cancel_restore",
+      "group": "behavior",
+      "weight": 1.0,
+      "description": "Cancel restores the committed View Rosters snapshot",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "capture_dimensions",
+      "group": "rendering",
+      "weight": 1.0,
+      "description": "All deterministic internal captures are exactly 512 by 240",
+      "status": "pass",
+      "credit": 1.0
+    },
+    {
+      "id": "team_header_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "View Rosters title, team logo, EA logo and upper frame",
+      "status": "measured",
+      "similarity_percent": 80.04,
+      "color_similarity_percent": 81.62,
+      "edge_similarity_percent": 77.11,
+      "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
+      "matched_native_capture": "team_chicago_phase_17.ppm",
+      "registration_offset": [
+        0,
+        4
+      ],
+      "credit": 1.2006
+    },
+    {
+      "id": "team_selector_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "Team name and left/right selector arrows",
+      "status": "measured",
+      "similarity_percent": 81.63,
+      "color_similarity_percent": 83.4,
+      "edge_similarity_percent": 78.34,
+      "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
+      "matched_native_capture": "team_chicago_phase_00.ppm",
+      "registration_offset": [
+        1,
+        4
+      ],
+      "credit": 1.2245
+    },
+    {
+      "id": "team_rows_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "Six player rows, selected pulse, stat headings and values",
+      "status": "measured",
+      "similarity_percent": 79.55,
+      "color_similarity_percent": 80.63,
+      "edge_similarity_percent": 77.53,
+      "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
+      "matched_native_capture": "team_chicago_phase_15.ppm",
+      "registration_offset": [
+        2,
+        -4
+      ],
+      "credit": 1.1932
+    },
+    {
+      "id": "team_footer_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "Roster scroll arrow, lower frame and Help strip",
+      "status": "measured",
+      "similarity_percent": 83.87,
+      "color_similarity_percent": 83.56,
+      "edge_similarity_percent": 84.46,
+      "reference_sha256": "41cd401604af110220ee2f64bc5ac5e59f7faffecaca994c990f5f583727979e",
+      "matched_native_capture": "team_chicago_phase_00.ppm",
+      "registration_offset": [
+        -1,
+        -4
+      ],
+      "credit": 1.2581
+    },
+    {
+      "id": "player_identity_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "View Player animated title and identity block",
+      "status": "measured",
+      "similarity_percent": 85.51,
+      "color_similarity_percent": 86.18,
+      "edge_similarity_percent": 84.25,
+      "reference_sha256": "5de73489c0c54f400f5b0a8e7e47598e0c2549a9fd8eca48d2470144e694aaa0",
+      "matched_native_capture": "player_chicago_phase_18.ppm",
+      "registration_offset": [
+        -1,
+        4
+      ],
+      "credit": 1.2827
+    },
+    {
+      "id": "player_stats_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "View Player stat labels, values and scroll arrows in the reference's one-row-scrolled state",
+      "status": "measured",
+      "similarity_percent": 79.66,
+      "color_similarity_percent": 81.6,
+      "edge_similarity_percent": 76.06,
+      "reference_sha256": "5de73489c0c54f400f5b0a8e7e47598e0c2549a9fd8eca48d2470144e694aaa0",
+      "matched_native_capture": "player_chicago_scrolled_phase_00.ppm",
+      "registration_offset": [
+        0,
+        0
+      ],
+      "credit": 1.1949
+    },
+    {
+      "id": "player_photo_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "Vertical team mark, portrait and photo frame",
+      "status": "measured",
+      "similarity_percent": 80.25,
+      "color_similarity_percent": 81.37,
+      "edge_similarity_percent": 78.16,
+      "reference_sha256": "5de73489c0c54f400f5b0a8e7e47598e0c2549a9fd8eca48d2470144e694aaa0",
+      "matched_native_capture": "player_chicago_phase_00.ppm",
+      "registration_offset": [
+        0,
+        0
+      ],
+      "credit": 1.2038
+    },
+    {
+      "id": "player_footer_visual",
+      "group": "visual",
+      "weight": 1.5,
+      "description": "Team name, Cool Facts control, lower frame and Help strip",
+      "status": "measured",
+      "similarity_percent": 87.67,
+      "color_similarity_percent": 87.04,
+      "edge_similarity_percent": 88.84,
+      "reference_sha256": "5de73489c0c54f400f5b0a8e7e47598e0c2549a9fd8eca48d2470144e694aaa0",
+      "matched_native_capture": "player_chicago_phase_00.ppm",
+      "registration_offset": [
+        0,
+        -4
+      ],
+      "credit": 1.3151
+    }
+  ]
+}

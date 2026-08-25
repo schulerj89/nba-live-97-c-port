@@ -14,6 +14,10 @@ jobs:
           python-version: '3.12'
       - name: Verify generated progress reports
         run: python tools/report_progress.py --check
+      - name: Verify recovered C ownership
+        run: python tools/verify_recovery.py
+      - name: Verify instruction-semantic accounting
+        run: python tools/verify_instruction_semantics.py --check
       - name: Ensure private asset directory is not tracked
         shell: bash
         run: |

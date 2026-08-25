@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "candidate_directory": ".local/build/ps1/functions",
+  "functions": [
+    {
+      "binary": "feonly",
+      "address": "0x8002F124",
+      "original_name": "Frontend_ApplySfxVolume",
+      "symbol": "nba97_frontend_sfx_volume",
+      "source": "src/recovered/frontend_audio.c",
+      "scope": "fragment",
+      "match_eligible": false,
+      "native_test": "Win32 --self-test boundary vectors"
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8002F258",
+      "original_name": "Frontend_StartMusic",
+      "symbol": "nba97_frontend_music_volume",
+      "source": "src/recovered/frontend_audio.c",
+      "scope": "fragment",
+      "match_eligible": false,
+      "native_test": "Win32 --self-test boundary vectors"
+    }
+  ]
+}

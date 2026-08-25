@@ -19,6 +19,11 @@ REPORT_JSON = ROOT / "reports" / "progress.json"
 REPORT_MD = ROOT / "docs" / "progress.md"
 REPORT_HTML = ROOT / "docs" / "progress.html"
 REPORT_SVG = ROOT / "docs" / "progress.svg"
+VIEW_ROSTERS_MANIFEST = CONFIG / "view_rosters_verification.json"
+VIEW_ROSTERS_REPORT = ROOT / "reports" / "view_rosters_fidelity.json"
+INSTRUCTION_SEMANTICS_ORIGINAL = CONFIG / "instruction_semantics" / "view_rosters_original.json"
+INSTRUCTION_SEMANTICS_MAPPING = CONFIG / "instruction_semantics" / "view_rosters_mapping.json"
+INSTRUCTION_SEMANTICS_REPORT = ROOT / "reports" / "instruction_semantics.json"
 
 
 def read_json(path: Path):
@@ -65,6 +70,11 @@ def build_report():
     project = read_json(CONFIG / "project.json")
     recovered = read_json(CONFIG / "recovered_functions.json")["functions"]
     features = read_json(CONFIG / "features.json")["features"]
+    fidelity_manifest = read_json(VIEW_ROSTERS_MANIFEST)
+    fidelity_report = read_json(VIEW_ROSTERS_REPORT)
+    semantic_original = read_json(INSTRUCTION_SEMANTICS_ORIGINAL)
+    semantic_mapping = read_json(INSTRUCTION_SEMANTICS_MAPPING)
+    semantic_report = read_json(INSTRUCTION_SEMANTICS_REPORT)
     inventories = {}
     binary_rows = []
     address_index = {}
@@ -130,6 +140,92 @@ def build_report():
         group["credit"] += feature_credit[feature["status"]]
         group["statuses"][feature["status"]] += 1
 
+    expected_checks = {item["id"]: item for item in fidelity_manifest["checks"]}
+    actual_checks = {item["id"]: item for item in fidelity_report["checks"]}
+    if set(expected_checks) != set(actual_checks):
+        raise ValueError("View Rosters fidelity report does not match its check manifest")
+    possible_fidelity = 0.0
+    earned_fidelity = 0.0
+    derived_fidelity_groups = {}
+    for check_id, expected in expected_checks.items():
+        actual = actual_checks[check_id]
+        if float(actual["weight"]) != float(expected["weight"]):
+            raise ValueError(f"View Rosters fidelity weight changed for {check_id}")
+        credit = float(actual["credit"])
+        weight = float(expected["weight"])
+        if credit < 0.0 or credit > weight:
+            raise ValueError(f"View Rosters fidelity credit is outside its weight for {check_id}")
+        possible_fidelity += weight
+        earned_fidelity += credit
+        group = derived_fidelity_groups.setdefault(expected["group"], [0.0, 0.0])
+        group[0] += credit
+        group[1] += weight
+    derived_fidelity = round(earned_fidelity * 100.0 / possible_fidelity, 2)
+    if fidelity_report["feature_ids"] != fidelity_manifest["feature_ids"] or \
+            abs(float(fidelity_report["fidelity_percent"]) - derived_fidelity) > 0.01:
+        raise ValueError("View Rosters fidelity summary is stale or inconsistent")
+    reported_groups = fidelity_report.get("group_scores", {})
+    if set(reported_groups) != set(derived_fidelity_groups):
+        raise ValueError("View Rosters fidelity group summary is stale or incomplete")
+    for group_name, (group_earned, group_possible) in derived_fidelity_groups.items():
+        reported = reported_groups[group_name]
+        group_percent = round(group_earned * 100.0 / group_possible, 2)
+        if (abs(float(reported["earned_points"]) - group_earned) > 0.001 or
+                abs(float(reported["possible_points"]) - group_possible) > 0.001 or
+                abs(float(reported["percent"]) - group_percent) > 0.01):
+            raise ValueError(f"View Rosters fidelity group is stale: {group_name}")
+    feature_index = {item["id"]: item for item in features}
+    for feature_id in fidelity_manifest["feature_ids"]:
+        feature = feature_index.get(feature_id)
+        if feature is None or feature.get("verification_report") != "reports/view_rosters_fidelity.json":
+            raise ValueError(f"View Rosters fidelity is not linked from feature {feature_id}")
+        if derived_fidelity < 100.0 and feature["status"] == "verified":
+            raise ValueError(f"feature {feature_id} cannot be verified below 100% fidelity")
+        if feature.get("instruction_semantics_report") != "reports/instruction_semantics.json":
+            raise ValueError(f"instruction semantics are not linked from feature {feature_id}")
+
+    semantic_originals = {item["address"]: item for item in semantic_original["functions"]}
+    semantic_mappings = {item["address"]: item for item in semantic_mapping["functions"]}
+    semantic_results = {item["address"]: item for item in semantic_report["functions"]}
+    if not semantic_originals or set(semantic_originals) != set(semantic_mappings) or \
+            set(semantic_originals) != set(semantic_results):
+        raise ValueError("instruction-semantic function scopes are inconsistent")
+    semantic_totals = {
+        "functions": len(semantic_originals),
+        "bytes": sum(int(item["size_bytes"]) for item in semantic_originals.values()),
+        "instructions": sum(int(item["instruction_count"])
+                            for item in semantic_originals.values()),
+        "basic_blocks": sum(int(item["basic_block_count"])
+                            for item in semantic_originals.values()),
+        "control_flow_edges": sum(int(item["control_flow_edge_count"])
+                                  for item in semantic_originals.values()),
+        "direct_call_sites": sum(int(item["direct_call_site_count"])
+                                 for item in semantic_originals.values()),
+    }
+    if semantic_report["original_scope"] != semantic_totals:
+        raise ValueError("instruction-semantic original totals are stale")
+    accounted_instructions = sum(
+        int(item["accounted_instruction_count"]) for item in semantic_results.values())
+    accounted_blocks = sum(
+        int(item["accounted_basic_block_count"]) for item in semantic_results.values())
+    verified_edges = sum(
+        int(item["structurally_verified_edge_count"]) for item in semantic_results.values())
+    recomp_found = sum(bool(item["recomp_entrypoint_found"])
+                       for item in semantic_results.values())
+    if semantic_report["instruction_accounting"] != {
+            "accounted_instructions": accounted_instructions,
+            "total_instructions": semantic_totals["instructions"],
+            "accounted_basic_blocks": accounted_blocks,
+            "total_basic_blocks": semantic_totals["basic_blocks"]}:
+        raise ValueError("instruction-accounting totals are stale")
+    if semantic_report["structural_verification"] != {
+            "verified_control_flow_edges": verified_edges,
+            "total_control_flow_edges": semantic_totals["control_flow_edges"]}:
+        raise ValueError("instruction-semantic CFG totals are stale")
+    if semantic_report["recomp_crosscheck"]["entrypoints_found"] != recomp_found or \
+            semantic_report["recomp_crosscheck"]["total_functions"] != len(semantic_results):
+        raise ValueError("instruction-semantic recomp cross-check is stale")
+
     total_functions = sum(row["functions"] for row in binary_rows)
     total_bytes = sum(row["analyzed_code_bytes"] for row in binary_rows)
     feature_points = sum(feature_credit[item["status"]] for item in features)
@@ -171,6 +267,8 @@ def build_report():
                 for key in sorted(feature_groups)
             },
             "features": features,
+            "fidelity": {"view_rosters": fidelity_report},
+            "instruction_semantics": semantic_report,
         },
         "methodology_notes": project["progress_model"]["notes"],
     }
@@ -197,6 +295,12 @@ def render_markdown(report: dict) -> str:
         f"**{reconstruction['matching_functions']}** are instruction-matching. We deliberately begin conservatively.",
         f"- Native-port roadmap estimate: **{native['roadmap_completion_percent']:.2f}%** "
         f"across {native['catalogued_features']} catalogued features.",
+        f"- View Rosters end-to-end fidelity: **{native['fidelity']['view_rosters']['fidelity_percent']:.2f}%** "
+        "from weighted behavioral and local-only visual-reference checks.",
+        f"- View Rosters original-MIPS accounting: "
+        f"**{native['instruction_semantics']['instruction_accounting']['accounted_instructions']}/"
+        f"{native['instruction_semantics']['original_scope']['instructions']} instructions** have "
+        "explicit block-level accounting; this is not an instruction-match percentage.",
         "",
         "## Original binary inventory",
         "",
@@ -227,6 +331,52 @@ def render_markdown(report: dict) -> str:
     for name, group in native["groups"].items():
         counts = ", ".join(f"{key}: {value}" for key, value in group["status_counts"].items())
         lines.append(f"| {name} | {group['items']} | {group['completion_percent']:.2f}% | {counts} |")
+    fidelity = native["fidelity"]["view_rosters"]
+    lines += [
+        "",
+        "## View Rosters fidelity",
+        "",
+        f"**{fidelity['fidelity_percent']:.2f}%** · "
+        f"{fidelity['earned_points']:.2f}/{fidelity['possible_points']:.2f} weighted points",
+        " · ".join(
+            f"{name}: **{score['percent']:.2f}%**"
+            for name, score in fidelity.get("group_scores", {}).items()
+        ),
+        "",
+        "| Check | Group | Result | Credit |",
+        "|---|---|---:|---:|",
+    ]
+    for check in fidelity["checks"]:
+        result = (f"{check['similarity_percent']:.2f}% similarity"
+                  if "similarity_percent" in check else check["status"])
+        lines.append(f"| {check['description']} | {check['group']} | {result} | "
+                     f"{check['credit']:.2f}/{check['weight']:.2f} |")
+    lines += [
+        "",
+        "Original screenshots and generated heatmaps remain under `.local/`; the public report contains only measurements and cryptographic reference hashes.",
+    ]
+    semantics = native["instruction_semantics"]
+    scope = semantics["original_scope"]
+    accounting = semantics["instruction_accounting"]
+    structural = semantics["structural_verification"]
+    checkpoints = semantics["native_checkpoint_observation"]
+    recomp = semantics["recomp_crosscheck"]
+    lines += [
+        "",
+        "## View Rosters instruction semantics",
+        "",
+        f"- Original scope: **{scope['functions']} functions**, **{scope['instructions']} MIPS instructions**, "
+        f"**{scope['basic_blocks']} basic blocks**, and **{scope['control_flow_edges']} CFG edges**.",
+        f"- Explicitly accounted: **{accounting['accounted_instructions']}/{accounting['total_instructions']} instructions** "
+        f"across **{accounting['accounted_basic_blocks']}/{accounting['total_basic_blocks']} blocks**.",
+        f"- Structurally verified: **{structural['verified_control_flow_edges']}/{structural['total_control_flow_edges']} CFG edges**.",
+        f"- Native semantic checkpoints observed: **{checkpoints['observed_functions']}/{checkpoints['total_functions']} functions**.",
+        f"- Static-recomp entry points found: **{recomp['entrypoints_found']}/{recomp['total_functions']}**; "
+        f"missing: **{', '.join(recomp['missing_entrypoints']) or 'none'}**.",
+        "- Original/native trace-equivalent scenarios: **0**; exact MIPS matching is not configured.",
+        "",
+        "Source ownership, block accounting, CFG verification, runtime trace equivalence, and exact binary matching are independent tiers and are never blended into one score.",
+    ]
     lines += ["", "## Methodology", ""]
     lines.extend(f"- {note}" for note in report["methodology_notes"])
     lines += [
@@ -240,6 +390,8 @@ def render_markdown(report: dict) -> str:
 def render_html(report: dict) -> str:
     reconstruction = report["reconstruction"]
     native = report["native_port"]
+    roster_fidelity = native["fidelity"]["view_rosters"]["fidelity_percent"]
+    semantic_accounting = native["instruction_semantics"]["instruction_accounting"]
     group_cards = []
     for name, group in native["groups"].items():
         group_cards.append(
@@ -264,6 +416,8 @@ code{{color:#ffd72d}}
 <div class="stat"><div class="value">{reconstruction['evidence_coverage_percent']:.2f}%</div><div class="label">functions with explicit evidence records</div></div>
 <div class="stat"><div class="value">{reconstruction['matching_functions']}</div><div class="label">instruction-matching functions</div></div>
 <div class="stat"><div class="value">{native['roadmap_completion_percent']:.2f}%</div><div class="label">native-port roadmap estimate</div></div>
+<div class="stat"><div class="value">{roster_fidelity:.2f}%</div><div class="label">View Rosters measured fidelity</div></div>
+<div class="stat"><div class="value">{semantic_accounting['accounted_instructions']}/{semantic_accounting['total_instructions']}</div><div class="label">View Rosters MIPS instructions explicitly accounted</div></div>
 </div><h2>Native-port groups</h2><div class="grid">{''.join(group_cards)}</div>
 <h2>How to read this</h2><ul>{notes}</ul>
 <p>Private game inputs and decoded assets remain under <code>.local/</code>.</p>
@@ -277,6 +431,8 @@ def render_svg(report: dict) -> str:
     native = report["native_port"]
     evidence = reconstruction["evidence_coverage_percent"]
     roadmap = native["roadmap_completion_percent"]
+    roster_fidelity = native["fidelity"]["view_rosters"]["fidelity_percent"]
+    semantic_accounting = native["instruction_semantics"]["instruction_accounting"]
     evidence_width = round(330.0 * evidence / 100.0, 2)
     roadmap_width = round(330.0 * roadmap / 100.0, 2)
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="760" height="178" viewBox="0 0 760 178" role="img" aria-labelledby="title desc">
@@ -305,10 +461,10 @@ def render_svg(report: dict) -> str:
   <text x="408" y="108" fill="#aeb7e4" font-size="12">{native['catalogued_features']} catalogued, evidence-backed feature milestones</text>
 
   <line x1="42" y1="126" x2="738" y2="126" stroke="#29315f"/>
-  <text x="42" y="150" fill="#8994ca" font-size="12">MATCHING FUNCTIONS</text>
-  <text x="180" y="150" fill="#eef1ff" font-size="13" font-weight="700">{reconstruction['matching_functions']}</text>
-  <text x="248" y="150" fill="#8994ca" font-size="12">SCOPED CODE</text>
-  <text x="348" y="150" fill="#eef1ff" font-size="13" font-weight="700">{reconstruction['analyzed_code_bytes']:,} bytes</text>
+  <text x="42" y="150" fill="#8994ca" font-size="12">MIPS ACCOUNTED</text>
+  <text x="160" y="150" fill="#eef1ff" font-size="13" font-weight="700">{semantic_accounting['accounted_instructions']}/{semantic_accounting['total_instructions']}</text>
+  <text x="248" y="150" fill="#8994ca" font-size="12">VIEW ROSTERS</text>
+  <text x="358" y="150" fill="#eef1ff" font-size="13" font-weight="700">{roster_fidelity:.2f}% fidelity</text>
   <text x="520" y="150" fill="#8994ca" font-size="12">ASSETS</text>
   <text x="580" y="150" fill="#eef1ff" font-size="13" font-weight="700">LOCAL ONLY</text>
 </g>

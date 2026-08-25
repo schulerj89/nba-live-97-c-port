@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "scope": "view_rosters",
+  "original_manifest": "config/decomp/instruction_semantics/view_rosters_original.json",
+  "tier_definitions": {
+    "source_mapped": "A reviewed native source owner is identified; no instruction equivalence is implied.",
+    "instruction_accounted": "The purpose of each listed original basic block is explicitly represented by cited native source.",
+    "structurally_verified": "A listed original CFG edge has an explicitly verified native semantic counterpart.",
+    "native_checkpoint_observed": "The native self-test executed the mapped semantic function checkpoint.",
+    "original_trace_equivalent": "An original-game trace and native semantic trace agree for a declared scenario.",
+    "binary_matching": "A MIPS build matches the original instruction words exactly."
+  },
+  "functions": [
+    {
+      "address": "0x8002FE58",
+      "name": "Frontend_PatchTeamPalette",
+      "source": "src/win32_main.cpp",
+      "symbols": ["loadTeamRosterBackgrounds"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x8002FE58"
+    },
+    {
+      "address": "0x8005770C",
+      "name": "Rosters_ResolveTeamSlots",
+      "source": "src/roster_database.cpp",
+      "symbols": ["RosterDatabase::load"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x8005770C"
+    },
+    {
+      "address": "0x80057864",
+      "name": "Rosters_CopySlotTable",
+      "source": "src/roster_database.cpp",
+      "symbols": ["RosterDatabase::load"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x80057864"
+    },
+    {
+      "address": "0x80057CE4",
+      "name": "Frontend_RunRostersMenu",
+      "source": "src/main_menu.cpp",
+      "symbols": ["renderRecoveredBottomMenu"],
+      "accounted_blocks": ["0x80057CE4"],
+      "accounting_basis": "The single straight-line original block constructs the eight Rosters cards; recomp/Ghidra call structure and the native eight-card behavior test agree.",
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x80057CE4"
+    },
+    {
+      "address": "0x80059034",
+      "name": "Rosters_DrawTeamSelector",
+      "source": "src/main_menu.cpp",
+      "symbols": ["renderRosterViewer"],
+      "accounted_blocks": ["0x80059034"],
+      "accounting_basis": "The single original selector block's palette selection, team label, and arrow drawing purpose is represented by the recovered renderer.",
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x80059034"
+    },
+    {
+      "address": "0x800590B8",
+      "name": "Rosters_ConstructViewer",
+      "source": "src/main_menu.cpp",
+      "symbols": ["RosterViewer::open", "renderRosterViewer"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x800590B8"
+    },
+    {
+      "address": "0x800592C4",
+      "name": "Rosters_RunViewer",
+      "source": "src/main_menu.cpp",
+      "symbols": ["RosterViewer::open", "RosterViewer::commit", "RosterViewer::cancel"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x800592C4"
+    },
+    {
+      "address": "0x80059610",
+      "name": "Rosters_ScanTeams",
+      "source": "src/main_menu.cpp",
+      "symbols": ["RosterViewer::scanTeam", "RosterViewer::move"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x80059610"
+    },
+    {
+      "address": "0x80059928",
+      "name": "Rosters_CyclePlayer",
+      "source": "src/main_menu.cpp",
+      "symbols": ["RosterViewer::move"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x80059928"
+    },
+    {
+      "address": "0x8005A538",
+      "name": "Player_RunCard",
+      "source": "src/main_menu.cpp",
+      "symbols": ["RosterViewer::activate", "renderRosterViewer"],
+      "accounted_blocks": [],
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x8005A538"
+    },
+    {
+      "address": "0x8005FE14",
+      "name": "Rosters_ResolvePlayerId",
+      "source": "src/roster_database.cpp",
+      "symbols": ["RosterDatabase::player"],
+      "accounted_blocks": ["0x8005FE14", "0x8005FE30", "0x8005FE50", "0x8005FE64"],
+      "accounting_basis": "All four original fixed/free-agent lookup blocks resolve to the native validated ID index; the representation differs, so no CFG equivalence is claimed.",
+      "structurally_verified_edges": [],
+      "native_checkpoint": "0x8005FE14"
+    }
+  ],
+  "trace_scenarios": []
+}
