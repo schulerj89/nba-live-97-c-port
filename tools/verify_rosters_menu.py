@@ -15,8 +15,10 @@ from verify_view_rosters import visual_similarity
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "reports" / "rosters_menu_fidelity.json"
-EXPECTED_Y = [76, 66, 66, 76, 118, 110, 110, 118]
-EXPECTED_X = [64, 169, 274, 379, 49, 154, 259, 364]
+EXPECTED_Y = [81, 75, 75, 81, 116, 110, 110, 116]
+EXPECTED_X = [65, 165, 270, 365, 50, 150, 255, 345]
+EXPECTED_ART_Y = [95, 88, 89, 98, 130, 123, 124, 133]
+EXPECTED_ART_X = [77, 171, 282, 379, 62, 156, 267, 359]
 
 
 def digest(path: Path) -> str:
@@ -53,13 +55,16 @@ def main() -> int:
     add(checks, "recovered_stack", "layout", 1,
         100 if (metadata.get("stack_y") == EXPECTED_Y and
                 metadata.get("stack_x") == EXPECTED_X and
-                metadata.get("stack_column_pitch") == 105 and
-                metadata.get("stack_pair_stagger_x") == 15) else 0,
+                metadata.get("art_y") == EXPECTED_ART_Y and
+                metadata.get("art_x") == EXPECTED_ART_X and
+                metadata.get("stack_pair_delta_y") == [35, 35, 35, 35] and
+                metadata.get("layout_table") == "0x80094ED4 records 16..39") else 0,
         expected_x=EXPECTED_X, actual_x=metadata.get("stack_x"),
         expected_y=EXPECTED_Y, actual_y=metadata.get("stack_y"),
-        column_pitch=metadata.get("stack_column_pitch"),
-        pair_stagger_x=metadata.get("stack_pair_stagger_x"),
-        evidence="FUN_80057CE4 grouped objects plus registered original frame geometry")
+        expected_art_x=EXPECTED_ART_X, actual_art_x=metadata.get("art_x"),
+        expected_art_y=EXPECTED_ART_Y, actual_art_y=metadata.get("art_y"),
+        pair_delta_y=metadata.get("stack_pair_delta_y"),
+        evidence="FEONLY screen-9 layout table 0x80094ED4 records 16..39")
 
     required_frames = [capture / "rosters_initial.ppm",
                        capture / "rosters_reset_locked_attempt.ppm",
@@ -78,10 +83,10 @@ def main() -> int:
         # Count only the plate rails, not the random ZCARD aperture. This
         # prevents a red player photo from falsely proving the red1 state.
         for name, boxes in {
-                "reset": [(379, 76, 479, 101), (379, 101, 399, 170),
-                          (459, 101, 479, 170), (379, 150, 479, 170)],
-                "injuries": [(364, 118, 464, 143), (364, 143, 384, 212),
-                             (444, 143, 464, 212), (364, 192, 464, 212)],
+                "reset": [(365, 81, 465, 106), (365, 106, 385, 175),
+                          (445, 106, 465, 175), (365, 155, 465, 175)],
+                "injuries": [(345, 116, 445, 141), (345, 141, 365, 210),
+                             (425, 141, 445, 210), (345, 190, 445, 210)],
         }.items():
             red_counts[name] = sum(
                 1 for box in boxes
@@ -116,10 +121,10 @@ def main() -> int:
     plate_present_both_phases = False
     try:
         phase_images = [Image.open(phases[index]).convert("RGB") for index in (0, 1)]
-        # View Rosters (index 4) is selected at x=49,y=118. Require opaque,
+        # View Rosters (index 4) is selected at x=50,y=116. Require opaque,
         # non-background rail pixels in every edge band in both flash states.
-        rail_boxes = [(49, 118, 149, 140), (49, 140, 68, 208),
-                      (130, 140, 149, 208), (49, 190, 149, 212)]
+        rail_boxes = [(50, 116, 150, 138), (50, 138, 69, 206),
+                      (131, 138, 150, 206), (50, 188, 150, 210)]
         rail_counts = [sum(
             1 for box in rail_boxes for red, green, blue in image.crop(box).getdata()
             if max(red, green, blue) - min(red, green, blue) < 85 and

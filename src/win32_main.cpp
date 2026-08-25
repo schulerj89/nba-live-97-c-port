@@ -625,7 +625,7 @@ private:
             index_list(setup_indices) + "; Rosters PRNG picks=" + index_list(roster_indices));
         trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
-        trace_.log("ROSTER-STACK", "FUN_80057CE4/FUN_80039DF8 grouped stack: back x=64/169/274/379, front x=49/154/259/364; arch y=76/66/66/76 + 118/110/110/118; ZCARD offset=(12,23)");
+        trace_.log("ROSTER-STACK", "FEONLY screen-9 table 0x80094ED4 records 16..39: back plates=(65,81)/(165,75)/(270,75)/(365,81), front plates=(50,116)/(150,110)/(255,110)/(345,116); pair dy=35; ZCARD origins individually authored");
         trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; FUN_800399C4 state 0x80 routes locked c06/c14 indices through the red1 CLUT while preserving white labels and blocking focus");
         trace_.log("ROSTER-FLASH", "FUN_8003F240 toggles the selected object's normal/selected plate for 12 vblanks; the underlying plate and ZCARD composite remain present in both phases");
         trace_.log("ROSTER-SFX", "FUN_8003D930 + live no$psx: down/up/left/right map ZCURSOR ids 1/2/3/4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
@@ -671,10 +671,12 @@ private:
         std::ofstream metadata(output / "capture.json", std::ios::trunc);
         if (!metadata) throw std::runtime_error("cannot write Rosters menu capture metadata");
         metadata << "{\n  \"schema_version\": 1,\n  \"function\": \"0x80057CE4\",\n"
-                 << "  \"stack_y\": [76,66,66,76,118,110,110,118],\n"
-                 << "  \"stack_x\": [64,169,274,379,49,154,259,364],\n"
-                 << "  \"stack_column_pitch\": 105,\n"
-                 << "  \"stack_pair_stagger_x\": 15,\n"
+                 << "  \"stack_y\": [81,75,75,81,116,110,110,116],\n"
+                 << "  \"stack_x\": [65,165,270,365,50,150,255,345],\n"
+                 << "  \"art_y\": [95,88,89,98,130,123,124,133],\n"
+                 << "  \"art_x\": [77,171,282,379,62,156,267,359],\n"
+                 << "  \"stack_pair_delta_y\": [35,35,35,35],\n"
+                 << "  \"layout_table\": \"0x80094ED4 records 16..39\",\n"
                  << "  \"flash_vblanks\": 12,\n  \"sounds\": [\n";
         for (std::uint32_t sound_id = 1; sound_id <= 6; ++sound_id) {
             char wav_name[64]{};

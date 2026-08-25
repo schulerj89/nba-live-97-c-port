@@ -2,8 +2,8 @@
   "schema_version": 1,
   "scope": "Rosters eight-card selection screen only",
   "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
-  "fidelity_percent": 96.3,
-  "earned_points": 11.5554,
+  "fidelity_percent": 96.31,
+  "earned_points": 11.557,
   "possible_points": 12.0,
   "groups": {
     "behavior": {
@@ -32,9 +32,9 @@
       "percent": 100.0
     },
     "visual": {
-      "earned": 1.5554,
+      "earned": 1.557,
       "possible": 2.0,
-      "percent": 77.77
+      "percent": 77.85
     }
   },
   "checks": [
@@ -53,48 +53,92 @@
       "score_percent": 100,
       "credit": 1.0,
       "expected_x": [
-        64,
-        169,
-        274,
-        379,
-        49,
-        154,
-        259,
-        364
+        65,
+        165,
+        270,
+        365,
+        50,
+        150,
+        255,
+        345
       ],
       "actual_x": [
-        64,
-        169,
-        274,
-        379,
-        49,
-        154,
-        259,
-        364
+        65,
+        165,
+        270,
+        365,
+        50,
+        150,
+        255,
+        345
       ],
       "expected_y": [
-        76,
-        66,
-        66,
-        76,
-        118,
+        81,
+        75,
+        75,
+        81,
+        116,
         110,
         110,
-        118
+        116
       ],
       "actual_y": [
-        76,
-        66,
-        66,
-        76,
-        118,
+        81,
+        75,
+        75,
+        81,
+        116,
         110,
         110,
-        118
+        116
       ],
-      "column_pitch": 105,
-      "pair_stagger_x": 15,
-      "evidence": "FUN_80057CE4 grouped objects plus registered original frame geometry"
+      "expected_art_x": [
+        77,
+        171,
+        282,
+        379,
+        62,
+        156,
+        267,
+        359
+      ],
+      "actual_art_x": [
+        77,
+        171,
+        282,
+        379,
+        62,
+        156,
+        267,
+        359
+      ],
+      "expected_art_y": [
+        95,
+        88,
+        89,
+        98,
+        130,
+        123,
+        124,
+        133
+      ],
+      "actual_art_y": [
+        95,
+        88,
+        89,
+        98,
+        130,
+        123,
+        124,
+        133
+      ],
+      "pair_delta_y": [
+        35,
+        35,
+        35,
+        35
+      ],
+      "evidence": "FEONLY screen-9 layout table 0x80094ED4 records 16..39"
     },
     {
       "id": "capture_dimensions",
@@ -110,8 +154,8 @@
       "score_percent": 100,
       "credit": 1.0,
       "red_dominant_pixels": {
-        "reset": 1879,
-        "injuries": 2214
+        "reset": 1904,
+        "injuries": 2284
       },
       "minimum_per_card": 350,
       "evidence": "FUN_800399C4 disabled type-2 state 0x80 rendered through ZSET4 red1 CLUT"
@@ -143,8 +187,8 @@
       "frame_count": 12,
       "plate_present_both_phases": true,
       "selected_plate_rail_pixels": [
-        3325,
-        2668
+        3272,
+        2613
       ],
       "evidence": "FUN_8003F240 alternates normal/selected objects without removing the plate"
     },
@@ -300,15 +344,15 @@
       "id": "original_screenshot_similarity",
       "group": "visual",
       "weight": 2,
-      "score_percent": 77.77,
-      "credit": 1.5554,
+      "score_percent": 77.85,
+      "credit": 1.557,
       "status": "measured",
-      "similarity_percent": 77.77,
-      "color_similarity_percent": 78.31,
-      "edge_similarity_percent": 76.77,
+      "similarity_percent": 77.85,
+      "color_similarity_percent": 78.48,
+      "edge_similarity_percent": 76.68,
       "registration_offset": [
-        4,
-        -2
+        3,
+        3
       ],
       "reference_sha256": "641a6f7bd6e47c62e8e995290f9c587066e5448897998846f866fcc4861c6e87"
     }

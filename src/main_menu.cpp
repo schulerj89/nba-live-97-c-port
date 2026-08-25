@@ -1128,15 +1128,19 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
         // blk1 placeholder. FUN_80031F48 replaces that third object with a
         // unique 69x63 ZCARD image. The plates are already authored at their
         // display size; the old 2/3 scaling caused the bunched-up layout.
-        // The recovered rows are four paired groups, not a flat grid. Each
-        // back card is 15 pixels right of its front partner; both use a
-        // 105-pixel column pitch. The back row arches upward in the centre,
-        // and the front row composites last so each lower card overlaps its
-        // partner diagonally, matching the original registered frame geometry.
+        // The recovered rows are four paired groups, not a flat grid. These
+        // are the authored (x,y) records 16..39 from FEONLY's screen-9 table
+        // at 0x80094ED4. In particular, each front plate begins only 35 pixels
+        // below its back partner; treating the rows as a uniform grid leaves
+        // a visibly incorrect gap between the paired cards.
         static constexpr std::array<int, 8> card_x{
-            64, 169, 274, 379, 49, 154, 259, 364};
+            65, 165, 270, 365, 50, 150, 255, 345};
         static constexpr std::array<int, 8> card_y{
-            76, 66, 66, 76, 118, 110, 110, 118};
+            81, 75, 75, 81, 116, 110, 110, 116};
+        static constexpr std::array<int, 8> art_x{
+            77, 171, 282, 379, 62, 156, 267, 359};
+        static constexpr std::array<int, 8> art_y{
+            95, 88, 89, 98, 130, 123, 124, 133};
         for (int i = 0; i < 8; ++i) {
             const int x = card_x[static_cast<std::size_t>(i)];
             const int y = card_y[static_cast<std::size_t>(i)];
@@ -1152,12 +1156,15 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                 tag = "c" + std::string(i * 2 < 10 ? "0" : "") +
                       std::to_string(i * 2 + (selected_phase ? 1 : 0)) + "d";
             // The image is inserted before its transparent plate, matching
-            // the PS1 ordering-table composite. These offsets are the common
-            // 69x63 blk1 descriptor origin inside the eight authored plates.
+            // the PS1 ordering-table composite. The eight blk1 descriptor
+            // origins are individually authored; they are not one common
+            // offset from their differently shaped plates.
             const auto& art = roster_cards[static_cast<std::size_t>(i)];
             if (!art.rgba.empty())
                 blitScaled(image, art, 0, 0, art.width, art.height,
-                           x + 12, y + 23, art.width, art.height);
+                           art_x[static_cast<std::size_t>(i)],
+                           art_y[static_cast<std::size_t>(i)],
+                           art.width, art.height);
             // FUN_8003F240 toggles between the normal and selected object; it
             // never removes the object's plate. Keeping the normal plate in
             // the off phase also contains the inserted ZCARD within its mask.
