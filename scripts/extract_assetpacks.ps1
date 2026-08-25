@@ -31,11 +31,18 @@ python $extractor $DiscImage (Join-Path $menu 'ZFEPLAYR.ART') --lba 248951 --siz
 python $extractor $DiscImage (Join-Path $menu 'ZLOGOS.PSH') --lba 249370 --size 99848
 python $extractor $DiscImage (Join-Path $menu 'ZTMPAL.PSH') --lba 267022 --size 21544
 python $extractor $DiscImage (Join-Path $menu 'ZBPAL.PSH') --lba 234694 --size 17264
+python $extractor $DiscImage (Join-Path $menu 'ZCURSOR.VB') --lba 235174 --size 60940
+python $extractor $DiscImage (Join-Path $menu 'ZCURSOR.VH') --lba 235204 --size 1836
 python $extractor $DiscImage (Join-Path $menu 'ZCARD.BIN') --lba 234703 --size 474240
+python $extractor $DiscImage (Join-Path $menu 'Z1COOL.BIG') --lba 165811 --size 122580678
+python $extractor $DiscImage (Join-Path $menu 'Z1COOL.IDX') --lba 225665 --size 19746
+python $extractor $DiscImage (Join-Path $menu 'Z1PORT.BIG') --lba 225675 --size 13296378
+python $extractor $DiscImage (Join-Path $menu 'Z1PORT.IDX') --lba 232168 --size 3970
 python $extractor $DiscImage (Join-Path $menu 'ZTMENU1.CNK') --lba 252406 --size 8522396
 python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 342448
 python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
 python $extractor $DiscImage (Join-Path $menu 'ZSET7.PSP') --lba 252102 --size 323444
+python $extractor $DiscImage (Join-Path $menu 'ZSET8.PSP') --lba 252260 --size 297432
 if ($LASTEXITCODE -ne 0) { throw 'Private asset extraction failed.' }
 python (Join-Path $repo 'tools\extract_roster_database.py') $feonly (Join-Path $database 'roster.n97db')
 if ($LASTEXITCODE -ne 0) { throw 'Private roster database extraction failed.' }
@@ -43,8 +50,22 @@ if ($LASTEXITCODE -ne 0) { throw 'Private roster database extraction failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET4
 if ($LASTEXITCODE -ne 0) { throw 'Private Rosters sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_team_logos.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Private View Player team-logo decoding failed.' }
+python (Join-Path $repo 'tools\decode_team_backgrounds.py') `
+    (Join-Path $menu 'ZSET4.PSP') (Join-Path $menu 'ZTMPAL.PSH') `
+    (Join-Path $menu 'ZSET4-team-backgrounds') `
+    --ea-tool (Join-Path $repo '.local\tools\EA-Graphics-Manager')
+if ($LASTEXITCODE -ne 0) { throw 'Private team roster background palette decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET7
 if ($LASTEXITCODE -ne 0) { throw 'Private Users sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET8
+if ($LASTEXITCODE -ne 0) { throw 'Private View Player sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_card_assets.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup card decoding failed.' }
+python (Join-Path $repo 'tools\decode_player_portraits.py') `
+    (Join-Path $menu 'Z1PORT.IDX') (Join-Path $menu 'Z1PORT.BIG') `
+    (Join-Path $menu 'Z1PORT-decoded') `
+    --ea-tool (Join-Path $repo '.local\tools\EA-Graphics-Manager')
+if ($LASTEXITCODE -ne 0) { throw 'Private View Player portrait decoding failed.' }
 Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'

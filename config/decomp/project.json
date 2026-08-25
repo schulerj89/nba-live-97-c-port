@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "project": "NBA Live 97 PS1 decompilation and native port",
+  "version": "NTSC-U SLUS-00267",
+  "progress_model": {
+    "function_statuses": ["researched", "implemented", "behavior_verified", "matching"],
+    "feature_credit": {
+      "not_started": 0.0,
+      "partial": 0.5,
+      "implemented": 0.75,
+      "verified": 1.0
+    },
+    "notes": [
+      "Function progress measures the original PS1 binaries and never infers completion from native screens.",
+      "A partial function is evidence coverage, not a completed original function.",
+      "Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.",
+      "Matching means instruction-identical PS1 output; the native C++ build cannot satisfy that status."
+    ]
+  },
+  "private_roots": [".local/"],
+  "binaries": [
+    {
+      "id": "boot",
+      "name": "PS-X EXE boot program",
+      "local_path": ".local/input/nba-live-97-slus-00267.bin.boot.exe",
+      "inventory": "config/decomp/functions/boot.csv",
+      "load_address": "0x801DF800",
+      "entry_point": "0x801E3508",
+      "file_size": 79872,
+      "sha256": "4dbffef6d86678a6cb9894e7a0503671d24bdc869732adc211120f180f2cb742"
+    },
+    {
+      "id": "feonly",
+      "name": "FEONLY frontend overlay",
+      "local_path": ".local/extracted/FEONLY.BIN",
+      "inventory": "config/decomp/functions/feonly.csv",
+      "load_address": "0x80015000",
+      "entry_point": "0x8007B79C",
+      "file_size": 959960,
+      "sha256": "14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c"
+    }
+  ]
+}

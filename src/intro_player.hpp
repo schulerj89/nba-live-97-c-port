@@ -33,6 +33,7 @@ public:
     [[nodiscard]] EventResult handleGraphEvents() noexcept;
     [[nodiscard]] bool isPlaying() const noexcept;
     [[nodiscard]] const std::vector<std::string>& filterNames() const noexcept;
+    [[nodiscard]] const std::string& audioDescription() const noexcept;
     [[nodiscard]] long lastEventCode() const noexcept;
 
 private:

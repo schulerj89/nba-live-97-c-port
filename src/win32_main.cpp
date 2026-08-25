@@ -5,6 +5,7 @@
 
 #include "boot_flow.hpp"
 #include "frontend_music.hpp"
+#include "recovered_audio.hpp"
 #include "intro_player.hpp"
 #include "main_menu.hpp"
 #include "png_image.hpp"
@@ -19,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -90,6 +92,20 @@ struct Frame {
     int height = 0;
     std::vector<std::uint8_t> bgra;
 };
+
+RECT psxPresentationRect(const RECT& client) noexcept {
+    const int client_width = client.right - client.left;
+    const int client_height = client.bottom - client.top;
+    int width = client_width;
+    int height = client_height;
+    if (client_width * 3 > client_height * 4)
+        width = client_height * 4 / 3;
+    else
+        height = client_width * 3 / 4;
+    const int left = client.left + (client_width - width) / 2;
+    const int top = client.top + (client_height - height) / 2;
+    return RECT{left, top, left + width, top + height};
+}
 
 Options parseOptions(int argc, char** argv) {
     Options options;
@@ -181,6 +197,8 @@ private:
         title_source_ = title;
         menu_font_ = nba97::load_psh_font(
             options_.asset_root / "fonts" / "ZFONT0.PSH", 10, 1);
+        control_font_ = nba97::load_psh_font(
+            options_.asset_root / "fonts" / "ZFONT1.PSH", 10, 1);
         validateFullscreen(load, "ZLOADSCR.PSH");
         validateFullscreen(legal, "ZLEGAL.PSH");
         validateFullscreen(title, "ZCPYRT97.PSH");
@@ -199,6 +217,7 @@ private:
                            std::to_string(menu_font_.transposedGlyphCount()) +
                            " space=10 kerning=1");
         trace_.log("FONT-XPOSE", "0x80029EC0 signed Position-X UV transpose applied; lowercase r/t restored");
+        trace_.log("FONT-CONTROL", "ZFONT1.PSH record 0994 loaded for recovered View Player play-cool-fact control");
         trace_.log("RECOVERED", "0x80035B00 calls 0x8002C6B0: font page 0, text=press start, center=(256,30), align=1");
         trace_.log("TITLE-TEXT", "original ZFONT0 glyphs width=97 start=(208,30 metadata-adjusted)");
         load_frame_ = makeFrame(load);
@@ -212,18 +231,36 @@ private:
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);
+        validateMenuAsset(menu_root / "ZCURSOR.VH", 1836);
+        validateMenuAsset(menu_root / "ZCURSOR.VB", 60940);
         validateMenuAsset(menu_root / "ZCARD.BIN", 474240);
+        validateMenuAsset(menu_root / "Z1PORT.BIG", 13296378);
+        validateMenuAsset(menu_root / "Z1PORT.IDX", 3970);
+        validateMenuAsset(menu_root / "Z1COOL.BIG", 122580678);
+        validateMenuAsset(menu_root / "Z1COOL.IDX", 19746);
         validateMenuAsset(menu_root / "ZTMENU1.CNK", 8522396);
         validateMenuAsset(menu_root / "ZSET1.PSP", 342448);
         validateMenuAsset(menu_root / "ZSET4.PSP", 332084);
         validateMenuAsset(menu_root / "ZSET7.PSP", 323444);
+        validateMenuAsset(menu_root / "ZSET8.PSP", 297432);
         loadMenuSprites(menu_root / "ZSET1-decoded");
         loadRecoveredBottomSprites(menu_root / "ZSET4-decoded", roster_sprites_, true);
+        loadTeamRosterBackgrounds(menu_root / "ZSET4-team-backgrounds");
         loadRecoveredBottomSprites(menu_root / "ZSET7-decoded", users_sprites_, false);
+        loadPlayerCardSprites(menu_root / "ZSET8-decoded");
         loadMenuCards(menu_root / "ZCARD-decoded");
         trace_.log("RECOVERED", "0x8002F258 selects ZTMENU1.CNK frontend audio");
         trace_.log("RECOVERED", "0x8002FDA4 loads 33 ZTMPAL.PSH palettes; 0x80030308 loads ZBPAL.PSH");
+        trace_.log("ROSTER-PALETTE", "FUN_8002FE58 patches ZSET4 Bkg colors 0..159 from ZTMPAL.PSH and preserves local colors 160..255");
+        trace_.log("ROSTER-LAYOUT", "state 0x10 / ZSET4: Bkga-d x=0/128/256/384, ba35=(142,10), frml=(30,15), dynamic team logo=(40,16), team arrows=ZFONT0 0x8D/0x8A at (157/381,66), scroll arrows=0x8B/0x8C at (48,108/168), help=(235,217)");
+        trace_.log("ROSTER-ANIM", "FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
+        trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; Select/L2 category, R2/L1 field; six-row repeat=7/5/3/1 ticks");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
+        trace_.log("RECOVERED", "state 0x24 FUN_8005A538 loads Z1PORT.IDX/BIG and Z1COOL.IDX/BIG for View Player");
+        trace_.log("PLAYER-LAYOUT", "FUN_8003F7C8 reloads gfx state 0x24 / ZSET8 LIVE: Bkge-h, brta-d/brba-d, ba41=(40,18), team *Z=(296,35), cros=(336,204), o18a=(356,198)");
+        trace_.log("PLAYER-ANIM", "FUN_8003186C + FUN_80034A5C: ba41 uses two 128-page GPU pieces with discrete four-corner jumble; scanline wave disabled");
+        trace_.log("PLAYER-POSITION", "descriptor case 0x13: roster slots 0..4 use original starting C/PF/SF/SG/PG strings at 0x80024C98..0x80024CC8; bench uses database position");
+        trace_.log("COOL-FACT", "view-card help descriptor 0x800B22F0 uses ZFONT control glyph 0x94 play / 0x93 stop; input 0x800 routes FUN_80059F30 -> FUN_80059E14");
         roster_database_.load(options_.asset_root / "database" / "roster.n97db");
         trace_.log("ROSTER-DB", "external private pack version=" +
             std::to_string(roster_database_.version()) + " teams=" +
@@ -232,7 +269,7 @@ private:
         trace_.log("ROSTER-INDEX", "FUN_8005FE14 boundary=0x1ED; assigned=" +
             std::to_string(roster_database_.assignedPlayerCount()) + " free-agents=" +
             std::to_string(roster_database_.freeAgentCount()) + "; all references validated");
-        trace_.log("RECOVERED", "FUN_8005770C resolves 15 slots/team; 0x80023AB0 stride=0x68 across 29 teams");
+        trace_.log("RECOVERED", "FUN_80057864 copies DAT_800C0CAC roster slots; FUN_8005770C resolves 29 teams x 15 slots");
         menu_.reset();
         const auto profile_status = profile_store_.load(options_.profiles_path);
         active_user_profiles_ = static_cast<int>(profile_store_.profiles().size());
@@ -296,9 +333,10 @@ private:
                                     nba97::MenuSpritePack& destination,
                                     bool rosters) {
         static constexpr const char* common[] = {
-            "Bkge","Bkgf","Bkgg","Bkgh","help",
+            "Bkga","Bkgb","Bkgc","Bkgd","Bkge","Bkgf","Bkgg","Bkgh","help","tria",
+            "brta","brtb","brtc","brtd","brba","brbb","brbc","brbd",
             "brte","brtf","brtg","brth","brle","brri",
-            "brbe","brbf","brbg","brbh","XXL1","XXR2"
+            "brbe","brbf","brbg","brbh","frml","XXL1","XXR2"
         };
         const auto load_one = [&](const char* tag) {
             const auto path = root / (std::string(tag) + ".png");
@@ -339,6 +377,57 @@ private:
                                   std::to_string(destination.size()) + " sprites");
     }
 
+    void loadPlayerCardTeamLogos(const std::filesystem::path& root) {
+        static constexpr const char* tags[] = {
+            "atlL","bosL","chaL","chiL","cleL","dalL","denL","detL","golL","houL",
+            "indL","lacL","lalL","miaL","milL","minL","nwjL","nwyL","orlL","phiL",
+            "phoL","porL","sacL","sanL","seaL","torL","utaL","vanL","wasL"
+        };
+        for (const char* tag : tags) {
+            const auto path = root / (std::string(tag) + ".png");
+            if (!std::filesystem::exists(path))
+                throw std::runtime_error("missing decoded ZLOGOS sprite: " + path.string() +
+                                         " (run scripts/decode_team_logos.ps1)");
+            PshImage image = load_png_image(path);
+            for (std::size_t at = 0; at < image.rgba.size(); at += 4)
+                if (image.rgba[at] == 0 && image.rgba[at + 1] == 0 && image.rgba[at + 2] == 0)
+                    image.rgba[at + 3] = 0;
+            roster_sprites_.emplace(tag, std::move(image));
+        }
+        trace_.log("PLAYER-TEAM-LOGO",
+            "ZLOGOS.PSH exact 44x48 player-card crests decoded locally; Chicago tag chi -> chiL");
+    }
+
+    void loadPlayerCardSprites(const std::filesystem::path& root) {
+        static constexpr const char* tags[] = {
+            "Bkge","Bkgf","Bkgg","Bkgh","help",
+            "brta","brtb","brtc","brtd","brle","brri",
+            "brba","brbb","brbc","brbd",
+            "ba41","o18a","o18b","cros","shot","wait",
+            "atlZ","bosZ","chaZ","chiZ","cleZ","dalZ","denZ","detZ","golZ","houZ",
+            "indZ","lacZ","lalZ","miaZ","milZ","minZ","nwjZ","nwyZ","orlZ","phiZ",
+            "phoZ","porZ","sacZ","sanZ","seaZ","torZ","utaZ","vanZ","wasZ"
+        };
+        for (const char* tag : tags) {
+            const auto path = root / (std::string(tag) + ".png");
+            if (!std::filesystem::exists(path))
+                throw std::runtime_error("missing decoded ZSET8 View Player sprite: " +
+                                         path.string() +
+                                         " (run scripts/extract_assetpacks.ps1)");
+            PshImage image = load_png_image(path);
+            if (std::string_view(tag).rfind("Bkg", 0) != 0) {
+                for (std::size_t at = 0; at < image.rgba.size(); at += 4)
+                    if (image.rgba[at] == 0 && image.rgba[at + 1] == 0 &&
+                        image.rgba[at + 2] == 0)
+                        image.rgba[at + 3] = 0;
+            }
+            player_sprites_.emplace(tag, std::move(image));
+        }
+        trace_.log("MENU-SPRITE",
+            "ZSET8.PSP View Player state 0x24 decoded locally: " +
+            std::to_string(player_sprites_.size()) + " exact sprites");
+    }
+
     void validateMenuAsset(const std::filesystem::path& path,
                            std::uintmax_t expected_size) {
         if (!std::filesystem::exists(path) || std::filesystem::file_size(path) != expected_size)
@@ -346,10 +435,100 @@ private:
         trace_.log("MENU-ASSET", path.string() + " bytes=" + std::to_string(expected_size));
     }
 
-    void loadMenuCards(const std::filesystem::path& root) {
-        for (std::size_t index = 0; index < menu_cards_.size(); ++index) {
+    void loadSelectedPlayerCardAssets() {
+        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
+        roster_portrait_loaded_ = false;
+        roster_cool_facts_available_ = false;
+        if (!player) return;
+        const auto root = options_.asset_root / "menu";
+        // Z1PORT physical record zero is the original fallback.  Player n's
+        // direct portrait is physical record n+1 (Longley id37 -> record38).
+        const auto portrait_root = root / "Z1PORT-decoded";
+        const auto portrait_path_for = [&portrait_root](std::uint32_t record) {
             wchar_t name[32]{};
-            swprintf_s(name, L"card_%02zu.png", index);
+            swprintf_s(name, L"player_%03u.png", record);
+            return portrait_root / name;
+        };
+        auto portrait_path = portrait_path_for(static_cast<std::uint32_t>(player->id) + 1);
+        if (!std::filesystem::exists(portrait_path)) portrait_path = portrait_path_for(0);
+        roster_portrait_ = load_png_image(portrait_path);
+        if (roster_portrait_.width != 180 || roster_portrait_.height != 156)
+            throw std::runtime_error("invalid Z1PORT View Player portrait dimensions: " +
+                                     portrait_path.string());
+        roster_portrait_loaded_ = true;
+
+        std::ifstream input(root / "Z1COOL.IDX", std::ios::binary);
+        std::vector<std::uint8_t> index((std::istreambuf_iterator<char>(input)), {});
+        const auto read_u32 = [&index](std::size_t at) -> std::uint32_t {
+            if (at + 4 > index.size()) return 0;
+            return static_cast<std::uint32_t>(index[at]) |
+                   (static_cast<std::uint32_t>(index[at + 1]) << 8) |
+                   (static_cast<std::uint32_t>(index[at + 2]) << 16) |
+                   (static_cast<std::uint32_t>(index[at + 3]) << 24);
+        };
+        const std::uint32_t count = read_u32(0);
+        for (std::uint32_t variant = 0; variant < 5; ++variant) {
+            const std::uint32_t record = static_cast<std::uint32_t>(player->id) * 5 + variant;
+            if (record < count && read_u32(4 + static_cast<std::size_t>(record) * 8) != 0) {
+                roster_cool_facts_available_ = true;
+                break;
+            }
+        }
+        trace_.log("PLAYER-CARD", "state=0x24 player=" + player->displayName() +
+            " id=" + std::to_string(player->id) + " portrait-record=" +
+            std::to_string(static_cast<unsigned>(player->id) + 1) + " 180x156 cool-facts=" +
+            (roster_cool_facts_available_ ? "enabled" : "disabled"));
+    }
+
+    void loadTeamRosterBackgrounds(const std::filesystem::path& root) {
+        static constexpr const char* teams[] = {
+            "atl","bos","cha","chi","cle","dal","den","det","gol","hou",
+            "ind","lac","lal","mia","mil","min","nwj","nwy","orl","phi",
+            "pho","por","sac","san","sea","tor","uta","van","was"};
+        static constexpr const char* strips[] = {
+            "Bkga", "Bkgb", "Bkgc", "Bkgd", "Bkge", "Bkgf", "Bkgg", "Bkgh"};
+        for (const char* team : teams) {
+            for (const char* strip : strips) {
+                const auto path = root / team / (std::string(strip) + ".png");
+                if (!std::filesystem::exists(path))
+                    throw std::runtime_error("missing team-paletted roster background: " + path.string() +
+                                             " (run scripts/extract_assetpacks.ps1)");
+                auto image = load_png_image(path);
+                if (image.width != 128 || image.height != 240)
+                    throw std::runtime_error("invalid team roster background dimensions: " +
+                                             path.string() + " (expected 128x240)");
+                bool lower_half_has_art = false;
+                for (int y = 120; y < image.height && !lower_half_has_art; ++y) {
+                    for (int x = 0; x < image.width; ++x) {
+                        const std::size_t at =
+                            (static_cast<std::size_t>(y) * image.width + x) * 4;
+                        if (image.rgba[at + 3] != 0 &&
+                            (image.rgba[at] != 0 || image.rgba[at + 1] != 0 ||
+                             image.rgba[at + 2] != 0)) {
+                            lower_half_has_art = true;
+                            break;
+                        }
+                    }
+                }
+                if (!lower_half_has_art)
+                    throw std::runtime_error("team roster background has empty lower half: " +
+                                             path.string() + " (re-run corrected decoder)");
+                roster_sprites_.emplace(std::string(team) + strip, std::move(image));
+            }
+        }
+        trace_.log("ROSTER-PALETTE",
+            "29 runtime-patched ZSET4 team backgrounds Bkga-h loaded from local-only ZTMPAL output");
+    }
+
+    void loadMenuCards(const std::filesystem::path& root) {
+        std::mt19937 random(static_cast<std::mt19937::result_type>(
+            std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
+            static_cast<long long>(GetTickCount64())));
+        std::uniform_int_distribution<int> card_index(0, 94);
+
+        const auto load_card = [&](int index) {
+            wchar_t name[32]{};
+            swprintf_s(name, L"card_%02d.png", index);
             const auto path = root / name;
             if (!std::filesystem::exists(path))
                 throw std::runtime_error("missing decoded ZCARD portrait: " + path.string() +
@@ -361,10 +540,38 @@ private:
                 if (image.rgba[at] == 0 && image.rgba[at + 1] == 0 &&
                     image.rgba[at + 2] == 0)
                     image.rgba[at + 3] = 0;
-            menu_cards_[index] = std::move(image);
-        }
-        trace_.log("MENU-CARD", "0x80031A88 loaded ZCARD.BIN; deterministic private cards=0,1,2,3");
-        trace_.log("RECOVERED", "0x80031F48 maps four flags=0x20 blk1 slots to unique 69x63 SHPP portraits");
+            return image;
+        };
+        const auto fill_random_pack = [&](auto& destination) {
+            std::array<bool, 32> used_residue{};
+            std::vector<int> selected;
+            selected.reserve(destination.size());
+            for (auto& image : destination) {
+                int index = 0;
+                do {
+                    index = card_index(random);
+                } while (used_residue[static_cast<std::size_t>(index & 31)]);
+                used_residue[static_cast<std::size_t>(index & 31)] = true;
+                image = load_card(index);
+                selected.push_back(index);
+            }
+            return selected;
+        };
+
+        const auto setup_indices = fill_random_pack(menu_cards_);
+        const auto roster_indices = fill_random_pack(roster_menu_cards_);
+        const auto index_list = [](const auto& indices) {
+            std::string result;
+            for (const int index : indices) {
+                if (!result.empty()) result += ',';
+                result += std::to_string(index);
+            }
+            return result;
+        };
+        trace_.log("MENU-CARD", "0x80031A88 loaded 95 ZCARD.BIN images; setup PRNG picks=" +
+            index_list(setup_indices) + "; Rosters PRNG picks=" + index_list(roster_indices));
+        trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
+        trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); native plates at x=49/154/259/364 y=56/122; art offset=(12,23)");
     }
 
     int runSelfTest() {
@@ -381,7 +588,7 @@ private:
         if (!flow_.enterMainMenu() || flow_.screen() != nba97::BootScreen::MainMenu)
             throw std::runtime_error("title -> game-setup self-test failed");
         if (roster_database_.teams().size() != 29 || roster_database_.players().size() != 493 ||
-            roster_database_.assignedPlayerCount() != 348 || roster_database_.freeAgentCount() != 145 ||
+            roster_database_.assignedPlayerCount() != 362 || roster_database_.freeAgentCount() != 131 ||
             !roster_database_.player(0) || !roster_database_.team(28))
             throw std::runtime_error("external roster database validation self-test failed");
         frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", 0);
@@ -410,39 +617,127 @@ private:
         nba97::RecoveredBottomMenu recovered_menu;
         recovered_menu.open(nba97::FrontendPage::Rosters);
         const auto roster_a = nba97::renderRecoveredBottomMenu(
-            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0);
         recovered_menu.move(1, 0);
         const auto roster_b = nba97::renderRecoveredBottomMenu(
-            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0);
         if (roster_a.rgba == roster_b.rgba || recovered_menu.count() != 8)
             throw std::runtime_error("Rosters original-card navigation self-test failed");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(
             roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
-        if (!roster_viewer_test.move(1, 0, roster_database_) ||
+        if (view_a.width != 512 || view_a.height != 240 ||
+            roster_database_.version() != 3 ||
+            roster_database_.teams()[0].roster.size() != 15 ||
+            roster_viewer_test.category() != 2 || roster_viewer_test.displayIndex() != 32)
+            throw std::runtime_error("View Rosters fixed 15-slot state 0x10 setup failed");
+        const auto* roster_sample = roster_viewer_test.selectedPlayer(roster_database_);
+        if (!roster_sample ||
+            roster_database_.playerAttribute(*roster_sample, 7).empty() ||
+            !roster_viewer_test.cycleDisplay(1) || roster_viewer_test.displayIndex() != 33)
+            throw std::runtime_error("View Rosters v3 descriptor setup failed");
+        const auto points_view = nba97::renderRosterViewer(
+            roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
+        if (points_view.rgba == view_a.rgba || !roster_viewer_test.cycleCategory(1) ||
+            roster_viewer_test.category() != 3 || roster_viewer_test.displayIndex() != 32 ||
+            !roster_viewer_test.cycleCategory(-1) || roster_viewer_test.displayIndex() != 33)
+            throw std::runtime_error("View Rosters category/field memory self-test failed");
+        nba97::RosterViewer palette_test;
+        palette_test.open(roster_database_);
+        if (!palette_test.move(1, 0, roster_database_, 100))
+            throw std::runtime_error("View Rosters palette-transition setup failed");
+        const auto palette_start = nba97::renderRosterViewer(
+            palette_test, roster_database_, menu_font_, roster_sprites_, 100);
+        const auto palette_mid = nba97::renderRosterViewer(
+            palette_test, roster_database_, menu_font_, roster_sprites_, 236);
+        const auto palette_end = nba97::renderRosterViewer(
+            palette_test, roster_database_, menu_font_, roster_sprites_, 372);
+        bool found_palette_interpolation = false;
+        for (int y = 170; y < 185 && !found_palette_interpolation; ++y) {
+            for (int x = 16; x < 496; ++x) {
+                const std::size_t at = (static_cast<std::size_t>(y) * 512 + x) * 4;
+                bool start_differs_from_end = false;
+                bool mid_differs_from_start = false;
+                bool mid_differs_from_end = false;
+                for (int channel = 0; channel < 3; ++channel) {
+                    start_differs_from_end |=
+                        palette_start.rgba[at + channel] != palette_end.rgba[at + channel];
+                    mid_differs_from_start |=
+                        palette_mid.rgba[at + channel] != palette_start.rgba[at + channel];
+                    mid_differs_from_end |=
+                        palette_mid.rgba[at + channel] != palette_end.rgba[at + channel];
+                }
+                if (start_differs_from_end && mid_differs_from_start && mid_differs_from_end) {
+                    found_palette_interpolation = true;
+                    break;
+                }
+            }
+        }
+        if (!found_palette_interpolation)
+            throw std::runtime_error("View Rosters 17-tick palette interpolation self-test failed");
+        if (roster_viewer_test.move(0, -1, roster_database_))
+            throw std::runtime_error("View Rosters incorrectly wrapped above the first player");
+        for (int row = 0; row < 6; ++row) {
+            if (!roster_viewer_test.move(0, 1, roster_database_))
+                throw std::runtime_error("View Rosters six-row scroll setup failed");
+        }
+        if (roster_viewer_test.playerIndex() != 6 ||
+            roster_viewer_test.firstVisiblePlayer() != 1 ||
+            !roster_viewer_test.move(1, 0, roster_database_) ||
             roster_viewer_test.teamIndex() != 1 ||
-            !roster_viewer_test.move(0, 1, roster_database_) ||
-            roster_viewer_test.playerIndex() != 1)
+            roster_viewer_test.playerIndex() != 6 ||
+            roster_viewer_test.firstVisiblePlayer() != 1)
             throw std::runtime_error("View Rosters team/player navigation self-test failed");
         roster_viewer_test.activate(roster_database_);
-        const auto view_b = nba97::renderRosterViewer(
-            roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 137);
-        if (roster_viewer_test.mode() != nba97::RosterViewMode::PlayerCard ||
-            view_a.rgba == view_b.rgba || !roster_viewer_test.back())
-            throw std::runtime_error("View Rosters player-card self-test failed");
-        roster_viewer_test.activate(roster_database_);
-        if (!roster_viewer_test.move(0, 1, roster_database_) ||
-            roster_viewer_test.detailPage() != 1 ||
-            nba97::renderRosterViewer(roster_viewer_test, roster_database_, menu_font_,
-                                      roster_sprites_, 0).rgba == view_b.rgba)
-            throw std::runtime_error("View Rosters all-ratings page self-test failed");
+        if (roster_viewer_test.mode() != nba97::RosterViewMode::PlayerCard)
+            throw std::runtime_error(
+                "View Rosters action 0x10 did not push player-card state 0x24");
+        for (int row = 0; row < 18; ++row) {
+            if (!roster_viewer_test.move(0, 1, roster_database_))
+                throw std::runtime_error("View Player 24-row statistic scroll self-test failed");
+        }
+        if (roster_viewer_test.firstVisiblePlayerStat() != 18 ||
+            roster_viewer_test.move(0, 1, roster_database_) ||
+            !roster_viewer_test.move(0, -1, roster_database_) ||
+            roster_viewer_test.firstVisiblePlayerStat() != 17)
+            throw std::runtime_error("View Player statistic scroll boundaries self-test failed");
+        nba97::RosterViewer wrap_test;
+        wrap_test.open(roster_database_);
+        wrap_test.activate(roster_database_);
+        const auto* wrap_team = wrap_test.selectedTeam(roster_database_);
+        std::size_t wrap_count = 0;
+        while (wrap_team && wrap_count < wrap_team->roster.size() &&
+               roster_database_.player(wrap_team->roster[wrap_count]))
+            ++wrap_count;
+        if (wrap_count < 2 || !wrap_test.move(-1, 0, roster_database_) ||
+            wrap_test.playerIndex() != wrap_count - 1 ||
+            !wrap_test.move(1, 0, roster_database_) || wrap_test.playerIndex() != 0)
+            throw std::runtime_error("View Player FUN_80059928 wrapped cycling self-test failed");
+        roster_viewer_test.returnToRoster();
+        if (roster_viewer_test.mode() != nba97::RosterViewMode::TeamRoster ||
+            roster_viewer_test.playerIndex() != 6 ||
+            roster_viewer_test.firstVisiblePlayer() != 1)
+            throw std::runtime_error("View Player return did not preserve roster state");
+        roster_viewer_test.commit();
+        const auto committed_team = roster_viewer_test.teamIndex();
+        const auto committed_player = roster_viewer_test.playerIndex();
+        roster_viewer_test.move(1, 0, roster_database_);
+        roster_viewer_test.move(0, 1, roster_database_);
+        roster_viewer_test.cancel();
+        if (roster_viewer_test.teamIndex() != committed_team ||
+            roster_viewer_test.playerIndex() != committed_player)
+            throw std::runtime_error("View Rosters transactional cancel self-test failed");
         recovered_menu.open(nba97::FrontendPage::Card);
         const auto card_a = nba97::renderRecoveredBottomMenu(
-            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0);
         recovered_menu.move(1, 0);
         const auto card_b = nba97::renderRecoveredBottomMenu(
-            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_, 0);
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0);
         if (card_a.rgba == card_b.rgba || recovered_menu.count() != 3)
             throw std::runtime_error("Memory Card original-card navigation self-test failed");
         menu_.setActiveUserProfiles(1);
@@ -494,7 +789,7 @@ private:
             throw std::runtime_error("profile generation/update self-test failed");
         std::filesystem::remove(profile_test_path, cleanup_error);
         std::filesystem::remove(std::filesystem::path(profile_test_path.wstring() + L".bak"), cleanup_error);
-        trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters/player cards, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
+        trace_.log("SELF-TEST", "PASS: boot, menus/settings, View Rosters state 0x10, View Player 24-row scroll and FUN_80059928 wrap, versioned profiles, external roster database, and all 2,524 frontend-music blocks validated");
         return 0;
     }
 
@@ -543,6 +838,13 @@ private:
             // frontend advances once per press, so ignore repeat messages
             // (bit 30 reports that the key was already down).
             if ((static_cast<std::uintptr_t>(lparam) & (1u << 30)) != 0) return 0;
+            if (flow_.screen() == nba97::BootScreen::MainMenu &&
+                frontend_page_ == nba97::FrontendPage::ViewRosters &&
+                (wparam == VK_UP || wparam == VK_DOWN)) {
+                held_roster_direction_ = wparam == VK_UP ? -1 : 1;
+                held_roster_counter_ = 0;
+                held_roster_ticks_since_repeat_ = 0;
+            }
             if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                 frontend_page_ != nba97::FrontendPage::GameSetup &&
                 frontend_page_ != nba97::FrontendPage::ProfileSetup &&
@@ -565,6 +867,14 @@ private:
             else if (wparam == VK_SPACE)
                 flow_.requestAdvance(options_.transition_ms);
             return 0;
+        case WM_KEYUP:
+            if ((wparam == VK_UP && held_roster_direction_ < 0) ||
+                (wparam == VK_DOWN && held_roster_direction_ > 0)) {
+                held_roster_direction_ = 0;
+                held_roster_counter_ = 0;
+                held_roster_ticks_since_repeat_ = 0;
+            }
+            return 0;
         case WM_CHAR:
             if (flow_.screen() == nba97::BootScreen::MainMenu &&
                 frontend_page_ == nba97::FrontendPage::ProfileSetup &&
@@ -586,10 +896,31 @@ private:
                          frontend_page_ == nba97::FrontendPage::Options)
                     adjustSetting(GET_X_LPARAM(lparam) < 512 ? -1 : 1);
                 else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
-                    roster_viewer_.activate(roster_database_);
-                    logRosterViewFocus("mouse activation");
-                    rebuildMenuFrame();
-                    InvalidateRect(window_, nullptr, FALSE);
+                    int psx_x = 0, psx_y = 0;
+                    if (clientToPsx(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam),
+                                    psx_x, psx_y) &&
+                        psx_x >= 225 && psx_x < 310 && psx_y >= 210) {
+                        roster_viewer_.toggleHelp();
+                        trace_.log("HELP", std::string("internal 0x20 state=") +
+                            (roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster ?
+                             "0x10 descriptor=0x800B146C" :
+                             "0x24 descriptor=0x800B22F0"));
+                        rebuildMenuFrame();
+                        InvalidateRect(window_, nullptr, FALSE);
+                    } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                               psx_x >= 330 && psx_x < 450 &&
+                               psx_y >= 200 && psx_y < 230) {
+                        playSelectedCoolFact();
+                        rebuildMenuFrame();
+                        InvalidateRect(window_, nullptr, FALSE);
+                    } else if (roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster &&
+                               roster_viewer_.selectedPlayer(roster_database_)) {
+                        roster_viewer_.activate(roster_database_);
+                        loadSelectedPlayerCardAssets();
+                        trace_.log("ROSTER-VIEW", "mouse/internal 0x10 -> result=2 -> nested state 0x24");
+                        rebuildMenuFrame();
+                        InvalidateRect(window_, nullptr, FALSE);
+                    }
                 }
                 else if (frontend_page_ == nba97::FrontendPage::Rosters)
                     activateRecoveredBottomSelection();
@@ -605,6 +936,11 @@ private:
         case WM_PAINT:
             paint();
             return 0;
+        case WM_ERASEBKGND:
+            // Every non-video frame is presented as one complete back-buffer
+            // blit. Suppress the default erase so Windows cannot expose a
+            // black intermediate frame between roster animation ticks.
+            return 1;
         case WM_SIZE:
         case WM_DISPLAYCHANGE:
             intro_player_.resize();
@@ -616,6 +952,8 @@ private:
             KillTimer(window_, kFrameTimer);
             intro_player_.stop();
             frontend_music_.stop();
+            cursor_audio_.stop();
+            cool_fact_audio_.stop();
             PostQuitMessage(0);
             return 0;
         default:
@@ -628,6 +966,7 @@ private:
         const DWORD now = GetTickCount();
         if (flow_.screen() == nba97::BootScreen::MainMenu) {
             menu_elapsed_ms_ += now - previous_tick_;
+            updateRosterHeldInput();
             rebuildMenuFrame();
             if (frontend_transition_active_) {
                 const auto elapsed = now - frontend_transition_tick_;
@@ -650,6 +989,19 @@ private:
             InvalidateRect(window_, nullptr, FALSE);
         }
         previous_tick_ = now;
+    }
+
+    void updateRosterHeldInput() {
+        if (frontend_page_ != nba97::FrontendPage::ViewRosters ||
+            frontend_transition_active_ || held_roster_direction_ == 0)
+            return;
+        held_roster_counter_ = (std::min)(48, held_roster_counter_ + 2);
+        const int interval = held_roster_counter_ <= 15 ? 7 :
+            held_roster_counter_ <= 27 ? 5 :
+            held_roster_counter_ <= 37 ? 3 : 1;
+        if (++held_roster_ticks_since_repeat_ < interval) return;
+        held_roster_ticks_since_repeat_ = 0;
+        handleRosterViewKey(held_roster_direction_ < 0 ? VK_UP : VK_DOWN);
     }
 
     [[nodiscard]] const Frame& currentFrame() const noexcept {
@@ -676,6 +1028,13 @@ private:
         } else {
             RECT client{};
             GetClientRect(window_, &client);
+            const int client_width = client.right - client.left;
+            const int client_height = client.bottom - client.top;
+            if (client_width <= 0 || client_height <= 0) {
+                EndPaint(window_, &paint);
+                return;
+            }
+            const RECT presentation = psxPresentationRect(client);
             const Frame& frame = currentFrame();
             BITMAPINFO info{};
             info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -684,10 +1043,34 @@ private:
             info.bmiHeader.biPlanes = 1;
             info.bmiHeader.biBitCount = 32;
             info.bmiHeader.biCompression = BI_RGB;
-            SetStretchBltMode(dc, COLORONCOLOR);
-            StretchDIBits(dc, 0, 0, client.right, client.bottom, 0, 0,
-                          frame.width, frame.height, frame.bgra.data(), &info,
-                          DIB_RGB_COLORS, SRCCOPY);
+            HDC back_dc = CreateCompatibleDC(dc);
+            HBITMAP back_bitmap = back_dc
+                ? CreateCompatibleBitmap(dc, client_width, client_height) : nullptr;
+            if (back_dc && back_bitmap) {
+                HGDIOBJ previous_bitmap = SelectObject(back_dc, back_bitmap);
+                FillRect(back_dc, &client,
+                         static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+                SetStretchBltMode(back_dc, COLORONCOLOR);
+                StretchDIBits(back_dc, presentation.left, presentation.top,
+                              presentation.right - presentation.left,
+                              presentation.bottom - presentation.top, 0, 0,
+                              frame.width, frame.height, frame.bgra.data(), &info,
+                              DIB_RGB_COLORS, SRCCOPY);
+                BitBlt(dc, 0, 0, client_width, client_height,
+                       back_dc, 0, 0, SRCCOPY);
+                SelectObject(back_dc, previous_bitmap);
+            } else {
+                // Allocation failure should not blank the frame. Paint directly
+                // without first clearing underneath the presentation rectangle.
+                SetStretchBltMode(dc, COLORONCOLOR);
+                StretchDIBits(dc, presentation.left, presentation.top,
+                              presentation.right - presentation.left,
+                              presentation.bottom - presentation.top, 0, 0,
+                              frame.width, frame.height, frame.bgra.data(), &info,
+                              DIB_RGB_COLORS, SRCCOPY);
+            }
+            if (back_bitmap) DeleteObject(back_bitmap);
+            if (back_dc) DeleteDC(back_dc);
         }
         EndPaint(window_, &paint);
     }
@@ -704,6 +1087,8 @@ private:
             for (const std::string& filter : intro_player_.filterNames())
                 trace_.log("DECODER", filter);
             trace_.log("MOVIE-PLAY", "1168 frames / 77.9 s with synchronized XA stereo");
+            trace_.log("MOVIE-AUDIO", intro_player_.audioDescription() +
+                "; DirectShow duplicate muted; prior WinMM state isolated/restored");
             trace_.log("DISPLAY", "intro surface active; title frame remains gated until movie end/skip");
         } catch (const std::exception& error) {
             trace_.log("MOVIE-ERROR", error.what());
@@ -849,31 +1234,182 @@ private:
             std::string(reason) + "; team=" +
             (team ? team->city + " " + team->nickname : "<none>") +
             " player=" + (player ? player->displayName() : "<none>") +
+            " category=" + std::to_string(roster_viewer_.category()) +
+            " display=" + std::to_string(roster_viewer_.displayIndex()) +
+            " list-window=" + std::to_string(roster_viewer_.firstVisiblePlayer()) + ".." +
+            std::to_string(roster_viewer_.firstVisiblePlayer() + 5) +
+            " stat-window=" + std::to_string(roster_viewer_.firstVisiblePlayerStat()) + ".." +
+            std::to_string(roster_viewer_.firstVisiblePlayerStat() + 5) +
             (player ? " id=" + std::to_string(player->id) + " number=" +
                 std::to_string(player->jersey_number) + " position=" +
                 nba97::positionName(player->position) : ""));
     }
 
+    void playRosterCursorSound(int direction) {
+        try {
+            const auto root = options_.asset_root / "menu";
+            const std::uint32_t sound_id = direction < 0 ? 3u : 4u;
+            const auto info = cursor_audio_.playCursorSound(
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id);
+            const auto effective_percent =
+                (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
+                (127u * 127u * 127u);
+            stat_flash_direction_ = direction;
+            stat_flash_until_ms_ = menu_elapsed_ms_ + 340;
+            trace_.log("PLAYER-STAT-FLASH", "FUN_8002AB88 gold transition=20 ticks; "
+                "FUN_8002F124 sound=" + std::to_string(sound_id) +
+                " ZCURSOR.VH/VB rate=" + std::to_string(info.sample_rate) +
+                " samples=" + std::to_string(info.sample_count) +
+                " gain=" + std::to_string(info.program_volume) + "/127*" +
+                std::to_string(info.tone_volume) + "/127*" +
+                std::to_string(info.playback_volume) + "/127 (" +
+                std::to_string(effective_percent) + "%)");
+        } catch (const std::exception& error) {
+            trace_.log("AUDIO-ERROR", std::string("ZCURSOR decode/play failed: ") + error.what());
+        }
+    }
+
+    void playSelectedCoolFact() {
+        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
+        if (!player || !roster_cool_facts_available_) {
+            trace_.log("COOL-FACT", "input 0x800 -> original no-cool-facts modal DAT_800AFE06");
+            return;
+        }
+        try {
+            const auto root = options_.asset_root / "menu";
+            const auto info = cool_fact_audio_.playCoolFact(
+                root / "Z1COOL.IDX", root / "Z1COOL.BIG", player->id);
+            trace_.log("COOL-FACT-AUDIO", "FUN_80059E14 -> FUN_80031630 -> FUN_80031770; "
+                "player=" + player->displayName() + " record=" +
+                std::to_string(info.record) + " " + info.source +
+                " codec=PSX-ADPCM mono rate=" + std::to_string(info.sample_rate) +
+                " samples=" + std::to_string(info.sample_count) + " duration-ms=" +
+                std::to_string(info.sample_count * 1000u / info.sample_rate));
+        } catch (const std::exception& error) {
+            trace_.log("AUDIO-ERROR", std::string("Cool Fact decode/play failed: ") + error.what());
+        }
+    }
+
     void handleRosterViewKey(WPARAM key) {
+        if (roster_viewer_.helpVisible()) {
+            if (key == 'H' || key == VK_F1 || key == VK_ESCAPE || key == VK_BACK ||
+                key == VK_RETURN || key == VK_SPACE) {
+                roster_viewer_.dismissHelp();
+                trace_.log("HELP", "modal dismissed; restored active frontend state");
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+            }
+            return;
+        }
+        if (key == 'H' || key == VK_F1) {
+            roster_viewer_.toggleHelp();
+            trace_.log("HELP", std::string("internal 0x20 FUN_80040FCC state=") +
+                (roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster ?
+                 "0x10 descriptor=0x800B146C" : "0x24 descriptor=0x800B22F0"));
+            rebuildMenuFrame();
+            InvalidateRect(window_, nullptr, FALSE);
+            return;
+        }
+        if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+            (key == VK_ESCAPE || key == VK_BACK)) {
+            roster_viewer_.returnToRoster();
+            trace_.log("PLAYER-CARD", "state 0x24 popped -> state 0x10; team/row/top preserved");
+            rebuildMenuFrame();
+            InvalidateRect(window_, nullptr, FALSE);
+            return;
+        }
         bool changed = false;
-        if (key == VK_LEFT) changed = roster_viewer_.move(-1, 0, roster_database_);
-        else if (key == VK_RIGHT) changed = roster_viewer_.move(1, 0, roster_database_);
-        else if (key == VK_UP) changed = roster_viewer_.move(0, -1, roster_database_);
-        else if (key == VK_DOWN) changed = roster_viewer_.move(0, 1, roster_database_);
+        const std::size_t previous_team = roster_viewer_.teamIndex();
+        const std::size_t previous_player = roster_viewer_.playerIndex();
+        const std::size_t previous_stat = roster_viewer_.firstVisiblePlayerStat();
+        if (key == VK_LEFT)
+            changed = roster_viewer_.move(-1, 0, roster_database_, menu_elapsed_ms_);
+        else if (key == VK_RIGHT)
+            changed = roster_viewer_.move(1, 0, roster_database_, menu_elapsed_ms_);
+        else if (key == VK_UP)
+            changed = roster_viewer_.move(0, -1, roster_database_, menu_elapsed_ms_);
+        else if (key == VK_DOWN)
+            changed = roster_viewer_.move(0, 1, roster_database_, menu_elapsed_ms_);
+        else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                 (key == VK_OEM_4 || key == 'J')) {
+            changed = roster_viewer_.scanTeam(-1, roster_database_, menu_elapsed_ms_);
+            trace_.log("PLAYER-TEAM-SCAN", "L1: previous team through FUN_80059610");
+        } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                   (key == VK_OEM_6 || key == 'K')) {
+            changed = roster_viewer_.scanTeam(1, roster_database_, menu_elapsed_ms_);
+            trace_.log("PLAYER-TEAM-SCAN", "R1: next team through FUN_80059610");
+        }
+        else if (key == 'Q') {
+            changed = roster_viewer_.cycleCategory(-1);
+            trace_.log("PLAYER-STAT-LAYER", "L2/internal 0x1000: previous recovered descriptor layer");
+        } else if (key == 'E') {
+            changed = roster_viewer_.cycleCategory(1);
+            trace_.log("PLAYER-STAT-LAYER", "R2/internal 0x2000: next recovered descriptor layer");
+        } else if (key == 'Z') {
+            changed = roster_viewer_.cycleDisplay(-1);
+            trace_.log("ROSTER-DISPLAY", "R2/internal 0x0200: previous field");
+        } else if (key == 'C') {
+            changed = roster_viewer_.cycleDisplay(1);
+            trace_.log("ROSTER-DISPLAY", "L1/internal 0x0400: next field");
+        }
         else if (key == VK_RETURN || key == VK_SPACE) {
-            roster_viewer_.activate(roster_database_);
-            changed = true;
-        } else if (key == VK_ESCAPE || key == VK_BACK) {
-            if (roster_viewer_.back()) {
-                trace_.log("ROSTER-BACK", "player card -> team roster");
-                changed = true;
-            } else {
-                beginFrontendTransition(nba97::FrontendPage::Rosters,
-                                        "View Rosters back input");
+            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard) {
+                playSelectedCoolFact();
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
                 return;
             }
+            if (roster_viewer_.selectedPlayer(roster_database_)) {
+                roster_viewer_.activate(roster_database_);
+                loadSelectedPlayerCardAssets();
+                trace_.log("ROSTER-VIEW",
+                    "internal 0x10 -> result=2 -> nested state 0x24 FUN_8005A538");
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+                return;
+            }
+            trace_.log("ROSTER-MESSAGE",
+                key == VK_RETURN ? "view player: blank roster slot" :
+                                   "compare players: blank roster slot");
+        } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard && key == 'S') {
+            cool_fact_audio_.stop();
+            trace_.log("COOL-FACT-STOP", "Square/internal 0x10 -> FUN_80059DB8(1); speech stopped");
+            rebuildMenuFrame();
+            InvalidateRect(window_, nullptr, FALSE);
+            return;
+        } else if (key == VK_ESCAPE || key == VK_BACK) {
+            roster_viewer_.cancel();
+            trace_.log("ROSTER-CANCEL",
+                "input 0x100: restored entry +0x70E/+0x712/+0x716 snapshot");
+            beginFrontendTransition(nba97::FrontendPage::Rosters,
+                                    "View Rosters back input");
+            return;
         }
         if (changed) {
+            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                (roster_viewer_.playerIndex() != previous_player ||
+                 roster_viewer_.teamIndex() != previous_team)) {
+                cool_fact_audio_.stop();
+                loadSelectedPlayerCardAssets();
+            }
+            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                roster_viewer_.firstVisiblePlayerStat() != previous_stat)
+                playRosterCursorSound(roster_viewer_.firstVisiblePlayerStat() > previous_stat ? 1 : -1);
+            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                roster_viewer_.playerIndex() != previous_player)
+                trace_.log("PLAYER-WRAP", "FUN_80059928 player slot " +
+                    std::to_string(previous_player) + " -> " +
+                    std::to_string(roster_viewer_.playerIndex()) +
+                    " with bidirectional roster wrap");
+            if (roster_viewer_.teamIndex() != previous_team) {
+                const auto* from = previous_team < roster_database_.teams().size()
+                    ? &roster_database_.teams()[previous_team] : nullptr;
+                const auto* to = roster_viewer_.selectedTeam(roster_database_);
+                trace_.log("ROSTER-PALETTE", "FUN_8003F7B0 target " +
+                    (from ? from->city + " " + from->nickname : "<none>") + " -> " +
+                    (to ? to->city + " " + to->nickname : "<none>") +
+                    "; FUN_8002FF80 transition ticks=0..16");
+            }
             logRosterViewFocus(key == VK_RETURN || key == VK_SPACE ? "player view" : "navigation");
             rebuildMenuFrame();
             InvalidateRect(window_, nullptr, FALSE);
@@ -938,9 +1474,15 @@ private:
         }
         RECT client{};
         GetClientRect(window_, &client);
-        if (client.right <= 0 || client.bottom <= 0) return;
-        const int psx_x = client_x * kPsxWidth / client.right;
-        const int psx_y = client_y * kPsxHeight / client.bottom;
+        const RECT presentation = psxPresentationRect(client);
+        const int presentation_width = presentation.right - presentation.left;
+        const int presentation_height = presentation.bottom - presentation.top;
+        if (presentation_width <= 0 || presentation_height <= 0 ||
+            client_x < presentation.left || client_x >= presentation.right ||
+            client_y < presentation.top || client_y >= presentation.bottom)
+            return;
+        const int psx_x = (client_x - presentation.left) * kPsxWidth / presentation_width;
+        const int psx_y = (client_y - presentation.top) * kPsxHeight / presentation_height;
         if (frontend_page_ == nba97::FrontendPage::GameSetup) {
             if (!menu_.hover(psx_x, psx_y)) return;
             trace_.log("MENU-HOVER", std::string(menu_.row() == nba97::MenuRow::GameOptions
@@ -960,6 +1502,21 @@ private:
         InvalidateRect(window_, nullptr, FALSE);
     }
 
+    bool clientToPsx(int client_x, int client_y, int& psx_x, int& psx_y) const {
+        RECT client{};
+        GetClientRect(window_, &client);
+        const RECT presentation = psxPresentationRect(client);
+        const int width = presentation.right - presentation.left;
+        const int height = presentation.bottom - presentation.top;
+        if (width <= 0 || height <= 0 || client_x < presentation.left ||
+            client_x >= presentation.right || client_y < presentation.top ||
+            client_y >= presentation.bottom)
+            return false;
+        psx_x = (client_x - presentation.left) * kPsxWidth / width;
+        psx_y = (client_y - presentation.top) * kPsxHeight / height;
+        return true;
+    }
+
     void rebuildMenuFrame() {
         if (frontend_page_ == nba97::FrontendPage::GameSetup)
             menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
@@ -969,7 +1526,14 @@ private:
                 profile_menu_, profile_store_, menu_font_, menu_sprites_, menu_elapsed_ms_));
         else if (frontend_page_ == nba97::FrontendPage::ViewRosters)
             menu_frame_ = makeFrame(nba97::renderRosterViewer(
-                roster_viewer_, roster_database_, menu_font_, roster_sprites_, menu_elapsed_ms_));
+                roster_viewer_, roster_database_, menu_font_,
+                roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard
+                    ? player_sprites_ : roster_sprites_,
+                menu_elapsed_ms_,
+                roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+                roster_cool_facts_available_, &control_font_,
+                menu_elapsed_ms_ < stat_flash_until_ms_ ? stat_flash_direction_ : 0,
+                cool_fact_audio_.isPlaying()));
         else if (frontend_page_ == nba97::FrontendPage::Rules ||
                  frontend_page_ == nba97::FrontendPage::Options)
             menu_frame_ = makeFrame(nba97::renderSettingsMenu(
@@ -977,7 +1541,7 @@ private:
         else
             menu_frame_ = makeFrame(nba97::renderRecoveredBottomMenu(
                 bottom_menu_, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
-                menu_elapsed_ms_));
+                roster_menu_cards_, menu_elapsed_ms_));
     }
 
     static std::string frontendPageName(nba97::FrontendPage page) {
@@ -1073,6 +1637,8 @@ private:
     nba97::BootFlow flow_;
     nba97::IntroPlayer intro_player_;
     nba97::FrontendMusicPlayer frontend_music_;
+    nba97::RecoveredAudioPlayer cursor_audio_;
+    nba97::RecoveredAudioPlayer cool_fact_audio_;
     nba97::MainMenu menu_;
     nba97::FrontendSettings settings_;
     nba97::SettingsMenu settings_menu_;
@@ -1083,10 +1649,18 @@ private:
     nba97::UserProfileMenu profile_menu_;
     nba97::FrontendPage frontend_page_ = nba97::FrontendPage::GameSetup;
     nba97::PshFont menu_font_;
+    nba97::PshFont control_font_;
     nba97::MenuSpritePack menu_sprites_;
     nba97::MenuSpritePack roster_sprites_;
+    nba97::MenuSpritePack player_sprites_;
     nba97::MenuSpritePack users_sprites_;
     nba97::MenuCardPack menu_cards_;
+    nba97::RosterCardPack roster_menu_cards_;
+    PshImage roster_portrait_;
+    bool roster_portrait_loaded_ = false;
+    bool roster_cool_facts_available_ = false;
+    std::uint32_t stat_flash_until_ms_ = 0;
+    int stat_flash_direction_ = 0;
     PshImage title_source_;
     Frame load_frame_;
     Frame legal_frame_;
@@ -1102,6 +1676,9 @@ private:
     int last_mouse_y_ = -1;
     bool menu_mouse_armed_ = false;
     int active_user_profiles_ = 0;
+    int held_roster_direction_ = 0;
+    int held_roster_counter_ = 0;
+    int held_roster_ticks_since_repeat_ = 0;
     static constexpr std::uint32_t kFrontendTransitionMs = 180;
     DWORD frontend_transition_tick_ = 0;
     bool frontend_transition_active_ = false;

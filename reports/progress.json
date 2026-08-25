@@ -1,0 +1,495 @@
+{
+  "schema_version": 1,
+  "project": "NBA Live 97 PS1 decompilation and native port",
+  "version": "NTSC-U SLUS-00267",
+  "reconstruction": {
+    "scoped_binaries": [
+      {
+        "id": "boot",
+        "name": "PS-X EXE boot program",
+        "functions": 272,
+        "analyzed_code_bytes": 49280,
+        "input_status": "validated locally"
+      },
+      {
+        "id": "feonly",
+        "name": "FEONLY frontend overlay",
+        "functions": 1497,
+        "analyzed_code_bytes": 416088,
+        "input_status": "validated locally"
+      }
+    ],
+    "discovered_functions": 1769,
+    "analyzed_code_bytes": 465368,
+    "evidence_tracked_functions": 56,
+    "evidence_tracked_bytes": 34224,
+    "evidence_coverage_percent": 3.17,
+    "evidence_byte_coverage_percent": 7.35,
+    "complete_functions": 0,
+    "matching_functions": 0,
+    "status_counts": {
+      "behavior_verified": 45,
+      "implemented": 3,
+      "researched": 8
+    },
+    "scope_counts": {
+      "partial": 56
+    },
+    "subsystems": {
+      "assets": {
+        "functions": 3,
+        "bytes": 816,
+        "verified": 0
+      },
+      "audio": {
+        "functions": 7,
+        "bytes": 1516,
+        "verified": 6
+      },
+      "boot": {
+        "functions": 7,
+        "bytes": 2712,
+        "verified": 5
+      },
+      "card": {
+        "functions": 1,
+        "bytes": 832,
+        "verified": 0
+      },
+      "database": {
+        "functions": 3,
+        "bytes": 1216,
+        "verified": 3
+      },
+      "font": {
+        "functions": 2,
+        "bytes": 3636,
+        "verified": 2
+      },
+      "graphics": {
+        "functions": 7,
+        "bytes": 4576,
+        "verified": 5
+      },
+      "input": {
+        "functions": 1,
+        "bytes": 108,
+        "verified": 1
+      },
+      "menus": {
+        "functions": 3,
+        "bytes": 5788,
+        "verified": 3
+      },
+      "movie": {
+        "functions": 2,
+        "bytes": 916,
+        "verified": 1
+      },
+      "profiles": {
+        "functions": 4,
+        "bytes": 7472,
+        "verified": 3
+      },
+      "rosters": {
+        "functions": 11,
+        "bytes": 3912,
+        "verified": 11
+      },
+      "settings": {
+        "functions": 3,
+        "bytes": 332,
+        "verified": 3
+      },
+      "ui": {
+        "functions": 2,
+        "bytes": 392,
+        "verified": 2
+      }
+    }
+  },
+  "native_port": {
+    "catalogued_features": 48,
+    "status_counts": {
+      "not_started": 16,
+      "partial": 5,
+      "verified": 27
+    },
+    "roadmap_points": 29.5,
+    "roadmap_completion_percent": 61.46,
+    "groups": {
+      "Audio": {
+        "items": 3,
+        "points": 2.5,
+        "completion_percent": 83.33,
+        "status_counts": {
+          "partial": 1,
+          "verified": 2
+        }
+      },
+      "Boot and title": {
+        "items": 5,
+        "points": 5.0,
+        "completion_percent": 100.0,
+        "status_counts": {
+          "verified": 5
+        }
+      },
+      "Frontend menus": {
+        "items": 8,
+        "points": 7.5,
+        "completion_percent": 93.75,
+        "status_counts": {
+          "partial": 1,
+          "verified": 7
+        }
+      },
+      "Gameplay path": {
+        "items": 8,
+        "points": 0.0,
+        "completion_percent": 0.0,
+        "status_counts": {
+          "not_started": 8
+        }
+      },
+      "Native platform": {
+        "items": 5,
+        "points": 4.5,
+        "completion_percent": 90.0,
+        "status_counts": {
+          "partial": 1,
+          "verified": 4
+        }
+      },
+      "Roster transactions": {
+        "items": 7,
+        "points": 0.0,
+        "completion_percent": 0.0,
+        "status_counts": {
+          "not_started": 7
+        }
+      },
+      "Rosters": {
+        "items": 6,
+        "points": 6.0,
+        "completion_percent": 100.0,
+        "status_counts": {
+          "verified": 6
+        }
+      },
+      "Save and card": {
+        "items": 3,
+        "points": 1.0,
+        "completion_percent": 33.33,
+        "status_counts": {
+          "not_started": 1,
+          "partial": 2
+        }
+      },
+      "User profiles": {
+        "items": 3,
+        "points": 3.0,
+        "completion_percent": 100.0,
+        "status_counts": {
+          "verified": 3
+        }
+      }
+    },
+    "features": [
+      {
+        "id": "boot.loading",
+        "group": "Boot and title",
+        "name": "Initial loading screen",
+        "status": "verified"
+      },
+      {
+        "id": "boot.legal",
+        "group": "Boot and title",
+        "name": "NBA legal screen",
+        "status": "verified"
+      },
+      {
+        "id": "boot.movie",
+        "group": "Boot and title",
+        "name": "In-window intro movie",
+        "status": "verified"
+      },
+      {
+        "id": "boot.movie_audio",
+        "group": "Boot and title",
+        "name": "Synchronized intro audio",
+        "status": "verified"
+      },
+      {
+        "id": "boot.title",
+        "group": "Boot and title",
+        "name": "Title screen and Press Start",
+        "status": "verified"
+      },
+      {
+        "id": "menu.game_setup",
+        "group": "Frontend menus",
+        "name": "Game Setup composition and navigation",
+        "status": "verified"
+      },
+      {
+        "id": "menu.random_cards",
+        "group": "Frontend menus",
+        "name": "Original random ZCARD imagery",
+        "status": "verified"
+      },
+      {
+        "id": "menu.rules",
+        "group": "Frontend menus",
+        "name": "Rules menu editing and persistence",
+        "status": "verified"
+      },
+      {
+        "id": "menu.options",
+        "group": "Frontend menus",
+        "name": "Options menu editing and persistence",
+        "status": "verified"
+      },
+      {
+        "id": "menu.rosters",
+        "group": "Frontend menus",
+        "name": "Rosters eight-card menu",
+        "status": "verified"
+      },
+      {
+        "id": "menu.users",
+        "group": "Frontend menus",
+        "name": "Users availability and setup transition",
+        "status": "verified"
+      },
+      {
+        "id": "menu.card",
+        "group": "Frontend menus",
+        "name": "Memory-card menu presentation",
+        "status": "partial"
+      },
+      {
+        "id": "menu.help",
+        "group": "Frontend menus",
+        "name": "Original-style modal help",
+        "status": "verified"
+      },
+      {
+        "id": "profiles.storage",
+        "group": "User profiles",
+        "name": "Versioned local profile storage",
+        "status": "verified"
+      },
+      {
+        "id": "profiles.create",
+        "group": "User profiles",
+        "name": "Profile creation",
+        "status": "verified"
+      },
+      {
+        "id": "profiles.delete",
+        "group": "User profiles",
+        "name": "Profile deletion and Users state",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.database",
+        "group": "Rosters",
+        "name": "Original team/player/stat database",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.viewer",
+        "group": "Rosters",
+        "name": "View Rosters screen",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.team_scan",
+        "group": "Rosters",
+        "name": "Team navigation and palette transition",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.player_card",
+        "group": "Rosters",
+        "name": "View Player screen",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.stats",
+        "group": "Rosters",
+        "name": "Player statistics scrolling",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.cool_fact",
+        "group": "Rosters",
+        "name": "Player cool-fact speech",
+        "status": "verified"
+      },
+      {
+        "id": "rosters.trade",
+        "group": "Roster transactions",
+        "name": "Trade players",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.sign",
+        "group": "Roster transactions",
+        "name": "Sign free agent",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.release",
+        "group": "Roster transactions",
+        "name": "Release player",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.reset",
+        "group": "Roster transactions",
+        "name": "Reset rosters",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.reorder",
+        "group": "Roster transactions",
+        "name": "Re-order rosters",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.create",
+        "group": "Roster transactions",
+        "name": "Create player",
+        "status": "not_started"
+      },
+      {
+        "id": "rosters.injuries",
+        "group": "Roster transactions",
+        "name": "Player injuries",
+        "status": "not_started"
+      },
+      {
+        "id": "audio.frontend_music",
+        "group": "Audio",
+        "name": "Looping frontend music decoder",
+        "status": "verified"
+      },
+      {
+        "id": "audio.menu_sfx",
+        "group": "Audio",
+        "name": "Original frontend menu sound effects",
+        "status": "partial"
+      },
+      {
+        "id": "audio.speech",
+        "group": "Audio",
+        "name": "Original speech stream decoder",
+        "status": "verified"
+      },
+      {
+        "id": "card.save_settings",
+        "group": "Save and card",
+        "name": "Save settings action",
+        "status": "partial"
+      },
+      {
+        "id": "card.load_settings",
+        "group": "Save and card",
+        "name": "Load settings action",
+        "status": "partial"
+      },
+      {
+        "id": "card.load_game",
+        "group": "Save and card",
+        "name": "Load game action",
+        "status": "not_started"
+      },
+      {
+        "id": "game.team_select",
+        "group": "Gameplay path",
+        "name": "Team selection",
+        "status": "not_started"
+      },
+      {
+        "id": "game.lineups",
+        "group": "Gameplay path",
+        "name": "Starting lineup flow",
+        "status": "not_started"
+      },
+      {
+        "id": "game.match_load",
+        "group": "Gameplay path",
+        "name": "Match loading",
+        "status": "not_started"
+      },
+      {
+        "id": "game.render",
+        "group": "Gameplay path",
+        "name": "Native court and player rendering",
+        "status": "not_started"
+      },
+      {
+        "id": "game.input",
+        "group": "Gameplay path",
+        "name": "Playable basketball controls",
+        "status": "not_started"
+      },
+      {
+        "id": "game.rules",
+        "group": "Gameplay path",
+        "name": "Match rules and clock",
+        "status": "not_started"
+      },
+      {
+        "id": "game.ai",
+        "group": "Gameplay path",
+        "name": "CPU player AI",
+        "status": "not_started"
+      },
+      {
+        "id": "game.results",
+        "group": "Gameplay path",
+        "name": "Results and return to frontend",
+        "status": "not_started"
+      },
+      {
+        "id": "platform.native_window",
+        "group": "Native platform",
+        "name": "Native C++ window and main loop",
+        "status": "verified"
+      },
+      {
+        "id": "platform.cli_trace",
+        "group": "Native platform",
+        "name": "Address-aware CLI trace",
+        "status": "verified"
+      },
+      {
+        "id": "platform.asset_extract",
+        "group": "Native platform",
+        "name": "Local-only asset extraction",
+        "status": "verified"
+      },
+      {
+        "id": "platform.self_test",
+        "group": "Native platform",
+        "name": "Automated frontend self-test",
+        "status": "verified"
+      },
+      {
+        "id": "platform.cross_platform",
+        "group": "Native platform",
+        "name": "Non-Windows feature parity",
+        "status": "partial"
+      }
+    ]
+  },
+  "methodology_notes": [
+    "Function progress measures the original PS1 binaries and never infers completion from native screens.",
+    "A partial function is evidence coverage, not a completed original function.",
+    "Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.",
+    "Matching means instruction-identical PS1 output; the native C++ build cannot satisfy that status."
+  ]
+}

@@ -2,6 +2,13 @@
 
 Experimental decompilation and recompilation research for the US PlayStation release (`SLUS-00267`).
 
+[![NBA Live 97 decompilation progress](docs/progress.svg)](docs/progress.md)
+
+The two percentages measure different things: original-function evidence is
+conservative reverse-engineering coverage, while native-port roadmap progress
+tracks playable reconstructed features. Click the status card for the full
+methodology and subsystem breakdown.
+
 ## License and asset policy
 
 Project-authored source code and documentation are available under the
@@ -32,6 +39,32 @@ The repository does not contain the game, executable, disc contents, or extracte
 ```
 
 Only project-authored source, scripts, configuration templates, documentation, and cryptographic hashes should be committed.
+
+## Measured progress
+
+Decompilation coverage and native-port coverage are tracked separately. The
+committed Ghidra inventories currently scope the PS-X boot executable and the
+`FEONLY` overlay. `config/decomp/recovered_functions.json` records only
+functions with explicit recompilation, Ghidra, source, or runtime evidence;
+partial recovery never counts as a completed function. The native feature
+roadmap lives in `config/decomp/features.json` and includes unfinished roster
+transactions and gameplay so a polished frontend cannot be mistaken for a
+complete game.
+
+The current generated baseline is in [docs/progress.md](docs/progress.md), with
+machine-readable output in `reports/progress.json`, a standalone dashboard in
+`docs/progress.html`, and the README status card in `docs/progress.svg`.
+Regenerate and validate them with:
+
+```powershell
+pwsh -File scripts/update_progress.ps1
+python tools/report_progress.py --check
+```
+
+CMake also exposes `progress` and `progress-check` targets when Python is
+available. CI rejects stale reports and any attempt to track `.local` files.
+Function inventories contain addresses, generated names, and sizes only—not
+original code or assets.
 
 ## Boot decompilation slice
 
@@ -67,12 +100,45 @@ hover change their highlighted cards; their deeper child flows remain outside
 this slice except View Rosters. View Rosters follows the recovered card-4
 return code into frontend state `0x10` (`FUN_800592C4`), preserves its team and
 player selections, and uses the original `ZSET4.PSP` Team Rosters heading and
-all 29 team-art sprites. Left/right wraps through teams, up/down browses a
-scrolling 15-slot-capable roster, mouse hover selects rows, and Enter opens a
-player card. The card exposes biography/physical data and all 17 source ratings
-from the private external roster database; left/right changes players and
-up/down or Enter switches biography/ratings. It is read-only and performs no
-roster mutations.
+all 29 team-art sprites. Its recovered generic-list geometry shows exactly six
+players at x=60 with a 12-pixel row pitch; the selected row uses the original
+neutral-to-gold pulse and the list performs the recovered one-tick, seven-row
+handoff only when focus crosses the six-row window. Left/right wraps through
+teams without resetting the player slot, up/down browses the 15-slot-capable
+roster, and mouse hover selects one of the six visible rows. Q/E reproduce the
+original Select/L2 category controls, while Z/C reproduce R2/L1 field controls.
+The six categories expose player attributes, ratings, 1995/96 season and
+playoff totals, and extensible current-season/current-playoff slots. Enter and
+Space, or clicking a visible row, pushes the recovered nested View Player state
+`0x24`. That state streams the selected player's original 180x156 action photo
+from the locally extracted `Z1PORT.IDX/BIG`, shows identity and season details,
+checks the player's five `Z1COOL.IDX/BIG` fact slots, and returns with Escape or
+Backspace without losing the team, selected player, or scroll position. The
+View Player descriptor layers are recovered separately from the team-list
+columns: Q/E cycles player attributes, player ratings, 1995/96 season,
+1995/96 playoffs, current season, and current playoffs; Up/Down scrolls the
+layer with the original 20-tick gold flash and `ZCURSOR.VH/VB` sound IDs 3/4;
+Left/Right wraps players; and J/K (or the bracket keys) scans teams. Enter plays
+a non-repeating available Cool Fact and S stops it. Each speech record is
+streamed by player ID from the ignored 122 MB `Z1COOL.BIG`, decoded in-process
+from its `PATl/TMxl` mono PlayStation ADPCM payload, and submitted through
+WinMM. H/F1 opens the original green state-`0x24` controller-help popup over
+the player screen with the exact `ZFONT1.PSH` button glyphs. Keyboard mappings
+remain documented here instead of crowding the recovered in-game modal.
+No cursor or Cool Fact audio is converted, bundled, or published. The roster's
+team and scroll arrows are the original `ZFONT0.PSH` control glyphs
+`0x8a` through `0x8d`; H, F1, or the original Help strip opens state-aware Help.
+Escape from the roster cancels and restores the entry snapshot.
+
+The View Rosters background is also reconstructed from the original private
+indexed art instead of approximated. Recompilation `FUN_8002FDA4` loads the 33
+`ZTMPAL.PSH` entries and `FUN_8002FE58` replaces colours 0 through 159 of each
+`ZSET4.PSP` `Bkga`-`Bkgd` strip with the selected team's palette while retaining
+the strip-local colours 160 through 255. Layout `0x1c` places the four full
+`128x240` strips at x=0, 128, 256, and 384 with no crop or model transform.
+`FUN_8002FF80` crossfades the team-controlled colours over 17 frontend ticks.
+The extraction tool reproduces that mixed palette only under ignored `.local/`;
+no decoded team background or source palette is tracked by Git.
 
 The original first-boot Users rule is preserved. `0x8005CD88` scans twenty
 0x6c-byte profile records; byte +0x5d is the first byte of the trailing user
@@ -111,14 +177,17 @@ database snapshot. There is intentionally no sample-name or built-in fallback
 roster.
 
 Static recompilation and headless Ghidra agree that `FUN_8005FE14` treats IDs
-below `0x1ed` as the 493 original players. `FUN_8005770C` resolves 15 slots per
-team into the table at `0x80023AB0`, whose records have a recovered `0x68` byte
-stride; the first 29 records are the NBA teams. The recovered source records
-produce 348 assigned players (12 per team) and 145 original free agents. The
-pack retains stable IDs, names, biography strings, physical attributes, the 17
-source ratings, team identity strings, roster membership, and still-unknown raw
-metadata without inventing semantics. Its sectioned container can add historical
-or current-stat sections later without breaking version-one readers.
+below `0x1ed` as the 493 original players. `FUN_80057864` copies the original
+29-by-15 signed roster-slot table from `DAT_800C0CAC`, then `FUN_8005770C`
+resolves every team. The recovered source table produces 362 assigned players
+and 131 original free agents; team sizes range from 9 to 15 rather than being
+invented as a uniform count. The pack retains stable IDs, names, biography strings, physical attributes, the 17
+source ratings, team identity strings, roster membership, resolved school and
+acquisition fields, and the original 1995/96 regular-season and playoff stat
+lines. Current-season and current-playoff records remain explicit empty slots
+that later gameplay can update without changing the viewer. The sectioned
+container is versioned so future fields can be added without being mistaken for
+older records.
 
 ### Native frontend music
 
@@ -162,6 +231,8 @@ headless Ghidra analysis:
 - `0x8005FE14` maps original player IDs below `0x1ed` through the player index
 - `0x800592C4` restores the View Rosters team/list position and
   `0x800590B8` constructs its recovered state-`0x10` browser
+- View input `0x10` returns 2 and pushes state `0x24`; `0x8005A538` loads
+  `Z1PORT.IDX/BIG` and `Z1COOL.IDX/BIG` before returning to state `0x10`
 
 Extract the private boot, frontend, font, and menu asset packs and build:
 
@@ -173,7 +244,8 @@ pwsh -File scripts/run.ps1
 ```
 
 `extract_assetpacks.ps1` decodes `ZSET1.PSP`, `ZSET4.PSP`, and `ZSET7.PSP`
-locally. Their generated PNGs and source packs remain under
+locally, extracts `Z1PORT`/`Z1COOL`, and decodes the View Player portraits.
+Their generated PNGs and source packs remain under
 `.local/assetpacks/menu/` and are excluded from Git.
 
 On User Setup, Up/Down selects an existing profile or `Start New`, Enter begins
@@ -187,20 +259,29 @@ compatibility build for Linux/WSL testing.
 
 `prepare_intro_movie.ps1` extracts the raw `Z0ZTITLE.XA` disc sectors and uses
 jPSXdec locally to produce a synchronized playback copy. The native C++ app
-builds an in-process DirectShow decoder graph and renders that copy into its
-existing Win32 window; no external movie-player process is launched. The CLI
-trace lists every selected source, splitter, decoder, renderer, and audio filter.
+builds an in-process DirectShow graph for video and renders it into the existing
+Win32 window. Because the system DirectSound renderer can build successfully
+while remaining silent, the app also parses the AVI's interleaved PCM chunks
+itself and submits the original 37.8 kHz stereo stream through WinMM alongside
+the video. No external movie-player or runtime conversion process is launched.
+The CLI trace lists the selected graph filters and native PCM sample count.
 The recovered sequence
 is load screen, NBA legal screen, the 77.9-second EA/NBA intro movie, then the
 title screen. Press Space during the intro to skip it. On the title screen,
 press Space or Enter to open Game Setup. Use arrows to move within/between its
 two rows, or hover with the mouse. Select a bottom menu with Enter, Space, or a
 mouse click. Rosters and Card use the same navigation keys; Backspace or Escape
-returns from them. In either settings screen, Up/Down changes the focused row,
+returns from them. In View Rosters, Enter/Space or clicking a player opens View
+Player, Escape returns to the exact roster position, and H/F1 or the Help strip
+opens Help. View Player uses Q/E for stat layers, Up/Down for stats,
+Left/Right for players, J/K for teams, Enter for Cool Fact playback, and S to
+stop the Cool Fact. In either settings screen, Up/Down changes the focused row,
 Left/Right changes its value, and Escape or Backspace returns to Game Setup.
 Escape from Game Setup exits.
 
-Run `scripts/analyze_headless.ps1` to regenerate the local Ghidra evidence.
+Run `scripts/analyze_headless.ps1` to regenerate the local Ghidra evidence and
+the committed address/size function inventories, then run
+`scripts/update_progress.ps1` to refresh the reports.
 The app mirrors its CLI trace to `.local/logs/boot_decomp_trace.log`. All disc
 data, extracted PSH files, derived frames, Ghidra projects, and generated recomp
 output remain under ignored `.local/` paths and must not be published.

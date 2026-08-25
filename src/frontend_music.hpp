@@ -33,6 +33,8 @@ public:
 private:
     HWAVEOUT wave_out_ = nullptr;
     WAVEHDR header_{};
+    DWORD previous_wave_volume_ = 0;
+    bool restore_wave_volume_ = false;
     std::vector<std::int16_t> pcm_;
     EaSchlInfo info_{};
     std::string decoder_name_;

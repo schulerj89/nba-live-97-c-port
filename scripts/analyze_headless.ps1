@@ -18,7 +18,9 @@ $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     -processor 'MIPS:LE:32:default' -loader-baseAddr 0x801DF800 `
     -preScript PreparePS1Raw.py 0x801E3508 `
     -postScript ReportReferencesHeadless.py (Join-Path $projectDir 'boot_asset_refs.txt') `
-    0x801E0008 0x801E0024 0x801E0040 -scriptPath $scriptPath
+    0x801E0008 0x801E0024 0x801E0040 `
+    -postScript ExportFunctionsHeadless.py (Join-Path $repo 'config\decomp\functions\boot.csv') `
+    -scriptPath $scriptPath
 if ($LASTEXITCODE -ne 0) { throw 'Boot analysis failed.' }
 
 & $headless $projectDir "nba97_feonly_$stamp" -import $feonly -loader BinaryLoader `
@@ -26,6 +28,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Boot analysis failed.' }
     -preScript PreparePS1Raw.py 0x8007B79C `
     -postScript ReportReferencesHeadless.py (Join-Path $projectDir 'feonly_asset_refs.txt') `
     0x80024914 0x80024920 0x80024B38 0x8002D768 0x8002DFB4 0x80036684 `
+    -postScript ExportFunctionsHeadless.py (Join-Path $repo 'config\decomp\functions\feonly.csv') `
     -scriptPath $scriptPath
 if ($LASTEXITCODE -ne 0) { throw 'FEONLY analysis failed.' }
-Write-Host 'Recovered boot/frontend asset references under .local/ghidra.'
+Write-Host 'Recovered local Ghidra evidence and refreshed public function metadata inventories.'

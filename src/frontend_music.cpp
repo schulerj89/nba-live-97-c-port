@@ -114,6 +114,11 @@ void FrontendMusicPlayer::start(const std::filesystem::path& cnk_path,
     format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
     MMRESULT result = waveOutOpen(&wave_out_, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL);
     if (result != MMSYSERR_NOERROR) { wave_out_ = nullptr; pcm_.clear(); throw std::runtime_error("waveOutOpen failed: " + std::to_string(result)); }
+    // waveOutSetVolume may map to persistent per-device or per-application
+    // state depending on the Windows audio driver. Preserve it so frontend
+    // music and --self-test cannot leave the subsequent DirectShow movie mute.
+    restore_wave_volume_ =
+        waveOutGetVolume(wave_out_, &previous_wave_volume_) == MMSYSERR_NOERROR;
     header_ = {};
     header_.lpData = reinterpret_cast<LPSTR>(pcm_.data());
     header_.dwBufferLength = static_cast<DWORD>(pcm_.size() * sizeof(std::int16_t));
@@ -130,9 +135,12 @@ void FrontendMusicPlayer::stop() noexcept {
     if (wave_out_) {
         waveOutReset(wave_out_);
         if (header_.dwFlags & WHDR_PREPARED) waveOutUnprepareHeader(wave_out_, &header_, sizeof(header_));
+        if (restore_wave_volume_)
+            waveOutSetVolume(wave_out_, previous_wave_volume_);
         waveOutClose(wave_out_);
     }
-    wave_out_ = nullptr; header_ = {}; pcm_.clear(); decoder_name_.clear();
+    wave_out_ = nullptr; header_ = {}; previous_wave_volume_ = 0;
+    restore_wave_volume_ = false; pcm_.clear(); decoder_name_.clear();
 }
 
 void FrontendMusicPlayer::setRecoveredVolume(std::uint8_t volume) noexcept {

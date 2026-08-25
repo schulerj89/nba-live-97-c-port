@@ -28,11 +28,14 @@ with src.open("rb") as stream:
     # crop to the directory dimensions below.
     logical_widths = {}
     for entry in archive.dir_entry_list:
-        if entry.h_record_id == 0xC0:
+        # Both compressed PAL4 (C0, two pixels/byte) and PAL8 (C1, one
+        # pixel/byte) records use a padded scanline stride.
+        if entry.h_record_id in (0xC0, 0xC1):
             unpacked_size = len(RefpackHandler().decompress_data(entry.raw_data))
             if unpacked_size % entry.h_height:
                 raise RuntimeError(f"Cannot derive scanline stride for {entry.tag}")
-            stored_width = unpacked_size // entry.h_height * 2
+            pixels_per_byte = 2 if entry.h_record_id == 0xC0 else 1
+            stored_width = unpacked_size // entry.h_height * pixels_per_byte
             if stored_width < entry.h_width:
                 raise RuntimeError(f"Stored scanline is shorter than {entry.tag}'s logical width")
             if stored_width != entry.h_width:

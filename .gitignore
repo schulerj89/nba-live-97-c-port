@@ -6,6 +6,8 @@ build/
 build-*/
 out/
 .cache/
+__pycache__/
+*.py[cod]
 log.txt
 
 # IDE and operating-system files.

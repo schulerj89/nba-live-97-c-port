@@ -153,8 +153,13 @@ PshFont load_psh_font(const std::filesystem::path& path,
     font.kerning_ = kerning;
     for (std::uint32_t index = 0; index < count; ++index) {
         const std::size_t entry = 16 + static_cast<std::size_t>(index) * 8;
-        const int character = parseTag(data, entry);
-        if (character < 0 || character > 0xff) continue;
+        const int tag = parseTag(data, entry);
+        if (tag < 0) continue;
+        // FEONLY indexes glyphs by the low byte of the four-hex-digit SHPP
+        // record tag. The high byte is atlas metadata: for example the
+        // original navigation controls are stored as 028A..028D but are
+        // emitted by the menu code as character bytes 8A..8D.
+        const int character = tag & 0xff;
         const std::size_t bitmap = readU32(data, entry + 4);
         font.glyphs_[static_cast<unsigned char>(character)] = decodeGlyph(data, bitmap);
     }

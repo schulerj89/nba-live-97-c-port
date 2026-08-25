@@ -43,14 +43,6 @@ void outlineRect(PshImage& image, int left, int top, int right, int bottom,
     fillRect(image, right - thickness, top, right, bottom, r, g, b);
 }
 
-void fillCircle(PshImage& image, int center_x, int center_y, int radius,
-                std::uint8_t r, std::uint8_t g, std::uint8_t b) {
-    for (int y = -radius; y <= radius; ++y)
-        for (int x = -radius; x <= radius; ++x)
-            if (x * x + y * y <= radius * radius)
-                putPixel(image, center_x + x, center_y + y, r, g, b);
-}
-
 void blitScaled(PshImage& destination, const PshImage& source,
                 int source_x, int source_y, int source_w, int source_h,
                 int target_x, int target_y, int target_w, int target_h) {
@@ -76,6 +68,21 @@ void blitScaled(PshImage& destination, const PshImage& source,
     }
 }
 
+void blitRotatedClockwise(PshImage& destination, const PshImage& source,
+                          int target_x, int target_y) {
+    for (int sy = 0; sy < source.height; ++sy) {
+        for (int sx = 0; sx < source.width; ++sx) {
+            const std::size_t from =
+                (static_cast<std::size_t>(sy) * source.width + sx) * 4;
+            if (source.rgba[from + 3] == 0) continue;
+            const int dx = target_x + source.height - 1 - sy;
+            const int dy = target_y + sx;
+            putPixel(destination, dx, dy, source.rgba[from], source.rgba[from + 1],
+                     source.rgba[from + 2], source.rgba[from + 3]);
+        }
+    }
+}
+
 const PshImage* sprite(const MenuSpritePack& sprites, const char* tag) {
     const auto found = sprites.find(tag);
     return found == sprites.end() ? nullptr : &found->second;
@@ -86,6 +93,39 @@ void blitAt(PshImage& destination, const MenuSpritePack& sprites,
     if (const PshImage* item = sprite(sprites, tag))
         blitScaled(destination, *item, 0, 0, item->width, item->height,
                    x, y, item->width, item->height);
+}
+
+void blitPaletteCrossfade(PshImage& destination,
+                          const PshImage& from, const PshImage& to,
+                          int target_x, int target_y,
+                          std::uint32_t factor) {
+    if (from.width != to.width || from.height != to.height) return;
+    factor = (std::min)(factor, 16u);
+    for (int y = 0; y < to.height; ++y) {
+        for (int x = 0; x < to.width; ++x) {
+            const std::size_t source_at =
+                (static_cast<std::size_t>(y) * to.width + x) * 4;
+            const std::uint8_t alpha = factor < 8
+                ? from.rgba[source_at + 3] : to.rgba[source_at + 3];
+            if (alpha == 0) continue;
+            const int dx = target_x + x;
+            const int dy = target_y + y;
+            if (dx < 0 || dx >= destination.width ||
+                dy < 0 || dy >= destination.height)
+                continue;
+            const std::size_t destination_at =
+                (static_cast<std::size_t>(dy) * destination.width + dx) * 4;
+            for (int channel = 0; channel < 3; ++channel) {
+                const std::uint32_t old_5 = from.rgba[source_at + channel] >> 3;
+                const std::uint32_t new_5 = to.rgba[source_at + channel] >> 3;
+                const std::uint32_t value_5 =
+                    (old_5 * (16 - factor) + new_5 * factor) >> 4;
+                destination.rgba[destination_at + channel] =
+                    static_cast<std::uint8_t>((value_5 << 3) | (value_5 >> 2));
+            }
+            destination.rgba[destination_at + 3] = 255;
+        }
+    }
 }
 
 void blitDisabled(PshImage& destination, const MenuSpritePack& sprites,
@@ -129,16 +169,112 @@ void blitBlueBorder(PshImage& destination, const MenuSpritePack& sprites,
                x, y, tinted.width, tinted.height);
 }
 
+void blitJiggledSprite(PshImage& destination, const MenuSpritePack& sprites,
+                       const char* tag, int x, int y,
+                       std::uint32_t elapsed_ms) {
+    const PshImage* item = sprite(sprites, tag);
+    if (!item) return;
+    for (int row = 0; row < item->height; ++row) {
+        const int wave_x = static_cast<int>(std::lround(
+            std::sin(elapsed_ms * 0.011 + row * 0.24) * 1.5));
+        blitScaled(destination, *item, 0, row, item->width, 1,
+                   x + wave_x, y + row, item->width, 1);
+    }
+}
+
+struct CornerJumble {
+    int top_left_x;
+    int top_left_y;
+    int top_right_x;
+    int top_right_y;
+    int bottom_left_x;
+    int bottom_left_y;
+    int bottom_right_x;
+    int bottom_right_y;
+};
+
+void blitJumbledChunk(PshImage& destination, const PshImage& item,
+                      int source_x, int source_width, int x, int y,
+                      const CornerJumble& offsets) {
+    if (source_width <= 0 || item.height <= 0) return;
+    const int source_height = static_cast<int>(item.height);
+    const int minimum_x = std::min({offsets.top_left_x, offsets.top_right_x,
+                                    offsets.bottom_left_x, offsets.bottom_right_x});
+    const int maximum_x = std::max({offsets.top_left_x, offsets.top_right_x,
+                                    offsets.bottom_left_x, offsets.bottom_right_x});
+    const int minimum_y = std::min({offsets.top_left_y, offsets.top_right_y,
+                                    offsets.bottom_left_y, offsets.bottom_right_y});
+    const int maximum_y = std::max({offsets.top_left_y, offsets.top_right_y,
+                                    offsets.bottom_left_y, offsets.bottom_right_y});
+    const int width_denominator = std::max(1, source_width - 1);
+    const int height_denominator = std::max(1, source_height - 1);
+    for (int destination_y = minimum_y;
+         destination_y < source_height + maximum_y; ++destination_y) {
+        const double vertical = std::clamp(
+            static_cast<double>(destination_y) / height_denominator, 0.0, 1.0);
+        for (int destination_x = minimum_x;
+             destination_x < source_width + maximum_x; ++destination_x) {
+            const double horizontal = std::clamp(
+                static_cast<double>(destination_x) / width_denominator, 0.0, 1.0);
+            const double top_x = offsets.top_left_x +
+                (offsets.top_right_x - offsets.top_left_x) * horizontal;
+            const double bottom_x = offsets.bottom_left_x +
+                (offsets.bottom_right_x - offsets.bottom_left_x) * horizontal;
+            const double left_y = offsets.top_left_y +
+                (offsets.bottom_left_y - offsets.top_left_y) * vertical;
+            const double right_y = offsets.top_right_y +
+                (offsets.bottom_right_y - offsets.top_right_y) * vertical;
+            const int sample_x = static_cast<int>(std::lround(
+                destination_x - (top_x + (bottom_x - top_x) * vertical)));
+            const int sample_y = static_cast<int>(std::lround(
+                destination_y - (left_y + (right_y - left_y) * horizontal)));
+            if (sample_x < 0 || sample_x >= source_width ||
+                sample_y < 0 || sample_y >= source_height)
+                continue;
+            const std::size_t from =
+                (static_cast<std::size_t>(sample_y) * item.width +
+                 source_x + sample_x) * 4;
+            if (item.rgba[from + 3] == 0) continue;
+            putPixel(destination, x + source_x + destination_x,
+                     y + destination_y, item.rgba[from], item.rgba[from + 1],
+                     item.rgba[from + 2]);
+        }
+    }
+}
+
+void blitJumbledTitleSprite(PshImage& destination,
+                            const MenuSpritePack& sprites,
+                            const char* tag, int x, int y,
+                            std::uint32_t elapsed_ms) {
+    const PshImage* item = sprite(sprites, tag);
+    if (!item) return;
+
+    // FUN_8003186C walks the two GPU primitives that make up ba41 and
+    // FUN_80034A5C applies an eight-byte (four-corner) deformation record.
+    // ZSET8's 221-pixel title crosses the PS1's 128-pixel texture-page edge,
+    // so preserve that original two-piece construction.  The recovered menu
+    // moves in small, discrete corner steps; it is not a scanline sine wave.
+    static constexpr std::array<CornerJumble, 8> frames{{
+        { 0,  0,  1, -1, -1,  1,  0,  0},
+        {-1,  1,  2,  0,  0, -1, -1,  1},
+        { 1, -1, -1,  1, -2,  0,  1,  1},
+        {-2,  0,  0,  2,  1, -1,  2,  0},
+        { 0,  2,  2, -1, -1,  0,  0,  1},
+        { 1,  0, -2, -1,  0,  2,  1,  0},
+        {-1, -1,  1,  1,  2,  0, -1,  2},
+        { 2,  1,  0, -2, -1,  1,  1,  0},
+    }};
+    const CornerJumble& offsets = frames[(elapsed_ms / 75) % frames.size()];
+    const int first_width = std::min(128, static_cast<int>(item->width));
+    blitJumbledChunk(destination, *item, 0, first_width, x, y, offsets);
+    if (first_width < item->width)
+        blitJumbledChunk(destination, *item, first_width,
+                         item->width - first_width, x, y, offsets);
+}
+
 void blitJiggledTitle(PshImage& destination, const MenuSpritePack& sprites,
                       std::uint32_t elapsed_ms) {
-    const PshImage* item = sprite(sprites, "ba09");
-    if (!item) return;
-    for (int y = 0; y < item->height; ++y) {
-        const int wave_x = static_cast<int>(std::lround(
-            std::sin(elapsed_ms * 0.011 + y * 0.24) * 1.5));
-        blitScaled(destination, *item, 0, y, item->width, 1,
-                   148 + wave_x, 10 + y, item->width, 1);
-    }
+    blitJiggledSprite(destination, sprites, "ba09", 148, 10, elapsed_ms);
 }
 
 int scaledTextWidth(const PshFont& font, const std::string& text, int scale,
@@ -193,6 +329,26 @@ void drawText(PshImage& destination, const PshFont& font, const std::string& tex
     }
 }
 
+// Controller records in ZFONT1.PSH are already fully colored UI artwork, not
+// ordinary monochrome letters. Preserve their decoded palette instead of
+// passing them through drawText's luminance tint path.
+void drawNativeControlGlyph(PshImage& destination, const PshFont& font,
+                            unsigned char character, int x, int baseline_y) {
+    const PshGlyph* glyph = font.glyph(static_cast<char>(character));
+    if (!glyph) return;
+    const int top = baseline_y - glyph->center_y;
+    for (int gy = 0; gy < glyph->height; ++gy) {
+        for (int gx = 0; gx < glyph->width; ++gx) {
+            const std::size_t from =
+                (static_cast<std::size_t>(gy) * glyph->width + gx) * 4;
+            if (glyph->rgba[from + 3] == 0) continue;
+            putPixel(destination, x + gx, top + gy,
+                     glyph->rgba[from], glyph->rgba[from + 1],
+                     glyph->rgba[from + 2]);
+        }
+    }
+}
+
 void drawCenteredText(PshImage& destination, const PshFont& font,
                       const std::string& text, int center_x, int baseline_y,
                       int scale, std::uint8_t r = 255, std::uint8_t g = 255,
@@ -202,6 +358,74 @@ void drawCenteredText(PshImage& destination, const PshFont& font,
     drawText(destination, font, text,
              center_x - scaledTextWidth(font, text, scale, horizontal_percent) / 2,
              baseline_y, scale, r, g, b, jiggle, elapsed_ms, horizontal_percent);
+}
+
+const char* rosterCategoryLabel(int category) noexcept {
+    static constexpr std::array<const char*, 6> labels{
+        "player attributes", "player ratings", "95/96 season",
+        "95/96 playoffs", "current season", "current playoff"};
+    return category >= 0 && category < static_cast<int>(labels.size())
+        ? labels[static_cast<std::size_t>(category)] : "";
+}
+
+const char* rosterDisplayLabel(int display) noexcept {
+    static constexpr std::array<const char*, 56> labels{
+        "first name", "nickname", "birthdate", "birthplace", "height",
+        "weight", "hand", "school", "years pro", "draft year",
+        "drafted by", "drafted", "overall", "acquired how?", "acquired from?",
+        "overall rating", "field goals", "3 point FGs", "free throws",
+        "dunking", "stealing", "blocking", "def. awareness", "agility",
+        "off. rebounds", "def. rebounds", "jumping", "strength",
+        "ball control", "off. awareness", "speed", "dribbling",
+        "games played/started", "points & pts. per game",
+        "minutes played & per game", "field goals", "3 point FGs",
+        "free throws", "off/def rebounds", "rebounds & per game",
+        "blocks & per game", "steals & per game", "assists & per game",
+        "fouls & ejections", "games played/started",
+        "points & pts. per game", "minutes played & per game", "field goals",
+        "3 point FGs", "free throws", "off/def rebounds",
+        "rebounds & per game", "blocks & per game", "steals & per game",
+        "assists & per game", "fouls"};
+    return display >= 0 && display < static_cast<int>(labels.size())
+        ? labels[static_cast<std::size_t>(display)] : "";
+}
+
+struct RosterDisplayValues {
+    std::string first;
+    std::string second;
+    bool paired = false;
+};
+
+RosterDisplayValues rosterDisplayValues(const PlayerRecord& player,
+                                         const RosterDatabase& database,
+                                         int category, int display) {
+    if (category == 0)
+        return {database.playerAttribute(player, static_cast<std::size_t>(display)), {}, false};
+    if (category == 1) {
+        if (display == 15) return {std::to_string(player.overallRating()), {}, false};
+        const int rating = display - 16;
+        return rating >= 0 && rating < 16
+            ? RosterDisplayValues{std::to_string(player.ratings[static_cast<std::size_t>(rating)]), {}, false}
+            : RosterDisplayValues{};
+    }
+
+    static constexpr std::array<std::int16_t, 12> first_fields{
+        22, 6, 8, 0, 1, 2, 15, 17, 18, 19, 20, 21};
+    static constexpr std::array<std::int16_t, 12> second_fields{
+        23, 32, 34, 43, 44, 45, 16, 37, 38, 39, 40, 25};
+    const int first_display = category >= 4 ? 44 : 32;
+    const int offset = display - first_display;
+    if (offset < 0 || offset >= static_cast<int>(first_fields.size())) return {};
+    PlayerStatPeriod period = PlayerStatPeriod::Season1995_96;
+    if (category == 3) period = PlayerStatPeriod::Playoffs1995_96;
+    else if (category == 4) period = PlayerStatPeriod::CurrentSeason;
+    else if (category == 5) period = PlayerStatPeriod::CurrentPlayoffs;
+    const StatLine& stats = player.stats(period);
+    const std::int16_t second_field = category >= 4 && offset == 11
+        ? static_cast<std::int16_t>(-1) : second_fields[static_cast<std::size_t>(offset)];
+    return {stats.format(first_fields[static_cast<std::size_t>(offset)]),
+            second_field >= 0 ? stats.format(second_field) : std::string{},
+            second_field >= 0};
 }
 
 } // namespace
@@ -538,16 +762,81 @@ bool RecoveredBottomMenu::hover(int psx_x, int psx_y) noexcept {
 }
 
 void RosterViewer::clamp(const RosterDatabase& database) noexcept {
-    if (database.teams().empty()) { team_index_ = player_index_ = 0; return; }
+    if (database.teams().empty()) {
+        team_index_ = player_index_ = first_visible_player_ = 0;
+        return;
+    }
     team_index_ = (std::min)(team_index_, database.teams().size() - 1);
     const auto& roster = database.teams()[team_index_].roster;
-    player_index_ = roster.empty() ? 0 : (std::min)(player_index_, roster.size() - 1);
+    if (roster.empty()) {
+        player_index_ = first_visible_player_ = 0;
+        return;
+    }
+    player_index_ = (std::min)(player_index_, roster.size() - 1);
+    first_visible_player_ = (std::min)(first_visible_player_, roster.size() - 1);
+    if (player_index_ < first_visible_player_)
+        first_visible_player_ = player_index_;
+    else if (player_index_ >= first_visible_player_ + 6)
+        first_visible_player_ = player_index_ - 5;
 }
 
 void RosterViewer::open(const RosterDatabase& database) noexcept {
     mode_ = RosterViewMode::TeamRoster;
-    detail_page_ = 0;
+    help_visible_ = false;
+    first_visible_player_stat_ = 0;
+    // FUN_800590B8 resets the category to the historical regular season on
+    // every entry while retaining one display index per category in state.
+    category_ = 2;
     clamp(database);
+    entry_team_index_ = team_index_;
+    entry_player_index_ = player_index_;
+    entry_first_visible_player_ = first_visible_player_;
+    palette_from_team_index_ = team_index_;
+    palette_transition_start_ms_ = 0;
+    scroll_from_first_player_ = first_visible_player_;
+    scroll_transition_start_ms_ = 0;
+}
+
+bool RosterViewer::cycleCategory(int direction) noexcept {
+    if (!direction) return false;
+    category_ = (category_ + (direction < 0 ? 5 : 1)) % 6;
+    first_visible_player_stat_ = 0;
+    return true;
+}
+
+std::size_t RosterViewer::playerStatCount() const noexcept {
+    if (category_ == 0) return 14;
+    if (category_ == 1) return 17;
+    return 24;
+}
+
+bool RosterViewer::cycleDisplay(int direction) noexcept {
+    if (!direction) return false;
+    static constexpr std::array<int, 6> minimum{0, 15, 32, 32, 44, 44};
+    static constexpr std::array<int, 6> maximum{14, 31, 43, 43, 55, 55};
+    int& display = display_by_category_[static_cast<std::size_t>(category_)];
+    if (direction < 0)
+        display = display == minimum[static_cast<std::size_t>(category_)]
+            ? maximum[static_cast<std::size_t>(category_)] : display - 1;
+    else
+        display = display == maximum[static_cast<std::size_t>(category_)]
+            ? minimum[static_cast<std::size_t>(category_)] : display + 1;
+    return true;
+}
+
+bool RosterViewer::scanTeam(int direction, const RosterDatabase& database,
+                            std::uint32_t elapsed_ms) noexcept {
+    if (!direction || database.teams().empty()) return false;
+    palette_from_team_index_ = team_index_;
+    team_index_ = direction < 0
+        ? (team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1)
+        : (team_index_ + 1) % database.teams().size();
+    palette_transition_start_ms_ = elapsed_ms;
+    player_index_ = 0;
+    first_visible_player_ = 0;
+    first_visible_player_stat_ = 0;
+    clamp(database);
+    return true;
 }
 
 const TeamRecord* RosterViewer::selectedTeam(const RosterDatabase& database) const noexcept {
@@ -560,58 +849,103 @@ const PlayerRecord* RosterViewer::selectedPlayer(const RosterDatabase& database)
         ? database.player(team->roster[player_index_]) : nullptr;
 }
 
-bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& database) noexcept {
+bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& database,
+                        std::uint32_t elapsed_ms) noexcept {
     if (database.teams().empty()) return false;
     const std::size_t previous_team = team_index_;
     const std::size_t previous_player = player_index_;
-    const int previous_detail_page = detail_page_;
+    const std::size_t previous_first_visible = first_visible_player_;
+    const std::size_t previous_stat = first_visible_player_stat_;
     if (mode_ == RosterViewMode::TeamRoster && horizontal) {
+        palette_from_team_index_ = team_index_;
         if (horizontal < 0) team_index_ = team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1;
         else team_index_ = (team_index_ + 1) % database.teams().size();
-        player_index_ = 0;
+        palette_transition_start_ms_ = elapsed_ms;
+    } else if (mode_ == RosterViewMode::PlayerCard) {
+        const TeamRecord* team = selectedTeam(database);
+        if (team && !team->roster.empty()) {
+            std::size_t roster_count = 0;
+            while (roster_count < team->roster.size() &&
+                   database.player(team->roster[roster_count]))
+                ++roster_count;
+            if (horizontal < 0 && roster_count != 0) {
+                player_index_ = player_index_ == 0 ? roster_count - 1 : player_index_ - 1;
+                first_visible_player_stat_ = 0;
+            } else if (horizontal > 0 && roster_count != 0) {
+                player_index_ = (player_index_ + 1) % roster_count;
+                first_visible_player_stat_ = 0;
+            }
+        }
+        const std::size_t stat_count = playerStatCount();
+        constexpr std::size_t visible_stats = 6;
+        if (vertical < 0 && first_visible_player_stat_ > 0)
+            --first_visible_player_stat_;
+        else if (vertical > 0 && first_visible_player_stat_ + visible_stats < stat_count)
+            ++first_visible_player_stat_;
     } else {
         const TeamRecord* team = selectedTeam(database);
         if (team && !team->roster.empty()) {
-            const int direction = mode_ == RosterViewMode::PlayerCard ? horizontal : vertical;
-            if (direction < 0)
-                player_index_ = player_index_ == 0 ? team->roster.size() - 1 : player_index_ - 1;
-            else if (direction > 0)
-                player_index_ = (player_index_ + 1) % team->roster.size();
+            if (vertical < 0 && player_index_ > 0)
+                --player_index_;
+            else if (vertical > 0 && player_index_ + 1 < team->roster.size() &&
+                     database.player(team->roster[player_index_ + 1]))
+                ++player_index_;
         }
-        if (mode_ == RosterViewMode::PlayerCard && vertical)
-            detail_page_ = detail_page_ == 0 ? 1 : 0;
     }
     clamp(database);
+    if (first_visible_player_ != previous_first_visible) {
+        scroll_from_first_player_ = previous_first_visible;
+        scroll_transition_start_ms_ = elapsed_ms;
+    }
     return previous_team != team_index_ || previous_player != player_index_ ||
-           previous_detail_page != detail_page_;
+           previous_stat != first_visible_player_stat_;
 }
 
 bool RosterViewer::hover(int psx_x, int psx_y, const RosterDatabase& database) noexcept {
     if (mode_ != RosterViewMode::TeamRoster) return false;
-    if (psx_y >= 72 && psx_y < 198 && psx_x >= 151) {
+    // FUN_800590B8 uses six generic-list rows at x=60, y=106 with a
+    // 12-pixel pitch. Keep mouse selection on those same recovered rows.
+    if (psx_y >= 100 && psx_y < 172 && psx_x >= 45 && psx_x < 440) {
         const TeamRecord* team = selectedTeam(database);
         if (!team || team->roster.empty()) return false;
-        const std::size_t first = player_index_ >= 12 ? player_index_ - 11 : 0;
         const std::size_t candidate = (std::min)(team->roster.size() - 1,
-            first + static_cast<std::size_t>((psx_y - 72) / 10));
+            first_visible_player_ + static_cast<std::size_t>((psx_y - 100) / 12));
         const bool changed = candidate != player_index_;
         player_index_ = candidate;
+        clamp(database);
         return changed;
     }
     return false;
 }
 
 void RosterViewer::activate(const RosterDatabase& database) noexcept {
-    if (!selectedPlayer(database)) return;
-    if (mode_ == RosterViewMode::PlayerCard) detail_page_ = detail_page_ == 0 ? 1 : 0;
-    else { mode_ = RosterViewMode::PlayerCard; detail_page_ = 0; }
+    // FUN_80058F0C action 0x10 returns 2 for a valid slot.  The frontend then
+    // pushes nested state 0x24 (FUN_8005A538) and returns to state 0x10.
+    if (selectedPlayer(database)) {
+        mode_ = RosterViewMode::PlayerCard;
+        first_visible_player_stat_ = 0;
+        help_visible_ = false;
+    }
 }
 
-bool RosterViewer::back() noexcept {
-    if (mode_ != RosterViewMode::PlayerCard) return false;
+void RosterViewer::returnToRoster() noexcept {
     mode_ = RosterViewMode::TeamRoster;
-    detail_page_ = 0;
-    return true;
+    first_visible_player_stat_ = 0;
+    help_visible_ = false;
+}
+
+void RosterViewer::commit() noexcept {
+    entry_team_index_ = team_index_;
+    entry_player_index_ = player_index_;
+    entry_first_visible_player_ = first_visible_player_;
+}
+
+void RosterViewer::cancel() noexcept {
+    team_index_ = entry_team_index_;
+    player_index_ = entry_player_index_;
+    first_visible_player_ = entry_first_visible_player_;
+    palette_from_team_index_ = team_index_;
+    scroll_from_first_player_ = first_visible_player_;
 }
 
 PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
@@ -619,6 +953,7 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    const MenuSpritePack& zset1,
                                    const MenuSpritePack& zset4,
                                    const MenuSpritePack& zset7,
+                                   const RosterCardPack& roster_cards,
                                    std::uint32_t elapsed_ms) {
     const MenuSpritePack& sprites = menu.page() == FrontendPage::Rosters ? zset4 :
                                     menu.page() == FrontendPage::Users ? zset7 : zset1;
@@ -643,15 +978,26 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
 
     if (menu.page() == FrontendPage::Rosters) {
         blitAt(image, sprites, "ba24", 166, 10);
+        // FUN_80057CE4 gives each of the eight choices three consecutive
+        // 0x6c-byte objects: normal plate, selected plate, then a flags=0x20
+        // blk1 placeholder. FUN_80031F48 replaces that third object with a
+        // unique 69x63 ZCARD image. The plates are already authored at their
+        // display size; the old 2/3 scaling caused the bunched-up layout.
+        static constexpr std::array<int, 4> card_x{49, 154, 259, 364};
+        static constexpr std::array<int, 2> card_y{56, 122};
         for (int i = 0; i < 8; ++i) {
-            const int x = 49 + (i % 4) * 105;
-            const int y = 57 + (i / 4) * 68;
+            const int x = card_x[static_cast<std::size_t>(i % 4)];
+            const int y = card_y[static_cast<std::size_t>(i / 4)];
             const std::string tag = "c" + std::string(i * 2 < 10 ? "0" : "") +
                                     std::to_string(i * 2 + (menu.selected() == i ? 1 : 0)) + "d";
-            const PshImage* card = sprite(sprites, tag.c_str());
-            if (card)
-                blitScaled(image, *card, 0, 0, card->width, card->height,
-                           x, y, card->width * 2 / 3, card->height * 2 / 3);
+            // The image is inserted before its transparent plate, matching
+            // the PS1 ordering-table composite. These offsets are the common
+            // 69x63 blk1 descriptor origin inside the eight authored plates.
+            const auto& art = roster_cards[static_cast<std::size_t>(i)];
+            if (!art.rgba.empty())
+                blitScaled(image, art, 0, 0, art.width, art.height,
+                           x + 12, y + 23, art.width, art.height);
+            blitAt(image, sprites, tag.c_str(), x, y);
         }
     } else if (menu.page() == FrontendPage::Card) {
         blitAt(image, sprites, "ba13", 132, 10);
@@ -731,110 +1077,365 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                             const RosterDatabase& database,
                             const PshFont& font,
                             const MenuSpritePack& sprites,
-                            std::uint32_t elapsed_ms) {
+                            std::uint32_t elapsed_ms,
+                            const PshImage* player_portrait,
+                            bool cool_facts_available,
+                            const PshFont* control_font,
+                            int stat_flash_direction,
+                            bool cool_fact_playing) {
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;
     image.tag = viewer.mode() == RosterViewMode::TeamRoster ? "VROS" : "PLCR";
     image.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
-    blitAt(image, sprites, "Bkge", 0, 0);
-    blitAt(image, sprites, "Bkgf", 128, 0);
-    blitAt(image, sprites, "Bkgg", 256, 0);
-    blitAt(image, sprites, "Bkgh", 384, 0);
-    for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
-        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
-        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
-        {"brbg",256,185},{"brbh",384,185}}})
-        blitBlueBorder(image, sprites, std::get<0>(border), std::get<1>(border), std::get<2>(border));
-    blitAt(image, sprites, "XXL1", 30, 16);
-    blitAt(image, sprites, "XXR2", 404, 16);
-    blitAt(image, sprites, "ba35", 153, 10);
-
+    const bool roster_screen = viewer.mode() == RosterViewMode::TeamRoster;
     const TeamRecord* team = viewer.selectedTeam(database);
     const PlayerRecord* selected = viewer.selectedPlayer(database);
+    static constexpr std::array<const char*, 29> team_codes{
+        "atl","bos","cha","chi","cle","dal","den","det","gol","hou",
+        "ind","lac","lal","mia","mil","min","nwj","nwy","orl","phi",
+        "pho","por","sac","san","sea","tor","uta","van","was"};
+    if (roster_screen && team && team->id < team_codes.size()) {
+        const std::string target_prefix = team_codes[team->id];
+        const TeamRecord* from_team =
+                viewer.paletteFromTeamIndex() < database.teams().size()
+            ? &database.teams()[viewer.paletteFromTeamIndex()] : team;
+        const std::string from_prefix = from_team->id < team_codes.size()
+            ? team_codes[from_team->id] : target_prefix;
+        // FUN_8002FF80 interpolates the patched 160-colour CLUT over 17
+        // frontend ticks. The local 96 colours are identical in both decoded
+        // images, so the same BGR555 interpolation leaves them unchanged.
+        constexpr std::uint32_t palette_tick_ms = 17;
+        const std::uint32_t transition_elapsed = elapsed_ms >= viewer.paletteTransitionStartMs()
+            ? elapsed_ms - viewer.paletteTransitionStartMs() : 0;
+        const std::uint32_t factor =
+            (std::min)(16u, transition_elapsed / palette_tick_ms);
+        static constexpr std::array<const char*, 4> roster_strips{
+            "Bkga", "Bkgb", "Bkgc", "Bkgd"};
+        const auto& strips = roster_strips;
+        for (std::size_t index = 0; index < strips.size(); ++index) {
+            const std::string from_tag = from_prefix + strips[index];
+            const std::string target_tag = target_prefix + strips[index];
+            const PshImage* from_image = sprite(sprites, from_tag.c_str());
+            const PshImage* target_image = sprite(sprites, target_tag.c_str());
+            if (factor < 16 && from_image && target_image)
+                blitPaletteCrossfade(image, *from_image, *target_image,
+                                     static_cast<int>(index) * 128, 0, factor);
+            else
+                blitAt(image, sprites, target_tag.c_str(),
+                       static_cast<int>(index) * 128, 0);
+        }
+    } else {
+        // State 0x24 exposes the second four background objects. Unlike the
+        // roster list's team-paletted Bkga-d family, Bkge-h carries the blue
+        // wavy jersey centre and dark side panels visible in the no$psx frame.
+        blitAt(image, sprites, roster_screen ? "Bkga" : "Bkge", 0, 0);
+        blitAt(image, sprites, roster_screen ? "Bkgb" : "Bkgf", 128, 0);
+        blitAt(image, sprites, roster_screen ? "Bkgc" : "Bkgg", 256, 0);
+        blitAt(image, sprites, roster_screen ? "Bkgd" : "Bkgh", 384, 0);
+    }
+    const std::array<std::tuple<const char*, int, int>, 10> roster_borders{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},
+        {"brbe",0,185},{"brbf",128,185},{"brbg",256,185},{"brbh",384,185}}};
+    const std::array<std::tuple<const char*, int, int>, 10> player_borders{{
+        {"brta",0,5},{"brtb",128,5},{"brtc",256,5},{"brtd",384,5},
+        {"brle",0,65},{"brri",476,65},
+        {"brba",0,185},{"brbb",128,185},{"brbc",256,185},{"brbd",384,185}}};
+    for (const auto& border : roster_screen ? roster_borders : player_borders)
+        // ZSET4-decoded already applies FEONLY screen 0x10's shared Pal0
+        // CLUT to records 6..16, so preserve those exact decoded colours.
+        blitAt(image, sprites, std::get<0>(border),
+               std::get<1>(border), std::get<2>(border));
+    if (roster_screen) {
+        blitAt(image, sprites, "XXR2", 404, 16);
+        blitJiggledSprite(image, sprites, "ba35", 142, 10, elapsed_ms);
+    }
+
     if (!team) return image;
     static constexpr std::array<const char*, 29> logo_tags{
         "atlR","bosR","chaR","chiR","cleR","dalR","denR","detR","golR","houR",
         "indR","lacR","lalR","miaR","milR","minR","nwjR","nwyR","orlR","phiR",
         "phoR","porR","sacR","sanR","seaR","torR","utaR","vanR","wasR"};
-    if (team->id < logo_tags.size()) blitAt(image, sprites, logo_tags[team->id], 25, 68);
-    drawCenteredText(image, font, team->city, 78, 146, 1, 235, 235, 235, false, 0, 68);
-    drawCenteredText(image, font, team->nickname, 78, 159, 1, 255, 218, 35,
-                     true, elapsed_ms, 68);
-    drawCenteredText(image, font, "<  team  >", 78, 181, 1, 185, 190, 215, false, 0, 68);
-
     if (viewer.mode() == RosterViewMode::TeamRoster) {
-        drawText(image, font, "#", 159, 66, 1, 205, 205, 220, false, 0, 70);
-        drawText(image, font, "player", 184, 66, 1, 205, 205, 220, false, 0, 70);
-        drawText(image, font, "position", 388, 66, 1, 205, 205, 220, false, 0, 60);
-        const std::size_t first = viewer.playerIndex() >= 12 ? viewer.playerIndex() - 11 : 0;
-        const std::size_t end = (std::min)(team->roster.size(), first + 12);
-        for (std::size_t index = first; index < end; ++index) {
-            const std::size_t row = index - first;
+        blitAt(image, sprites, "frml", 30, 15);
+        if (team->id < logo_tags.size())
+            blitAt(image, sprites, logo_tags[team->id], 40, 16);
+
+        // FUN_80059034 builds the centered team selector and both headings.
+        const std::string team_name = team->city + " " + team->nickname;
+        drawCenteredText(image, font, team_name, 269, 66, 1, 245, 245, 245,
+                         false, 0, 100);
+        // FUN_8003D434 builds the selector from ZFONT control glyphs.  These
+        // are permanent state-0x10 markers, not the tiny `tria` PSP sprite.
+        drawCenteredText(image, font, std::string(1, static_cast<char>(0x8d)),
+                         157, 66, 1, 255, 255, 255);
+        drawCenteredText(image, font, std::string(1, static_cast<char>(0x8a)),
+                         381, 66, 1, 255, 255, 255);
+
+        drawCenteredText(image, font, rosterCategoryLabel(viewer.category()), 398, 80, 1,
+                         238, 238, 238, false, 0, 100);
+        drawCenteredText(image, font, rosterDisplayLabel(viewer.displayIndex()), 398, 92, 1,
+                         238, 238, 238, false, 0, 100);
+
+        // The original generic list in FUN_800590B8 is hard-coded to six
+        // rows. Its configuration at DAT_800A436C supplies x=60, y=106 and
+        // the font resolves to a 12-pixel row pitch.
+        constexpr int list_x = 60;
+        constexpr int first_y = 106;
+        constexpr int row_pitch = 12;
+        constexpr int visible_rows = 6;
+        const std::size_t first = viewer.firstVisiblePlayer();
+        const std::size_t end = (std::min)(team->roster.size(), first + visible_rows);
+        constexpr std::uint32_t scroll_tick_ms = 17;
+        const std::uint32_t scroll_elapsed = elapsed_ms >= viewer.scrollTransitionStartMs()
+            ? elapsed_ms - viewer.scrollTransitionStartMs() : 0;
+        const std::size_t scroll_from = viewer.scrollFromFirstPlayer();
+        // FUN_8002B2AC/FUN_8002BA70 receive dy=+/-12 and duration=1.
+        // For that single tick the seven-item object chain is shown at its
+        // translated position; the following tick settles to six rows.
+        const bool transition_tick = scroll_elapsed < scroll_tick_ms;
+        const bool scrolling_down = transition_tick && first > scroll_from;
+        const bool scrolling_up = transition_tick && first < scroll_from;
+        const std::size_t render_first = scrolling_down ? scroll_from : first;
+        const std::size_t render_count = (scrolling_down || scrolling_up) ? 7 : visible_rows;
+        const std::size_t render_end = (std::min)(team->roster.size(),
+                                                  render_first + render_count);
+        const int scroll_offset = scrolling_down ? -row_pitch : 0;
+        PshImage row_layer;
+        row_layer.width = kWidth;
+        row_layer.height = kHeight;
+        row_layer.tag = "ROWS";
+        row_layer.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+        for (std::size_t index = render_first; index < render_end; ++index) {
+            const std::size_t row = index - render_first;
             const PlayerRecord* player = database.player(team->roster[index]);
             if (!player) continue;
             const bool focused = index == viewer.playerIndex();
-            const int y = 78 + static_cast<int>(row) * 10;
-            const int jiggle = focused ? static_cast<int>(std::lround(
-                std::sin(elapsed_ms * 0.014) * 1.0)) : 0;
-            const std::uint8_t r = focused ? 255 : 215;
-            const std::uint8_t g = focused ? 218 : 215;
-            const std::uint8_t b = focused ? 35 : 215;
-            drawText(image, font, focused ? ">" : " ", 148 + jiggle, y, 1, r, g, b);
-            drawText(image, font, std::to_string(player->jersey_number), 162 + jiggle, y, 1, r, g, b,
-                     false, 0, 66);
-            drawText(image, font, player->displayName(), 184 + jiggle, y, 1, r, g, b,
-                     focused, elapsed_ms, 62);
-            drawText(image, font, positionName(player->position), 388 + jiggle, y, 1, r, g, b,
-                     false, 0, 48);
+            const int y = first_y + static_cast<int>(row) * row_pitch + scroll_offset;
+            static constexpr std::array<const char*, 5> short_positions{
+                "c", "pf", "sf", "sg", "pg"};
+            const char* position = player->position < short_positions.size()
+                ? short_positions[player->position] : "-";
+            // FUN_8002AB88 modulates the selected generic-list item from
+            // neutral PS1 texture color 0x808080 to gold 0x786600 over 20
+            // ticks, then back. PS1 0x80 is neutral rather than half-bright.
+            const std::uint32_t pulse = (elapsed_ms / 17) % 40;
+            const std::uint32_t blend = pulse <= 20 ? pulse : 40 - pulse;
+            const auto selected_channel = [blend](int neutral, int gold) {
+                return static_cast<std::uint8_t>(
+                    (neutral * static_cast<int>(20 - blend) +
+                     gold * static_cast<int>(blend)) / 20);
+            };
+            const std::uint8_t row_r = focused ? selected_channel(255, 240) : 255;
+            const std::uint8_t row_g = focused ? selected_channel(255, 204) : 255;
+            const std::uint8_t row_b = focused ? selected_channel(255, 0) : 255;
+            // FUN_8003CF70 retains the identity object while FUN_8003B26C
+            // replaces the dynamic stat object.  Reproduce the original
+            // fixed fields instead of concatenating text with guessed spaces.
+            const std::string position_text = position;
+            const std::string number_text = std::to_string(player->jersey_number);
+            drawText(row_layer, font, position_text,
+                     list_x + 28 - scaledTextWidth(font, position_text, 1, 100), y, 1,
+                     row_r, row_g, row_b, false, elapsed_ms, 100);
+            drawText(row_layer, font, number_text,
+                     list_x + 58 - scaledTextWidth(font, number_text, 1, 100), y, 1,
+                     row_r, row_g, row_b, false, elapsed_ms, 100);
+            drawText(row_layer, font, player->last_name, list_x + 66, y, 1,
+                     row_r, row_g, row_b, false, elapsed_ms, 100);
+
+            const RosterDisplayValues values = rosterDisplayValues(
+                *player, database, viewer.category(), viewer.displayIndex());
+            if (values.paired) {
+                drawCenteredText(row_layer, font, values.first, 313, y, 1,
+                                 row_r, row_g, row_b, false, 0, 100);
+                drawCenteredText(row_layer, font, values.second, 462, y, 1,
+                                 row_r, row_g, row_b, false, 0, 100);
+            } else {
+                drawCenteredText(row_layer, font, values.first, 398, y, 1,
+                                 row_r, row_g, row_b, false, 0, 100);
+            }
         }
-        drawCenteredText(image, font, "arrows browse   enter view player   back return", 256, 220,
-                         1, 205, 205, 90, false, 0, 58);
-    } else if (selected && viewer.detailPage() == 0) {
-        blitAt(image, sprites, "dflt", 181, 72);
-        drawText(image, font, selected->displayName(), 283, 78, 1, 255, 218, 35,
-                 true, elapsed_ms, 68);
-        drawText(image, font, "number", 283, 92, 1, 190, 190, 205, false, 0, 64);
-        drawText(image, font, std::to_string(selected->jersey_number), 380, 92, 1, 235, 235, 235);
-        drawText(image, font, "position", 283, 104, 1, 190, 190, 205, false, 0, 64);
-        drawText(image, font, positionName(selected->position), 380, 104, 1, 235, 235, 235, false, 0, 54);
-        drawText(image, font, "height", 283, 116, 1, 190, 190, 205, false, 0, 64);
-        drawText(image, font, std::to_string(selected->height_inches / 12) + "'" +
-                 std::to_string(selected->height_inches % 12) + "\"", 380, 116, 1, 235, 235, 235);
-        drawText(image, font, "weight", 283, 128, 1, 190, 190, 205, false, 0, 64);
-        drawText(image, font, std::to_string(selected->weightPounds()) + " lbs", 380, 128, 1, 235, 235, 235);
-        drawText(image, font, "birthdate", 181, 151, 1, 190, 190, 205, false, 0, 62);
-        drawText(image, font, selected->birthdate, 277, 151, 1, 235, 235, 235, false, 0, 58);
-        drawText(image, font, "birthplace", 181, 164, 1, 190, 190, 205, false, 0, 62);
-        drawText(image, font, selected->birthplace, 277, 164, 1, 235, 235, 235, false, 0, 52);
-        for (int rating = 0; rating < 6; ++rating) {
-            const int column = rating / 3;
-            const int row = rating % 3;
-            const auto value = selected->ratings[static_cast<std::size_t>(rating)];
-            const int x = 175 + column * 155;
-            const int y = 180 + row * 10;
-            drawText(image, font, playerRatingName(static_cast<PlayerRating>(rating)), x, y, 1,
-                     185, 185, 200, false, 0, 42);
-            drawText(image, font, std::to_string(value), x + 116, y, 1, 245, 215, 45);
-        }
-        drawCenteredText(image, font, "left right player   up down ratings   back roster", 256, 220,
-                         1, 205, 205, 90, false, 0, 62);
+        // The sixth baseline is y=166 and its original glyphs extend below
+        // y=172. The next (seventh) baseline starts at y=178, which recovers
+        // the exact bottom clip boundary without exposing that extra row.
+        blitScaled(image, row_layer, 0, 100, kWidth, 78, 0, 100, kWidth, 78);
+        if (first > 0)
+            drawCenteredText(image, font, std::string(1, static_cast<char>(0x8b)),
+                             48, 108, 1, 255, 255, 255);
+        if (end < team->roster.size())
+            drawCenteredText(image, font, std::string(1, static_cast<char>(0x8c)),
+                             48, 168, 1, 255, 255, 255);
+        blitAt(image, sprites, "help", 235, 217);
     } else if (selected) {
-        drawCenteredText(image, font, selected->displayName(), 256, 70, 1, 255, 218, 35,
-                         true, elapsed_ms, 68);
-        drawCenteredText(image, font, "player ratings", 256, 84, 1, 205, 205, 220, false, 0, 68);
-        for (int rating = 0; rating < static_cast<int>(PlayerRating::Count); ++rating) {
-            const int column = rating / 9;
-            const int row = rating % 9;
-            const int x = 105 + column * 205;
-            const int y = 99 + row * 12;
-            drawText(image, font, playerRatingName(static_cast<PlayerRating>(rating)), x, y, 1,
-                     205, 205, 215, false, 0, 48);
-            drawText(image, font, std::to_string(selected->ratings[static_cast<std::size_t>(rating)]),
-                     x + 158, y, 1, 255, 218, 35);
+        // no$psx framebuffer comparison shows state 0x24's body text uses a
+        // slightly condensed horizontal transform. Keep the recovered
+        // baselines/vertical glyph metrics intact and apply that transform
+        // only to the player-card text objects.
+        constexpr int player_text_width = 90;
+        // Nested state 0x24 / graphics state 0x11. The photograph comes from
+        // Z1PORT physical record playerId+1; record zero is the fallback.
+        blitJumbledTitleSprite(image, sprites, "ba41", 40, 18, elapsed_ms);
+        if (player_portrait && player_portrait->width == 180 && player_portrait->height == 156)
+            blitScaled(image, *player_portrait, 0, 0, 180, 156, 297, 35, 180, 156);
+        else
+            blitAt(image, sprites, "shot", 297, 35);
+        // State 0x24's ZSET8 pack contains the exact 39x156 city wordmark and
+        // crest composite for every team (atlZ, chiZ, ...). It overlays the
+        // reserved left strip of the Z1PORT photograph at the recovered slot.
+        if (team->id < team_codes.size()) {
+            const std::string team_strip = std::string(team_codes[team->id]) + "Z";
+            blitAt(image, sprites, team_strip.c_str(), 296, 35);
         }
-        drawCenteredText(image, font, "left right player   up down bio   back roster", 256, 220,
-                         1, 205, 205, 90, false, 0, 62);
+        drawText(image, font, selected->displayName(), 54, 63, 1, 255, 255, 255,
+                 false, 0, player_text_width);
+        drawText(image, font, "num.", 54, 75, 1, 238, 238, 238,
+                 false, 0, player_text_width);
+        drawText(image, font, std::to_string(selected->jersey_number), 108, 75, 1,
+                 255, 255, 255, false, 0, player_text_width);
+        drawText(image, font, "pos.", 54, 86, 1, 238, 238, 238,
+                 false, 0, player_text_width);
+        static constexpr std::array<const char*, 5> starting_positions{
+            "starting C", "starting PF", "starting SF", "starting SG", "starting PG"};
+        const std::string displayed_position = viewer.playerIndex() < starting_positions.size()
+            ? starting_positions[viewer.playerIndex()]
+            : positionName(selected->position);
+        drawText(image, font, displayed_position, 108, 86, 1,
+                 255, 255, 255, false, 0, player_text_width);
+        drawCenteredText(image, font, rosterCategoryLabel(viewer.category()), 177, 99, 1,
+                         245, 245, 245,
+                         false, 0, player_text_width);
+        static constexpr std::array<const char*, 24> stat_labels{
+            "games played", "games started", "points", "points per game",
+            "minutes played", "minutes per game", "field goals", "field goal %",
+            "3 point fgs", "3 point %", "free throws", "free throw %",
+            "off. rebounds", "def. rebounds", "total rebounds", "rebounds per game",
+            "blocks", "blocks per game", "steals", "steals per game", "assists",
+            "assists per game", "fouls", "ejections"};
+        static constexpr std::array<std::int16_t, 24> stat_fields{
+            22, 23, 6, 32, 8, 34, 0, 43, 1, 44, 2, 45,
+            15, 16, 17, 37, 18, 38, 19, 39, 20, 40, 21, 25};
+        static constexpr std::array<const char*, 14> attribute_labels{
+            "nickname", "birthdate", "birthplace", "height", "weight", "hand",
+            "school", "years pro", "draft year", "drafted by", "drafted",
+            "overall", "acquired how?", "acquired from?"};
+        static constexpr std::array<std::size_t, 14> attribute_fields{
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+        const std::size_t first_stat = viewer.firstVisiblePlayerStat();
+        constexpr std::size_t visible_stats = 6;
+        for (std::size_t row = 0; row < visible_stats; ++row) {
+            const std::size_t index = first_stat + row;
+            if (index >= viewer.playerStatCount()) break;
+            // DAT_800A482C base y=112; FUN_8003D930 selector 1 resolves
+            // through DAT_80024F6C to the original 14-pixel row pitch.
+            const int y = 112 + static_cast<int>(row) * 14;
+            std::string label;
+            std::string value;
+            if (viewer.category() == 0) {
+                label = attribute_labels[index];
+                value = database.playerAttribute(*selected, attribute_fields[index]);
+            } else if (viewer.category() == 1) {
+                label = index == 0 ? "overall rating" :
+                    playerRatingName(static_cast<PlayerRating>(index - 1));
+                value = std::to_string(index == 0 ? selected->overallRating() :
+                    selected->ratings[index - 1]);
+            } else {
+                PlayerStatPeriod period = PlayerStatPeriod::Season1995_96;
+                if (viewer.category() == 3) period = PlayerStatPeriod::Playoffs1995_96;
+                else if (viewer.category() == 4) period = PlayerStatPeriod::CurrentSeason;
+                else if (viewer.category() == 5) period = PlayerStatPeriod::CurrentPlayoffs;
+                label = stat_labels[index];
+                value = selected->stats(period).format(stat_fields[index]);
+            }
+            const bool flashed_row = stat_flash_direction < 0 ? row == 0 :
+                                     stat_flash_direction > 0 ? row + 1 == visible_stats : false;
+            const std::uint8_t row_r = flashed_row ? 255 : 245;
+            const std::uint8_t row_g = flashed_row ? 218 : 245;
+            const std::uint8_t row_b = flashed_row ? 35 : 245;
+            drawText(image, font, label, 54, y, 1, row_r, row_g, row_b,
+                     false, 0, player_text_width);
+            drawText(image, font, value,
+                     293 - scaledTextWidth(font, value, 1, player_text_width), y, 1,
+                     row_r, row_g, row_b, false, 0, player_text_width);
+        }
+        // FUN_8003D930 receives x=48 for these markers, but the PS1 text
+        // primitive applies the arrow glyph's left-side bearing before it is
+        // rasterized.  Our decoded-font path has no bearing metadata, so use
+        // the resulting visual center (x=42) to preserve the original gap
+        // before the stat label at x=54.
+        constexpr int player_stat_arrow_center_x = 42;
+        if (first_stat > 0)
+            drawCenteredText(image, font, std::string(1, static_cast<char>(0x8b)),
+                             player_stat_arrow_center_x, 114, 1,
+                             stat_flash_direction < 0 ? 255 : 255,
+                             stat_flash_direction < 0 ? 218 : 255,
+                             stat_flash_direction < 0 ? 35 : 255);
+        if (first_stat + visible_stats < viewer.playerStatCount())
+            drawCenteredText(image, font, std::string(1, static_cast<char>(0x8c)),
+                             player_stat_arrow_center_x, 184, 1,
+                             stat_flash_direction > 0 ? 255 : 255,
+                             stat_flash_direction > 0 ? 218 : 255,
+                             stat_flash_direction > 0 ? 35 : 255);
+        drawCenteredText(image, font, team->city + " " + team->nickname,
+                         177, 202, 1, 245, 245, 245, false, 0,
+                         player_text_width);
+        // ZSET8 provides both the exact controller marker and the original
+        // Cool Facts plaque. o18a is the resting state; o18b is its gold
+        // selected variant used by the controller transition.
+        if (cool_facts_available) {
+            blitAt(image, sprites, "cros", 336, 204);
+            blitAt(image, sprites, cool_fact_playing ? "o18b" : "o18a", 356, 198);
+        }
+        blitAt(image, sprites, "help", 235, 217);
+    }
+    if (viewer.helpVisible() && roster_screen) {
+        fillRect(image, 78, 52, 434, 190, 3, 5, 20);
+        outlineRect(image, 78, 52, 434, 190, 2, 90, 88, 190);
+        drawCenteredText(image, font,
+                         roster_screen ? "view rosters help" : "view player help",
+                         256, 72, 1, 255, 218, 35);
+        const std::array<const char*, 6> lines = roster_screen
+            ? std::array<const char*, 6>{"left/right - scan through teams",
+                "up/down - select player", "enter/click - view current player",
+                "q/e - category", "z/c - stat field", "esc - cancel all changes"}
+            : std::array<const char*, 6>{};
+        for (std::size_t row = 0; row < lines.size(); ++row)
+            drawText(image, font, lines[row], 100, 92 + static_cast<int>(row) * 14,
+                     1, 235, 235, 235);
+    } else if (viewer.helpVisible()) {
+        // FUN_80040FCC state 0x24 -> descriptor 0x800B22F0. The original
+        // controller-help page is an opaque green modal with angular green
+        // panels, white instructions, and ZFONT1 controller glyphs.
+        constexpr int modal_left = 45, modal_top = 14;
+        constexpr int modal_right = 467, modal_bottom = 226;
+        fillRect(image, modal_left, modal_top, modal_right, modal_bottom, 0, 145, 18);
+        for (int y = modal_top; y < modal_bottom; ++y) {
+            const int diagonal = (y - modal_top) * 2 / 3;
+            fillRect(image, modal_left, y, 100 + diagonal, y + 1, 0, 105, 28);
+            fillRect(image, 385 + diagonal / 3, y, modal_right, y + 1, 0, 177, 18);
+        }
+        outlineRect(image, modal_left, modal_top, modal_right, modal_bottom,
+                    1, 0, 92, 22);
+        static constexpr std::array<const char*, 8> instructions{
+            "change stat layer", "scan through teams", "view player stats",
+            "change player", "play cool fact", "stop cool fact", "continue", "continue"};
+        for (std::size_t row = 0; row < instructions.size(); ++row) {
+            const int y = 24 + static_cast<int>(row) * 25;
+            if (control_font) {
+                const auto control = [&](unsigned char glyph, int x) {
+                    drawNativeControlGlyph(image, *control_font, glyph, x, y);
+                };
+                if (row == 0) { control(0x97, 67); control(0x99, 103); }
+                else if (row == 1) { control(0x96, 67); control(0x98, 103); }
+                else if (row == 2) { control(0x9c, 74); control(0x9d, 101); }
+                else if (row == 3) { control(0x9a, 74); control(0x9b, 101); }
+                else if (row == 4) control(0x94, 79);
+                else if (row == 5) control(0x93, 79);
+                else if (row == 6) control(0x9f, 67);
+                else control(0x9e, 67);
+            }
+            drawText(image, font, instructions[row], 155, y + 2, 1, 245, 245, 245);
+        }
     }
     return image;
 }

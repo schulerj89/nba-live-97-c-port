@@ -1,11 +1,27 @@
 cmake_minimum_required(VERSION 3.20)
 project(nba_live_97_decomp LANGUAGES CXX)
 
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(progress
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/report_progress.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating decompilation and native-port progress reports"
+    )
+    add_custom_target(progress-check
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/report_progress.py --check
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Checking committed progress reports"
+    )
+endif()
+
 if(WIN32)
     add_executable(nba97_boot_decomp
         src/win32_main.cpp
         src/intro_player.cpp
         src/frontend_music.cpp
+        src/psx_adpcm.cpp
+        src/recovered_audio.cpp
         src/boot_flow.cpp
         src/main_menu.cpp
         src/frontend_settings.cpp
