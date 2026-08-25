@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "scope": "Rosters eight-card selection screen only",
+  "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
+  "fidelity_percent": 95.41,
+  "earned_points": 9.5412,
+  "possible_points": 10.0,
+  "groups": {
+    "behavior": {
+      "earned": 1.0,
+      "possible": 1.0,
+      "percent": 100.0
+    },
+    "layout": {
+      "earned": 2.0,
+      "possible": 2.0,
+      "percent": 100.0
+    },
+    "availability": {
+      "earned": 2.0,
+      "possible": 2.0,
+      "percent": 100.0
+    },
+    "animation": {
+      "earned": 1.5,
+      "possible": 1.5,
+      "percent": 100.0
+    },
+    "audio": {
+      "earned": 1.5,
+      "possible": 1.5,
+      "percent": 100.0
+    },
+    "visual": {
+      "earned": 1.5412,
+      "possible": 2.0,
+      "percent": 77.06
+    }
+  },
+  "checks": [
+    {
+      "id": "native_behavior",
+      "group": "behavior",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "evidence": "native self-test covers navigation, lock/unlock and overlay visibility"
+    },
+    {
+      "id": "recovered_stack",
+      "group": "layout",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "expected": [
+        76,
+        66,
+        66,
+        76,
+        118,
+        110,
+        110,
+        118
+      ],
+      "actual": [
+        76,
+        66,
+        66,
+        76,
+        118,
+        110,
+        110,
+        118
+      ]
+    },
+    {
+      "id": "capture_dimensions",
+      "group": "layout",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0
+    },
+    {
+      "id": "reset_locked_skip",
+      "group": "availability",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "predicate": "roster snapshot differs"
+    },
+    {
+      "id": "dynamic_unlock_variants",
+      "group": "availability",
+      "weight": 1,
+      "score_percent": 100,
+      "credit": 1.0,
+      "reset": "roster snapshot differs",
+      "injuries": "one or more non-zero injury bytes"
+    },
+    {
+      "id": "selection_flash_12_vblanks",
+      "group": "animation",
+      "weight": 1.5,
+      "score_percent": 100,
+      "credit": 1.5,
+      "unique_frame_states": 2,
+      "frame_count": 12
+    },
+    {
+      "id": "zcursor_1_through_6",
+      "group": "audio",
+      "weight": 1.5,
+      "score_percent": 100,
+      "credit": 1.5,
+      "sounds": [
+        {
+          "id": 1,
+          "role": "vertical_next",
+          "samples": 2852,
+          "valid": true
+        },
+        {
+          "id": 2,
+          "role": "vertical_previous",
+          "samples": 1921,
+          "valid": true
+        },
+        {
+          "id": 3,
+          "role": "horizontal_previous",
+          "samples": 2200,
+          "valid": true
+        },
+        {
+          "id": 4,
+          "role": "horizontal_next",
+          "samples": 3840,
+          "valid": true
+        },
+        {
+          "id": 5,
+          "role": "unused_05",
+          "samples": 17152,
+          "valid": true
+        },
+        {
+          "id": 6,
+          "role": "select_flash",
+          "samples": 15381,
+          "valid": true
+        }
+      ],
+      "all_waveforms_distinct": true
+    },
+    {
+      "id": "original_screenshot_similarity",
+      "group": "visual",
+      "weight": 2,
+      "score_percent": 77.06,
+      "credit": 1.5412,
+      "status": "measured",
+      "similarity_percent": 77.06,
+      "color_similarity_percent": 77.52,
+      "edge_similarity_percent": 76.21,
+      "registration_offset": [
+        4,
+        -2
+      ],
+      "reference_sha256": "641a6f7bd6e47c62e8e995290f9c587066e5448897998846f866fcc4861c6e87"
+    }
+  ]
+}

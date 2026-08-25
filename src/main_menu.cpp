@@ -809,7 +809,15 @@ void RecoveredBottomMenu::open(FrontendPage page) noexcept {
 }
 
 void RecoveredBottomMenu::setSelected(int selected) noexcept {
-    selected_ = std::clamp(selected, 0, count() - 1);
+    const int candidate = std::clamp(selected, 0, count() - 1);
+    if (enabled(candidate)) selected_ = candidate;
+}
+
+void RecoveredBottomMenu::setRosterCapabilities(bool roster_modified,
+                                                bool injuries_present) noexcept {
+    roster_modified_ = roster_modified;
+    injuries_present_ = injuries_present;
+    if (!enabled(selected_)) selected_ = 4;
 }
 
 int RecoveredBottomMenu::count() const noexcept {
@@ -829,11 +837,37 @@ const char* RecoveredBottomMenu::selectedLabel() const noexcept {
     return "team stats";
 }
 
+bool RecoveredBottomMenu::enabled(int index) const noexcept {
+    if (index < 0 || index >= count()) return false;
+    if (page_ != FrontendPage::Rosters) return true;
+    // FUN_80057C48 enables Reset only after FUN_80058104 detects roster data
+    // differing from its entry snapshot. FUN_80057A98 enables Injuries only
+    // when at least one of the 536 recovered injury bytes is non-zero.
+    if (index == 3) return roster_modified_;
+    if (index == 7) return injuries_present_;
+    return true;
+}
+
 bool RecoveredBottomMenu::move(int horizontal, int vertical) noexcept {
     const int previous = selected_;
     if (page_ == FrontendPage::Rosters) {
-        if (horizontal) selected_ = std::clamp(selected_ + (horizontal < 0 ? -1 : 1), 0, 7);
-        if (vertical) selected_ = std::clamp(selected_ + (vertical < 0 ? -4 : 4), 0, 7);
+        if (horizontal) {
+            const int direction = horizontal < 0 ? -1 : 1;
+            const int row_start = selected_ < 4 ? 0 : 4;
+            const int row_end = row_start + 3;
+            for (int candidate = selected_ + direction;
+                 candidate >= row_start && candidate <= row_end;
+                 candidate += direction) {
+                if (enabled(candidate)) {
+                    selected_ = candidate;
+                    break;
+                }
+            }
+        }
+        if (vertical) {
+            const int candidate = selected_ + (vertical < 0 ? -4 : 4);
+            if (enabled(candidate)) selected_ = candidate;
+        }
     } else if (page_ == FrontendPage::Card && horizontal) {
         selected_ = std::clamp(selected_ + (horizontal < 0 ? -1 : 1), 0, 2);
     }
@@ -851,6 +885,7 @@ bool RecoveredBottomMenu::hover(int psx_x, int psx_y) noexcept {
     } else {
         return false;
     }
+    if (!enabled(candidate)) return false;
     const bool changed = candidate != selected_;
     selected_ = candidate;
     return changed;
@@ -1057,7 +1092,8 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    const MenuSpritePack& zset4,
                                    const MenuSpritePack& zset7,
                                    const RosterCardPack& roster_cards,
-                                   std::uint32_t elapsed_ms) {
+                                   std::uint32_t elapsed_ms,
+                                   bool selected_overlay_visible) {
     const MenuSpritePack& sprites = menu.page() == FrontendPage::Rosters ? zset4 :
                                     menu.page() == FrontendPage::Users ? zset7 : zset1;
     if (menu.page() == FrontendPage::Rosters)
@@ -1088,13 +1124,19 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
         // blk1 placeholder. FUN_80031F48 replaces that third object with a
         // unique 69x63 ZCARD image. The plates are already authored at their
         // display size; the old 2/3 scaling caused the bunched-up layout.
-        static constexpr std::array<int, 4> card_x{49, 154, 259, 364};
-        static constexpr std::array<int, 2> card_y{56, 122};
+        // The two recovered rows are not a flat grid. The back row arches
+        // upward in the centre; the front row follows it 42-48 pixels lower
+        // and is composited last so each lower card overlaps its partner.
+        static constexpr std::array<int, 8> card_x{
+            49, 154, 259, 364, 49, 154, 259, 364};
+        static constexpr std::array<int, 8> card_y{
+            76, 66, 66, 76, 118, 110, 110, 118};
         for (int i = 0; i < 8; ++i) {
-            const int x = card_x[static_cast<std::size_t>(i % 4)];
-            const int y = card_y[static_cast<std::size_t>(i / 4)];
+            const int x = card_x[static_cast<std::size_t>(i)];
+            const int y = card_y[static_cast<std::size_t>(i)];
+            const bool selected = menu.selected() == i;
             const std::string tag = "c" + std::string(i * 2 < 10 ? "0" : "") +
-                                    std::to_string(i * 2 + (menu.selected() == i ? 1 : 0)) + "d";
+                                    std::to_string(i * 2 + (selected ? 1 : 0)) + "d";
             // The image is inserted before its transparent plate, matching
             // the PS1 ordering-table composite. These offsets are the common
             // 69x63 blk1 descriptor origin inside the eight authored plates.
@@ -1102,7 +1144,8 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
             if (!art.rgba.empty())
                 blitScaled(image, art, 0, 0, art.width, art.height,
                            x + 12, y + 23, art.width, art.height);
-            blitAt(image, sprites, tag.c_str(), x, y);
+            if (!selected || selected_overlay_visible)
+                blitAt(image, sprites, tag.c_str(), x, y);
         }
     } else if (menu.page() == FrontendPage::Card) {
         blitAt(image, sprites, "ba13", 132, 10);

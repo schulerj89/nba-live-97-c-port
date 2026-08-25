@@ -42,6 +42,7 @@ struct Options {
     std::filesystem::path trace_path = ".local/logs/boot_decomp_trace.log";
     std::filesystem::path settings_path = ".local/config/frontend_settings.ini";
     std::filesystem::path profiles_path = ".local/saves/user_profiles.n97sav";
+    std::filesystem::path rosters_menu_capture_dir;
     std::filesystem::path view_rosters_capture_dir;
     std::filesystem::path semantic_report_path =
         ".local/reports/view_rosters_semantic_trace.json";
@@ -127,6 +128,8 @@ Options parseOptions(int argc, char** argv) {
         else if (arg == "--trace" && i + 1 < argc) options.trace_path = argv[++i];
         else if (arg == "--settings" && i + 1 < argc) options.settings_path = argv[++i];
         else if (arg == "--profiles" && i + 1 < argc) options.profiles_path = argv[++i];
+        else if (arg == "--capture-rosters-menu" && i + 1 < argc)
+            options.rosters_menu_capture_dir = argv[++i];
         else if (arg == "--capture-view-rosters" && i + 1 < argc)
             options.view_rosters_capture_dir = argv[++i];
         else if (arg == "--semantic-report" && i + 1 < argc)
@@ -190,6 +193,8 @@ public:
 
     int run() {
         if (options_.self_test) return runSelfTest();
+        if (!options_.rosters_menu_capture_dir.empty())
+            return captureRostersMenu();
         if (!options_.view_rosters_capture_dir.empty())
             return captureViewRosters();
         registerWindowClass();
@@ -552,9 +557,12 @@ private:
     }
 
     void loadMenuCards(const std::filesystem::path& root) {
-        std::mt19937 random(static_cast<std::mt19937::result_type>(
-            std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
-            static_cast<long long>(GetTickCount64())));
+        const auto random_seed = options_.rosters_menu_capture_dir.empty()
+            ? static_cast<std::mt19937::result_type>(
+                  std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
+                  static_cast<long long>(GetTickCount64()))
+            : static_cast<std::mt19937::result_type>(0x57ce4u);
+        std::mt19937 random(random_seed);
         std::uniform_int_distribution<int> card_index(0, 94);
 
         const auto load_card = [&](int index) {
@@ -602,7 +610,70 @@ private:
         trace_.log("MENU-CARD", "0x80031A88 loaded 95 ZCARD.BIN images; setup PRNG picks=" +
             index_list(setup_indices) + "; Rosters PRNG picks=" + index_list(roster_indices));
         trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
-        trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); native plates at x=49/154/259/364 y=56/122; art offset=(12,23)");
+        trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
+        trace_.log("ROSTER-STACK", "plate x=49/154/259/364; recovered arch y=76/66/66/76 + 118/110/110/118; ZCARD offset=(12,23)");
+        trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta; FUN_80057A98 Injuries requires any non-zero injury byte; red c06/c07/c14/c15 artwork is categorical, not the lock flag");
+        trace_.log("ROSTER-SFX", "FUN_8003D930 directional cues use ZCURSOR ids 1..4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
+    }
+
+    int captureRostersMenu() {
+        const auto output = options_.rosters_menu_capture_dir;
+        nba97::RecoveredBottomMenu menu;
+        menu.open(nba97::FrontendPage::Rosters);
+        menu.setRosterCapabilities(false, false);
+        menu.setSelected(4);
+        const auto render = [&](const std::filesystem::path& name,
+                                bool selected_overlay_visible = true) {
+            writePpm(nba97::renderRecoveredBottomMenu(
+                menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+                roster_menu_cards_, 0, selected_overlay_visible), output / name);
+        };
+        render("rosters_initial.ppm");
+        menu.setSelected(3);
+        render("rosters_reset_locked_attempt.ppm");
+        for (int phase = 0; phase < 12; ++phase) {
+            char name[48]{};
+            sprintf_s(name, "rosters_select_phase_%02d.ppm", phase);
+            render(name, (phase & 1) != 0);
+        }
+        menu.move(1, 0);
+        render("rosters_reorder_focused.ppm");
+        menu.setRosterCapabilities(true, true);
+        menu.setSelected(3);
+        render("rosters_reset_enabled.ppm");
+        menu.setSelected(7);
+        render("rosters_injuries_enabled.ppm");
+
+        const auto audio_root = options_.asset_root / "menu";
+        static constexpr std::array<const char*, 6> sound_names{
+            "vertical_next", "vertical_previous", "horizontal_previous",
+            "horizontal_next", "unused_05", "select_flash"};
+        std::ofstream metadata(output / "capture.json", std::ios::trunc);
+        if (!metadata) throw std::runtime_error("cannot write Rosters menu capture metadata");
+        metadata << "{\n  \"schema_version\": 1,\n  \"function\": \"0x80057CE4\",\n"
+                 << "  \"stack_y\": [76,66,66,76,118,110,110,118],\n"
+                 << "  \"flash_vblanks\": 12,\n  \"sounds\": [\n";
+        for (std::uint32_t sound_id = 1; sound_id <= 6; ++sound_id) {
+            char wav_name[64]{};
+            sprintf_s(wav_name, "zcursor_%02u_%s.wav", sound_id,
+                      sound_names[sound_id - 1]);
+            const auto info = cursor_audio_.exportCursorSound(
+                audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", sound_id,
+                output / wav_name);
+            metadata << "    {\"id\":" << sound_id << ",\"role\":\""
+                     << sound_names[sound_id - 1] << "\",\"file\":\"" << wav_name
+                     << "\",\"rate\":" << info.sample_rate << ",\"samples\":"
+                     << info.sample_count << "}" << (sound_id == 6 ? "\n" : ",\n");
+            trace_.log("ROSTER-SFX", "captured id=" + std::to_string(sound_id) +
+                " role=" + sound_names[sound_id - 1] + " rate=" +
+                std::to_string(info.sample_rate) + " samples=" +
+                std::to_string(info.sample_count) + " bytes=" +
+                std::to_string(info.compressed_bytes));
+        }
+        metadata << "  ],\n  \"availability\": {\"reset\":\"roster snapshot differs\","
+                    "\"injuries\":\"one or more non-zero injury bytes\"}\n}\n";
+        trace_.log("ROSTER-CAPTURE", "deterministic stack, lock variants, 12 flash phases and six recovered WAVs -> " + output.string());
+        return 0;
     }
 
     int captureViewRosters() {
@@ -792,6 +863,22 @@ private:
             roster_menu_cards_, 0);
         if (roster_a.rgba == roster_b.rgba || recovered_menu.count() != 8)
             throw std::runtime_error("Rosters original-card navigation self-test failed");
+        recovered_menu.setSelected(3);
+        if (recovered_menu.selected() == 3 || recovered_menu.enabled(3) ||
+            recovered_menu.enabled(7))
+            throw std::runtime_error("Rosters Reset/Injuries recovered lock self-test failed");
+        recovered_menu.setRosterCapabilities(true, true);
+        recovered_menu.setSelected(3);
+        if (recovered_menu.selected() != 3 || !recovered_menu.enabled(7))
+            throw std::runtime_error("Rosters Reset/Injuries unlock self-test failed");
+        const auto flash_on = nba97::renderRecoveredBottomMenu(
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0, true);
+        const auto flash_off = nba97::renderRecoveredBottomMenu(
+            recovered_menu, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
+            roster_menu_cards_, 0, false);
+        if (flash_on.rgba == flash_off.rgba)
+            throw std::runtime_error("Rosters recovered selection-overlay flash self-test failed");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(
@@ -1487,6 +1574,13 @@ private:
         if (flow_.screen() == nba97::BootScreen::MainMenu) {
             menu_elapsed_ms_ += now - previous_tick_;
             updateRosterHeldInput();
+            if (bottom_select_pending_ &&
+                menu_elapsed_ms_ - bottom_select_flash_start_ms_ >= kBottomSelectFlashMs) {
+                bottom_select_pending_ = false;
+                trace_.log("ROSTER-CARD-SELECT", "FUN_8003F240 flash complete after 12 vblanks; "
+                    "dispatch=" + std::string(bottom_menu_.selectedLabel()));
+                completeRecoveredBottomSelection();
+            }
             rebuildMenuFrame();
             if (frontend_transition_active_) {
                 const auto elapsed = now - frontend_transition_tick_;
@@ -1671,6 +1765,7 @@ private:
 
     void handleMenuKey(WPARAM key) {
         if (frontend_transition_active_) return;
+        if (bottom_select_pending_) return;
         if (frontend_page_ == nba97::FrontendPage::ProfileSetup) {
             handleProfileKey(key);
             return;
@@ -1683,10 +1778,17 @@ private:
             frontend_page_ != nba97::FrontendPage::Rules &&
             frontend_page_ != nba97::FrontendPage::Options) {
             bool changed = false;
-            if (key == VK_LEFT) changed = bottom_menu_.move(-1, 0);
-            else if (key == VK_RIGHT) changed = bottom_menu_.move(1, 0);
-            else if (key == VK_UP) changed = bottom_menu_.move(0, -1);
-            else if (key == VK_DOWN) changed = bottom_menu_.move(0, 1);
+            std::uint32_t sound_id = 0;
+            const char* direction = "none";
+            if (key == VK_LEFT) {
+                changed = bottom_menu_.move(-1, 0); sound_id = 3; direction = "left";
+            } else if (key == VK_RIGHT) {
+                changed = bottom_menu_.move(1, 0); sound_id = 4; direction = "right";
+            } else if (key == VK_UP) {
+                changed = bottom_menu_.move(0, -1); sound_id = 2; direction = "up";
+            } else if (key == VK_DOWN) {
+                changed = bottom_menu_.move(0, 1); sound_id = 1; direction = "down";
+            }
             else if (key == VK_BACK) {
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
                 return;
@@ -1695,9 +1797,16 @@ private:
                 return;
             }
             if (changed) {
-                trace_.log("SUBMENU-FOCUS", bottom_menu_.selectedLabel());
+                playBottomMenuSound(sound_id, direction);
+                trace_.log("ROSTER-CARD-FOCUS", std::string("direction=") + direction +
+                    " index=" + std::to_string(bottom_menu_.selected()) +
+                    " label=" + bottom_menu_.selectedLabel() + " enabled=yes");
                 rebuildMenuFrame();
                 InvalidateRect(window_, nullptr, FALSE);
+            } else if (sound_id != 0) {
+                trace_.log("ROSTER-CARD-BOUNDARY", std::string("direction=") + direction +
+                    " stayed=" + bottom_menu_.selectedLabel() +
+                    "; boundary or recovered availability predicate blocked target");
             }
             return;
         }
@@ -1737,6 +1846,29 @@ private:
     }
 
     void activateRecoveredBottomSelection() {
+        if (bottom_select_pending_) return;
+        if (!bottom_menu_.enabled(bottom_menu_.selected())) {
+            const int selected = bottom_menu_.selected();
+            trace_.log("ROSTER-CARD-LOCK", std::string(bottom_menu_.selectedLabel()) +
+                (selected == 3
+                    ? " disabled: FUN_80057C48 requires roster != saved snapshot"
+                    : selected == 7
+                        ? " disabled: FUN_80057A98 requires at least one non-zero injury record"
+                        : " disabled by recovered object predicate"));
+            return;
+        }
+        bottom_select_pending_ = true;
+        bottom_select_flash_start_ms_ = menu_elapsed_ms_;
+        bottom_select_index_ = bottom_menu_.selected();
+        playBottomMenuSound(6, "select");
+        trace_.log("ROSTER-CARD-SELECT", "FUN_8003F240 index=" +
+            std::to_string(bottom_select_index_) + " label=" + bottom_menu_.selectedLabel() +
+            "; FUN_8002F124 sound=6; selected overlay toggles 12 vblanks (~204 ms)");
+        rebuildMenuFrame();
+        InvalidateRect(window_, nullptr, FALSE);
+    }
+
+    void completeRecoveredBottomSelection() {
         if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 4) {
             beginFrontendTransition(nba97::FrontendPage::ViewRosters,
                 "view rosters selected; FUN_80057CE4 return=6 pushes state 0x10 FUN_800592C4");
@@ -1744,6 +1876,25 @@ private:
         }
         trace_.log("MENU-BLOCK", std::string(bottom_menu_.selectedLabel()) +
                                  " child flow not yet decompiled");
+    }
+
+    void playBottomMenuSound(std::uint32_t sound_id, const char* role) {
+        try {
+            const auto root = options_.asset_root / "menu";
+            const auto info = cursor_audio_.playCursorSound(
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id);
+            const auto effective_percent =
+                (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
+                (127u * 127u * 127u);
+            trace_.log("ROSTER-CARD-SFX", std::string("role=") + role +
+                " FUN_8002F124 id=" + std::to_string(sound_id) +
+                " rate=" + std::to_string(info.sample_rate) + "Hz samples=" +
+                std::to_string(info.sample_count) + " effective-gain=" +
+                std::to_string(effective_percent) + "%");
+        } catch (const std::exception& error) {
+            trace_.log("AUDIO-ERROR", std::string("rosters ZCURSOR decode/play failed: ") +
+                error.what());
+        }
     }
 
     void logRosterViewFocus(const char* reason) {
@@ -1983,6 +2134,7 @@ private:
     }
 
     void handleMenuHover(int client_x, int client_y) {
+        if (bottom_select_pending_) return;
         const bool genuinely_moved = last_mouse_x_ < 0 ||
             std::abs(client_x - last_mouse_x_) > 1 ||
             std::abs(client_y - last_mouse_y_) > 1;
@@ -2059,9 +2211,13 @@ private:
             menu_frame_ = makeFrame(nba97::renderSettingsMenu(
                 settings_menu_, settings_, menu_font_, menu_sprites_, menu_elapsed_ms_));
         else
+        {
+            const bool selected_overlay_visible = !bottom_select_pending_ ||
+                (((menu_elapsed_ms_ - bottom_select_flash_start_ms_) / kPsxVblankMs) & 1u) != 0u;
             menu_frame_ = makeFrame(nba97::renderRecoveredBottomMenu(
                 bottom_menu_, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
-                roster_menu_cards_, menu_elapsed_ms_));
+                roster_menu_cards_, menu_elapsed_ms_, selected_overlay_visible));
+        }
     }
 
     static std::string frontendPageName(nba97::FrontendPage page) {
@@ -2109,6 +2265,12 @@ private:
             settings_menu_.open(target);
         else if (target != nba97::FrontendPage::GameSetup) {
             bottom_menu_.open(target);
+            if (target == nba97::FrontendPage::Rosters) {
+                bottom_menu_.setRosterCapabilities(false, false);
+                trace_.log("ROSTER-CARD-STATE", "Reset locked until roster snapshot changes; "
+                    "Injuries locked until injury table contains a non-zero record; red artwork "
+                    "is categorical and does not itself implement the lock");
+            }
             if (target == nba97::FrontendPage::Rosters &&
                 previous_page == nba97::FrontendPage::ViewRosters)
                 bottom_menu_.setSelected(4);
@@ -2195,6 +2357,11 @@ private:
     int last_mouse_x_ = -1;
     int last_mouse_y_ = -1;
     bool menu_mouse_armed_ = false;
+    bool bottom_select_pending_ = false;
+    std::uint32_t bottom_select_flash_start_ms_ = 0;
+    int bottom_select_index_ = -1;
+    static constexpr std::uint32_t kPsxVblankMs = 17;
+    static constexpr std::uint32_t kBottomSelectFlashMs = 12 * kPsxVblankMs;
     int active_user_profiles_ = 0;
     int held_roster_direction_ = 0;
     int held_roster_counter_ = 0;

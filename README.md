@@ -131,6 +131,17 @@ deterministic capture to refresh it. The score is useful regression evidence,
 not a byte-match claim: emulator scaling, color presentation, and animation
 phase can prevent identical pixels even when the recovered layout agrees.
 
+The parent Rosters card screen has a smaller focused regression pipeline:
+
+```powershell
+pwsh -File scripts/verify_rosters_menu.ps1 -RequireReference
+```
+
+It validates the recovered two-tier draw order, Reset/Injuries availability,
+12-vblank selection flash, and all six local ZCURSOR waveform decodes. Its
+original screenshot and exported WAV proof remain ignored under `.local/`;
+only the asset-free measurement report is committed.
+
 Run the complete local verification pipeline with:
 
 ```powershell

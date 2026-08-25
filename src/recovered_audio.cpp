@@ -42,6 +42,27 @@ void applyPsxGain(std::vector<std::int16_t>& pcm,
         sample = static_cast<std::int16_t>(scaled / kDenominator);
     }
 }
+
+void writePcmWav(const std::filesystem::path& path,
+                 const std::vector<std::int16_t>& pcm,
+                 std::uint32_t sample_rate) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output) throw std::runtime_error("cannot write recovered WAV: " + path.string());
+    const std::uint32_t data_size = static_cast<std::uint32_t>(pcm.size() * 2);
+    const std::uint32_t riff_size = 36 + data_size;
+    const std::uint16_t pcm_format = 1, channels = 1, bits = 16, block_align = 2;
+    const std::uint32_t byte_rate = sample_rate * block_align;
+    const auto write = [&output](const auto& value) {
+        output.write(reinterpret_cast<const char*>(&value), sizeof(value));
+    };
+    output.write("RIFF", 4); write(riff_size); output.write("WAVEfmt ", 8);
+    const std::uint32_t fmt_size = 16; write(fmt_size); write(pcm_format);
+    write(channels); write(sample_rate); write(byte_rate); write(block_align);
+    write(bits); output.write("data", 4); write(data_size);
+    output.write(reinterpret_cast<const char*>(pcm.data()), data_size);
+    if (!output) throw std::runtime_error("failed writing recovered WAV: " + path.string());
+}
 }
 
 RecoveredAudioPlayer::~RecoveredAudioPlayer() { stop(); }
@@ -82,6 +103,23 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
         std::uint32_t sound_id) {
+    return loadCursorSound(header_path, body_path, sound_id, true, nullptr);
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::exportCursorSound(
+        const std::filesystem::path& header_path,
+        const std::filesystem::path& body_path,
+        std::uint32_t sound_id,
+        const std::filesystem::path& output) {
+    return loadCursorSound(header_path, body_path, sound_id, false, &output);
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
+        const std::filesystem::path& header_path,
+        const std::filesystem::path& body_path,
+        std::uint32_t sound_id,
+        bool play,
+        const std::filesystem::path* output) {
     const auto header = readFile(header_path);
     const auto body = readFile(body_path);
     if (!tag(header, 0, "BNKl") || sound_id >= 12)
@@ -112,7 +150,8 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
     const std::uint32_t playback_volume = nba97_frontend_sfx_volume(9);
     auto pcm = decodePsxAdpcmMono(body.data() + offset, bytes, sample_count);
     applyPsxGain(pcm, program_volume, tone_volume, playback_volume);
-    playPcm(std::move(pcm), sample_rate);
+    if (output) writePcmWav(*output, pcm, sample_rate);
+    if (play) playPcm(std::move(pcm), sample_rate);
     info_ = {sound_id, sample_rate, sample_count, bytes,
              header_path.filename().string() + "/" + body_path.filename().string()};
     info_.program_volume = program_volume;

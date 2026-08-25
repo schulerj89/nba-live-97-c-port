@@ -39,6 +39,7 @@ class RecoveredBottomMenu final {
 public:
     void open(FrontendPage page) noexcept;
     void setSelected(int selected) noexcept;
+    void setRosterCapabilities(bool roster_modified, bool injuries_present) noexcept;
     bool move(int horizontal, int vertical) noexcept;
     bool hover(int psx_x, int psx_y) noexcept;
 
@@ -46,10 +47,13 @@ public:
     [[nodiscard]] int selected() const noexcept { return selected_; }
     [[nodiscard]] int count() const noexcept;
     [[nodiscard]] const char* selectedLabel() const noexcept;
+    [[nodiscard]] bool enabled(int index) const noexcept;
 
 private:
     FrontendPage page_ = FrontendPage::Rosters;
     int selected_ = 0;
+    bool roster_modified_ = false;
+    bool injuries_present_ = false;
 };
 
 enum class RosterViewMode : std::uint8_t { TeamRoster, PlayerCard };
@@ -139,7 +143,8 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    const MenuSpritePack& zset4,
                                    const MenuSpritePack& zset7,
                                    const RosterCardPack& roster_cards,
-                                   std::uint32_t elapsed_ms);
+                                   std::uint32_t elapsed_ms,
+                                   bool selected_overlay_visible = true);
 
 PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const UserProfileStore& store,

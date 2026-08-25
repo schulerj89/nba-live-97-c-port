@@ -30,6 +30,10 @@ public:
     RecoveredClipInfo playCursorSound(const std::filesystem::path& header,
                                       const std::filesystem::path& body,
                                       std::uint32_t sound_id);
+    RecoveredClipInfo exportCursorSound(const std::filesystem::path& header,
+                                        const std::filesystem::path& body,
+                                        std::uint32_t sound_id,
+                                        const std::filesystem::path& output);
     RecoveredClipInfo playCoolFact(const std::filesystem::path& index,
                                    const std::filesystem::path& archive,
                                    std::uint16_t player_id,
@@ -43,6 +47,11 @@ public:
     [[nodiscard]] const RecoveredClipInfo& info() const noexcept { return info_; }
 
 private:
+    RecoveredClipInfo loadCursorSound(const std::filesystem::path& header,
+                                      const std::filesystem::path& body,
+                                      std::uint32_t sound_id,
+                                      bool play,
+                                      const std::filesystem::path* output);
     RecoveredClipInfo loadCoolFact(const std::filesystem::path& index,
                                    const std::filesystem::path& archive,
                                    std::uint16_t player_id,
