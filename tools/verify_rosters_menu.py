@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import wave
 from pathlib import Path
 
@@ -116,33 +117,60 @@ def main() -> int:
 
     sound_rows = metadata.get("sounds", [])
     sound_evidence = []
-    audio_ok = len(sound_rows) == 6
+    bank_audio_ok = len(sound_rows) == 6
+    pitch_semantics_ok = len(sound_rows) == 6
     audio_hashes = []
     for row in sound_rows:
         path = capture / row["file"]
+        raw_path = capture / row["raw_file"]
         try:
             with wave.open(str(path), "rb") as wav:
                 valid = (wav.getnchannels() == 1 and wav.getsampwidth() == 2 and
                          wav.getframerate() == row["rate"] == 22050 and
                          wav.getnframes() == row["samples"])
+            with wave.open(str(raw_path), "rb") as raw_wav:
+                raw_valid = (raw_wav.getnchannels() == 1 and
+                             raw_wav.getsampwidth() == 2 and
+                             raw_wav.getframerate() == 22050 and
+                             raw_wav.getnframes() == row["source_samples"])
             audio_hashes.append(digest(path))
         except (OSError, wave.Error):
             valid = False
-        audio_ok = audio_ok and valid
+            raw_valid = False
+        expected_samples = math.ceil(
+            row["source_samples"] / (2.0 ** (row["pitch_cents"] / 1200.0)))
+        pitch_valid = (row["requested_note"] == 60 and
+                       row["pitch_cents"] == -100 * (row["root_note"] - 60) and
+                       row["samples"] == expected_samples)
+        bank_audio_ok = bank_audio_ok and valid and raw_valid
+        pitch_semantics_ok = pitch_semantics_ok and pitch_valid
         sound_evidence.append({"id": row.get("id"), "role": row.get("role"),
-                               "samples": row.get("samples"), "valid": valid})
+                               "samples": row.get("samples"),
+                               "source_samples": row.get("source_samples"),
+                               "root_note": row.get("root_note"),
+                               "pitch_cents": row.get("pitch_cents"),
+                               "pitch_valid": pitch_valid, "valid": valid})
     repeated_right = capture / "zcursor_04_right_repeat.wav"
     right_sound = capture / "zcursor_04_right.wav"
     repeated_right_ok = (repeated_right.is_file() and right_sound.is_file() and
                          digest(repeated_right) == digest(right_sound))
     recovered_roles_ok = [row.get("role") for row in sound_rows[:4]] == [
         "down", "up", "left", "right"]
-    audio_ok = (audio_ok and len(set(audio_hashes)) == 6 and repeated_right_ok and
-                recovered_roles_ok)
-    add(checks, "zcursor_1_through_6", "audio", 1.5, 100 if audio_ok else 0,
+    bank_audio_ok = (bank_audio_ok and len(set(audio_hashes)) == 6 and
+                     repeated_right_ok and recovered_roles_ok)
+    add(checks, "zcursor_1_through_6", "audio", 0.75,
+        100 if bank_audio_ok else 0,
         sounds=sound_evidence, all_waveforms_distinct=len(set(audio_hashes)) == 6,
         direction_mapping={"right": 4, "left": 3, "up": 2, "down": 1},
         repeated_right_byte_identical=repeated_right_ok)
+    add(checks, "zcursor_authored_pitch", "audio", 0.75,
+        100 if pitch_semantics_ok else 0,
+        evidence="FUN_8009267C root-note cents feeding FUN_80072048 SPU pitch",
+        authored_pitch={"requested_note": 60, "right_root_note": 64,
+                        "right_pitch_cents": -400},
+        sounds=[{"id": row.get("id"), "root_note": row.get("root_note"),
+                 "pitch_cents": row.get("pitch_cents"),
+                 "pitch_valid": row.get("pitch_valid")} for row in sound_evidence])
 
     visual_missing = not reference.is_file()
     if visual_missing:

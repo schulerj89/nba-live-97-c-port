@@ -672,19 +672,34 @@ private:
                  << "  \"flash_vblanks\": 12,\n  \"sounds\": [\n";
         for (std::uint32_t sound_id = 1; sound_id <= 6; ++sound_id) {
             char wav_name[64]{};
+            char raw_wav_name[64]{};
             sprintf_s(wav_name, "zcursor_%02u_%s.wav", sound_id,
+                      sound_names[sound_id - 1]);
+            sprintf_s(raw_wav_name, "zcursor_%02u_%s_raw.wav", sound_id,
                       sound_names[sound_id - 1]);
             const auto info = cursor_audio_.exportCursorSound(
                 audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", sound_id,
                 output / wav_name);
+            cursor_audio_.exportCursorSoundRaw(
+                audio_root / "ZCURSOR.VH", audio_root / "ZCURSOR.VB", sound_id,
+                output / raw_wav_name);
             metadata << "    {\"id\":" << sound_id << ",\"role\":\""
                      << sound_names[sound_id - 1] << "\",\"file\":\"" << wav_name
+                     << "\",\"raw_file\":\"" << raw_wav_name
                      << "\",\"rate\":" << info.sample_rate << ",\"samples\":"
-                     << info.sample_count << "}" << (sound_id == 6 ? "\n" : ",\n");
+                     << info.rendered_sample_count << ",\"source_samples\":"
+                     << info.sample_count << ",\"root_note\":" << info.root_note
+                     << ",\"requested_note\":" << info.requested_note
+                     << ",\"pitch_cents\":" << info.pitch_cents << "}"
+                     << (sound_id == 6 ? "\n" : ",\n");
             trace_.log("ROSTER-SFX", "captured id=" + std::to_string(sound_id) +
                 " role=" + sound_names[sound_id - 1] + " rate=" +
                 std::to_string(info.sample_rate) + " samples=" +
-                std::to_string(info.sample_count) + " bytes=" +
+                std::to_string(info.rendered_sample_count) + " source-samples=" +
+                std::to_string(info.sample_count) + " root/request=" +
+                std::to_string(info.root_note) + "/" +
+                std::to_string(info.requested_note) + " pitch=" +
+                std::to_string(info.pitch_cents) + " cents bytes=" +
                 std::to_string(info.compressed_bytes));
         }
         const auto repeated_right = cursor_audio_.exportCursorSound(
@@ -692,7 +707,7 @@ private:
             output / "zcursor_04_right_repeat.wav");
         trace_.log("ROSTER-SFX-REPEAT", "three consecutive logical Right moves all route "
             "FUN_8003D930 cue id=4; deterministic repeat samples=" +
-            std::to_string(repeated_right.sample_count) + " rate=" +
+            std::to_string(repeated_right.rendered_sample_count) + " rate=" +
             std::to_string(repeated_right.sample_rate) + "Hz; runtime WinMM device reused");
         metadata << "  ],\n  \"availability\": {\"reset\":\"roster snapshot differs and no special-state override\","
                     "\"injuries\":\"active context plus one or more non-zero values among 536 injury bytes\"}\n}\n";
@@ -1922,7 +1937,11 @@ private:
             trace_.log("ROSTER-CARD-SFX", std::string("role=") + role +
                 " FUN_8002F124 id=" + std::to_string(sound_id) +
                 " rate=" + std::to_string(info.sample_rate) + "Hz samples=" +
-                std::to_string(info.sample_count) + " effective-gain=" +
+                std::to_string(info.rendered_sample_count) + " source-samples=" +
+                std::to_string(info.sample_count) + " root/request=" +
+                std::to_string(info.root_note) + "/" +
+                std::to_string(info.requested_note) + " pitch=" +
+                std::to_string(info.pitch_cents) + "c effective-gain=" +
                 std::to_string(effective_percent) + "%");
         } catch (const std::exception& error) {
             trace_.log("AUDIO-ERROR", std::string("rosters ZCURSOR decode/play failed: ") +
@@ -1963,7 +1982,11 @@ private:
             trace_.log("PLAYER-STAT-FLASH", "FUN_8002AB88 gold transition=20 ticks; "
                 "FUN_8002F124 sound=" + std::to_string(sound_id) +
                 " ZCURSOR.VH/VB rate=" + std::to_string(info.sample_rate) +
-                " samples=" + std::to_string(info.sample_count) +
+                " samples=" + std::to_string(info.rendered_sample_count) +
+                " source-samples=" + std::to_string(info.sample_count) +
+                " root/request=" + std::to_string(info.root_note) + "/" +
+                std::to_string(info.requested_note) + " pitch=" +
+                std::to_string(info.pitch_cents) + "c" +
                 " gain=" + std::to_string(info.program_volume) + "/127*" +
                 std::to_string(info.tone_volume) + "/127*" +
                 std::to_string(info.playback_volume) + "/127 (" +

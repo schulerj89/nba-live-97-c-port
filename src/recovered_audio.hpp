@@ -18,6 +18,10 @@ struct RecoveredClipInfo {
     std::uint32_t program_volume = 127;
     std::uint32_t tone_volume = 127;
     std::uint32_t playback_volume = 127;
+    std::int32_t pitch_cents = 0;
+    std::uint32_t root_note = 60;
+    std::uint32_t requested_note = 60;
+    std::uint32_t rendered_sample_count = 0;
 };
 
 class RecoveredAudioPlayer final {
@@ -34,6 +38,10 @@ public:
                                         const std::filesystem::path& body,
                                         std::uint32_t sound_id,
                                         const std::filesystem::path& output);
+    RecoveredClipInfo exportCursorSoundRaw(const std::filesystem::path& header,
+                                           const std::filesystem::path& body,
+                                           std::uint32_t sound_id,
+                                           const std::filesystem::path& output);
     RecoveredClipInfo playCoolFact(const std::filesystem::path& index,
                                    const std::filesystem::path& archive,
                                    std::uint16_t player_id,
@@ -51,7 +59,8 @@ private:
                                       const std::filesystem::path& body,
                                       std::uint32_t sound_id,
                                       bool play,
-                                      const std::filesystem::path* output);
+                                      const std::filesystem::path* output,
+                                      bool apply_authored_pitch = true);
     RecoveredClipInfo loadCoolFact(const std::filesystem::path& index,
                                    const std::filesystem::path& archive,
                                    std::uint16_t player_id,

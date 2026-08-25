@@ -130,44 +130,68 @@
     {
       "id": "zcursor_1_through_6",
       "group": "audio",
-      "weight": 1.5,
+      "weight": 0.75,
       "score_percent": 100,
-      "credit": 1.5,
+      "credit": 0.75,
       "sounds": [
         {
           "id": 1,
           "role": "down",
           "samples": 2852,
+          "source_samples": 2852,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true,
           "valid": true
         },
         {
           "id": 2,
           "role": "up",
           "samples": 1921,
+          "source_samples": 1921,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true,
           "valid": true
         },
         {
           "id": 3,
           "role": "left",
           "samples": 2200,
+          "source_samples": 2200,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true,
           "valid": true
         },
         {
           "id": 4,
           "role": "right",
-          "samples": 3840,
+          "samples": 4839,
+          "source_samples": 3840,
+          "root_note": 64,
+          "pitch_cents": -400,
+          "pitch_valid": true,
           "valid": true
         },
         {
           "id": 5,
           "role": "unused_05",
           "samples": 17152,
+          "source_samples": 17152,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true,
           "valid": true
         },
         {
           "id": 6,
           "role": "select_flash",
           "samples": 15381,
+          "source_samples": 15381,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true,
           "valid": true
         }
       ],
@@ -179,6 +203,57 @@
         "down": 1
       },
       "repeated_right_byte_identical": true
+    },
+    {
+      "id": "zcursor_authored_pitch",
+      "group": "audio",
+      "weight": 0.75,
+      "score_percent": 100,
+      "credit": 0.75,
+      "evidence": "FUN_8009267C root-note cents feeding FUN_80072048 SPU pitch",
+      "authored_pitch": {
+        "requested_note": 60,
+        "right_root_note": 64,
+        "right_pitch_cents": -400
+      },
+      "sounds": [
+        {
+          "id": 1,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true
+        },
+        {
+          "id": 2,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true
+        },
+        {
+          "id": 3,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true
+        },
+        {
+          "id": 4,
+          "root_note": 64,
+          "pitch_cents": -400,
+          "pitch_valid": true
+        },
+        {
+          "id": 5,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true
+        },
+        {
+          "id": 6,
+          "root_note": 60,
+          "pitch_cents": 0,
+          "pitch_valid": true
+        }
+      ]
     },
     {
       "id": "original_screenshot_similarity",

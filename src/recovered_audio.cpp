@@ -4,6 +4,7 @@
 #include "recovered/frontend_audio.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -18,6 +19,9 @@ std::vector<std::uint8_t> readFile(const std::filesystem::path& path) {
 std::uint16_t u16(const std::vector<std::uint8_t>& b, std::size_t p) {
     if (p + 2 > b.size()) throw std::runtime_error("truncated audio u16");
     return static_cast<std::uint16_t>(b[p] | (b[p + 1] << 8));
+}
+std::int16_t s16(const std::vector<std::uint8_t>& b, std::size_t p) {
+    return static_cast<std::int16_t>(u16(b, p));
 }
 std::uint32_t u32(const std::vector<std::uint8_t>& b, std::size_t p) {
     if (p + 4 > b.size()) throw std::runtime_error("truncated audio u32");
@@ -41,6 +45,29 @@ void applyPsxGain(std::vector<std::int16_t>& pcm,
         const std::int64_t scaled = static_cast<std::int64_t>(sample) * numerator;
         sample = static_cast<std::int16_t>(scaled / kDenominator);
     }
+}
+
+std::vector<std::int16_t> applyPitchCents(const std::vector<std::int16_t>& input,
+                                          std::int32_t pitch_cents) {
+    if (input.empty() || pitch_cents == 0) return input;
+    // FUN_80072048 applies cents to the SPU pitch register. Keep WinMM at the
+    // common 22.05 kHz format and resample the PCM by the equivalent ratio so
+    // switching cues cannot cause device close/open transients.
+    const double ratio = std::pow(2.0, static_cast<double>(pitch_cents) / 1200.0);
+    const auto output_size = std::max<std::size_t>(
+        1, static_cast<std::size_t>(std::ceil(input.size() / ratio)));
+    std::vector<std::int16_t> output(output_size);
+    for (std::size_t i = 0; i < output.size(); ++i) {
+        const double source = static_cast<double>(i) * ratio;
+        const auto source_index = static_cast<std::size_t>(source);
+        const auto lower = source_index < input.size() ? source_index : input.size() - 1;
+        const auto upper = lower + 1 < input.size() ? lower + 1 : input.size() - 1;
+        const double fraction = source - static_cast<double>(lower);
+        const double value = input[lower] + (input[upper] - input[lower]) * fraction;
+        output[i] = static_cast<std::int16_t>(std::clamp(
+            std::lround(value), static_cast<long>(-32768), static_cast<long>(32767)));
+    }
+    return output;
 }
 
 void writePcmWav(const std::filesystem::path& path,
@@ -118,7 +145,7 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
         std::uint32_t sound_id) {
-    return loadCursorSound(header_path, body_path, sound_id, true, nullptr);
+    return loadCursorSound(header_path, body_path, sound_id, true, nullptr, true);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::exportCursorSound(
@@ -126,7 +153,15 @@ RecoveredClipInfo RecoveredAudioPlayer::exportCursorSound(
         const std::filesystem::path& body_path,
         std::uint32_t sound_id,
         const std::filesystem::path& output) {
-    return loadCursorSound(header_path, body_path, sound_id, false, &output);
+    return loadCursorSound(header_path, body_path, sound_id, false, &output, true);
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::exportCursorSoundRaw(
+        const std::filesystem::path& header_path,
+        const std::filesystem::path& body_path,
+        std::uint32_t sound_id,
+        const std::filesystem::path& output) {
+    return loadCursorSound(header_path, body_path, sound_id, false, &output, false);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
@@ -134,7 +169,8 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
         const std::filesystem::path& body_path,
         std::uint32_t sound_id,
         bool play,
-        const std::filesystem::path* output) {
+        const std::filesystem::path* output,
+        bool apply_authored_pitch) {
     const auto header = readFile(header_path);
     const auto body = readFile(body_path);
     if (!tag(header, 0, "BNKl") || sound_id >= 12)
@@ -160,11 +196,22 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
         throw std::runtime_error("invalid ZCURSOR TMxl range");
     const std::uint32_t program_volume = header[patl + 11];
     const std::uint32_t tone_volume = header[tone + 18];
+    // FUN_8009267C defaults its requested note to MIDI 60 when FUN_8009180C
+    // supplies -1. It combines PATl and tone fine pitch, then subtracts 100
+    // cents for every semitone between the tone root and requested note.
+    constexpr std::uint32_t requested_note = 60;
+    const std::uint32_t root_note = header[tone + 9];
+    const std::int32_t pitch_cents = static_cast<std::int32_t>(s16(header, patl + 8)) +
+        static_cast<std::int32_t>(s16(header, tone + 20)) -
+        100 * (static_cast<std::int32_t>(root_note) -
+               static_cast<std::int32_t>(requested_note));
     // FUN_8002F124 passes min(frontend SFX setting * 12, 127) to the bank
     // player. The recovered frontend initializes that setting to 9.
     const std::uint32_t playback_volume = nba97_frontend_sfx_volume(9);
     auto pcm = decodePsxAdpcmMono(body.data() + offset, bytes, sample_count);
     applyPsxGain(pcm, program_volume, tone_volume, playback_volume);
+    if (apply_authored_pitch) pcm = applyPitchCents(pcm, pitch_cents);
+    const std::uint32_t rendered_sample_count = static_cast<std::uint32_t>(pcm.size());
     if (output) writePcmWav(*output, pcm, sample_rate);
     if (play) playPcm(std::move(pcm), sample_rate);
     info_ = {sound_id, sample_rate, sample_count, bytes,
@@ -172,6 +219,10 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     info_.program_volume = program_volume;
     info_.tone_volume = tone_volume;
     info_.playback_volume = playback_volume;
+    info_.pitch_cents = pitch_cents;
+    info_.root_note = root_note;
+    info_.requested_note = requested_note;
+    info_.rendered_sample_count = rendered_sample_count;
     return info_;
 }
 
