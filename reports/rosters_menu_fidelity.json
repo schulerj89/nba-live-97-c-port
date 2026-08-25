@@ -137,6 +137,16 @@
         {
           "id": 1,
           "role": "down",
+          "samples": 4229,
+          "source_samples": 4480,
+          "root_note": 59,
+          "pitch_cents": 100,
+          "pitch_valid": true,
+          "valid": true
+        },
+        {
+          "id": 2,
+          "role": "up",
           "samples": 2852,
           "source_samples": 2852,
           "root_note": 60,
@@ -145,8 +155,8 @@
           "valid": true
         },
         {
-          "id": 2,
-          "role": "up",
+          "id": 3,
+          "role": "left",
           "samples": 1921,
           "source_samples": 1921,
           "root_note": 60,
@@ -155,8 +165,8 @@
           "valid": true
         },
         {
-          "id": 3,
-          "role": "left",
+          "id": 4,
+          "role": "right",
           "samples": 2200,
           "source_samples": 2200,
           "root_note": 60,
@@ -165,8 +175,8 @@
           "valid": true
         },
         {
-          "id": 4,
-          "role": "right",
+          "id": 5,
+          "role": "unused_05",
           "samples": 4839,
           "source_samples": 3840,
           "root_note": 64,
@@ -175,20 +185,10 @@
           "valid": true
         },
         {
-          "id": 5,
-          "role": "unused_05",
-          "samples": 17152,
-          "source_samples": 17152,
-          "root_note": 60,
-          "pitch_cents": 0,
-          "pitch_valid": true,
-          "valid": true
-        },
-        {
           "id": 6,
           "role": "select_flash",
-          "samples": 15381,
-          "source_samples": 15381,
+          "samples": 17152,
+          "source_samples": 17152,
           "root_note": 60,
           "pitch_cents": 0,
           "pitch_valid": true,
@@ -205,22 +205,33 @@
       "repeated_right_byte_identical": true
     },
     {
-      "id": "zcursor_authored_pitch",
+      "id": "zcursor_bnkl_program_semantics",
       "group": "audio",
       "weight": 0.75,
       "score_percent": 100,
       "credit": 0.75,
-      "evidence": "FUN_8009267C root-note cents feeding FUN_80072048 SPU pitch",
+      "evidence": "FUN_80091814 bank+8+sound_id*4 PATl lookup plus FUN_8009267C pitch",
+      "bank_table_offset": 8,
       "authored_pitch": {
         "requested_note": 60,
-        "right_root_note": 64,
-        "right_pitch_cents": -400
+        "direction_root_notes": [
+          59,
+          60,
+          60,
+          60
+        ],
+        "direction_pitch_cents": [
+          100,
+          0,
+          0,
+          0
+        ]
       },
       "sounds": [
         {
           "id": 1,
-          "root_note": 60,
-          "pitch_cents": 0,
+          "root_note": 59,
+          "pitch_cents": 100,
           "pitch_valid": true
         },
         {
@@ -237,14 +248,14 @@
         },
         {
           "id": 4,
-          "root_note": 64,
-          "pitch_cents": -400,
+          "root_note": 60,
+          "pitch_cents": 0,
           "pitch_valid": true
         },
         {
           "id": 5,
-          "root_note": 60,
-          "pitch_cents": 0,
+          "root_note": 64,
+          "pitch_cents": -400,
           "pitch_valid": true
         },
         {

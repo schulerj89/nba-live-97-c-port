@@ -139,7 +139,8 @@ pwsh -File scripts/verify_rosters_menu.ps1 -RequireReference
 
 It validates the recovered two-tier draw order, Reset/Injuries availability,
 12-vblank selection flash, and all six local ZCURSOR waveform decodes including
-PATl/Tone root-note pitch. Run `python tools/compare_cursor_audio.py` to create a
+the recovered BNKl program-table lookup and PATl/Tone pitch. Run
+`python tools/compare_cursor_audio.py` to create a
 local raw-versus-authored waveform/spectrum audit. The original screenshot,
 exported WAVs, and plots remain ignored under `.local/`; only the asset-free
 measurement report is committed.

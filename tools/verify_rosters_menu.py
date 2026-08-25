@@ -163,11 +163,19 @@ def main() -> int:
         sounds=sound_evidence, all_waveforms_distinct=len(set(audio_hashes)) == 6,
         direction_mapping={"right": 4, "left": 3, "up": 2, "down": 1},
         repeated_right_byte_identical=repeated_right_ok)
-    add(checks, "zcursor_authored_pitch", "audio", 0.75,
-        100 if pitch_semantics_ok else 0,
-        evidence="FUN_8009267C root-note cents feeding FUN_80072048 SPU pitch",
-        authored_pitch={"requested_note": 60, "right_root_note": 64,
-                        "right_pitch_cents": -400},
+    direction_rows = sound_rows[:4]
+    direction_bank_indexing_ok = (
+        pitch_semantics_ok and
+        [row.get("id") for row in direction_rows] == [1, 2, 3, 4] and
+        [row.get("root_note") for row in direction_rows] == [59, 60, 60, 60] and
+        [row.get("pitch_cents") for row in direction_rows] == [100, 0, 0, 0])
+    add(checks, "zcursor_bnkl_program_semantics", "audio", 0.75,
+        100 if direction_bank_indexing_ok else 0,
+        evidence="FUN_80091814 bank+8+sound_id*4 PATl lookup plus FUN_8009267C pitch",
+        bank_table_offset=8,
+        authored_pitch={"requested_note": 60,
+                        "direction_root_notes": [59, 60, 60, 60],
+                        "direction_pitch_cents": [100, 0, 0, 0]},
         sounds=[{"id": row.get("id"), "root_note": row.get("root_note"),
                  "pitch_cents": row.get("pitch_cents"),
                  "pitch_valid": row.get("pitch_valid")} for row in sound_evidence])

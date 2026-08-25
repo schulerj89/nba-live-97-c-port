@@ -175,10 +175,10 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     const auto body = readFile(body_path);
     if (!tag(header, 0, "BNKl") || sound_id >= 12)
         throw std::runtime_error("unsupported ZCURSOR BNKl sound id");
-    // BNKl stores a self-relative PATl pointer for each sound ID. Each PATl
-    // then points to its 92-byte tone, whose serialized TMxl starts at +40.
-    // Following that chain preserves the original PS1 program/tone gain.
-    const std::size_t program_pointer = 12 + static_cast<std::size_t>(sound_id) * 4;
+    // FUN_80091814 indexes the BNKl table at bank + 8 + sound_id * 4. BNKl's
+    // two-word header is therefore followed by the self-relative PATl pointer
+    // for sound ID 0. Each PATl points to a 92-byte tone whose TMxl is at +40.
+    const std::size_t program_pointer = 8 + static_cast<std::size_t>(sound_id) * 4;
     const std::size_t patl = program_pointer + u32(header, program_pointer);
     if (patl + 16 > header.size() || !tag(header, patl, "PATl") ||
         header[patl + 7] != 1)
