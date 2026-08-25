@@ -67,18 +67,26 @@ def main() -> int:
     red_counts = {}
     try:
         initial = Image.open(required_frames[0]).convert("RGB")
-        for name, box in {"reset": (364, 76, 464, 170),
-                          "injuries": (364, 118, 464, 212)}.items():
+        # Count only the plate rails, not the random ZCARD aperture. This
+        # prevents a red player photo from falsely proving the red1 state.
+        for name, boxes in {
+                "reset": [(364, 76, 464, 101), (364, 101, 384, 170),
+                          (444, 101, 464, 170), (364, 150, 464, 170)],
+                "injuries": [(364, 118, 464, 143), (364, 143, 384, 212),
+                             (444, 143, 464, 212), (364, 192, 464, 212)],
+        }.items():
             red_counts[name] = sum(
-                1 for red, green, blue in initial.crop(box).getdata()
+                1 for box in boxes
+                for red, green, blue in initial.crop(box).getdata()
                 if red > 60 and red > green * 1.25 and red > blue * 1.25
             )
-        red_plates_ok = all(count >= 500 for count in red_counts.values())
+        red_plates_ok = all(count >= 350 for count in red_counts.values())
     except (NameError, OSError):
         red_plates_ok = False
     add(checks, "authored_red_locked_plates", "layout", 1,
         100 if red_plates_ok else 0, red_dominant_pixels=red_counts,
-        minimum_per_card=500)
+        minimum_per_card=350,
+        evidence="FUN_800399C4 disabled type-2 state 0x80 rendered through ZSET4 red1 CLUT")
 
     locked_same = (all(path.is_file() for path in required_frames[:2]) and
                    digest(required_frames[0]) == digest(required_frames[1]))
@@ -97,9 +105,27 @@ def main() -> int:
     cadence_ok = (len(hashes) == 12 and len(set(hashes[0::2])) == 1 and
                   len(set(hashes[1::2])) == 1 and hashes[0] != hashes[1] and
                   metadata.get("flash_vblanks") == 12)
+    plate_present_both_phases = False
+    try:
+        phase_images = [Image.open(phases[index]).convert("RGB") for index in (0, 1)]
+        # View Rosters (index 4) is selected at x=49,y=118. Require opaque,
+        # non-background rail pixels in every edge band in both flash states.
+        rail_boxes = [(49, 118, 149, 140), (49, 140, 68, 208),
+                      (130, 140, 149, 208), (49, 190, 149, 212)]
+        rail_counts = [sum(
+            1 for box in rail_boxes for red, green, blue in image.crop(box).getdata()
+            if max(red, green, blue) - min(red, green, blue) < 85 and
+               max(red, green, blue) > 45)
+            for image in phase_images]
+        plate_present_both_phases = all(count >= 400 for count in rail_counts)
+    except (NameError, OSError):
+        rail_counts = []
     add(checks, "selection_flash_12_vblanks", "animation", 1.5,
-        100 if cadence_ok else 0, unique_frame_states=len(set(hashes)),
-        frame_count=len(hashes))
+        100 if cadence_ok and plate_present_both_phases else 0,
+        unique_frame_states=len(set(hashes)), frame_count=len(hashes),
+        plate_present_both_phases=plate_present_both_phases,
+        selected_plate_rail_pixels=rail_counts,
+        evidence="FUN_8003F240 alternates normal/selected objects without removing the plate")
 
     title_phases = [capture / f"rosters_title_phase_{index:02d}.ppm"
                     for index in range(4)]

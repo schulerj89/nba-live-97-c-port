@@ -2,8 +2,8 @@
   "schema_version": 1,
   "scope": "Rosters eight-card selection screen only",
   "method": "recovered predicates + deterministic framebuffer/audio captures + local original screenshot",
-  "fidelity_percent": 96.17,
-  "earned_points": 11.5408,
+  "fidelity_percent": 96.19,
+  "earned_points": 11.5426,
   "possible_points": 12.0,
   "groups": {
     "behavior": {
@@ -32,9 +32,9 @@
       "percent": 100.0
     },
     "visual": {
-      "earned": 1.5408,
+      "earned": 1.5426,
       "possible": 2.0,
-      "percent": 77.04
+      "percent": 77.13
     }
   },
   "checks": [
@@ -87,10 +87,11 @@
       "score_percent": 100,
       "credit": 1.0,
       "red_dominant_pixels": {
-        "reset": 706,
-        "injuries": 714
+        "reset": 2043,
+        "injuries": 2156
       },
-      "minimum_per_card": 500
+      "minimum_per_card": 350,
+      "evidence": "FUN_800399C4 disabled type-2 state 0x80 rendered through ZSET4 red1 CLUT"
     },
     {
       "id": "reset_locked_skip",
@@ -116,7 +117,13 @@
       "score_percent": 100,
       "credit": 1.5,
       "unique_frame_states": 2,
-      "frame_count": 12
+      "frame_count": 12,
+      "plate_present_both_phases": true,
+      "selected_plate_rail_pixels": [
+        3097,
+        2435
+      ],
+      "evidence": "FUN_8003F240 alternates normal/selected objects without removing the plate"
     },
     {
       "id": "rosters_title_discrete_jumble",
@@ -270,12 +277,12 @@
       "id": "original_screenshot_similarity",
       "group": "visual",
       "weight": 2,
-      "score_percent": 77.04,
-      "credit": 1.5408,
+      "score_percent": 77.13,
+      "credit": 1.5426,
       "status": "measured",
-      "similarity_percent": 77.04,
-      "color_similarity_percent": 77.51,
-      "edge_similarity_percent": 76.18,
+      "similarity_percent": 77.13,
+      "color_similarity_percent": 77.49,
+      "edge_similarity_percent": 76.45,
       "registration_offset": [
         4,
         -2

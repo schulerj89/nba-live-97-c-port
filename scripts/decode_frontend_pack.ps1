@@ -74,6 +74,24 @@ with src.open("rb") as stream:
         pal0 = get_palette_info_dto_from_dir_entry(pal0_entry, archive)
         if len(pal0.data) != 32:
             raise RuntimeError(f"Pal0 has {len(pal0.data)} bytes; expected 16 BGR555 colours")
+    # FUN_800399C4 marks unavailable type-2 menu objects with state bit 0x80.
+    # The frontend renderer resolves that state through ZSET4's `red1` palette
+    # carrier. Its lower indices form the disabled red ramp while its upper
+    # indices preserve the plate's grey/white highlights and labels. Reset
+    # (c06d) and Player Injuries (c14d) therefore reuse their normal indexed
+    # artwork; they are not separate replacement pictures in the archive.
+    # Preserve those exact local-only runtime variants for the native compositor.
+    disabled_variants = {}
+    if src.stem.upper() == "ZSET4":
+        red1_entry = next((entry for entry in archive.dir_entry_list
+                           if entry.tag == "red1"), None)
+        if red1_entry is None:
+            raise RuntimeError("ZSET4 is missing FEONLY's disabled red1 palette carrier")
+        red1 = get_palette_info_dto_from_dir_entry(red1_entry, archive)
+        if len(red1.data) != 32:
+            raise RuntimeError(f"red1 has {len(red1.data)} bytes; expected 16 BGR555 colours")
+        disabled_variants = {"c06d": (red1, "c06r"),
+                             "c14d": (red1, "c14r")}
     for entry in archive.dir_entry_list:
         converted = entry.img_convert_data
         if pal0 is not None and entry.tag in pal0_targets:
@@ -91,6 +109,22 @@ with src.open("rb") as stream:
             if logical_width is not None:
                 image = image.crop((0, 0, logical_width, entry.h_height))
             image.save(out / (entry.tag + ".png"))
+        variant = disabled_variants.get(entry.tag)
+        if variant is not None:
+            palette, output_tag = variant
+            image_data = entry.raw_data
+            if entry.h_record_id & 0x80:
+                image_data = RefpackHandler().decompress_data(image_data)
+            converted = decode_image_data_by_entry_type(
+                entry.h_record_id & 0x7f, image_data, palette, entry)
+            if converted is None:
+                raise RuntimeError(f"Failed to decode {entry.tag} through red1 CLUT")
+            image = Image.frombytes("RGBA", (entry.h_width, entry.h_height),
+                                    bytes(converted))
+            logical_width = logical_widths.get(entry.tag)
+            if logical_width is not None:
+                image = image.crop((0, 0, logical_width, entry.h_height))
+            image.save(out / (output_tag + ".png"))
 '@
 $decode = $decode.Replace('__SOURCE__', $source).Replace('__OUTPUT__', $output)
 Push-Location $tool

@@ -1139,8 +1139,16 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
             const int x = card_x[static_cast<std::size_t>(i)];
             const int y = card_y[static_cast<std::size_t>(i)];
             const bool selected = menu.selected() == i;
-            const std::string tag = "c" + std::string(i * 2 < 10 ? "0" : "") +
-                                    std::to_string(i * 2 + (selected ? 1 : 0)) + "d";
+            const bool locked = !menu.enabled(i);
+            const bool selected_phase = selected && selected_overlay_visible;
+            std::string tag;
+            if (locked && i == 3)
+                tag = "c06r";
+            else if (locked && i == 7)
+                tag = "c14r";
+            else
+                tag = "c" + std::string(i * 2 < 10 ? "0" : "") +
+                      std::to_string(i * 2 + (selected_phase ? 1 : 0)) + "d";
             // The image is inserted before its transparent plate, matching
             // the PS1 ordering-table composite. These offsets are the common
             // 69x63 blk1 descriptor origin inside the eight authored plates.
@@ -1148,8 +1156,10 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
             if (!art.rgba.empty())
                 blitScaled(image, art, 0, 0, art.width, art.height,
                            x + 12, y + 23, art.width, art.height);
-            if (!selected || selected_overlay_visible)
-                blitAt(image, sprites, tag.c_str(), x, y);
+            // FUN_8003F240 toggles between the normal and selected object; it
+            // never removes the object's plate. Keeping the normal plate in
+            // the off phase also contains the inserted ZCARD within its mask.
+            blitAt(image, sprites, tag.c_str(), x, y);
         }
     } else if (menu.page() == FrontendPage::Card) {
         blitAt(image, sprites, "ba13", 132, 10);

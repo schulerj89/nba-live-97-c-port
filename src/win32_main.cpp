@@ -415,6 +415,8 @@ private:
                 sprintf_s(tag, "c%02dd", i);
                 load_one(tag);
             }
+            load_one("c06r");
+            load_one("c14r");
         } else {
             load_one("ba37");
         }
@@ -624,7 +626,8 @@ private:
         trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
         trace_.log("ROSTER-STACK", "plate x=49/154/259/364; recovered arch y=76/66/66/76 + 118/110/110/118; ZCARD offset=(12,23)");
-        trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; red c06/c07/c14/c15 plates remain drawn while object predicates block focus");
+        trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; FUN_800399C4 state 0x80 routes locked c06/c14 indices through the red1 CLUT while preserving white labels and blocking focus");
+        trace_.log("ROSTER-FLASH", "FUN_8003F240 toggles the selected object's normal/selected plate for 12 vblanks; the underlying plate and ZCARD composite remain present in both phases");
         trace_.log("ROSTER-SFX", "FUN_8003D930 + live no$psx: down/up/left/right map ZCURSOR ids 1/2/3/4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
     }
 
