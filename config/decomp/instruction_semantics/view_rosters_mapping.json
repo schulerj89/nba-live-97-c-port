@@ -288,7 +288,50 @@
       "name": "Player_ChangeStatLayer",
       "source": "src/main_menu.cpp",
       "symbols": ["RosterViewer::cycleCategory"],
-      "accounted_blocks": [],
+      "additional_sources": [
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": ["RosterStatLayerChangeState", "lastStatLayerChange"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Player_ChangeStatLayer PASS"]
+        },
+        {
+          "source": "config/decomp/view_rosters_scenarios.json",
+          "symbols": ["constructor-limited stat-layer previous/next wrap"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x80059610", "0x8005963C", "0x80059650", "0x80059658",
+        "0x80059664", "0x80059674", "0x80059678", "0x8005967C",
+        "0x8005968C", "0x800596B0", "0x800596E4", "0x80059704",
+        "0x80059720", "0x80059750", "0x80059760", "0x80059768",
+        "0x8005978C", "0x800597A8", "0x800597D8"
+      ],
+      "accounting_basis": "All 19 blocks are semantically represented from a fresh private Ghidra decompile. cycleCategory implements the 0x1000 previous/forward branch, inclusive constructor layer limit, wrap, and conditional layer-4 exclusion. RosterStatLayerChangeState retains the original sound slot 0x1B, FUN_800594F0 descriptor table family and 14/17/24 extents, extent-change result, conditional primary and layout-0x23 secondary animation resets, both visible-row refresh loops, controller-page save/zero/rebuild/restore, and stat-scroll reset. Focused native tests cover same-extent and changed-extent transitions, both directions, normal wrap, restricted and available layer-4 branches, sound identity, descriptor extents, animation conditions, refresh counts, and rebuild state. Raw PS1 object lists and renderer calls are typed native state, so no structural CFG equivalence is claimed.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059610", "0x8005963C", "0x80059650", "0x80059658", "0x80059664", "0x80059674", "0x80059678", "0x8005967C", "0x8005968C"],
+          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and sound slot 0x1B are explicit native state transitions."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800596B0", "0x800596E4", "0x80059704", "0x80059720"],
+          "summary": "FUN_800594F0's descriptor extent result drives the primary animation reset, followed by an exact visible-row refresh count."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059750", "0x80059760", "0x80059768", "0x8005978C", "0x800597A8"],
+          "summary": "Layout 0x23 conditionally resets the secondary group when the descriptor extent changes and refreshes its visible rows on every layer change."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800597D8"],
+          "summary": "Controller page save, temporary zero, layout rebuild, exact restoration, stat-window reset, and return are retained."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x80059610"
     },

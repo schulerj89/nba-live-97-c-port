@@ -1055,6 +1055,47 @@ private:
             run_viewer_test.lastRunExitStatus() != 0x100)
             throw std::runtime_error("Rosters_RunViewer cancel suppression self-test failed");
         trace_.log("SELF-TEST", "Rosters_RunViewer PASS: -1 player repair, team 29 -> active/3 branches, state 0x10 callback boundary, accepted writeback, and cancel 0x100 suppression");
+        nba97::RosterViewer stat_layer_test;
+        stat_layer_test.open(roster_database_);
+        if (!stat_layer_test.cycleCategory(1) || stat_layer_test.category() != 3) {
+            throw std::runtime_error("Player_ChangeStatLayer forward setup failed");
+        }
+        const auto same_extent = stat_layer_test.lastStatLayerChange();
+        if (same_extent.input_mask != 0x2000 || same_extent.sound_slot != 0x1b ||
+            same_extent.descriptor_table != 2 || same_extent.descriptor_last_index != 23 ||
+            same_extent.descriptor_extent_changed || same_extent.primary_animation_reset ||
+            same_extent.primary_refresh_count != 6 || !same_extent.secondary_layout ||
+            same_extent.secondary_animation_reset || same_extent.secondary_refresh_count != 6 ||
+            !same_extent.controller_page_zeroed_for_rebuild || !same_extent.layout_rebuilt) {
+            throw std::runtime_error("Player_ChangeStatLayer same-extent side effects failed");
+        }
+        stat_layer_test.move(0, 1, roster_database_);
+        if (!stat_layer_test.cycleCategory(1) || stat_layer_test.category() != 0 ||
+            stat_layer_test.firstVisiblePlayerStat() != 0) {
+            throw std::runtime_error("Player_ChangeStatLayer normal wrap/reset failed");
+        }
+        const auto changed_extent = stat_layer_test.lastStatLayerChange();
+        if (changed_extent.descriptor_table != 0 ||
+            changed_extent.descriptor_last_index != 13 ||
+            !changed_extent.descriptor_extent_changed ||
+            !changed_extent.primary_animation_reset ||
+            !changed_extent.secondary_animation_reset) {
+            throw std::runtime_error("Player_ChangeStatLayer changed-extent animation failed");
+        }
+        stat_layer_test.construct(roster_database_, {1, true, false, true});
+        if (stat_layer_test.category() != 4 || !stat_layer_test.cycleCategory(-1) ||
+            stat_layer_test.category() != 3 || !stat_layer_test.cycleCategory(1) ||
+            stat_layer_test.category() != 0 ||
+            !stat_layer_test.lastStatLayerChange().skipped_layer_four) {
+            throw std::runtime_error("Player_ChangeStatLayer restricted layer-4 skip failed");
+        }
+        stat_layer_test.construct(roster_database_, {1, true, false, false});
+        stat_layer_test.cycleCategory(-1);
+        if (!stat_layer_test.cycleCategory(1) || stat_layer_test.category() != 4 ||
+            stat_layer_test.lastStatLayerChange().skipped_layer_four) {
+            throw std::runtime_error("Player_ChangeStatLayer available layer-4 branch failed");
+        }
+        trace_.log("SELF-TEST", "Player_ChangeStatLayer PASS: inclusive constructor limit wrap, restricted layer-4 skip, sound slot 0x1B, 14/17/24 descriptor extents, conditional dual-group animation, row refresh, page-zero rebuild, and stat-scroll reset");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(
@@ -1419,7 +1460,7 @@ private:
         layers.events.push_back(capture(
             "previous_to_layer_0", layer_viewer.cycleCategory(-1), layer_viewer));
         layers.events.push_back(capture(
-            "previous_wraps_to_layer_5", layer_viewer.cycleCategory(-1), layer_viewer));
+            "previous_wraps_to_layer_3", layer_viewer.cycleCategory(-1), layer_viewer));
         layers.events.push_back(capture(
             "next_wraps_to_layer_0", layer_viewer.cycleCategory(1), layer_viewer));
         finish(layers);
@@ -2100,6 +2141,27 @@ private:
                 nba97::positionName(player->position) : ""));
     }
 
+    void logPlayerStatLayer(const char* control) {
+        const auto& change = roster_viewer_.lastStatLayerChange();
+        trace_.log("PLAYER-STAT-LAYER",
+            std::string(control) + " FUN_80059610 mask=0x" +
+            (change.input_mask == 0x1000 ? "1000" : "2000") +
+            " layer=" + std::to_string(change.previous_layer) + "->" +
+            std::to_string(change.current_layer) +
+            (change.skipped_layer_four ? " (restricted layer 4 skipped)" : "") +
+            " sound-slot=0x1B descriptors=" +
+            std::to_string(change.descriptor_last_index + 1) +
+            " table=" + std::to_string(change.descriptor_table) +
+            " extent-change=" + (change.descriptor_extent_changed ? "yes" : "no") +
+            " animation=primary:" +
+            (change.primary_animation_reset ? "reset" : "retained") +
+            "/secondary:" +
+            (change.secondary_animation_reset ? "reset" : "retained") +
+            " refreshed=" + std::to_string(change.primary_refresh_count) + "+" +
+            std::to_string(change.secondary_refresh_count) +
+            " controller-page=rebuild/restore stat-scroll=0");
+    }
+
     void playRosterCursorSound(int direction) {
         try {
             const auto root = options_.asset_root / "menu";
@@ -2198,12 +2260,12 @@ private:
             changed = roster_viewer_.scanTeam(1, roster_database_, menu_elapsed_ms_);
             trace_.log("PLAYER-TEAM-SCAN", "R1: next team");
         }
-        else if (key == 'Q') {
+        else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard && key == 'Q') {
             changed = roster_viewer_.cycleCategory(-1);
-            trace_.log("PLAYER-STAT-LAYER", "L2/internal 0x1000: previous layer through FUN_80059610");
-        } else if (key == 'E') {
+            logPlayerStatLayer("L2/previous");
+        } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard && key == 'E') {
             changed = roster_viewer_.cycleCategory(1);
-            trace_.log("PLAYER-STAT-LAYER", "R2/internal 0x2000: next layer through FUN_80059610");
+            logPlayerStatLayer("R2/next");
         } else if (key == 'Z') {
             changed = roster_viewer_.cycleDisplay(-1);
             trace_.log("ROSTER-DISPLAY", "R2/internal 0x0200: previous field");

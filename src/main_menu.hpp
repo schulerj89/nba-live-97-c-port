@@ -65,6 +65,27 @@ struct RosterViewerConstructionContext {
     bool special_roster_active = false;
     // FUN_800590B8 copies param_2 into both viewer object-state bytes.
     bool object_state_flag = false;
+    // FUN_80059610 omits layer 4 while frontend roster byte +0x2F61 is set.
+    bool layer_four_restricted = false;
+};
+
+struct RosterStatLayerChangeState {
+    int input_mask = 0;
+    int previous_layer = 2;
+    int current_layer = 2;
+    bool skipped_layer_four = false;
+    int sound_slot = 0;
+    int descriptor_table = 2;
+    int descriptor_last_index = 23;
+    bool descriptor_extent_changed = false;
+    bool primary_animation_reset = false;
+    int primary_refresh_count = 0;
+    bool secondary_layout = false;
+    bool secondary_animation_reset = false;
+    int secondary_refresh_count = 0;
+    int saved_controller_page = 0;
+    bool controller_page_zeroed_for_rebuild = false;
+    bool layout_rebuilt = false;
 };
 
 struct RosterViewerControllerBinding {
@@ -86,6 +107,7 @@ struct RosterViewerRunContext {
     int special_stat_layer = 0;
     bool special_roster_active = false;
     std::uint8_t active_team_index = 0;
+    bool layer_four_restricted = false;
 };
 
 class RosterViewer final {
@@ -137,6 +159,9 @@ public:
     }
     [[nodiscard]] int displayIndexForCategory(std::size_t category) const noexcept {
         return category < display_by_category_.size() ? display_by_category_[category] : -1;
+    }
+    [[nodiscard]] const RosterStatLayerChangeState& lastStatLayerChange() const noexcept {
+        return last_stat_layer_change_;
     }
     [[nodiscard]] int constructionLayerLimit() const noexcept {
         return construction_layer_limit_;
@@ -197,6 +222,14 @@ private:
     std::array<bool, 2> construction_object_flags_{};
     RosterViewerControllerBinding construction_controller_{};
     int construction_controller_phase_ = 0;
+    bool layer_four_restricted_ = false;
+    int stat_descriptor_last_index_ = 23;
+    // View Player uses layout 0x23 and six visible descriptor rows. These
+    // replace the raw DAT_80022088 byte fields consumed by FUN_80059610.
+    int stat_layout_id_ = 0x23;
+    int stat_visible_row_count_ = 6;
+    int stat_controller_page_ = 0;
+    RosterStatLayerChangeState last_stat_layer_change_{};
     std::size_t entry_team_index_ = 0;
     std::size_t entry_player_index_ = 0;
     std::size_t entry_first_visible_player_ = 0;

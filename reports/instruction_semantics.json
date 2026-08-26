@@ -17,19 +17,19 @@
     "total_instructions": 997
   },
   "instruction_accounting": {
-    "accounted_instructions": 673,
+    "accounted_instructions": 799,
     "total_instructions": 997,
-    "accounted_basic_blocks": 49,
+    "accounted_basic_blocks": 68,
     "total_basic_blocks": 83
   },
   "review_classification": {
-    "classified_instructions": 351,
+    "classified_instructions": 477,
     "total_instructions": 997,
-    "unclassified_instructions": 646,
+    "unclassified_instructions": 520,
     "categories": {
       "native_semantic_replacement": {
-        "instructions": 351,
-        "basic_blocks": 43
+        "instructions": 477,
+        "basic_blocks": 62
       }
     }
   },
@@ -429,19 +429,67 @@
           "symbols": [
             "RosterViewer::cycleCategory"
           ]
+        },
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": [
+            "RosterStatLayerChangeState",
+            "lastStatLayerChange"
+          ]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": [
+            "Player_ChangeStatLayer PASS"
+          ]
+        },
+        {
+          "source": "config/decomp/view_rosters_scenarios.json",
+          "symbols": [
+            "constructor-limited stat-layer previous/next wrap"
+          ]
         }
       ],
       "source_mapped": true,
       "original_instruction_count": 126,
       "original_basic_block_count": 19,
-      "accounted_instruction_count": 0,
-      "accounted_basic_block_count": 0,
+      "accounted_instruction_count": 126,
+      "accounted_basic_block_count": 19,
       "structurally_verified_edge_count": 0,
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
       "binary_matching": false,
-      "block_classifications": []
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 40,
+          "basic_block_count": 9,
+          "accounted": true,
+          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and sound slot 0x1B are explicit native state transitions."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 40,
+          "basic_block_count": 4,
+          "accounted": true,
+          "summary": "FUN_800594F0's descriptor extent result drives the primary animation reset, followed by an exact visible-row refresh count."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 34,
+          "basic_block_count": 5,
+          "accounted": true,
+          "summary": "Layout 0x23 conditionally resets the secondary group when the descriptor extent changes and refreshes its visible rows on every layer change."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 12,
+          "basic_block_count": 1,
+          "accounted": true,
+          "summary": "Controller page save, temporary zero, layout rebuild, exact restoration, stat-window reset, and return are retained."
+        }
+      ]
     },
     {
       "address": "0x80059928",

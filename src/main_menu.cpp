@@ -941,6 +941,14 @@ void RosterViewer::constructViewer(const RosterDatabase& database,
         display_by_category_[static_cast<std::size_t>(category_)];
     construction_object_flags_.fill(context.object_state_flag);
     construction_controller_phase_ = 0;
+    layer_four_restricted_ = context.layer_four_restricted;
+    stat_descriptor_last_index_ = category_ == 0 ? 13 : category_ == 1 ? 16 : 23;
+    last_stat_layer_change_ = {};
+    last_stat_layer_change_.previous_layer = category_;
+    last_stat_layer_change_.current_layer = category_;
+    last_stat_layer_change_.descriptor_table = category_ < 2 ? category_
+        : category_ < 4 ? 2 : 3;
+    last_stat_layer_change_.descriptor_last_index = stat_descriptor_last_index_;
 
     // Native state ownership for FUN_80039D88(&DAT_800A436C, 0x12,
     // 0x10004, 0x11, 7). The opaque PS1 object pool is replaced by the
@@ -975,7 +983,8 @@ void RosterViewer::runViewer(const RosterDatabase& database,
     help_visible_ = false;
     first_visible_player_stat_ = 0;
     constructViewer(database, {context.special_stat_layer,
-                               context.special_roster_active, false});
+                               context.special_roster_active, false,
+                               context.layer_four_restricted});
 
     // FUN_8003D930(DAT_80022088, 0x10, ..., FUN_80059034, 0).
     // Input arrives incrementally in the native window loop, but the state
@@ -994,11 +1003,53 @@ void RosterViewer::runViewer(const RosterDatabase& database,
 
 bool RosterViewer::cycleCategory(int direction) noexcept {
     if (!direction) return false;
-    // Live no$psx breakpoint evidence: FUN_80059610 is entered by L2/R2
-    // while View Player changes between season/playoff stat layers. Ordinary
-    // roster team navigation and View Player L1/R1 team scans do not enter it.
     nba97_semantic_trace_record(0x80059610u);
-    category_ = (category_ + (direction < 0 ? 5 : 1)) % 6;
+
+    // FUN_80059610 reads 0x1000 for L2; every other accepted invocation is
+    // the forward/R2 path. It wraps against the constructor's inclusive
+    // layer limit, not the six-entry backing descriptor array.
+    RosterStatLayerChangeState change;
+    change.input_mask = direction < 0 ? 0x1000 : 0x2000;
+    change.previous_layer = category_;
+    do {
+        category_ = direction < 0
+            ? (category_ == 0 ? construction_layer_limit_ : category_ - 1)
+            : (category_ == construction_layer_limit_ ? 0 : category_ + 1);
+        if (category_ == 4 && layer_four_restricted_)
+            change.skipped_layer_four = true;
+    } while (category_ == 4 && layer_four_restricted_);
+
+    // FUN_8003B26C(0x1B) is the original registered frontend sound slot. It
+    // is deliberately retained as a slot rather than misidentified as
+    // ZCURSOR program 27 (that local bank contains only programs 0..11).
+    change.sound_slot = 0x1b;
+    change.current_layer = category_;
+    change.descriptor_table = category_ < 2 ? category_
+        : category_ < 4 ? 2 : 3;
+    const int previous_last_index = stat_descriptor_last_index_;
+    stat_descriptor_last_index_ = category_ == 0 ? 13 : category_ == 1 ? 16 : 23;
+    change.descriptor_last_index = stat_descriptor_last_index_;
+    change.descriptor_extent_changed = previous_last_index != stat_descriptor_last_index_;
+
+    // FUN_800594F0 replaces every stat-label descriptor. A changed extent
+    // additionally resets/animates the primary object group. FUN_80059610
+    // refreshes every visible row even when the extent remains unchanged.
+    change.primary_animation_reset = change.descriptor_extent_changed;
+    change.primary_refresh_count = stat_visible_row_count_;
+    change.secondary_layout = stat_layout_id_ == 0x23;
+    change.secondary_animation_reset =
+        change.secondary_layout && change.descriptor_extent_changed;
+    change.secondary_refresh_count =
+        change.secondary_layout ? stat_visible_row_count_ : 0;
+
+    // The original temporarily sets the controller page byte to zero around
+    // FUN_8003A224, then restores it exactly.
+    change.saved_controller_page = stat_controller_page_;
+    stat_controller_page_ = 0;
+    change.controller_page_zeroed_for_rebuild = true;
+    change.layout_rebuilt = true;
+    stat_controller_page_ = change.saved_controller_page;
+    last_stat_layer_change_ = change;
     first_visible_player_stat_ = 0;
     return true;
 }
