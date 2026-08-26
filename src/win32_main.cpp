@@ -1226,6 +1226,65 @@ private:
             wrap_test.lastPlayerCycle().transition_frames != 0)
             throw std::runtime_error("Rosters_CyclePlayer special-roster lock failed");
         trace_.log("SELF-TEST", "Rosters_CyclePlayer PASS: input 8/forward masks, bidirectional count-based wrap, player-ID mirror, two transition frames, page 0/other descriptor groups, visible-row refresh, state-0x24 cool-fact stop/rebuild, special descriptor-29 lock, and stat-scroll preservation");
+        nba97::RosterViewer player_card_run_test;
+        player_card_run_test.open(roster_database_);
+        for (int row = 0; row < 6; ++row)
+            player_card_run_test.move(0, 1, roster_database_);
+        if (!player_card_run_test.runPlayerCard(roster_database_))
+            throw std::runtime_error("Player_RunCard normal entry failed");
+        const auto normal_card = player_card_run_test.playerCardRunState();
+        const auto* normal_card_player = player_card_run_test.selectedPlayer(roster_database_);
+        if (!normal_card.portrait_archive_requested ||
+            !normal_card.cool_fact_archive_requested ||
+            std::string(normal_card.portrait_index) != "Z1PORT.IDX" ||
+            std::string(normal_card.portrait_archive) != "Z1PORT.BIG" ||
+            std::string(normal_card.cool_fact_index) != "Z1COOL.IDX" ||
+            std::string(normal_card.cool_fact_archive) != "Z1COOL.BIG" ||
+            normal_card.object_count != 0x1d || normal_card.visible_row_count != 6 ||
+            normal_card.manager_byte_2 != 0x70 ||
+            normal_card.manager_short_20 != 0x36 ||
+            normal_card.manager_short_22 != 0xef ||
+            normal_card.manager_mirror_flags != std::array<int, 2>{1, 1} ||
+            !normal_card.number_descriptor_bound || !normal_card.position_descriptor_bound ||
+            normal_card.layout_id != 0x24 || normal_card.current_stat_layer != 2 ||
+            normal_card.stat_layer_limit != 3 || normal_card.descriptor_last_index != 0x17 ||
+            normal_card.descriptor_end != 0x38 || normal_card.selected_team != 0 ||
+            normal_card.selected_roster_slot != 6 || normal_card.selected_visible_row != 5 ||
+            !normal_card_player || normal_card.selected_player_id != normal_card_player->id ||
+            !normal_card.player_context_initialized ||
+            !normal_card.cool_fact_choices_refreshed ||
+            !normal_card.parent_roster_viewer_selected || normal_card.parent_active_page != 0 ||
+            normal_card.column_starts != std::array<int, 4>{0, 0, 0, 0} ||
+            normal_card.column_steps != std::array<int, 4>{2, 2, 2, 2} ||
+            normal_card.previous_fact_choice != -1 || normal_card.previous_fact_record != -1 ||
+            !normal_card.controller.bound || normal_card.controller.slot != 0x39 ||
+            normal_card.controller.flags != 0x10000u ||
+            normal_card.controller.object_id != 0x10 || normal_card.controller.value != 0x0d ||
+            normal_card.frontend_state_during_loop != 0x11 || normal_card.input_state != -1 ||
+            normal_card.draw_callback != 0x8005A280u ||
+            normal_card.action_callback != 0x8005A3FCu ||
+            !normal_card.input_loop_bound || normal_card.frontend_state_after_loop != -1 ||
+            !normal_card.teardown_scheduled || normal_card.teardown_complete)
+            throw std::runtime_error("Player_RunCard normal lifecycle self-test failed");
+        player_card_run_test.returnToRoster();
+        if (player_card_run_test.playerCardRunState().input_loop_bound ||
+            !player_card_run_test.playerCardRunState().teardown_complete)
+            throw std::runtime_error("Player_RunCard teardown self-test failed");
+        if (!player_card_run_test.runPlayerCard(roster_database_, {1, false, 0x11, 1}) ||
+            player_card_run_test.playerCardRunState().current_stat_layer != 4 ||
+            player_card_run_test.playerCardRunState().stat_layer_limit != 4 ||
+            player_card_run_test.playerCardRunState().parent_roster_viewer_selected ||
+            player_card_run_test.playerCardRunState().parent_active_page != 1)
+            throw std::runtime_error("Player_RunCard special-layer branch failed");
+        if (!player_card_run_test.runPlayerCard(roster_database_, {1, true, 0x10, 0}) ||
+            player_card_run_test.playerCardRunState().current_stat_layer != 5 ||
+            player_card_run_test.playerCardRunState().stat_layer_limit != 5)
+            throw std::runtime_error("Player_RunCard forced-layer-five branch failed");
+        if (!player_card_run_test.runPlayerCard(roster_database_, {0, true, 0x10, 0}) ||
+            player_card_run_test.playerCardRunState().current_stat_layer != 2 ||
+            player_card_run_test.playerCardRunState().stat_layer_limit != 3)
+            throw std::runtime_error("Player_RunCard inactive-force branch failed");
+        trace_.log("SELF-TEST", "Player_RunCard PASS: four private archive requests, manager 29/6/0x70/0x36/0xEF, layout 0x24, normal/special/forced layers, selected context and cool-fact refresh, four 0/2 columns, -1 sentinels, controller 0x39 binding, frontend 0x11/state -1 callbacks, and teardown restoration");
         nba97::RecoveredAudioPlayer cool_fact_test;
         const auto cool_fact_info = cool_fact_test.inspectCoolFact(
             options_.asset_root / "menu" / "Z1COOL.IDX",
@@ -2322,8 +2381,21 @@ private:
             if (roster_viewer_.selectedPlayer(roster_database_)) {
                 roster_viewer_.activate(roster_database_);
                 loadSelectedPlayerCardAssets();
+                const auto& run = roster_viewer_.playerCardRunState();
                 trace_.log("ROSTER-VIEW",
-                    "internal 0x10 -> result=2 -> nested state 0x24 FUN_8005A538");
+                    "internal 0x10 -> result=2 -> FUN_8005A538 layout=0x24; "
+                    "archives=" + std::string(run.portrait_index) + "/" +
+                    run.portrait_archive + "+" + run.cool_fact_index + "/" +
+                    run.cool_fact_archive + " manager=" +
+                    std::to_string(run.object_count) + " objects/" +
+                    std::to_string(run.visible_row_count) + " rows layer=" +
+                    std::to_string(run.current_stat_layer) + "/" +
+                    std::to_string(run.stat_layer_limit) + " team/slot/player=" +
+                    std::to_string(run.selected_team) + "/" +
+                    std::to_string(run.selected_roster_slot) + "/" +
+                    std::to_string(run.selected_player_id) +
+                    " controller=0x39 flags=0x10000 object=0x10 value=0x0D "
+                    "frontend=0x11 input=-1 draw=0x8005A280 action=0x8005A3FC");
                 rebuildMenuFrame();
                 InvalidateRect(window_, nullptr, FALSE);
                 return;

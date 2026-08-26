@@ -389,8 +389,40 @@
       "address": "0x8005A538",
       "name": "Player_RunCard",
       "source": "src/main_menu.cpp",
-      "symbols": ["RosterViewer::activate", "renderRosterViewer"],
-      "accounted_blocks": [],
+      "symbols": ["RosterViewer::runPlayerCard", "RosterViewer::activate", "RosterViewer::returnToRoster"],
+      "additional_sources": [
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": ["PlayerCardRunContext", "PlayerCardRunState", "playerCardRunState"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Player_RunCard PASS", "loadSelectedPlayerCardAssets", "draw=0x8005A280 action=0x8005A3FC"]
+        },
+        {
+          "source": "config/decomp/view_rosters_scenarios.json",
+          "symbols": ["player-card archive/controller lifecycle"]
+        }
+      ],
+      "accounted_blocks": ["0x8005A538", "0x8005A650", "0x8005A67C"],
+      "accounting_basis": "All three blocks are semantically represented from a fresh private Ghidra decompile. runPlayerCard retains the Z1PORT IDX/BIG and Z1COOL IDX/BIG request boundaries, exact DAT_800A482C manager values (29 objects, 6 rows, 0x70, 0x36, 0xEF, paired flags), number/position bindings, layout 0x24, FUN_8005A1EC normal/special/forced layer selection, FUN_8005A074 selected team/slot/visible-row/player context and cool-fact refresh, FUN_800594F0 24-descriptor extent, four 0/2 column pairs, two -1 fact sentinels, controller tuple (0x39,0x10000,0x10,0x0D), frontend state 0x11, generic input state -1, draw callback 0x8005A280, action callback 0x8005A3FC, and post-loop -1 restoration. returnToRoster closes the asynchronous native input-loop boundary. The Windows host performs actual archive reads only from ignored local assetpacks and logs every recovered binding. Focused tests cover normal, special, forced-five, and inactive-force branches; parent state/page selection; all manager constants; selected context; columns/sentinels; controller/callbacks; and teardown. Raw PS1 object pointers and blocking renderer loop use typed native state, so no structural CFG equivalence is claimed.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005A538"],
+          "summary": "Private archive requests, exact manager initialization, descriptor bindings, layout/layer selection, selected player context, cool-fact choices, and 24-entry descriptor setup are explicit native lifecycle state."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005A650"],
+          "summary": "The four-entry initialization loop is retained as exact zero column starts paired with step value two, followed by both -1 fact sentinels."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005A67C"],
+          "summary": "Controller 0x39 binding, frontend state 0x11, state -1 input loop, distinct draw/action callbacks, scheduled teardown, and final frontend -1 restoration are independently testable."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x8005A538"
     },

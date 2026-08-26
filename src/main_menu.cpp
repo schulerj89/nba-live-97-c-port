@@ -950,6 +950,7 @@ void RosterViewer::constructViewer(const RosterDatabase& database,
         : category_ < 4 ? 2 : 3;
     last_stat_layer_change_.descriptor_last_index = stat_descriptor_last_index_;
     last_player_cycle_ = {};
+    player_card_run_state_ = {};
 
     // Native state ownership for FUN_80039D88(&DAT_800A436C, 0x12,
     // 0x10004, 0x11, 7). The opaque PS1 object pool is replaced by the
@@ -1225,18 +1226,100 @@ bool RosterViewer::hover(int psx_x, int psx_y, const RosterDatabase& database) n
     return false;
 }
 
+bool RosterViewer::runPlayerCard(const RosterDatabase& database,
+                                 PlayerCardRunContext context) noexcept {
+    const PlayerRecord* player = selectedPlayer(database);
+    if (!player) return false;
+    nba97_semantic_trace_record(0x8005A538u);
+
+    PlayerCardRunState run;
+    // FUN_80030D14 / FUN_8003122C request the original private archives. The
+    // native window owns actual local decoding; this state preserves the
+    // recovered lifecycle without embedding or publishing their contents.
+    run.portrait_archive_requested = true;
+    run.cool_fact_archive_requested = true;
+    run.portrait_index = "Z1PORT.IDX";
+    run.portrait_archive = "Z1PORT.BIG";
+    run.cool_fact_index = "Z1COOL.IDX";
+    run.cool_fact_archive = "Z1COOL.BIG";
+
+    // DAT_800A482C manager initialization.
+    run.object_count = 0x1d;
+    run.visible_row_count = 6;
+    run.manager_byte_2 = 0x70;
+    run.manager_short_20 = 0x36;
+    run.manager_short_22 = 0xef;
+    run.manager_mirror_flags = {1, 1};
+    run.number_descriptor_bound = true;
+    run.position_descriptor_bound = true;
+    run.layout_id = 0x24;
+
+    // FUN_8005A1EC chooses the normal layer 2/limit 3 pair or a special
+    // layer+3 pair. Byte +0x2FC4 forces both to layer 5 only while special
+    // mode is active.
+    int layer = 2;
+    int limit = 3;
+    if (context.special_stat_layer != 0) {
+        layer = context.special_stat_layer + 3;
+        limit = layer;
+        if (context.force_layer_five)
+            layer = limit = 5;
+    }
+    category_ = layer;
+    construction_layer_limit_ = limit;
+    stat_descriptor_last_index_ = 0x17;
+    run.current_stat_layer = layer;
+    run.stat_layer_limit = limit;
+    run.descriptor_last_index = 0x17;
+    run.descriptor_end = 0x38;
+
+    // For the 0x24 invocation, FUN_8005A074 selects the parent roster page,
+    // initializes one team/player context, refreshes available cool facts,
+    // and installs the recovered -1 sentinels.
+    run.parent_roster_viewer_selected = context.parent_frontend_state == 0x10;
+    run.parent_active_page = context.parent_active_page;
+    run.selected_team = team_index_;
+    run.selected_roster_slot = player_index_;
+    run.selected_visible_row = player_index_ >= first_visible_player_
+        ? player_index_ - first_visible_player_ : 0;
+    run.selected_player_id = player->id;
+    run.player_context_initialized = true;
+    run.cool_fact_choices_refreshed = true;
+    run.column_starts.fill(0);
+    run.column_steps.fill(2);
+    run.previous_fact_choice = -1;
+    run.previous_fact_record = -1;
+
+    // FUN_80039D88(&DAT_800A482C, 0x39, 0x10000, 0x10, 0x0D), followed by
+    // the generic state -1 loop with distinct draw/action callbacks.
+    run.controller = {0x39, 0x10000u, 0x10, 0x0d, true};
+    run.frontend_state_during_loop = 0x11;
+    run.input_state = -1;
+    run.draw_callback = 0x8005A280u;
+    run.action_callback = 0x8005A3FCu;
+    run.input_loop_bound = true;
+    run.frontend_state_after_loop = -1;
+    run.teardown_scheduled = true;
+    run.teardown_complete = false;
+
+    mode_ = RosterViewMode::PlayerCard;
+    first_visible_player_stat_ = 0;
+    help_visible_ = false;
+    player_card_run_state_ = run;
+    return true;
+}
+
 void RosterViewer::activate(const RosterDatabase& database) noexcept {
     // FUN_80058F0C action 0x10 returns 2 for a valid slot.  The frontend then
     // pushes nested state 0x24 (FUN_8005A538) and returns to state 0x10.
-    if (selectedPlayer(database)) {
-        nba97_semantic_trace_record(0x8005A538u);
-        mode_ = RosterViewMode::PlayerCard;
-        first_visible_player_stat_ = 0;
-        help_visible_ = false;
-    }
+    runPlayerCard(database);
 }
 
 void RosterViewer::returnToRoster() noexcept {
+    if (player_card_run_state_.input_loop_bound) {
+        player_card_run_state_.input_loop_bound = false;
+        player_card_run_state_.teardown_complete = true;
+    }
     mode_ = RosterViewMode::TeamRoster;
     first_visible_player_stat_ = 0;
     help_visible_ = false;

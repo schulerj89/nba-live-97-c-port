@@ -121,12 +121,64 @@ struct RosterPlayerCycleState {
     bool stat_scroll_preserved = false;
 };
 
+struct PlayerCardRunContext {
+    int special_stat_layer = 0;
+    // Frontend roster byte +0x2FC4 forces layer/limit 5 when a special layer
+    // is active.
+    bool force_layer_five = false;
+    int parent_frontend_state = 0x10;
+    std::uint8_t parent_active_page = 0;
+};
+
 struct RosterViewerControllerBinding {
     int slot = 0;
     std::uint32_t flags = 0;
     int object_id = 0;
     int value = 0;
     bool bound = false;
+};
+
+struct PlayerCardRunState {
+    bool portrait_archive_requested = false;
+    bool cool_fact_archive_requested = false;
+    const char* portrait_index = "";
+    const char* portrait_archive = "";
+    const char* cool_fact_index = "";
+    const char* cool_fact_archive = "";
+    int object_count = 0;
+    int visible_row_count = 0;
+    int manager_byte_2 = 0;
+    int manager_short_20 = 0;
+    int manager_short_22 = 0;
+    std::array<int, 2> manager_mirror_flags{};
+    bool number_descriptor_bound = false;
+    bool position_descriptor_bound = false;
+    int layout_id = 0;
+    int current_stat_layer = 0;
+    int stat_layer_limit = 0;
+    int descriptor_last_index = 0;
+    int descriptor_end = 0;
+    std::size_t selected_team = 0;
+    std::size_t selected_roster_slot = 0;
+    std::size_t selected_visible_row = 0;
+    std::uint16_t selected_player_id = 0xffffu;
+    bool player_context_initialized = false;
+    bool cool_fact_choices_refreshed = false;
+    bool parent_roster_viewer_selected = false;
+    int parent_active_page = 0;
+    std::array<int, 4> column_starts{};
+    std::array<int, 4> column_steps{};
+    int previous_fact_choice = 0;
+    int previous_fact_record = 0;
+    RosterViewerControllerBinding controller{};
+    int frontend_state_during_loop = 0;
+    int input_state = 0;
+    std::uint32_t draw_callback = 0;
+    std::uint32_t action_callback = 0;
+    bool input_loop_bound = false;
+    int frontend_state_after_loop = 0;
+    bool teardown_scheduled = false;
+    bool teardown_complete = false;
 };
 
 struct RosterViewerPersistentState {
@@ -154,6 +206,8 @@ public:
               std::uint32_t elapsed_ms = 0) noexcept;
     bool cyclePlayer(int direction, const RosterDatabase& database,
                      RosterPlayerCycleContext context = {}) noexcept;
+    bool runPlayerCard(const RosterDatabase& database,
+                       PlayerCardRunContext context = {}) noexcept;
     bool cycleCategory(int direction) noexcept;
     bool cycleDisplay(int direction) noexcept;
     bool scanTeam(int direction, const RosterDatabase& database,
@@ -200,6 +254,9 @@ public:
     }
     [[nodiscard]] const RosterPlayerCycleState& lastPlayerCycle() const noexcept {
         return last_player_cycle_;
+    }
+    [[nodiscard]] const PlayerCardRunState& playerCardRunState() const noexcept {
+        return player_card_run_state_;
     }
     [[nodiscard]] int constructionLayerLimit() const noexcept {
         return construction_layer_limit_;
@@ -269,6 +326,7 @@ private:
     int stat_controller_page_ = 0;
     RosterStatLayerChangeState last_stat_layer_change_{};
     RosterPlayerCycleState last_player_cycle_{};
+    PlayerCardRunState player_card_run_state_{};
     std::size_t entry_team_index_ = 0;
     std::size_t entry_player_index_ = 0;
     std::size_t entry_first_visible_player_ = 0;
