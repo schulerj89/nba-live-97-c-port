@@ -11,6 +11,12 @@ evidence. The green percentage measures completion of the catalogued native-port
 roadmap. They are deliberately separate; a working feature is not automatically
 a fully decompiled or matching original function.
 
+The tracked View Rosters scope currently has semantic ownership for **997/997
+original instructions** across **83/83 basic blocks**, with **12/12 native
+scenarios**, **18/18 interaction contracts**, and **91.82% measured visual
+fidelity**. Structural MIPS control-flow matching is not targeted for the
+native port and is not presented as a completion percentage.
+
 ## Current scope
 
 The native Windows build currently covers:
@@ -106,10 +112,13 @@ Function coverage is intentionally conservative: partial behavioral evidence
 does not count as a complete or instruction-matching decompilation.
 
 View Rosters additionally tracks the original MIPS denominator—functions,
-instructions, basic blocks, CFG edges, and call sites—from headless Ghidra.
-Source ownership, explicit block accounting, native semantic checkpoints,
-original-trace equivalence, and exact MIPS matching are reported separately so
-a working native feature is never mislabeled as matching original code.
+instructions, basic blocks, and call sites—from headless Ghidra. Source
+ownership, explicit block accounting, native semantic checkpoints, and
+original-trace equivalence are reported separately so a working native feature
+is never mislabeled as byte-identical original code. The detailed report keeps
+the original CFG inventory as research metadata, but structural CFG equivalence
+is **not targeted** for this native C/C++ port; its raw edge count should not be
+interpreted as a progress or quality score.
 
 Refresh that structural inventory with
 `pwsh -File scripts/update_instruction_semantics.ps1`. Once a same-scenario
@@ -118,7 +127,7 @@ the native checkpoint sequence using
 `python tools/compare_semantic_traces.py --original <local-trace.txt>`.
 For state-aware scenario comparison, follow the
 [View Rosters semantic verification workflow](docs/view_rosters_verification_workflow.md).
-That contract currently runs 12 small native scenarios over 16 inventoried
+That contract currently runs 12 small native scenarios over 18 inventoried
 state interactions, while original no$psx trace equivalence remains a separate
 2-scenario evidence tier. Help modals, scrolling, stat layers, and Cool Fact
 decoding also have non-scoring pass/fail regressions so they cannot inflate the
