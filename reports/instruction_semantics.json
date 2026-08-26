@@ -17,19 +17,19 @@
     "total_instructions": 997
   },
   "instruction_accounting": {
-    "accounted_instructions": 598,
+    "accounted_instructions": 673,
     "total_instructions": 997,
-    "accounted_basic_blocks": 39,
+    "accounted_basic_blocks": 49,
     "total_basic_blocks": 83
   },
   "review_classification": {
-    "classified_instructions": 276,
+    "classified_instructions": 351,
     "total_instructions": 997,
-    "unclassified_instructions": 721,
+    "unclassified_instructions": 646,
     "categories": {
       "native_semantic_replacement": {
-        "instructions": 276,
-        "basic_blocks": 33
+        "instructions": 351,
+        "basic_blocks": 43
       }
     }
   },
@@ -358,23 +358,66 @@
         {
           "source": "src/main_menu.cpp",
           "symbols": [
-            "RosterViewer::open",
+            "RosterViewer::runViewer",
+            "RosterViewer::finishRun",
             "RosterViewer::commit",
             "RosterViewer::cancel"
+          ]
+        },
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": [
+            "RosterViewerPersistentState",
+            "RosterViewerRunContext"
+          ]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": [
+            "Rosters_RunViewer PASS"
           ]
         }
       ],
       "source_mapped": true,
       "original_instruction_count": 75,
       "original_basic_block_count": 10,
-      "accounted_instruction_count": 0,
-      "accounted_basic_block_count": 0,
+      "accounted_instruction_count": 75,
+      "accounted_basic_block_count": 10,
       "structurally_verified_edge_count": 0,
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
       "binary_matching": false,
-      "block_classifications": []
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 24,
+          "basic_block_count": 3,
+          "accounted": true,
+          "summary": "The saved-player -1 check/reset and the two saved selection mirrors are represented by typed persistent state normalized before construction."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 14,
+          "basic_block_count": 4,
+          "accounted": true,
+          "summary": "Saved team 29 is replaced with the active team in mode 2 and team 3 otherwise, with ordinary teams retained, exactly matching both original branches."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 18,
+          "basic_block_count": 1,
+          "accounted": true,
+          "summary": "FUN_800590B8 construction plus FUN_8003D930 state-0x10 input/draw invocation become explicit constructor, input-state, cancel-sentinel, and callback-bound native state; generic input internals remain separately scoped."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 19,
+          "basic_block_count": 2,
+          "accounted": true,
+          "summary": "The non-0x100 player/window/team writeback, 0x100 suppression, epilogue, and returned loop result are represented by finishRun, commit/cancel snapshots, and retained result/exit status."
+        }
+      ]
     },
     {
       "address": "0x80059610",

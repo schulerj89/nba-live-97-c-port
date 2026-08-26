@@ -234,8 +234,52 @@
       "address": "0x800592C4",
       "name": "Rosters_RunViewer",
       "source": "src/main_menu.cpp",
-      "symbols": ["RosterViewer::open", "RosterViewer::commit", "RosterViewer::cancel"],
-      "accounted_blocks": [],
+      "symbols": ["RosterViewer::runViewer", "RosterViewer::finishRun", "RosterViewer::commit", "RosterViewer::cancel"],
+      "additional_sources": [
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": ["RosterViewerPersistentState", "RosterViewerRunContext"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Rosters_RunViewer PASS"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x800592C4",
+        "0x800592E8",
+        "0x800592F0",
+        "0x80059324",
+        "0x80059334",
+        "0x80059350",
+        "0x80059354",
+        "0x8005935C",
+        "0x800593A4",
+        "0x800593D8"
+      ],
+      "accounting_basis": "All ten blocks are semantically represented at this orchestration boundary. RosterViewer::runViewer repairs saved player -1 by resetting player/window to zero, restores the two saved selection fields, normalizes team sentinel 29 to the active team when frontend mode is 2 or to team 3 otherwise, and calls the recovered constructor with the active special-layer context. It records the exact generic input state 0x10, cancel sentinel 0x100, and FUN_80059034 draw-callback binding while native window input is delivered incrementally. RosterViewer::finishRun preserves the generic loop's result code and exit status, writes current player/window/team state through commit for every non-0x100 exit, and suppresses writeback/restores the entry snapshot through cancel for 0x100. Native tests cover both sentinel repairs, both team-29 branches, constructor/input boundaries, accepted writeback, cancel suppression, and returned result/status values.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800592C4", "0x800592E8", "0x800592F0"],
+          "summary": "The saved-player -1 check/reset and the two saved selection mirrors are represented by typed persistent state normalized before construction."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059324", "0x80059334", "0x80059350", "0x80059354"],
+          "summary": "Saved team 29 is replaced with the active team in mode 2 and team 3 otherwise, with ordinary teams retained, exactly matching both original branches."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005935C"],
+          "summary": "FUN_800590B8 construction plus FUN_8003D930 state-0x10 input/draw invocation become explicit constructor, input-state, cancel-sentinel, and callback-bound native state; generic input internals remain separately scoped."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800593A4", "0x800593D8"],
+          "summary": "The non-0x100 player/window/team writeback, 0x100 suppression, epilogue, and returned loop result are represented by finishRun, commit/cancel snapshots, and retained result/exit status."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x800592C4"
     },

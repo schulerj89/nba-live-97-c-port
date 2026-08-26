@@ -912,7 +912,11 @@ void RosterViewer::clamp(const RosterDatabase& database) noexcept {
 }
 
 void RosterViewer::open(const RosterDatabase& database) noexcept {
-    open(database, {});
+    RosterViewerRunContext context;
+    context.saved = {static_cast<std::int16_t>(player_index_),
+                     static_cast<std::int16_t>(first_visible_player_),
+                     static_cast<std::int16_t>(team_index_)};
+    runViewer(database, context);
 }
 
 void RosterViewer::constructViewer(const RosterDatabase& database,
@@ -944,13 +948,41 @@ void RosterViewer::constructViewer(const RosterDatabase& database,
     construction_controller_ = {0x12, 0x10004u, 0x11, 7, true};
 }
 
-void RosterViewer::open(const RosterDatabase& database,
-                        RosterViewerConstructionContext context) noexcept {
+void RosterViewer::construct(const RosterDatabase& database,
+                             RosterViewerConstructionContext context) noexcept {
+    constructViewer(database, context);
+}
+
+void RosterViewer::runViewer(const RosterDatabase& database,
+                             RosterViewerRunContext context) noexcept {
     nba97_semantic_trace_record(0x800592C4u);
+    if (context.saved.player_index == -1) {
+        context.saved.player_index = 0;
+        context.saved.first_visible_player = 0;
+    }
+    if (context.saved.team_index == 29) {
+        context.saved.team_index = context.special_stat_layer == 2
+            ? static_cast<std::int16_t>(context.active_team_index) : 3;
+    }
+    player_index_ = context.saved.player_index < 0
+        ? 0u : static_cast<std::size_t>(context.saved.player_index);
+    first_visible_player_ = context.saved.first_visible_player < 0
+        ? 0u : static_cast<std::size_t>(context.saved.first_visible_player);
+    team_index_ = context.saved.team_index < 0
+        ? 0u : static_cast<std::size_t>(context.saved.team_index);
+
     mode_ = RosterViewMode::TeamRoster;
     help_visible_ = false;
     first_visible_player_stat_ = 0;
-    constructViewer(database, context);
+    constructViewer(database, {context.special_stat_layer,
+                               context.special_roster_active, false});
+
+    // FUN_8003D930(DAT_80022088, 0x10, ..., FUN_80059034, 0).
+    // Input arrives incrementally in the native window loop, but the state
+    // and draw-callback boundary remain explicit here.
+    run_input_state_ = 0x10;
+    run_cancel_sentinel_ = 0x100;
+    run_draw_callback_bound_ = true;
     entry_team_index_ = team_index_;
     entry_player_index_ = player_index_;
     entry_first_visible_player_ = first_visible_player_;
@@ -1115,6 +1147,15 @@ void RosterViewer::cancel() noexcept {
     first_visible_player_ = entry_first_visible_player_;
     palette_from_team_index_ = team_index_;
     scroll_from_first_player_ = first_visible_player_;
+}
+
+void RosterViewer::finishRun(int result_code, int exit_status) noexcept {
+    last_run_result_ = result_code;
+    last_run_exit_status_ = exit_status;
+    if (exit_status == run_cancel_sentinel_)
+        cancel();
+    else
+        commit();
 }
 
 PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,

@@ -75,11 +75,26 @@ struct RosterViewerControllerBinding {
     bool bound = false;
 };
 
+struct RosterViewerPersistentState {
+    std::int16_t player_index = 0;
+    std::int16_t first_visible_player = 0;
+    std::int16_t team_index = 0;
+};
+
+struct RosterViewerRunContext {
+    RosterViewerPersistentState saved{};
+    int special_stat_layer = 0;
+    bool special_roster_active = false;
+    std::uint8_t active_team_index = 0;
+};
+
 class RosterViewer final {
 public:
     void open(const RosterDatabase& database) noexcept;
-    void open(const RosterDatabase& database,
-              RosterViewerConstructionContext context) noexcept;
+    void construct(const RosterDatabase& database,
+                   RosterViewerConstructionContext context) noexcept;
+    void runViewer(const RosterDatabase& database,
+                   RosterViewerRunContext context) noexcept;
     bool move(int horizontal, int vertical, const RosterDatabase& database,
               std::uint32_t elapsed_ms = 0) noexcept;
     bool cycleCategory(int direction) noexcept;
@@ -93,6 +108,7 @@ public:
     void dismissHelp() noexcept { help_visible_ = false; }
     void commit() noexcept;
     void cancel() noexcept;
+    void finishRun(int result_code, int exit_status) noexcept;
 
     [[nodiscard]] RosterViewMode mode() const noexcept { return mode_; }
     [[nodiscard]] bool helpVisible() const noexcept { return help_visible_; }
@@ -146,6 +162,18 @@ public:
     [[nodiscard]] const RosterViewerControllerBinding& constructionController() const noexcept {
         return construction_controller_;
     }
+    [[nodiscard]] RosterViewerPersistentState savedRunState() const noexcept {
+        return {static_cast<std::int16_t>(entry_player_index_),
+                static_cast<std::int16_t>(entry_first_visible_player_),
+                static_cast<std::int16_t>(entry_team_index_)};
+    }
+    [[nodiscard]] int runInputState() const noexcept { return run_input_state_; }
+    [[nodiscard]] int runCancelSentinel() const noexcept { return run_cancel_sentinel_; }
+    [[nodiscard]] bool runDrawCallbackBound() const noexcept {
+        return run_draw_callback_bound_;
+    }
+    [[nodiscard]] int lastRunResult() const noexcept { return last_run_result_; }
+    [[nodiscard]] int lastRunExitStatus() const noexcept { return last_run_exit_status_; }
     [[nodiscard]] const TeamRecord* selectedTeam(const RosterDatabase& database) const noexcept;
     [[nodiscard]] const PlayerRecord* selectedPlayer(const RosterDatabase& database) const noexcept;
 
@@ -174,6 +202,11 @@ private:
     std::size_t entry_first_visible_player_ = 0;
     std::size_t first_visible_player_stat_ = 0;
     bool help_visible_ = false;
+    int run_input_state_ = 0x10;
+    int run_cancel_sentinel_ = 0x100;
+    bool run_draw_callback_bound_ = false;
+    int last_run_result_ = 0;
+    int last_run_exit_status_ = 0;
 };
 
 using MenuSpritePack = std::unordered_map<std::string, PshImage>;

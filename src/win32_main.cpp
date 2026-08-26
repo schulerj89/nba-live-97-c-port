@@ -1015,17 +1015,46 @@ private:
         if (constructor_test.category() != 2 || constructor_test.displayIndex() != 32 ||
             constructor_test.displayIndexForCategory(3) != 32)
             throw std::runtime_error("Rosters_ConstructViewer reopen reset self-test failed");
-        constructor_test.open(roster_database_, {2, true, true});
+        constructor_test.construct(roster_database_, {2, true, true});
         if (constructor_test.category() != 5 || constructor_test.displayIndex() != 44 ||
             constructor_test.constructionLayerLimit() != 5 ||
             constructor_test.constructedDescriptorIndex() != 44 ||
             !constructor_test.constructionObjectFlagsAgree() ||
             !constructor_test.constructionObjectStateFlag())
             throw std::runtime_error("Rosters_ConstructViewer special construction self-test failed");
-        constructor_test.open(roster_database_, {2, false, false});
+        constructor_test.construct(roster_database_, {2, false, false});
         if (constructor_test.category() != 2 || constructor_test.constructionLayerLimit() != 3)
             throw std::runtime_error("Rosters_ConstructViewer inactive-special self-test failed");
         trace_.log("SELF-TEST", "Rosters_ConstructViewer PASS: six descriptor defaults reset; normal layer=2/limit=3; active special layer=5/limit=5; paired object flags and controller 0x12 bound");
+        nba97::RosterViewer run_viewer_test;
+        run_viewer_test.runViewer(roster_database_, {{-1, 5, 29}, 2, true, 7});
+        if (run_viewer_test.playerIndex() != 0 ||
+            run_viewer_test.firstVisiblePlayer() != 0 ||
+            run_viewer_test.teamIndex() != 7 || run_viewer_test.category() != 5 ||
+            run_viewer_test.runInputState() != 0x10 ||
+            run_viewer_test.runCancelSentinel() != 0x100 ||
+            !run_viewer_test.runDrawCallbackBound())
+            throw std::runtime_error("Rosters_RunViewer sentinel/special-team self-test failed");
+        run_viewer_test.runViewer(roster_database_, {{2, 0, 29}, 1, true, 12});
+        if (run_viewer_test.teamIndex() != 3 || run_viewer_test.category() != 4)
+            throw std::runtime_error("Rosters_RunViewer default-team sentinel self-test failed");
+        run_viewer_test.runViewer(roster_database_, {{2, 0, 1}, 0, false, 0});
+        if (!run_viewer_test.move(0, 1, roster_database_) ||
+            !run_viewer_test.move(1, 0, roster_database_))
+            throw std::runtime_error("Rosters_RunViewer writeback setup failed");
+        run_viewer_test.finishRun(2, 0);
+        const auto accepted_state = run_viewer_test.savedRunState();
+        if (accepted_state.player_index != 3 || accepted_state.team_index != 2 ||
+            run_viewer_test.lastRunResult() != 2 || run_viewer_test.lastRunExitStatus() != 0)
+            throw std::runtime_error("Rosters_RunViewer accepted writeback self-test failed");
+        run_viewer_test.move(0, 1, roster_database_);
+        run_viewer_test.move(1, 0, roster_database_);
+        run_viewer_test.finishRun(3, 0x100);
+        if (run_viewer_test.playerIndex() != 3 || run_viewer_test.teamIndex() != 2 ||
+            run_viewer_test.lastRunResult() != 3 ||
+            run_viewer_test.lastRunExitStatus() != 0x100)
+            throw std::runtime_error("Rosters_RunViewer cancel suppression self-test failed");
+        trace_.log("SELF-TEST", "Rosters_RunViewer PASS: -1 player repair, team 29 -> active/3 branches, state 0x10 callback boundary, accepted writeback, and cancel 0x100 suppression");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(
