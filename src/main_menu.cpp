@@ -949,6 +949,7 @@ void RosterViewer::constructViewer(const RosterDatabase& database,
     last_stat_layer_change_.descriptor_table = category_ < 2 ? category_
         : category_ < 4 ? 2 : 3;
     last_stat_layer_change_.descriptor_last_index = stat_descriptor_last_index_;
+    last_player_cycle_ = {};
 
     // Native state ownership for FUN_80039D88(&DAT_800A436C, 0x12,
     // 0x10004, 0x11, 7). The opaque PS1 object pool is replaced by the
@@ -1099,6 +1100,74 @@ const PlayerRecord* RosterViewer::selectedPlayer(const RosterDatabase& database)
         ? database.player(team->roster[player_index_]) : nullptr;
 }
 
+bool RosterViewer::cyclePlayer(int direction, const RosterDatabase& database,
+                               RosterPlayerCycleContext context) noexcept {
+    if (!direction || mode_ != RosterViewMode::PlayerCard) return false;
+    nba97_semantic_trace_record(0x80059928u);
+
+    RosterPlayerCycleState change;
+    change.input_mask = direction < 0 ? 8 : 4;
+    change.previous_slot = player_index_;
+    change.current_slot = player_index_;
+    change.descriptor_page = context.active_page;
+
+    // Descriptor 29 is a special frontend roster. In mode 1 the original
+    // clears the input latch at +0x1B and deliberately performs no mutation.
+    if (context.special_roster_descriptor && context.special_cycle_locked) {
+        change.blocked_special_roster = true;
+        change.input_latch_cleared = true;
+        last_player_cycle_ = change;
+        return false;
+    }
+
+    const TeamRecord* team = selectedTeam(database);
+    if (!team) {
+        last_player_cycle_ = change;
+        return false;
+    }
+    while (change.roster_count < team->roster.size() &&
+           database.player(team->roster[change.roster_count]))
+        ++change.roster_count;
+    if (change.roster_count == 0) {
+        last_player_cycle_ = change;
+        return false;
+    }
+
+    if (direction < 0) {
+        change.wrapped = player_index_ == 0;
+        player_index_ = change.wrapped ? change.roster_count - 1 : player_index_ - 1;
+    } else {
+        change.wrapped = player_index_ + 1 == change.roster_count;
+        player_index_ = change.wrapped ? 0 : player_index_ + 1;
+    }
+    change.current_slot = player_index_;
+    const PlayerRecord* player = selectedPlayer(database);
+    if (player) {
+        change.resolved_player_id = player->id;
+        change.global_player_id_updated = true;
+    }
+
+    // FUN_80039574(0, 2) presents two frontend frames before FUN_80059808
+    // refreshes three page-dependent header descriptors and every visible
+    // row descriptor.
+    change.transition_frames = 2;
+    change.header_refresh_start = context.active_page == 0 ? 0x18 : 0x1e;
+    change.header_refresh_count = 3;
+    change.visible_row_refresh_start = context.visible_row_start;
+    change.visible_row_refresh_count = (std::max)(0, context.visible_row_count);
+
+    // State 0x24 stops current speech and rebuilds the selected player's
+    // available cool-fact choices. Crucially, FUN_80059928 never resets the
+    // statistic-list scroll position.
+    if (context.layout_id == 0x24) {
+        change.cool_fact_stopped = true;
+        change.player_card_refreshed = true;
+    }
+    change.stat_scroll_preserved = true;
+    last_player_cycle_ = change;
+    return true;
+}
+
 bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& database,
                         std::uint32_t elapsed_ms) noexcept {
     if (database.teams().empty()) return false;
@@ -1106,27 +1175,14 @@ bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& data
     const std::size_t previous_player = player_index_;
     const std::size_t previous_first_visible = first_visible_player_;
     const std::size_t previous_stat = first_visible_player_stat_;
+    bool player_cycle_processed = false;
     if (mode_ == RosterViewMode::TeamRoster && horizontal) {
         palette_from_team_index_ = team_index_;
         if (horizontal < 0) team_index_ = team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1;
         else team_index_ = (team_index_ + 1) % database.teams().size();
         palette_transition_start_ms_ = elapsed_ms;
     } else if (mode_ == RosterViewMode::PlayerCard) {
-        if (horizontal) nba97_semantic_trace_record(0x80059928u);
-        const TeamRecord* team = selectedTeam(database);
-        if (team && !team->roster.empty()) {
-            std::size_t roster_count = 0;
-            while (roster_count < team->roster.size() &&
-                   database.player(team->roster[roster_count]))
-                ++roster_count;
-            if (horizontal < 0 && roster_count != 0) {
-                player_index_ = player_index_ == 0 ? roster_count - 1 : player_index_ - 1;
-                first_visible_player_stat_ = 0;
-            } else if (horizontal > 0 && roster_count != 0) {
-                player_index_ = (player_index_ + 1) % roster_count;
-                first_visible_player_stat_ = 0;
-            }
-        }
+        if (horizontal) player_cycle_processed = cyclePlayer(horizontal, database);
         const std::size_t stat_count = playerStatCount();
         constexpr std::size_t visible_stats = 6;
         if (vertical < 0 && first_visible_player_stat_ > 0)
@@ -1148,7 +1204,7 @@ bool RosterViewer::move(int horizontal, int vertical, const RosterDatabase& data
         scroll_from_first_player_ = previous_first_visible;
         scroll_transition_start_ms_ = elapsed_ms;
     }
-    return previous_team != team_index_ || previous_player != player_index_ ||
+    return player_cycle_processed || previous_team != team_index_ || previous_player != player_index_ ||
            previous_stat != first_visible_player_stat_;
 }
 

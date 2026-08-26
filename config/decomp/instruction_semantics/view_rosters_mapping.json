@@ -339,8 +339,49 @@
       "address": "0x80059928",
       "name": "Rosters_CyclePlayer",
       "source": "src/main_menu.cpp",
-      "symbols": ["RosterViewer::move"],
-      "accounted_blocks": [],
+      "symbols": ["RosterViewer::cyclePlayer", "RosterViewer::move"],
+      "additional_sources": [
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": ["RosterPlayerCycleContext", "RosterPlayerCycleState", "lastPlayerCycle"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Rosters_CyclePlayer PASS", "PLAYER-CYCLE"]
+        },
+        {
+          "source": "config/decomp/view_rosters_scenarios.json",
+          "symbols": ["player-cycle stat-scroll preservation"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x80059928", "0x80059960", "0x8005997C", "0x80059984",
+        "0x800599A0", "0x800599A8", "0x800599B0", "0x800599D0",
+        "0x80059A00", "0x80059A04", "0x80059A08", "0x80059A70"
+      ],
+      "accounting_basis": "All 12 blocks are semantically represented from a fresh private Ghidra decompile. cyclePlayer implements the descriptor-29/mode-1 lock and input-latch clear, input-8 previous versus forward selection, roster-count wrap, selected-slot and resolved-player-ID mirrors, two-frame frontend transition, and the FUN_80059808 refresh boundary. RosterPlayerCycleState retains its active-page-dependent three-header refresh, visible-row refresh range, state-0x24 cool-fact stop/player-card refresh, and the discovered preservation of the current stat-scroll position. Focused native tests cover previous and next wraps, both input masks, exact roster count and player ID, two frames, page-zero and alternate-page descriptor groups, injectable visible-row ranges, state-0x24 and non-card branches, the locked special descriptor path, and scroll preservation. Raw PS1 globals, descriptor objects, and renderer internals use typed native state, so no structural CFG equivalence is claimed.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059928", "0x80059960", "0x8005997C", "0x80059984", "0x800599A0", "0x800599A8", "0x800599B0"],
+          "summary": "The special descriptor-29 lock, input-latch clear, previous/forward branch, exact count boundary, and bidirectional slot wrap are explicit typed transitions."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800599D0", "0x80059A00", "0x80059A04"],
+          "summary": "The new slot resolves through the fixed roster table and mirrors the selected player ID into the active frontend page."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059A08"],
+          "summary": "The two-frame transition and FUN_80059808 call boundary retain page-dependent headers, visible-row refresh, state-0x24 cool-fact stop/rebuild, and unchanged stat scroll."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80059A70"],
+          "summary": "Both the successful refresh path and blocked special-roster path return with their exact mutation status retained for verification."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x80059928"
     },

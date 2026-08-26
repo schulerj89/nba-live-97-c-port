@@ -1178,6 +1178,8 @@ private:
         nba97::RosterViewer wrap_test;
         wrap_test.open(roster_database_);
         wrap_test.activate(roster_database_);
+        for (int row = 0; row < 3; ++row)
+            wrap_test.move(0, 1, roster_database_);
         const auto* wrap_team = wrap_test.selectedTeam(roster_database_);
         std::size_t wrap_count = 0;
         while (wrap_team && wrap_count < wrap_team->roster.size() &&
@@ -1185,8 +1187,45 @@ private:
             ++wrap_count;
         if (wrap_count < 2 || !wrap_test.move(-1, 0, roster_database_) ||
             wrap_test.playerIndex() != wrap_count - 1 ||
-            !wrap_test.move(1, 0, roster_database_) || wrap_test.playerIndex() != 0)
+            wrap_test.firstVisiblePlayerStat() != 3)
             throw std::runtime_error("View Player FUN_80059928 wrapped cycling self-test failed");
+        const auto previous_cycle = wrap_test.lastPlayerCycle();
+        const auto* wrapped_player = wrap_test.selectedPlayer(roster_database_);
+        if (previous_cycle.input_mask != 8 || !previous_cycle.wrapped ||
+            previous_cycle.previous_slot != 0 ||
+            previous_cycle.current_slot != wrap_count - 1 ||
+            previous_cycle.roster_count != wrap_count || !wrapped_player ||
+            previous_cycle.resolved_player_id != wrapped_player->id ||
+            !previous_cycle.global_player_id_updated ||
+            previous_cycle.transition_frames != 2 ||
+            previous_cycle.header_refresh_start != 0x18 ||
+            previous_cycle.header_refresh_count != 3 ||
+            previous_cycle.visible_row_refresh_count != 6 ||
+            !previous_cycle.cool_fact_stopped ||
+            !previous_cycle.player_card_refreshed ||
+            !previous_cycle.stat_scroll_preserved)
+            throw std::runtime_error("Rosters_CyclePlayer previous/refresh side effects failed");
+        if (!wrap_test.move(1, 0, roster_database_) || wrap_test.playerIndex() != 0 ||
+            !wrap_test.lastPlayerCycle().wrapped ||
+            wrap_test.lastPlayerCycle().input_mask != 4 ||
+            wrap_test.firstVisiblePlayerStat() != 3)
+            throw std::runtime_error("Rosters_CyclePlayer next wrap/preservation failed");
+        if (!wrap_test.cyclePlayer(1, roster_database_, {1, false, false, 7, 5, 0x23}) ||
+            wrap_test.lastPlayerCycle().header_refresh_start != 0x1e ||
+            wrap_test.lastPlayerCycle().header_refresh_count != 3 ||
+            wrap_test.lastPlayerCycle().visible_row_refresh_start != 7 ||
+            wrap_test.lastPlayerCycle().visible_row_refresh_count != 5 ||
+            wrap_test.lastPlayerCycle().cool_fact_stopped ||
+            wrap_test.lastPlayerCycle().player_card_refreshed)
+            throw std::runtime_error("Rosters_CyclePlayer mirrored-page refresh failed");
+        const auto before_blocked = wrap_test.playerIndex();
+        if (wrap_test.cyclePlayer(1, roster_database_, {0, true, true}) ||
+            wrap_test.playerIndex() != before_blocked ||
+            !wrap_test.lastPlayerCycle().blocked_special_roster ||
+            !wrap_test.lastPlayerCycle().input_latch_cleared ||
+            wrap_test.lastPlayerCycle().transition_frames != 0)
+            throw std::runtime_error("Rosters_CyclePlayer special-roster lock failed");
+        trace_.log("SELF-TEST", "Rosters_CyclePlayer PASS: input 8/forward masks, bidirectional count-based wrap, player-ID mirror, two transition frames, page 0/other descriptor groups, visible-row refresh, state-0x24 cool-fact stop/rebuild, special descriptor-29 lock, and stat-scroll preservation");
         nba97::RecoveredAudioPlayer cool_fact_test;
         const auto cool_fact_info = cool_fact_test.inspectCoolFact(
             options_.asset_root / "menu" / "Z1COOL.IDX",
@@ -2307,8 +2346,11 @@ private:
             return;
         }
         if (changed) {
+            const bool player_cycle_input =
+                roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
+                (key == VK_LEFT || key == VK_RIGHT);
             if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
-                (roster_viewer_.playerIndex() != previous_player ||
+                (player_cycle_input || roster_viewer_.playerIndex() != previous_player ||
                  roster_viewer_.teamIndex() != previous_team)) {
                 cool_fact_audio_.stop();
                 loadSelectedPlayerCardAssets();
@@ -2316,12 +2358,23 @@ private:
             if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
                 roster_viewer_.firstVisiblePlayerStat() != previous_stat)
                 playRosterCursorSound(roster_viewer_.firstVisiblePlayerStat() > previous_stat ? 1 : -1);
-            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
-                roster_viewer_.playerIndex() != previous_player)
-                trace_.log("PLAYER-WRAP", "FUN_80059928 player slot " +
-                    std::to_string(previous_player) + " -> " +
-                    std::to_string(roster_viewer_.playerIndex()) +
-                    " with bidirectional roster wrap");
+            if (player_cycle_input) {
+                const auto& cycle = roster_viewer_.lastPlayerCycle();
+                trace_.log("PLAYER-CYCLE", "FUN_80059928 mask=" +
+                    std::to_string(cycle.input_mask) + " slot=" +
+                    std::to_string(cycle.previous_slot) + "->" +
+                    std::to_string(cycle.current_slot) + "/" +
+                    std::to_string(cycle.roster_count) +
+                    (cycle.wrapped ? " wrapped" : " advanced") +
+                    " player-id=" + std::to_string(cycle.resolved_player_id) +
+                    " transition-frames=" + std::to_string(cycle.transition_frames) +
+                    " header-refresh=" + std::to_string(cycle.header_refresh_start) +
+                    "+" + std::to_string(cycle.header_refresh_count) +
+                    " rows=" + std::to_string(cycle.visible_row_refresh_start) +
+                    "+" + std::to_string(cycle.visible_row_refresh_count) +
+                    " cool-fact=stop/rebuild stat-scroll=preserved@" +
+                    std::to_string(roster_viewer_.firstVisiblePlayerStat()));
+            }
             if (roster_viewer_.teamIndex() != previous_team) {
                 const auto* from = previous_team < roster_database_.teams().size()
                     ? &roster_database_.teams()[previous_team] : nullptr;

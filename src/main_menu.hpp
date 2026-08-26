@@ -88,6 +88,39 @@ struct RosterStatLayerChangeState {
     bool layout_rebuilt = false;
 };
 
+struct RosterPlayerCycleContext {
+    // DAT_80022088+0x0F chooses which mirrored frontend descriptor page is
+    // active. Page zero uses header objects 0x18..0x1A; all others 0x1E..0x20.
+    std::uint8_t active_page = 0;
+    bool special_roster_descriptor = false;
+    // Frontend word +0x708 == 1 blocks cycling descriptor 29.
+    bool special_cycle_locked = false;
+    int visible_row_start = 0;
+    int visible_row_count = 6;
+    int layout_id = 0x24;
+};
+
+struct RosterPlayerCycleState {
+    int input_mask = 0;
+    std::size_t previous_slot = 0;
+    std::size_t current_slot = 0;
+    std::size_t roster_count = 0;
+    bool wrapped = false;
+    bool blocked_special_roster = false;
+    bool input_latch_cleared = false;
+    std::uint16_t resolved_player_id = 0xffffu;
+    bool global_player_id_updated = false;
+    int transition_frames = 0;
+    int descriptor_page = 0;
+    int header_refresh_start = 0;
+    int header_refresh_count = 0;
+    int visible_row_refresh_start = 0;
+    int visible_row_refresh_count = 0;
+    bool cool_fact_stopped = false;
+    bool player_card_refreshed = false;
+    bool stat_scroll_preserved = false;
+};
+
 struct RosterViewerControllerBinding {
     int slot = 0;
     std::uint32_t flags = 0;
@@ -119,6 +152,8 @@ public:
                    RosterViewerRunContext context) noexcept;
     bool move(int horizontal, int vertical, const RosterDatabase& database,
               std::uint32_t elapsed_ms = 0) noexcept;
+    bool cyclePlayer(int direction, const RosterDatabase& database,
+                     RosterPlayerCycleContext context = {}) noexcept;
     bool cycleCategory(int direction) noexcept;
     bool cycleDisplay(int direction) noexcept;
     bool scanTeam(int direction, const RosterDatabase& database,
@@ -162,6 +197,9 @@ public:
     }
     [[nodiscard]] const RosterStatLayerChangeState& lastStatLayerChange() const noexcept {
         return last_stat_layer_change_;
+    }
+    [[nodiscard]] const RosterPlayerCycleState& lastPlayerCycle() const noexcept {
+        return last_player_cycle_;
     }
     [[nodiscard]] int constructionLayerLimit() const noexcept {
         return construction_layer_limit_;
@@ -230,6 +268,7 @@ private:
     int stat_visible_row_count_ = 6;
     int stat_controller_page_ = 0;
     RosterStatLayerChangeState last_stat_layer_change_{};
+    RosterPlayerCycleState last_player_cycle_{};
     std::size_t entry_team_index_ = 0;
     std::size_t entry_player_index_ = 0;
     std::size_t entry_first_visible_player_ = 0;

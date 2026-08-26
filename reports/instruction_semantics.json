@@ -17,19 +17,19 @@
     "total_instructions": 997
   },
   "instruction_accounting": {
-    "accounted_instructions": 799,
+    "accounted_instructions": 887,
     "total_instructions": 997,
-    "accounted_basic_blocks": 68,
+    "accounted_basic_blocks": 80,
     "total_basic_blocks": 83
   },
   "review_classification": {
-    "classified_instructions": 477,
+    "classified_instructions": 565,
     "total_instructions": 997,
-    "unclassified_instructions": 520,
+    "unclassified_instructions": 432,
     "categories": {
       "native_semantic_replacement": {
-        "instructions": 477,
-        "basic_blocks": 62
+        "instructions": 565,
+        "basic_blocks": 74
       }
     }
   },
@@ -499,21 +499,72 @@
         {
           "source": "src/main_menu.cpp",
           "symbols": [
+            "RosterViewer::cyclePlayer",
             "RosterViewer::move"
+          ]
+        },
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": [
+            "RosterPlayerCycleContext",
+            "RosterPlayerCycleState",
+            "lastPlayerCycle"
+          ]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": [
+            "Rosters_CyclePlayer PASS",
+            "PLAYER-CYCLE"
+          ]
+        },
+        {
+          "source": "config/decomp/view_rosters_scenarios.json",
+          "symbols": [
+            "player-cycle stat-scroll preservation"
           ]
         }
       ],
       "source_mapped": true,
       "original_instruction_count": 88,
       "original_basic_block_count": 12,
-      "accounted_instruction_count": 0,
-      "accounted_basic_block_count": 0,
+      "accounted_instruction_count": 88,
+      "accounted_basic_block_count": 12,
       "structurally_verified_edge_count": 0,
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
       "binary_matching": false,
-      "block_classifications": []
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 42,
+          "basic_block_count": 7,
+          "accounted": true,
+          "summary": "The special descriptor-29 lock, input-latch clear, previous/forward branch, exact count boundary, and bidirectional slot wrap are explicit typed transitions."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 14,
+          "basic_block_count": 3,
+          "accounted": true,
+          "summary": "The new slot resolves through the fixed roster table and mirrors the selected player ID into the active frontend page."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 26,
+          "basic_block_count": 1,
+          "accounted": true,
+          "summary": "The two-frame transition and FUN_80059808 call boundary retain page-dependent headers, visible-row refresh, state-0x24 cool-fact stop/rebuild, and unchanged stat scroll."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 6,
+          "basic_block_count": 1,
+          "accounted": true,
+          "summary": "Both the successful refresh path and blocked special-roster path return with their exact mutation status retained for verification."
+        }
+      ]
     },
     {
       "address": "0x8005A538",
