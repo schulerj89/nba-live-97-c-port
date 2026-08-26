@@ -184,7 +184,7 @@ void RosterDatabase::load(const std::filesystem::path& path) {
     if (data.size() < 24 || std::memcmp(data.data(), magic, 8) != 0)
         throw std::runtime_error("invalid roster database magic");
     const auto version = u32(data, 8);
-    if ((version != 1 && version != 2 && version != 3) || u32(data, 12) != 0x12345678)
+    if ((version < 1 || version > 4) || u32(data, 12) != 0x12345678)
         throw std::runtime_error("unsupported roster database version/endianness");
     const auto section_count = u32(data, 16);
     if (section_count == 0 || section_count > 32 || u32(data, 20) != data.size())
@@ -236,7 +236,7 @@ void RosterDatabase::load(const std::filesystem::path& path) {
         if (version == 2) {
             value.games_played_1995_96 = data[at + 41];
             value.games_started_1995_96 = data[at + 42];
-        } else if (version == 3) {
+        } else if (version >= 3) {
             value.season_1995_96 = packedStatLine(data, at + 41);
             value.playoffs_1995_96 = packedStatLine(data, at + 70);
             if (value.regular_stats_index >= 391 || value.postseason_stats_index >= 180 ||
@@ -253,11 +253,11 @@ void RosterDatabase::load(const std::filesystem::path& path) {
         value.nickname = poolString(data, strings, u32(data, string_fields + 8));
         value.birthdate = poolString(data, strings, u32(data, string_fields + 12));
         value.birthplace = poolString(data, strings, u32(data, string_fields + 16));
-        if (version == 3) {
+        if (version >= 3) {
             value.school_name = poolString(data, strings, u32(data, string_fields + 20));
             value.acquisition_method = poolString(data, strings, u32(data, string_fields + 24));
             if (value.school_name.empty() || value.acquisition_method.empty())
-                throw std::runtime_error("v3 player attribute lookup string is empty");
+                throw std::runtime_error("roster player attribute lookup string is empty");
         }
         if (!new_player_index.emplace(value.id, new_players.size()).second)
             throw std::runtime_error("duplicate player ID");
@@ -292,11 +292,26 @@ void RosterDatabase::load(const std::filesystem::path& path) {
         if (!new_team_index.emplace(value.id, new_teams.size()).second)
             throw std::runtime_error("duplicate team ID");
         new_teams.push_back(std::move(value));
-        nba97_semantic_trace_record(0x8005770Cu);
+    }
+    std::array<std::uint16_t, 25> new_special_fallback_ids{};
+    new_special_fallback_ids.fill(UINT16_MAX);
+    if (version >= 4) {
+        const Section& fallback = require("FALL");
+        if (fallback.count != new_special_fallback_ids.size() ||
+            fallback.stride != sizeof(std::uint16_t) ||
+            fallback.size != fallback.count * fallback.stride)
+            throw std::runtime_error("special roster fallback table shape mismatch");
+        for (std::size_t i = 0; i < new_special_fallback_ids.size(); ++i) {
+            const auto id = u16(data, fallback.offset + i * sizeof(std::uint16_t));
+            if (!new_player_index.count(id))
+                throw std::runtime_error("special roster fallback references unknown player ID");
+            new_special_fallback_ids[i] = id;
+        }
     }
     source_path_ = path; version_ = version;
     players_ = std::move(new_players); teams_ = std::move(new_teams);
     player_index_ = std::move(new_player_index); team_index_ = std::move(new_team_index);
+    special_fallback_player_ids_ = new_special_fallback_ids;
     nba97_semantic_trace_record(0x80057864u);
 }
 
@@ -308,6 +323,38 @@ const PlayerRecord* RosterDatabase::player(std::uint16_t id) const noexcept {
 const TeamRecord* RosterDatabase::team(std::uint16_t id) const noexcept {
     const auto found = team_index_.find(id);
     return found == team_index_.end() ? nullptr : &teams_[found->second];
+}
+RosterDatabase::ResolvedTeamSlots RosterDatabase::resolveTeamSlots(
+    std::int16_t team_id, bool special_roster_mode) const noexcept {
+    ResolvedTeamSlots result{};
+    nba97_semantic_trace_record(0x8005770Cu);
+    if (team_id < 0 || team_id >= 29) return result;
+
+    const TeamRecord* selected_team = team(static_cast<std::uint16_t>(team_id));
+    if (!selected_team) return result;
+    for (std::size_t slot = 0; slot < result.size(); ++slot) {
+        const std::uint16_t id = slot < selected_team->roster.size()
+            ? selected_team->roster[slot] : UINT16_MAX;
+        if (id == UINT16_MAX) continue; // Original signed -1 roster sentinel.
+
+        const PlayerRecord* resolved = player(id);
+        if (special_roster_mode && resolved && resolved->regular_stats_index == 0) {
+            // FUN_8005768C indexes a private 5-position by 5-rating-tier
+            // replacement table. Keep those copyrighted IDs in roster.n97db.
+            const unsigned rating_sum = resolved->ratings[0] + resolved->ratings[1] +
+                resolved->ratings[2] + resolved->ratings[3];
+            if (resolved->position < 5 && rating_sum >= 200) {
+                const unsigned tier = (rating_sum - 200) / 40;
+                if (tier < 5) {
+                    const auto fallback_id = special_fallback_player_ids_[
+                        static_cast<std::size_t>(resolved->position) * 5 + tier];
+                    resolved = player(fallback_id);
+                }
+            }
+        }
+        result[slot] = resolved;
+    }
+    return result;
 }
 std::string RosterDatabase::playerAttribute(const PlayerRecord& player,
                                             std::size_t descriptor) const {

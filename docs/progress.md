@@ -7,10 +7,10 @@
 - **1,769** functions and **465,368** code bytes discovered by headless Ghidra in the currently scoped original binaries.
 - **63** functions (3.56%) have explicit recomp/Ghidra/source evidence records.
 - Evidence records touch **38,764** original code bytes (8.33%). Partial records do not mean the whole function is complete.
-- **1** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
+- **2** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
 - Native-port roadmap estimate: **59.38%** across 48 catalogued features.
 - View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
-- View Rosters original-MIPS accounting: **380/997 instructions** have explicit block-level accounting; this is not an instruction-match percentage.
+- View Rosters original-MIPS accounting: **445/997 instructions** have explicit block-level accounting; this is not an instruction-match percentage.
 
 ## Original binary inventory
 
@@ -96,8 +96,8 @@ Original screenshots and generated heatmaps remain under `.local/`; the public r
 ## View Rosters instruction semantics
 
 - Original scope: **11 functions**, **997 MIPS instructions**, **83 basic blocks**, and **111 CFG edges**.
-- Explicitly accounted: **380/997 instructions** across **17/83 blocks**.
-- Purpose-classified for review: **58/997 instructions**; classification alone does not earn accounting credit.
+- Explicitly accounted: **445/997 instructions** across **27/83 blocks**.
+- Purpose-classified for review: **123/997 instructions**; classification alone does not earn accounting credit.
 - Structurally verified: **0/111 CFG edges**.
 - Native semantic checkpoints observed: **11/11 functions**.
 - Static-recomp entry points found: **10/11**; missing: **0x80059034**.

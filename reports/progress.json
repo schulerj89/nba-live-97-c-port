@@ -25,7 +25,7 @@
     "evidence_tracked_bytes": 38764,
     "evidence_coverage_percent": 3.56,
     "evidence_byte_coverage_percent": 8.33,
-    "complete_functions": 1,
+    "complete_functions": 2,
     "matching_functions": 0,
     "status_counts": {
       "behavior_verified": 49,
@@ -33,8 +33,8 @@
       "researched": 11
     },
     "scope_counts": {
-      "complete": 1,
-      "partial": 62
+      "complete": 2,
+      "partial": 61
     },
     "subsystems": {
       "assets": {
@@ -911,19 +911,19 @@
         "total_instructions": 997
       },
       "instruction_accounting": {
-        "accounted_instructions": 380,
+        "accounted_instructions": 445,
         "total_instructions": 997,
-        "accounted_basic_blocks": 17,
+        "accounted_basic_blocks": 27,
         "total_basic_blocks": 83
       },
       "review_classification": {
-        "classified_instructions": 58,
+        "classified_instructions": 123,
         "total_instructions": 997,
-        "unclassified_instructions": 939,
+        "unclassified_instructions": 874,
         "categories": {
           "native_semantic_replacement": {
-            "instructions": 58,
-            "basic_blocks": 11
+            "instructions": 123,
+            "basic_blocks": 21
           }
         }
       },
@@ -1017,21 +1017,56 @@
             {
               "source": "src/roster_database.cpp",
               "symbols": [
-                "RosterDatabase::load"
+                "RosterDatabase::resolveTeamSlots"
+              ]
+            },
+            {
+              "source": "tools/extract_roster_database.py",
+              "symbols": [
+                "SPECIAL_FALLBACK_OFFSET",
+                "fallback_ids"
+              ]
+            },
+            {
+              "source": "src/win32_main.cpp",
+              "symbols": [
+                "Rosters_ResolveTeamSlots PASS"
               ]
             }
           ],
           "source_mapped": true,
           "original_instruction_count": 65,
           "original_basic_block_count": 10,
-          "accounted_instruction_count": 0,
-          "accounted_basic_block_count": 0,
+          "accounted_instruction_count": 65,
+          "accounted_basic_block_count": 10,
           "structurally_verified_edge_count": 0,
           "native_checkpoint_observed": true,
           "recomp_entrypoint_found": true,
           "original_trace_equivalent": false,
           "binary_matching": false,
-          "block_classifications": []
+          "block_classifications": [
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 20,
+              "basic_block_count": 2,
+              "accounted": true,
+              "summary": "MIPS prologue/epilogue and the signed team bound are represented by a value-returning native function with explicit safe rejection outside team IDs 0..28."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 38,
+              "basic_block_count": 6,
+              "accounted": true,
+              "summary": "The fixed fifteen-slot address arithmetic, -1/null branch, ordinary FUN_8005FE14 lookup, result store, and loop are represented by the fixed-size ResolvedTeamSlots traversal and native player index."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 7,
+              "basic_block_count": 2,
+              "accounted": true,
+              "summary": "The global special-mode check, regular-stat-index-zero test, and FUN_8005768C replacement call are represented by the recovered position/rating-tier calculation over the local-only 5x5 FALL table."
+            }
+          ]
         },
         {
           "address": "0x80057864",

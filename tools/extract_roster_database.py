@@ -29,7 +29,9 @@ ACQUISITION_METHOD_COUNT = 4
 
 MAGIC = b"N97RDB\0\0"
 ENDIAN_MARKER = 0x12345678
-PACK_VERSION = 3
+PACK_VERSION = 4
+SPECIAL_FALLBACK_OFFSET = 0xAC0DA  # DAT_800C10DA used by FUN_8005768C
+SPECIAL_FALLBACK_COUNT = 25         # five positions by five rating tiers
 
 # FUN_800602E4 -> FUN_80060094 uses the u16 player-record field at +4 as
 # an index into 391-entry, column-major 1995/96 regular-season arrays.
@@ -201,9 +203,18 @@ def build_pack(data: bytes) -> bytes:
     if len(assigned_players) != 362:
         raise ValueError(f"expected 362 assigned players, recovered {len(assigned_players)}")
 
+    fallback = data[SPECIAL_FALLBACK_OFFSET:
+                    SPECIAL_FALLBACK_OFFSET + SPECIAL_FALLBACK_COUNT * 2]
+    if len(fallback) != SPECIAL_FALLBACK_COUNT * 2:
+        raise ValueError("truncated special roster fallback table")
+    fallback_ids = struct.unpack("<25h", fallback)
+    if any(player_id < 0 or player_id >= PLAYER_COUNT for player_id in fallback_ids):
+        raise ValueError("special roster fallback table references an invalid player")
+
     sections = [(b"PLAY", bytes(players), PLAYER_COUNT, PLAYER_RECORD.size),
                 (b"TEAM", bytes(teams), TEAM_COUNT, TEAM_RECORD.size),
-                (b"STRS", bytes(strings.data), len(strings.offsets), 0)]
+                (b"STRS", bytes(strings.data), len(strings.offsets), 0),
+                (b"FALL", fallback, SPECIAL_FALLBACK_COUNT, 2)]
     header_size = 24 + len(sections) * 20
     directory = bytearray()
     payload = bytearray()

@@ -97,9 +97,16 @@ struct TeamRecord {
 
 class RosterDatabase final {
 public:
+    using ResolvedTeamSlots = std::array<const PlayerRecord*, 15>;
+
     void load(const std::filesystem::path& path);
     [[nodiscard]] const PlayerRecord* player(std::uint16_t id) const noexcept;
     [[nodiscard]] const TeamRecord* team(std::uint16_t id) const noexcept;
+    // Native representation of FEONLY FUN_8005770C. Empty signed roster
+    // slots resolve to nullptr. The optional special mode applies the exact
+    // position/rating-tier fallback recovered from FUN_8005768C.
+    [[nodiscard]] ResolvedTeamSlots resolveTeamSlots(
+        std::int16_t team_id, bool special_roster_mode = false) const noexcept;
     [[nodiscard]] std::string playerAttribute(const PlayerRecord& player,
                                               std::size_t descriptor) const;
     [[nodiscard]] const std::vector<PlayerRecord>& players() const noexcept { return players_; }
@@ -116,6 +123,7 @@ private:
     std::vector<TeamRecord> teams_;
     std::unordered_map<std::uint16_t, std::size_t> player_index_;
     std::unordered_map<std::uint16_t, std::size_t> team_index_;
+    std::array<std::uint16_t, 25> special_fallback_player_ids_{};
 };
 
 [[nodiscard]] const char* playerRatingName(PlayerRating rating) noexcept;

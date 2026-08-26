@@ -316,7 +316,7 @@ private:
         trace_.log("ROSTER-INDEX", "FUN_8005FE14 boundary=0x1ED; assigned=" +
             std::to_string(roster_database_.assignedPlayerCount()) + " free-agents=" +
             std::to_string(roster_database_.freeAgentCount()) + "; all references validated");
-        trace_.log("RECOVERED", "FUN_80057864 copies DAT_800C0CAC roster slots; FUN_8005770C resolves 29 teams x 15 slots");
+        trace_.log("ROSTER-SLOTS", "FUN_8005770C resolves 29 teams x 15 signed slots; -1 -> null; special stat-index-zero players route through the private 5x5 FUN_8005768C fallback table");
         menu_.reset();
         const auto profile_status = profile_store_.load(options_.profiles_path);
         active_user_profiles_ = static_cast<int>(profile_store_.profiles().size());
@@ -872,6 +872,34 @@ private:
             roster_database_.assignedPlayerCount() != 362 || roster_database_.freeAgentCount() != 131 ||
             !roster_database_.player(0) || !roster_database_.team(28))
             throw std::runtime_error("external roster database validation self-test failed");
+        std::size_t resolved_slots = 0;
+        std::size_t empty_slots = 0;
+        for (std::int16_t team_id = 0; team_id < 29; ++team_id) {
+            const auto slots = roster_database_.resolveTeamSlots(team_id);
+            for (const auto* slot : slots) slot ? ++resolved_slots : ++empty_slots;
+        }
+        const auto invalid_low = roster_database_.resolveTeamSlots(-1);
+        const auto invalid_high = roster_database_.resolveTeamSlots(29);
+        if (resolved_slots != 362 || empty_slots != 73 ||
+            std::any_of(invalid_low.begin(), invalid_low.end(), [](const auto* p) { return p; }) ||
+            std::any_of(invalid_high.begin(), invalid_high.end(), [](const auto* p) { return p; }))
+            throw std::runtime_error("Rosters_ResolveTeamSlots fixed-slot/bounds self-test failed");
+        std::size_t special_fallbacks = 0;
+        for (std::int16_t team_id = 0; team_id < 29; ++team_id) {
+            const auto normal = roster_database_.resolveTeamSlots(team_id, false);
+            const auto special = roster_database_.resolveTeamSlots(team_id, true);
+            for (std::size_t slot = 0; slot < normal.size(); ++slot) {
+                if (normal[slot] && normal[slot]->regular_stats_index == 0) {
+                    if (!special[slot] || special[slot] == normal[slot])
+                        throw std::runtime_error("Rosters_ResolveTeamSlots special fallback self-test failed");
+                    ++special_fallbacks;
+                }
+            }
+        }
+        if (special_fallbacks == 0)
+            throw std::runtime_error("Rosters_ResolveTeamSlots special branch was not exercised");
+        trace_.log("SELF-TEST", "Rosters_ResolveTeamSlots PASS: 29x15 slots, 362 resolved, 73 null, both bounds rejected, all " +
+            std::to_string(special_fallbacks) + " special-mode replacements exercised through private 5x5 table");
         const auto* montross = roster_database_.player(66);
         if (!montross || montross->last_name != "Montross" ||
             montross->jersey_number != 0xff || montross->jerseyNumberText() != "00")
@@ -936,7 +964,7 @@ private:
         const auto view_a = nba97::renderRosterViewer(
             roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
         if (view_a.width != 512 || view_a.height != 240 ||
-            roster_database_.version() != 3 ||
+            roster_database_.version() != 4 ||
             roster_database_.teams()[0].roster.size() != 15 ||
             roster_viewer_test.category() != 2 || roster_viewer_test.displayIndex() != 32)
             throw std::runtime_error("View Rosters fixed 15-slot state 0x10 setup failed");
@@ -944,7 +972,7 @@ private:
         if (!roster_sample ||
             roster_database_.playerAttribute(*roster_sample, 7).empty() ||
             !roster_viewer_test.cycleDisplay(1) || roster_viewer_test.displayIndex() != 33)
-            throw std::runtime_error("View Rosters v3 descriptor setup failed");
+            throw std::runtime_error("View Rosters roster-pack descriptor setup failed");
         const auto points_view = nba97::renderRosterViewer(
             roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
         if (points_view.rgba == view_a.rgba || !roster_viewer_test.cycleCategory(1) ||

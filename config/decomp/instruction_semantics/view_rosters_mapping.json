@@ -73,8 +73,47 @@
       "address": "0x8005770C",
       "name": "Rosters_ResolveTeamSlots",
       "source": "src/roster_database.cpp",
-      "symbols": ["RosterDatabase::load"],
-      "accounted_blocks": [],
+      "symbols": ["RosterDatabase::resolveTeamSlots"],
+      "additional_sources": [
+        {
+          "source": "tools/extract_roster_database.py",
+          "symbols": ["SPECIAL_FALLBACK_OFFSET", "fallback_ids"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Rosters_ResolveTeamSlots PASS"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x8005770C",
+        "0x8005773C",
+        "0x80057768",
+        "0x80057788",
+        "0x80057790",
+        "0x800577A8",
+        "0x800577B8",
+        "0x800577C4",
+        "0x800577C8",
+        "0x800577F0"
+      ],
+      "accounting_basis": "All ten blocks are semantically represented. RosterDatabase::resolveTeamSlots rejects teams outside the recovered 0..28 range, traverses exactly fifteen fixed slots, maps the signed -1 sentinel to null, resolves ordinary IDs through the native player index, and stores one result per slot. The stat-index-zero special-mode branch reproduces FUN_8005768C: it derives one of five rating tiers from the first four player ratings, combines it with the five-position index, reads the corresponding player ID from the private 5x5 FALL table, and resolves that replacement. tools/extract_roster_database.py streams both the 29x15 roster IDs and copyrighted fallback IDs from the user's local FEONLY.BIN; no game data is embedded in public source. The native self-test covers all 435 slots, both bounds, null slots, ordinary resolution, and the special fallback path.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005770C", "0x800577F0"],
+          "summary": "MIPS prologue/epilogue and the signed team bound are represented by a value-returning native function with explicit safe rejection outside team IDs 0..28."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005773C", "0x80057768", "0x80057788", "0x80057790", "0x800577C4", "0x800577C8"],
+          "summary": "The fixed fifteen-slot address arithmetic, -1/null branch, ordinary FUN_8005FE14 lookup, result store, and loop are represented by the fixed-size ResolvedTeamSlots traversal and native player index."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800577A8", "0x800577B8"],
+          "summary": "The global special-mode check, regular-stat-index-zero test, and FUN_8005768C replacement call are represented by the recovered position/rating-tier calculation over the local-only 5x5 FALL table."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x8005770C"
     },
