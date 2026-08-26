@@ -113,10 +113,21 @@ public:
     [[nodiscard]] const std::vector<TeamRecord>& teams() const noexcept { return teams_; }
     [[nodiscard]] std::size_t assignedPlayerCount() const noexcept;
     [[nodiscard]] std::size_t freeAgentCount() const noexcept;
+    [[nodiscard]] std::size_t unlistedPlayerCount() const noexcept;
+    // 0..28 = NBA team, 29 = original free-agent list, -1 = hidden/unlisted.
+    [[nodiscard]] std::int16_t rosterOwner(std::uint16_t player_id) const noexcept;
+    [[nodiscard]] const std::array<std::uint16_t, 100>& freeAgentSlots() const noexcept {
+        return free_agent_slots_;
+    }
+    [[nodiscard]] bool derivedTeamRatingsDirty() const noexcept {
+        return derived_team_ratings_dirty_;
+    }
     [[nodiscard]] std::uint32_t version() const noexcept { return version_; }
     [[nodiscard]] const std::filesystem::path& sourcePath() const noexcept { return source_path_; }
 
 private:
+    void copySlotTable();
+
     std::uint32_t version_ = 0;
     std::filesystem::path source_path_;
     std::vector<PlayerRecord> players_;
@@ -124,6 +135,11 @@ private:
     std::unordered_map<std::uint16_t, std::size_t> player_index_;
     std::unordered_map<std::uint16_t, std::size_t> team_index_;
     std::array<std::uint16_t, 25> special_fallback_player_ids_{};
+    std::array<std::uint16_t, 100> free_agent_slots_{};
+    std::array<ResolvedTeamSlots, 29> resolved_team_slots_{};
+    std::vector<std::int16_t> player_roster_membership_;
+    std::array<std::uint16_t, 30> roster_counts_{};
+    bool derived_team_ratings_dirty_ = false;
 };
 
 [[nodiscard]] const char* playerRatingName(PlayerRating rating) noexcept;

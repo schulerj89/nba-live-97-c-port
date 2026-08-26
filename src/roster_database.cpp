@@ -184,7 +184,7 @@ void RosterDatabase::load(const std::filesystem::path& path) {
     if (data.size() < 24 || std::memcmp(data.data(), magic, 8) != 0)
         throw std::runtime_error("invalid roster database magic");
     const auto version = u32(data, 8);
-    if ((version < 1 || version > 4) || u32(data, 12) != 0x12345678)
+    if ((version < 1 || version > 5) || u32(data, 12) != 0x12345678)
         throw std::runtime_error("unsupported roster database version/endianness");
     const auto section_count = u32(data, 16);
     if (section_count == 0 || section_count > 32 || u32(data, 20) != data.size())
@@ -308,11 +308,84 @@ void RosterDatabase::load(const std::filesystem::path& path) {
             new_special_fallback_ids[i] = id;
         }
     }
+    std::array<std::uint16_t, 100> new_free_agent_slots{};
+    new_free_agent_slots.fill(UINT16_MAX);
+    if (version >= 5) {
+        const Section& free_agents = require("FREE");
+        if (free_agents.count != new_free_agent_slots.size() ||
+            free_agents.stride != sizeof(std::uint16_t) ||
+            free_agents.size != free_agents.count * free_agents.stride)
+            throw std::runtime_error("free-agent slot table shape mismatch");
+        std::unordered_set<std::uint16_t> free_agent_ids;
+        bool saw_hole = false;
+        for (std::size_t i = 0; i < new_free_agent_slots.size(); ++i) {
+            const auto raw = static_cast<std::int16_t>(
+                u16(data, free_agents.offset + i * sizeof(std::uint16_t)));
+            if (raw == -1) {
+                saw_hole = true;
+                continue;
+            }
+            if (raw < 0 || saw_hole ||
+                !new_player_index.count(static_cast<std::uint16_t>(raw)) ||
+                assigned.count(static_cast<std::uint16_t>(raw)) ||
+                !free_agent_ids.insert(static_cast<std::uint16_t>(raw)).second)
+                throw std::runtime_error("invalid free-agent slot assignment");
+            new_free_agent_slots[i] = static_cast<std::uint16_t>(raw);
+        }
+    } else {
+        // Legacy packs did not preserve the original thirtieth slot list.
+        std::size_t slot = 0;
+        for (const auto& value : new_players) {
+            if (!assigned.count(value.id) && slot < new_free_agent_slots.size())
+                new_free_agent_slots[slot++] = value.id;
+        }
+    }
     source_path_ = path; version_ = version;
     players_ = std::move(new_players); teams_ = std::move(new_teams);
     player_index_ = std::move(new_player_index); team_index_ = std::move(new_team_index);
     special_fallback_player_ids_ = new_special_fallback_ids;
+    free_agent_slots_ = new_free_agent_slots;
+    copySlotTable();
+}
+
+void RosterDatabase::copySlotTable() {
     nba97_semantic_trace_record(0x80057864u);
+    roster_counts_.fill(0);
+    player_roster_membership_.assign(players_.size(), -1);
+
+    // FUN_80057864 copies fifteen signed IDs and immediately resolves each
+    // of the 29 team lists before advancing to the next team.
+    for (std::int16_t team_id = 0; team_id < 29; ++team_id) {
+        resolved_team_slots_[static_cast<std::size_t>(team_id)] =
+            resolveTeamSlots(team_id);
+        const TeamRecord* selected_team = team(static_cast<std::uint16_t>(team_id));
+        if (!selected_team) continue;
+        for (const auto id : selected_team->roster) {
+            if (id == UINT16_MAX) continue;
+            const auto found = player_index_.find(id);
+            if (found != player_index_.end()) {
+                player_roster_membership_[found->second] = team_id;
+                ++roster_counts_[static_cast<std::size_t>(team_id)];
+            }
+        }
+    }
+
+    // The second loop copies the exact 100-short thirtieth list. The
+    // subsequent FUN_80054CBC call maps those players to owner 29 and counts
+    // the non--1 entries; hidden players remain deliberately unlisted.
+    for (const auto id : free_agent_slots_) {
+        if (id == UINT16_MAX) continue;
+        const auto found = player_index_.find(id);
+        if (found != player_index_.end()) {
+            player_roster_membership_[found->second] = 29;
+            ++roster_counts_[29];
+        }
+    }
+
+    // The original then clears +0x72E before calling FUN_8005DB34. Preserve
+    // that invalidation/request boundary; the callee's ranking algorithm is
+    // independently scoped recovery work and is not claimed here.
+    derived_team_ratings_dirty_ = true;
 }
 
 const PlayerRecord* RosterDatabase::player(std::uint16_t id) const noexcept {
@@ -391,13 +464,22 @@ std::string RosterDatabase::playerAttribute(const PlayerRecord& player,
 }
 std::size_t RosterDatabase::assignedPlayerCount() const noexcept {
     std::size_t count = 0;
-    for (const auto& team : teams_)
-        for (const auto id : team.roster)
-            if (player(id)) ++count;
+    for (std::size_t team_id = 0; team_id < 29; ++team_id)
+        count += roster_counts_[team_id];
     return count;
 }
 std::size_t RosterDatabase::freeAgentCount() const noexcept {
-    return players_.size() - (std::min)(players_.size(), assignedPlayerCount());
+    return roster_counts_[29];
+}
+std::size_t RosterDatabase::unlistedPlayerCount() const noexcept {
+    return players_.size() - (std::min)(players_.size(),
+        assignedPlayerCount() + freeAgentCount());
+}
+std::int16_t RosterDatabase::rosterOwner(std::uint16_t player_id) const noexcept {
+    const auto found = player_index_.find(player_id);
+    if (found == player_index_.end() || found->second >= player_roster_membership_.size())
+        return -1;
+    return player_roster_membership_[found->second];
 }
 
 const char* playerRatingName(PlayerRating rating) noexcept {

@@ -121,8 +121,47 @@
       "address": "0x80057864",
       "name": "Rosters_CopySlotTable",
       "source": "src/roster_database.cpp",
-      "symbols": ["RosterDatabase::load"],
-      "accounted_blocks": [],
+      "symbols": ["RosterDatabase::copySlotTable"],
+      "additional_sources": [
+        {
+          "source": "tools/extract_roster_database.py",
+          "symbols": ["FREE_AGENT_OFFSET", "FREE_AGENT_SLOTS", "free_agent_ids"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Rosters_CopySlotTable PASS"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x80057864",
+        "0x80057898",
+        "0x800578D0",
+        "0x800578F8",
+        "0x80057930"
+      ],
+      "accounting_basis": "All five blocks are semantically represented at this function boundary. tools/extract_roster_database.py streams the contiguous source layout from the user's private FEONLY.BIN into fixed TEAM and FREE sections. RosterDatabase::copySlotTable walks 29 teams with exactly fifteen signed slots, resolves each completed team through Rosters_ResolveTeamSlots, then consumes exactly 100 signed free-agent slots. It reproduces the FUN_80054CBC membership/count effect by assigning owners 0..28 for team players, owner 29 for the 67 listed free agents, and -1 for the 64 hidden/unlisted players while retaining 33 trailing holes. Finally it preserves the original +0x72E invalidation and FUN_8005DB34 invocation boundary as a derived-team-rating dirty request; the callee's internal rating/ranking algorithm remains separately scoped and is not claimed as part of this caller. Native tests cover all 535 copied slots, membership counts, terminator ordering, hidden players, and the post-copy dirty state.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80057864"],
+          "summary": "The MIPS prologue, global-context fetch, private source-table base, and zeroed loop counters are replaced by native fixed-size containers initialized by the local pack loader."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80057898", "0x800578D0"],
+          "summary": "The nested 29-by-15 signed-short copy and per-team FUN_8005770C call are represented by copySlotTable's fixed team traversal and resolved_team_slots_ assignment."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800578F8"],
+          "summary": "The second exact 100-short copy loop is represented by the private FREE pack section and fixed free_agent_slots_ container, including 67 IDs and 33 trailing -1 holes."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x80057930"],
+          "summary": "FUN_80054CBC's roster-owner/count refresh is represented directly, while the +0x72E reset and FUN_8005DB34 call boundary become an explicit derived-rating dirty request. FUN_8005DB34 internals are not claimed here."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x80057864"
     },

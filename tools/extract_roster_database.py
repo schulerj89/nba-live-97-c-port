@@ -29,9 +29,11 @@ ACQUISITION_METHOD_COUNT = 4
 
 MAGIC = b"N97RDB\0\0"
 ENDIAN_MARKER = 0x12345678
-PACK_VERSION = 4
+PACK_VERSION = 5
 SPECIAL_FALLBACK_OFFSET = 0xAC0DA  # DAT_800C10DA used by FUN_8005768C
 SPECIAL_FALLBACK_COUNT = 25         # five positions by five rating tiers
+FREE_AGENT_OFFSET = TEAM_ROSTER_OFFSET + TEAM_COUNT * TEAM_ROSTER_SLOTS * 2
+FREE_AGENT_SLOTS = 100              # thirtieth list copied by FUN_80057864
 
 # FUN_800602E4 -> FUN_80060094 uses the u16 player-record field at +4 as
 # an index into 391-entry, column-major 1995/96 regular-season arrays.
@@ -203,6 +205,25 @@ def build_pack(data: bytes) -> bytes:
     if len(assigned_players) != 362:
         raise ValueError(f"expected 362 assigned players, recovered {len(assigned_players)}")
 
+    free_agents = data[FREE_AGENT_OFFSET:FREE_AGENT_OFFSET + FREE_AGENT_SLOTS * 2]
+    if len(free_agents) != FREE_AGENT_SLOTS * 2:
+        raise ValueError("truncated 100-slot free-agent table")
+    free_agent_ids = struct.unpack("<100h", free_agents)
+    try:
+        free_agent_count = free_agent_ids.index(-1)
+    except ValueError:
+        free_agent_count = FREE_AGENT_SLOTS
+    if any(player_id != -1 for player_id in free_agent_ids[free_agent_count:]):
+        raise ValueError("free-agent table has a player after its terminator")
+    if free_agent_count != 67:
+        raise ValueError(f"expected 67 original free agents, recovered {free_agent_count}")
+    if any(player_id < 0 or player_id >= PLAYER_COUNT
+           for player_id in free_agent_ids[:free_agent_count]):
+        raise ValueError("free-agent table references an invalid player")
+    if len(set(free_agent_ids[:free_agent_count])) != free_agent_count or any(
+            player_id in assigned_players for player_id in free_agent_ids[:free_agent_count]):
+        raise ValueError("free-agent table contains a duplicate roster assignment")
+
     fallback = data[SPECIAL_FALLBACK_OFFSET:
                     SPECIAL_FALLBACK_OFFSET + SPECIAL_FALLBACK_COUNT * 2]
     if len(fallback) != SPECIAL_FALLBACK_COUNT * 2:
@@ -214,7 +235,8 @@ def build_pack(data: bytes) -> bytes:
     sections = [(b"PLAY", bytes(players), PLAYER_COUNT, PLAYER_RECORD.size),
                 (b"TEAM", bytes(teams), TEAM_COUNT, TEAM_RECORD.size),
                 (b"STRS", bytes(strings.data), len(strings.offsets), 0),
-                (b"FALL", fallback, SPECIAL_FALLBACK_COUNT, 2)]
+                (b"FALL", fallback, SPECIAL_FALLBACK_COUNT, 2),
+                (b"FREE", free_agents, FREE_AGENT_SLOTS, 2)]
     header_size = 24 + len(sections) * 20
     directory = bytearray()
     payload = bytearray()
@@ -235,7 +257,8 @@ def main() -> None:
     pack = build_pack(args.feonly.read_bytes())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(pack)
-    print(f"roster pack: 29 teams, 493 players, 362 assigned, 131 free agents -> {args.output}")
+    print("roster pack: 29 teams, 493 players, 362 assigned, "
+          f"67 free agents, 64 hidden/unlisted -> {args.output}")
 
 
 if __name__ == "__main__":

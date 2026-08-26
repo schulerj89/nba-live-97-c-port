@@ -25,7 +25,7 @@
     "evidence_tracked_bytes": 38764,
     "evidence_coverage_percent": 3.56,
     "evidence_byte_coverage_percent": 8.33,
-    "complete_functions": 2,
+    "complete_functions": 3,
     "matching_functions": 0,
     "status_counts": {
       "behavior_verified": 49,
@@ -33,8 +33,8 @@
       "researched": 11
     },
     "scope_counts": {
-      "complete": 2,
-      "partial": 61
+      "complete": 3,
+      "partial": 60
     },
     "subsystems": {
       "assets": {
@@ -911,19 +911,19 @@
         "total_instructions": 997
       },
       "instruction_accounting": {
-        "accounted_instructions": 445,
+        "accounted_instructions": 508,
         "total_instructions": 997,
-        "accounted_basic_blocks": 27,
+        "accounted_basic_blocks": 32,
         "total_basic_blocks": 83
       },
       "review_classification": {
-        "classified_instructions": 123,
+        "classified_instructions": 186,
         "total_instructions": 997,
-        "unclassified_instructions": 874,
+        "unclassified_instructions": 811,
         "categories": {
           "native_semantic_replacement": {
-            "instructions": 123,
-            "basic_blocks": 21
+            "instructions": 186,
+            "basic_blocks": 26
           }
         }
       },
@@ -1076,21 +1076,64 @@
             {
               "source": "src/roster_database.cpp",
               "symbols": [
-                "RosterDatabase::load"
+                "RosterDatabase::copySlotTable"
+              ]
+            },
+            {
+              "source": "tools/extract_roster_database.py",
+              "symbols": [
+                "FREE_AGENT_OFFSET",
+                "FREE_AGENT_SLOTS",
+                "free_agent_ids"
+              ]
+            },
+            {
+              "source": "src/win32_main.cpp",
+              "symbols": [
+                "Rosters_CopySlotTable PASS"
               ]
             }
           ],
           "source_mapped": true,
           "original_instruction_count": 63,
           "original_basic_block_count": 5,
-          "accounted_instruction_count": 0,
-          "accounted_basic_block_count": 0,
+          "accounted_instruction_count": 63,
+          "accounted_basic_block_count": 5,
           "structurally_verified_edge_count": 0,
           "native_checkpoint_observed": true,
           "recomp_entrypoint_found": true,
           "original_trace_equivalent": false,
           "binary_matching": false,
-          "block_classifications": []
+          "block_classifications": [
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 13,
+              "basic_block_count": 1,
+              "accounted": true,
+              "summary": "The MIPS prologue, global-context fetch, private source-table base, and zeroed loop counters are replaced by native fixed-size containers initialized by the local pack loader."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 24,
+              "basic_block_count": 2,
+              "accounted": true,
+              "summary": "The nested 29-by-15 signed-short copy and per-team FUN_8005770C call are represented by copySlotTable's fixed team traversal and resolved_team_slots_ assignment."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 14,
+              "basic_block_count": 1,
+              "accounted": true,
+              "summary": "The second exact 100-short copy loop is represented by the private FREE pack section and fixed free_agent_slots_ container, including 67 IDs and 33 trailing -1 holes."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 12,
+              "basic_block_count": 1,
+              "accounted": true,
+              "summary": "FUN_80054CBC's roster-owner/count refresh is represented directly, while the +0x72E reset and FUN_8005DB34 call boundary become an explicit derived-rating dirty request. FUN_8005DB34 internals are not claimed here."
+            }
+          ]
         },
         {
           "address": "0x80057CE4",

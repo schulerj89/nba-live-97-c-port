@@ -315,7 +315,9 @@ private:
             std::to_string(roster_database_.players().size()));
         trace_.log("ROSTER-INDEX", "FUN_8005FE14 boundary=0x1ED; assigned=" +
             std::to_string(roster_database_.assignedPlayerCount()) + " free-agents=" +
-            std::to_string(roster_database_.freeAgentCount()) + "; all references validated");
+            std::to_string(roster_database_.freeAgentCount()) + " hidden/unlisted=" +
+            std::to_string(roster_database_.unlistedPlayerCount()) + "; all references validated");
+        trace_.log("ROSTER-SLOT-COPY", "FUN_80057864 copied 29x15 team slots plus the original 100-slot free-agent tail; FUN_80054CBC membership/count refresh represented; FUN_8005DB34 derived-rating refresh marked dirty");
         trace_.log("ROSTER-SLOTS", "FUN_8005770C resolves 29 teams x 15 signed slots; -1 -> null; special stat-index-zero players route through the private 5x5 FUN_8005768C fallback table");
         menu_.reset();
         const auto profile_status = profile_store_.load(options_.profiles_path);
@@ -869,9 +871,37 @@ private:
         if (!flow_.enterMainMenu() || flow_.screen() != nba97::BootScreen::MainMenu)
             throw std::runtime_error("title -> game-setup self-test failed");
         if (roster_database_.teams().size() != 29 || roster_database_.players().size() != 493 ||
-            roster_database_.assignedPlayerCount() != 362 || roster_database_.freeAgentCount() != 131 ||
+            roster_database_.assignedPlayerCount() != 362 || roster_database_.freeAgentCount() != 67 ||
+            roster_database_.unlistedPlayerCount() != 64 ||
             !roster_database_.player(0) || !roster_database_.team(28))
             throw std::runtime_error("external roster database validation self-test failed");
+        std::size_t copied_team_slots = 0;
+        for (const auto& team : roster_database_.teams()) {
+            for (const auto id : team.roster) {
+                if (id != UINT16_MAX) {
+                    if (roster_database_.rosterOwner(id) != static_cast<std::int16_t>(team.id))
+                        throw std::runtime_error("Rosters_CopySlotTable team membership self-test failed");
+                    ++copied_team_slots;
+                }
+            }
+        }
+        std::size_t copied_free_agents = 0;
+        bool free_agent_hole = false;
+        for (const auto id : roster_database_.freeAgentSlots()) {
+            if (id == UINT16_MAX) {
+                free_agent_hole = true;
+            } else {
+                if (free_agent_hole || roster_database_.rosterOwner(id) != 29)
+                    throw std::runtime_error("Rosters_CopySlotTable free-agent tail self-test failed");
+                ++copied_free_agents;
+            }
+        }
+        if (copied_team_slots != 362 || copied_free_agents != 67 ||
+            roster_database_.rosterOwner(429) != -1 ||
+            roster_database_.rosterOwner(492) != -1 ||
+            !roster_database_.derivedTeamRatingsDirty())
+            throw std::runtime_error("Rosters_CopySlotTable population self-test failed");
+        trace_.log("SELF-TEST", "Rosters_CopySlotTable PASS: 435 team slots + 100 free-agent slots; membership=362 team/67 free/64 hidden; trailing 33 holes preserved");
         std::size_t resolved_slots = 0;
         std::size_t empty_slots = 0;
         for (std::int16_t team_id = 0; team_id < 29; ++team_id) {
@@ -964,7 +994,7 @@ private:
         const auto view_a = nba97::renderRosterViewer(
             roster_viewer_test, roster_database_, menu_font_, roster_sprites_, 0);
         if (view_a.width != 512 || view_a.height != 240 ||
-            roster_database_.version() != 4 ||
+            roster_database_.version() != 5 ||
             roster_database_.teams()[0].roster.size() != 15 ||
             roster_viewer_test.category() != 2 || roster_viewer_test.displayIndex() != 32)
             throw std::runtime_error("View Rosters fixed 15-slot state 0x10 setup failed");
