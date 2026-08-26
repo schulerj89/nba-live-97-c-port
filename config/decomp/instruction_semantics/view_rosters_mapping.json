@@ -4,6 +4,7 @@
   "original_manifest": "config/decomp/instruction_semantics/view_rosters_original.json",
   "tier_definitions": {
     "source_mapped": "A reviewed native source owner is identified; no instruction equivalence is implied.",
+    "review_classified": "A reviewed block has an understood purpose and category, but receives instruction-accounting credit only when its native representation is also cited.",
     "instruction_accounted": "The purpose of each listed original basic block is explicitly represented by cited native source.",
     "structurally_verified": "A listed original CFG edge has an explicitly verified native semantic counterpart.",
     "native_checkpoint_observed": "The native self-test executed the mapped semantic function checkpoint.",
@@ -16,7 +17,55 @@
       "name": "Frontend_PatchTeamPalette",
       "source": "src/win32_main.cpp",
       "symbols": ["loadTeamRosterBackgrounds"],
-      "accounted_blocks": [],
+      "additional_sources": [
+        {
+          "source": "tools/decode_team_backgrounds.py",
+          "symbols": ["mixed_palette", "team_palette.data[:160 * 2]"]
+        },
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": ["RosterViewer::scanTeam", "renderRosterViewer", "blitPaletteCrossfade"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x8002FE58",
+        "0x8002FE74",
+        "0x8002FE80",
+        "0x8002FE90",
+        "0x8002FEA0",
+        "0x8002FEBC",
+        "0x8002FED8",
+        "0x8002FEEC",
+        "0x8002FEF4",
+        "0x8002FF00",
+        "0x8002FF24"
+      ],
+      "accounting_basis": "All eleven blocks are semantically represented. The first six select the team palette and copy exactly 160 PS1 colors; tools/decode_team_backgrounds.py performs that substitution locally and loadTeamRosterBackgrounds validates the resulting native RGBA strips. The final five snapshot the patched palette into two transition buffers and initialize both counters to 16; RosterViewer::scanTeam retains the source/target teams and renderRosterViewer advances the equivalent 0..16 crossfade at the recovered 17 ms frontend tick. Pointer arithmetic, BGR555 scratch buffers, and MIPS copy loops are native replacements rather than emulated operations.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": [
+            "0x8002FE58",
+            "0x8002FE74",
+            "0x8002FE80",
+            "0x8002FE90",
+            "0x8002FEA0",
+            "0x8002FEBC"
+          ],
+          "summary": "Team/palette selection, address calculation, and the 160-entry PS1 CLUT copy are replaced by local mixed-palette decoding plus validated native RGBA loading."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": [
+            "0x8002FED8",
+            "0x8002FEEC",
+            "0x8002FEF4",
+            "0x8002FF00",
+            "0x8002FF24"
+          ],
+          "summary": "The original two palette snapshots and counters initialized to 16 are represented by retained source/target teams and a native factor progressing from 0 through 16 at 17 ms per frontend tick."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x8002FE58"
     },

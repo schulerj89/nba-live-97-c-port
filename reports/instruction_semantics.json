@@ -17,10 +17,21 @@
     "total_instructions": 997
   },
   "instruction_accounting": {
-    "accounted_instructions": 322,
+    "accounted_instructions": 380,
     "total_instructions": 997,
-    "accounted_basic_blocks": 6,
+    "accounted_basic_blocks": 17,
     "total_basic_blocks": 83
+  },
+  "review_classification": {
+    "classified_instructions": 58,
+    "total_instructions": 997,
+    "unclassified_instructions": 939,
+    "categories": {
+      "native_semantic_replacement": {
+        "instructions": 58,
+        "basic_blocks": 11
+      }
+    }
   },
   "structural_verification": {
     "verified_control_flow_edges": 0,
@@ -54,21 +65,68 @@
       "address": "0x8002FE58",
       "name": "Frontend_PatchTeamPalette",
       "source": "src/win32_main.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": [
+            "loadTeamRosterBackgrounds"
+          ]
+        },
+        {
+          "source": "tools/decode_team_backgrounds.py",
+          "symbols": [
+            "mixed_palette",
+            "team_palette.data[:160 * 2]"
+          ]
+        },
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::scanTeam",
+            "renderRosterViewer",
+            "blitPaletteCrossfade"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 58,
       "original_basic_block_count": 11,
-      "accounted_instruction_count": 0,
-      "accounted_basic_block_count": 0,
+      "accounted_instruction_count": 58,
+      "accounted_basic_block_count": 11,
       "structurally_verified_edge_count": 0,
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 32,
+          "basic_block_count": 6,
+          "accounted": true,
+          "summary": "Team/palette selection, address calculation, and the 160-entry PS1 CLUT copy are replaced by local mixed-palette decoding plus validated native RGBA loading."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "instruction_count": 26,
+          "basic_block_count": 5,
+          "accounted": true,
+          "summary": "The original two palette snapshots and counters initialized to 16 are represented by retained source/target teams and a native factor progressing from 0 through 16 at 17 ms per frontend tick."
+        }
+      ]
     },
     {
       "address": "0x8005770C",
       "name": "Rosters_ResolveTeamSlots",
       "source": "src/roster_database.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/roster_database.cpp",
+          "symbols": [
+            "RosterDatabase::load"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 65,
       "original_basic_block_count": 10,
@@ -78,12 +136,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x80057864",
       "name": "Rosters_CopySlotTable",
       "source": "src/roster_database.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/roster_database.cpp",
+          "symbols": [
+            "RosterDatabase::load"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 63,
       "original_basic_block_count": 5,
@@ -93,12 +160,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x80057CE4",
       "name": "Frontend_RunRostersMenu",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "renderRecoveredBottomMenu"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 264,
       "original_basic_block_count": 1,
@@ -108,12 +184,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x80059034",
       "name": "Rosters_DrawTeamSelector",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "renderRosterViewer"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 33,
       "original_basic_block_count": 1,
@@ -123,12 +208,22 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": false,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x800590B8",
       "name": "Rosters_ConstructViewer",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::open",
+            "renderRosterViewer"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 90,
       "original_basic_block_count": 7,
@@ -138,12 +233,23 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x800592C4",
       "name": "Rosters_RunViewer",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::open",
+            "RosterViewer::commit",
+            "RosterViewer::cancel"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 75,
       "original_basic_block_count": 10,
@@ -153,12 +259,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x80059610",
       "name": "Player_ChangeStatLayer",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::cycleCategory"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 126,
       "original_basic_block_count": 19,
@@ -168,12 +283,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x80059928",
       "name": "Rosters_CyclePlayer",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::move"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 88,
       "original_basic_block_count": 12,
@@ -183,12 +307,22 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x8005A538",
       "name": "Player_RunCard",
       "source": "src/main_menu.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/main_menu.cpp",
+          "symbols": [
+            "RosterViewer::activate",
+            "renderRosterViewer"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 110,
       "original_basic_block_count": 3,
@@ -198,12 +332,21 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     },
     {
       "address": "0x8005FE14",
       "name": "Rosters_ResolvePlayerId",
       "source": "src/roster_database.cpp",
+      "evidence_sources": [
+        {
+          "source": "src/roster_database.cpp",
+          "symbols": [
+            "RosterDatabase::player"
+          ]
+        }
+      ],
       "source_mapped": true,
       "original_instruction_count": 25,
       "original_basic_block_count": 4,
@@ -213,7 +356,8 @@
       "native_checkpoint_observed": true,
       "recomp_entrypoint_found": true,
       "original_trace_equivalent": false,
-      "binary_matching": false
+      "binary_matching": false,
+      "block_classifications": []
     }
   ]
 }

@@ -358,6 +358,7 @@ def render_markdown(report: dict) -> str:
     semantics = native["instruction_semantics"]
     scope = semantics["original_scope"]
     accounting = semantics["instruction_accounting"]
+    classification = semantics.get("review_classification", {})
     structural = semantics["structural_verification"]
     checkpoints = semantics["native_checkpoint_observation"]
     recomp = semantics["recomp_crosscheck"]
@@ -370,6 +371,8 @@ def render_markdown(report: dict) -> str:
         f"**{scope['basic_blocks']} basic blocks**, and **{scope['control_flow_edges']} CFG edges**.",
         f"- Explicitly accounted: **{accounting['accounted_instructions']}/{accounting['total_instructions']} instructions** "
         f"across **{accounting['accounted_basic_blocks']}/{accounting['total_basic_blocks']} blocks**.",
+        f"- Purpose-classified for review: **{classification.get('classified_instructions', 0)}/"
+        f"{classification.get('total_instructions', scope['instructions'])} instructions**; classification alone does not earn accounting credit.",
         f"- Structurally verified: **{structural['verified_control_flow_edges']}/{structural['total_control_flow_edges']} CFG edges**.",
         f"- Native semantic checkpoints observed: **{checkpoints['observed_functions']}/{checkpoints['total_functions']} functions**.",
         f"- Static-recomp entry points found: **{recomp['entrypoints_found']}/{recomp['total_functions']}**; "

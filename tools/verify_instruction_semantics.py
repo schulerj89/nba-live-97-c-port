@@ -90,6 +90,8 @@ def calculate(require_native: bool):
     recomp_entrypoints_found = 0
     missing_recomp_entrypoints = []
     function_results = []
+    classified_instruction_counts = Counter()
+    classified_block_counts = Counter()
     for address in sorted(originals, key=lambda value: int(value, 0)):
         source = originals[address]
         owner = mappings[address]
@@ -104,6 +106,20 @@ def calculate(require_native: bool):
         for symbol in owner["symbols"]:
             if symbol not in source_text:
                 raise ValueError(f"missing mapped symbol {symbol} in {owner['source']}")
+        evidence_sources = [{"source": owner["source"], "symbols": owner["symbols"]}]
+        for additional in owner.get("additional_sources", []):
+            additional_path = ROOT / additional["source"]
+            if not additional_path.is_file():
+                raise ValueError(f"missing additional source owner: {additional['source']}")
+            additional_text = additional_path.read_text(encoding="utf-8")
+            for symbol in additional.get("symbols", []):
+                if symbol not in additional_text:
+                    raise ValueError(
+                        f"missing mapped symbol {symbol} in {additional['source']}")
+            evidence_sources.append({
+                "source": additional["source"],
+                "symbols": additional.get("symbols", []),
+            })
 
         blocks = {normalize_address(item["start"]): item for item in source["blocks"]}
         listed_blocks = [normalize_address(item) for item in owner["accounted_blocks"]]
@@ -111,6 +127,39 @@ def calculate(require_native: bool):
             raise ValueError(f"invalid accounted block list: {address}")
         if listed_blocks and not owner.get("accounting_basis"):
             raise ValueError(f"accounted blocks lack a written basis: {address}")
+        block_classifications = owner.get("block_classifications", [])
+        classified_blocks = {}
+        function_classifications = []
+        for classification in block_classifications:
+            category = classification.get("category")
+            summary = classification.get("summary")
+            category_blocks = [normalize_address(item)
+                               for item in classification.get("blocks", [])]
+            if not category or not summary or not category_blocks:
+                raise ValueError(f"incomplete block classification: {address}")
+            if not set(category_blocks) <= set(blocks):
+                raise ValueError(f"classification names an invalid block: {address}")
+            overlap = set(category_blocks) & set(classified_blocks)
+            if overlap:
+                raise ValueError(f"block classified more than once: {address} {sorted(overlap)}")
+            for block in category_blocks:
+                classified_blocks[block] = category
+            instruction_count = sum(int(blocks[item]["instruction_count"])
+                                    for item in category_blocks)
+            classified_instruction_counts[category] += instruction_count
+            classified_block_counts[category] += len(category_blocks)
+            function_classifications.append({
+                "category": category,
+                "instruction_count": instruction_count,
+                "basic_block_count": len(category_blocks),
+                "accounted": set(category_blocks) <= set(listed_blocks),
+                "summary": summary,
+            })
+        if block_classifications and not set(listed_blocks) <= set(classified_blocks):
+            raise ValueError(f"accounted block lacks a review classification: {address}")
+        for block in listed_blocks:
+            if classified_blocks.get(block, "").endswith("_pending"):
+                raise ValueError(f"pending block cannot receive accounting credit: {address} {block}")
         edge_keys = {
             (normalize_address(item["from"]), normalize_address(item["to"]), item["type"])
             for item in source["edges"]
@@ -147,6 +196,7 @@ def calculate(require_native: bool):
             "address": address,
             "name": owner["name"],
             "source": owner["source"],
+            "evidence_sources": evidence_sources,
             "source_mapped": True,
             "original_instruction_count": function_instructions,
             "original_basic_block_count": function_blocks,
@@ -157,6 +207,7 @@ def calculate(require_native: bool):
             "recomp_entrypoint_found": recomp_found,
             "original_trace_equivalent": False,
             "binary_matching": False,
+            "block_classifications": function_classifications,
         })
 
     report = {
@@ -183,6 +234,19 @@ def calculate(require_native: bool):
             "total_instructions": total_instructions,
             "accounted_basic_blocks": accounted_blocks,
             "total_basic_blocks": total_blocks,
+        },
+        "review_classification": {
+            "classified_instructions": sum(classified_instruction_counts.values()),
+            "total_instructions": total_instructions,
+            "unclassified_instructions": total_instructions -
+                                         sum(classified_instruction_counts.values()),
+            "categories": {
+                category: {
+                    "instructions": classified_instruction_counts[category],
+                    "basic_blocks": classified_block_counts[category],
+                }
+                for category in sorted(classified_instruction_counts)
+            },
         },
         "structural_verification": {
             "verified_control_flow_edges": verified_edges,
