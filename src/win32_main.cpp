@@ -989,6 +989,43 @@ private:
             roster_menu_cards_, 0, false);
         if (flash_on.rgba == flash_off.rgba)
             throw std::runtime_error("Rosters recovered selection-overlay flash self-test failed");
+        nba97::RosterViewer constructor_test;
+        constructor_test.open(roster_database_);
+        static constexpr std::array<int, 6> constructor_defaults{0, 15, 32, 32, 44, 44};
+        for (std::size_t category = 0; category < constructor_defaults.size(); ++category) {
+            if (constructor_test.displayIndexForCategory(category) != constructor_defaults[category])
+                throw std::runtime_error("Rosters_ConstructViewer descriptor defaults self-test failed");
+        }
+        const auto& default_controller = constructor_test.constructionController();
+        if (constructor_test.category() != 2 || constructor_test.displayIndex() != 32 ||
+            constructor_test.constructionLayerLimit() != 3 ||
+            constructor_test.constructionDescriptorCount() != 28 ||
+            constructor_test.constructedDescriptorIndex() != 32 ||
+            !constructor_test.constructionObjectFlagsAgree() ||
+            constructor_test.constructionObjectStateFlag() ||
+            !constructor_test.constructionControllerBound() ||
+            constructor_test.constructionControllerPhase() != 0 ||
+            default_controller.slot != 0x12 || default_controller.flags != 0x10004u ||
+            default_controller.object_id != 0x11 || default_controller.value != 7)
+            throw std::runtime_error("Rosters_ConstructViewer normal construction self-test failed");
+        constructor_test.cycleDisplay(1);
+        constructor_test.cycleCategory(1);
+        constructor_test.cycleDisplay(1);
+        constructor_test.open(roster_database_);
+        if (constructor_test.category() != 2 || constructor_test.displayIndex() != 32 ||
+            constructor_test.displayIndexForCategory(3) != 32)
+            throw std::runtime_error("Rosters_ConstructViewer reopen reset self-test failed");
+        constructor_test.open(roster_database_, {2, true, true});
+        if (constructor_test.category() != 5 || constructor_test.displayIndex() != 44 ||
+            constructor_test.constructionLayerLimit() != 5 ||
+            constructor_test.constructedDescriptorIndex() != 44 ||
+            !constructor_test.constructionObjectFlagsAgree() ||
+            !constructor_test.constructionObjectStateFlag())
+            throw std::runtime_error("Rosters_ConstructViewer special construction self-test failed");
+        constructor_test.open(roster_database_, {2, false, false});
+        if (constructor_test.category() != 2 || constructor_test.constructionLayerLimit() != 3)
+            throw std::runtime_error("Rosters_ConstructViewer inactive-special self-test failed");
+        trace_.log("SELF-TEST", "Rosters_ConstructViewer PASS: six descriptor defaults reset; normal layer=2/limit=3; active special layer=5/limit=5; paired object flags and controller 0x12 bound");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(

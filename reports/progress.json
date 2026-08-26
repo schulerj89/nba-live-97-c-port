@@ -25,7 +25,7 @@
     "evidence_tracked_bytes": 38764,
     "evidence_coverage_percent": 3.56,
     "evidence_byte_coverage_percent": 8.33,
-    "complete_functions": 3,
+    "complete_functions": 4,
     "matching_functions": 0,
     "status_counts": {
       "behavior_verified": 49,
@@ -33,8 +33,8 @@
       "researched": 11
     },
     "scope_counts": {
-      "complete": 3,
-      "partial": 60
+      "complete": 4,
+      "partial": 59
     },
     "subsystems": {
       "assets": {
@@ -911,19 +911,19 @@
         "total_instructions": 997
       },
       "instruction_accounting": {
-        "accounted_instructions": 508,
+        "accounted_instructions": 598,
         "total_instructions": 997,
-        "accounted_basic_blocks": 32,
+        "accounted_basic_blocks": 39,
         "total_basic_blocks": 83
       },
       "review_classification": {
-        "classified_instructions": 186,
+        "classified_instructions": 276,
         "total_instructions": 997,
-        "unclassified_instructions": 811,
+        "unclassified_instructions": 721,
         "categories": {
           "native_semantic_replacement": {
-            "instructions": 186,
-            "basic_blocks": 26
+            "instructions": 276,
+            "basic_blocks": 33
           }
         }
       },
@@ -1191,22 +1191,58 @@
             {
               "source": "src/main_menu.cpp",
               "symbols": [
+                "RosterViewer::constructViewer",
                 "RosterViewer::open",
-                "renderRosterViewer"
+                "RosterViewer::selectedTeam"
+              ]
+            },
+            {
+              "source": "src/main_menu.hpp",
+              "symbols": [
+                "RosterViewerConstructionContext",
+                "RosterViewerControllerBinding"
+              ]
+            },
+            {
+              "source": "src/win32_main.cpp",
+              "symbols": [
+                "Rosters_ConstructViewer PASS"
               ]
             }
           ],
           "source_mapped": true,
           "original_instruction_count": 90,
           "original_basic_block_count": 7,
-          "accounted_instruction_count": 0,
-          "accounted_basic_block_count": 0,
+          "accounted_instruction_count": 90,
+          "accounted_basic_block_count": 7,
           "structurally_verified_edge_count": 0,
           "native_checkpoint_observed": true,
           "recomp_entrypoint_found": true,
           "original_trace_equivalent": false,
           "binary_matching": false,
-          "block_classifications": []
+          "block_classifications": [
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 29,
+              "basic_block_count": 2,
+              "accounted": true,
+              "summary": "Raw roster-table pointer derivation becomes retained team identity plus database injection; the six-iteration descriptor-default copy becomes an explicit six-element reset on every construction."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 16,
+              "basic_block_count": 4,
+              "accounted": true,
+              "summary": "Default layer 2/limit 3 and the active-special condition selecting global layer+3 are represented by RosterViewerConstructionContext and tested across both branch outcomes."
+            },
+            {
+              "category": "native_semantic_replacement",
+              "instruction_count": 45,
+              "basic_block_count": 1,
+              "accounted": true,
+              "summary": "Descriptor count/index/pointer ownership, global viewer ownership, controller phase reset, paired object flags, and FUN_80039D88 object construction are represented as typed viewer state with the exact recovered binding constants."
+            }
+          ]
         },
         {
           "address": "0x800592C4",

@@ -58,9 +58,28 @@ private:
 
 enum class RosterViewMode : std::uint8_t { TeamRoster, PlayerCard };
 
+struct RosterViewerConstructionContext {
+    // Original global +0x78. Values 1/2 select recovered layers 4/5 only
+    // while the active-roster byte at +0x2FC3 is set.
+    int special_stat_layer = 0;
+    bool special_roster_active = false;
+    // FUN_800590B8 copies param_2 into both viewer object-state bytes.
+    bool object_state_flag = false;
+};
+
+struct RosterViewerControllerBinding {
+    int slot = 0;
+    std::uint32_t flags = 0;
+    int object_id = 0;
+    int value = 0;
+    bool bound = false;
+};
+
 class RosterViewer final {
 public:
     void open(const RosterDatabase& database) noexcept;
+    void open(const RosterDatabase& database,
+              RosterViewerConstructionContext context) noexcept;
     bool move(int horizontal, int vertical, const RosterDatabase& database,
               std::uint32_t elapsed_ms = 0) noexcept;
     bool cycleCategory(int direction) noexcept;
@@ -100,11 +119,40 @@ public:
     [[nodiscard]] int displayIndex() const noexcept {
         return display_by_category_[static_cast<std::size_t>(category_)];
     }
+    [[nodiscard]] int displayIndexForCategory(std::size_t category) const noexcept {
+        return category < display_by_category_.size() ? display_by_category_[category] : -1;
+    }
+    [[nodiscard]] int constructionLayerLimit() const noexcept {
+        return construction_layer_limit_;
+    }
+    [[nodiscard]] int constructionDescriptorCount() const noexcept {
+        return construction_descriptor_count_;
+    }
+    [[nodiscard]] int constructedDescriptorIndex() const noexcept {
+        return constructed_descriptor_index_;
+    }
+    [[nodiscard]] bool constructionObjectFlagsAgree() const noexcept {
+        return construction_object_flags_[0] == construction_object_flags_[1];
+    }
+    [[nodiscard]] bool constructionObjectStateFlag() const noexcept {
+        return construction_object_flags_[0];
+    }
+    [[nodiscard]] bool constructionControllerBound() const noexcept {
+        return construction_controller_.bound;
+    }
+    [[nodiscard]] int constructionControllerPhase() const noexcept {
+        return construction_controller_phase_;
+    }
+    [[nodiscard]] const RosterViewerControllerBinding& constructionController() const noexcept {
+        return construction_controller_;
+    }
     [[nodiscard]] const TeamRecord* selectedTeam(const RosterDatabase& database) const noexcept;
     [[nodiscard]] const PlayerRecord* selectedPlayer(const RosterDatabase& database) const noexcept;
 
 private:
     void clamp(const RosterDatabase& database) noexcept;
+    void constructViewer(const RosterDatabase& database,
+                         RosterViewerConstructionContext context) noexcept;
     RosterViewMode mode_ = RosterViewMode::TeamRoster;
     std::size_t team_index_ = 0;
     std::size_t player_index_ = 0;
@@ -115,6 +163,12 @@ private:
     std::uint32_t scroll_transition_start_ms_ = 0;
     int category_ = 2;
     std::array<int, 6> display_by_category_{0, 15, 32, 32, 44, 44};
+    int construction_layer_limit_ = 3;
+    int construction_descriptor_count_ = 28;
+    int constructed_descriptor_index_ = 32;
+    std::array<bool, 2> construction_object_flags_{};
+    RosterViewerControllerBinding construction_controller_{};
+    int construction_controller_phase_ = 0;
     std::size_t entry_team_index_ = 0;
     std::size_t entry_player_index_ = 0;
     std::size_t entry_first_visible_player_ = 0;

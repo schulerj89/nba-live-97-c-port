@@ -189,8 +189,44 @@
       "address": "0x800590B8",
       "name": "Rosters_ConstructViewer",
       "source": "src/main_menu.cpp",
-      "symbols": ["RosterViewer::open", "renderRosterViewer"],
-      "accounted_blocks": [],
+      "symbols": ["RosterViewer::constructViewer", "RosterViewer::open", "RosterViewer::selectedTeam"],
+      "additional_sources": [
+        {
+          "source": "src/main_menu.hpp",
+          "symbols": ["RosterViewerConstructionContext", "RosterViewerControllerBinding"]
+        },
+        {
+          "source": "src/win32_main.cpp",
+          "symbols": ["Rosters_ConstructViewer PASS"]
+        }
+      ],
+      "accounted_blocks": [
+        "0x800590B8",
+        "0x800590EC",
+        "0x8005912C",
+        "0x80059144",
+        "0x8005915C",
+        "0x80059168",
+        "0x8005916C"
+      ],
+      "accounting_basis": "All seven blocks are semantically represented. RosterViewer::constructViewer retains the selected team index as the native replacement for the raw team-slot pointer; selectedTeam/renderRosterViewer resolve that ownership through the injected RosterDatabase. Every construction resets the six descriptor defaults recovered from DAT_800A4088 (0,15,32,32,44,44), initializes layer limit 3 and normal layer 2, and implements the original active-special branch by selecting special_stat_layer+3 and matching the limit. It records the descriptor count 28, current descriptor index, paired param_2 object-state flags, zero controller phase, and the exact FUN_80039D88 binding tuple (slot 0x12, flags 0x10004, object 0x11, value 7). Native tests cover normal, reopen/reset, active-special, inactive-special, both object flags, descriptor selection, phase reset, and controller binding.",
+      "block_classifications": [
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x800590B8", "0x800590EC"],
+          "summary": "Raw roster-table pointer derivation becomes retained team identity plus database injection; the six-iteration descriptor-default copy becomes an explicit six-element reset on every construction."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005912C", "0x80059144", "0x8005915C", "0x80059168"],
+          "summary": "Default layer 2/limit 3 and the active-special condition selecting global layer+3 are represented by RosterViewerConstructionContext and tested across both branch outcomes."
+        },
+        {
+          "category": "native_semantic_replacement",
+          "blocks": ["0x8005916C"],
+          "summary": "Descriptor count/index/pointer ownership, global viewer ownership, controller phase reset, paired object flags, and FUN_80039D88 object construction are represented as typed viewer state with the exact recovered binding constants."
+        }
+      ],
       "structurally_verified_edges": [],
       "native_checkpoint": "0x800590B8"
     },

@@ -912,15 +912,45 @@ void RosterViewer::clamp(const RosterDatabase& database) noexcept {
 }
 
 void RosterViewer::open(const RosterDatabase& database) noexcept {
-    nba97_semantic_trace_record(0x800592C4u);
+    open(database, {});
+}
+
+void RosterViewer::constructViewer(const RosterDatabase& database,
+                                   RosterViewerConstructionContext context) noexcept {
     nba97_semantic_trace_record(0x800590B8u);
+    clamp(database);
+
+    // DAT_800A4088 contains six 12-byte descriptor records. The constructor
+    // copies each record's first short on every invocation.
+    display_by_category_ = {0, 15, 32, 32, 44, 44};
+    construction_layer_limit_ = 3;
+    category_ = 2;
+    if (context.special_stat_layer != 0 && context.special_roster_active) {
+        category_ = context.special_stat_layer + 3;
+        construction_layer_limit_ = category_;
+    }
+    if (category_ < 0 || category_ >= static_cast<int>(display_by_category_.size()))
+        category_ = 2;
+
+    construction_descriptor_count_ = 28;
+    constructed_descriptor_index_ =
+        display_by_category_[static_cast<std::size_t>(category_)];
+    construction_object_flags_.fill(context.object_state_flag);
+    construction_controller_phase_ = 0;
+
+    // Native state ownership for FUN_80039D88(&DAT_800A436C, 0x12,
+    // 0x10004, 0x11, 7). The opaque PS1 object pool is replaced by the
+    // viewer instance; the binding itself remains explicit and testable.
+    construction_controller_ = {0x12, 0x10004u, 0x11, 7, true};
+}
+
+void RosterViewer::open(const RosterDatabase& database,
+                        RosterViewerConstructionContext context) noexcept {
+    nba97_semantic_trace_record(0x800592C4u);
     mode_ = RosterViewMode::TeamRoster;
     help_visible_ = false;
     first_visible_player_stat_ = 0;
-    // FUN_800590B8 resets the category to the historical regular season on
-    // every entry while retaining one display index per category in state.
-    category_ = 2;
-    clamp(database);
+    constructViewer(database, context);
     entry_team_index_ = team_index_;
     entry_player_index_ = player_index_;
     entry_first_visible_player_ = first_visible_player_;
