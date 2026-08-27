@@ -4,16 +4,12 @@
   "version": "NTSC-U SLUS-00267",
   "progress_model": {
     "function_statuses": ["researched", "implemented", "behavior_verified", "matching"],
-    "feature_credit": {
-      "not_started": 0.0,
-      "partial": 0.5,
-      "implemented": 0.75,
-      "verified": 1.0
-    },
+    "feature_statuses": ["not_started", "partial", "implemented", "verified"],
     "notes": [
       "Function progress measures the original PS1 binaries and never infers completion from native screens.",
       "A partial function is evidence coverage, not a completed original function.",
-      "Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.",
+      "Native-port milestones are manually maintained status counts, not a game-completion percentage or estimate of remaining effort.",
+      "The milestone catalogue is incomplete and items differ substantially in scope. Partial has no numeric credit; verified means marked verified in the manifest, not exhaustive proof.",
       "Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.",
       "Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status."
     ]

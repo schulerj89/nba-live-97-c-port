@@ -7,14 +7,15 @@ headless Ghidra analysis, and runtime comparison with the original game.
 [![NBA Live 97 decompilation progress](docs/progress.svg)](docs/progress.md)
 
 The gold percentage measures original functions with explicit recovery
-evidence. The green percentage measures completion of the catalogued native-port
-roadmap. They are deliberately separate; a working feature is not automatically
-a fully decompiled or matching original function.
+evidence, not completed functions. The green panel lists manually catalogued
+native-port milestones by status, not an overall game-completion percentage.
+Items vary greatly in size and the catalogue is incomplete; partial work earns
+no arbitrary half-credit. Playable basketball remains unimplemented.
 
 The tracked View Rosters scope currently has semantic ownership for **997/997
 original instructions** across **83/83 basic blocks**, with **12/12 native
-scenarios**, **18/18 interaction contracts**, and **91.82% measured visual
-fidelity**. Structural MIPS control-flow matching is not targeted for the
+scenarios**, **18/18 interaction contracts**, and **91.82% weighted behavioral
+and screenshot fidelity**. Structural MIPS control-flow matching is not targeted for the
 native port and is not presented as a completion percentage.
 
 ## Current scope
@@ -96,7 +97,7 @@ Recovery metadata is committed without original code or assets:
   inventories;
 - `config/decomp/recovered_functions.json` records evidence-backed function
   research;
-- `config/decomp/features.json` tracks native feature milestones; and
+- `config/decomp/features.json` records manually assigned native milestone statuses; and
 - `reports/progress.json` and `docs/progress.*` are generated views.
 
 Refresh Ghidra inventories and progress reports with:

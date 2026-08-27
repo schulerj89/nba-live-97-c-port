@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test count-only milestone reporting
+        run: python -m unittest discover -s tools -p test_report_progress.py
       - name: Verify generated progress reports
         run: python tools/report_progress.py --check
       - name: Verify recovered C ownership

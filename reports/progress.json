@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project": "NBA Live 97 PS1 decompilation and native port",
   "version": "NTSC-U SLUS-00267",
   "reconstruction": {
@@ -116,13 +116,11 @@
       "partial": 7,
       "verified": 25
     },
-    "roadmap_points": 28.5,
-    "roadmap_completion_percent": 59.38,
+    "measurement": "manually_catalogued_milestone_counts",
+    "playable_basketball_status": "not_started",
     "groups": {
       "Audio": {
         "items": 3,
-        "points": 2.5,
-        "completion_percent": 83.33,
         "status_counts": {
           "partial": 1,
           "verified": 2
@@ -130,16 +128,12 @@
       },
       "Boot and title": {
         "items": 5,
-        "points": 5.0,
-        "completion_percent": 100.0,
         "status_counts": {
           "verified": 5
         }
       },
       "Frontend menus": {
         "items": 8,
-        "points": 7.5,
-        "completion_percent": 93.75,
         "status_counts": {
           "partial": 1,
           "verified": 7
@@ -147,16 +141,12 @@
       },
       "Gameplay path": {
         "items": 8,
-        "points": 0.0,
-        "completion_percent": 0.0,
         "status_counts": {
           "not_started": 8
         }
       },
       "Native platform": {
         "items": 5,
-        "points": 4.5,
-        "completion_percent": 90.0,
         "status_counts": {
           "partial": 1,
           "verified": 4
@@ -164,16 +154,12 @@
       },
       "Roster transactions": {
         "items": 7,
-        "points": 0.0,
-        "completion_percent": 0.0,
         "status_counts": {
           "not_started": 7
         }
       },
       "Rosters": {
         "items": 6,
-        "points": 5.0,
-        "completion_percent": 83.33,
         "status_counts": {
           "partial": 2,
           "verified": 4
@@ -181,8 +167,6 @@
       },
       "Save and card": {
         "items": 3,
-        "points": 1.0,
-        "completion_percent": 33.33,
         "status_counts": {
           "not_started": 1,
           "partial": 2
@@ -190,8 +174,6 @@
       },
       "User profiles": {
         "items": 3,
-        "points": 3.0,
-        "completion_percent": 100.0,
         "status_counts": {
           "verified": 3
         }
@@ -1560,7 +1542,8 @@
   "methodology_notes": [
     "Function progress measures the original PS1 binaries and never infers completion from native screens.",
     "A partial function is evidence coverage, not a completed original function.",
-    "Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.",
+    "Native-port milestones are manually maintained status counts, not a game-completion percentage or estimate of remaining effort.",
+    "The milestone catalogue is incomplete and items differ substantially in scope. Partial has no numeric credit; verified means marked verified in the manifest, not exhaustive proof.",
     "Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.",
     "Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status."
   ]

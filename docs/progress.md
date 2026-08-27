@@ -8,7 +8,8 @@
 - **63** functions (3.56%) have explicit recomp/Ghidra/source evidence records.
 - Evidence records touch **38,764** original code bytes (8.33%). Partial records do not mean the whole function is complete.
 - **8** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
-- Native-port roadmap estimate: **59.38%** across 48 catalogued features.
+- Native port: **48 catalogued milestones** — 25 marked verified, 7 partial, 16 not started. Not an overall completion score.
+- Playable basketball remains unimplemented.
 - View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
 - View Rosters original-MIPS accounting: **997/997 instructions** have explicit block-level accounting; this is not an instruction-match percentage.
 
@@ -38,19 +39,21 @@
 | settings | 3 | 332 | 3 |
 | ui | 4 | 968 | 3 |
 
-## Native-port roadmap
+## Native-port milestone inventory
 
-| Group | Items | Estimated completion | Status counts |
-|---|---:|---:|---|
-| Audio | 3 | 83.33% | partial: 1, verified: 2 |
-| Boot and title | 5 | 100.00% | verified: 5 |
-| Frontend menus | 8 | 93.75% | partial: 1, verified: 7 |
-| Gameplay path | 8 | 0.00% | not_started: 8 |
-| Native platform | 5 | 90.00% | partial: 1, verified: 4 |
-| Roster transactions | 7 | 0.00% | not_started: 7 |
-| Rosters | 6 | 83.33% | partial: 2, verified: 4 |
-| Save and card | 3 | 33.33% | not_started: 1, partial: 2 |
-| User profiles | 3 | 100.00% | verified: 3 |
+Manually maintained statuses; unequal-sized, non-exhaustive milestones. No partial-credit percentages or effort estimates.
+
+| Group | Items | Status counts |
+|---|---:|---|
+| Audio | 3 | 2 marked verified, 1 partial |
+| Boot and title | 5 | 5 marked verified |
+| Frontend menus | 8 | 7 marked verified, 1 partial |
+| Gameplay path | 8 | 8 not started |
+| Native platform | 5 | 4 marked verified, 1 partial |
+| Roster transactions | 7 | 7 not started |
+| Rosters | 6 | 4 marked verified, 2 partial |
+| Save and card | 3 | 2 partial, 1 not started |
+| User profiles | 3 | 3 marked verified |
 
 ## View Rosters fidelity
 
@@ -109,7 +112,8 @@ Source ownership, block accounting, CFG verification, runtime trace equivalence,
 
 - Function progress measures the original PS1 binaries and never infers completion from native screens.
 - A partial function is evidence coverage, not a completed original function.
-- Feature progress is a living roadmap estimate whose denominator grows as new systems are catalogued.
+- Native-port milestones are manually maintained status counts, not a game-completion percentage or estimate of remaining effort.
+- The milestone catalogue is incomplete and items differ substantially in scope. Partial has no numeric credit; verified means marked verified in the manifest, not exhaustive proof.
 - Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.
 - Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status.
 

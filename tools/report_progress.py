@@ -124,20 +124,19 @@ def build_report():
         if item["status"] == "behavior_verified":
             stats["verified"] += 1
 
-    feature_credit = project["progress_model"]["feature_credit"]
+    allowed_feature_statuses = project["progress_model"]["feature_statuses"]
     feature_statuses = Counter()
-    feature_groups = defaultdict(lambda: {"items": 0, "credit": 0.0, "statuses": Counter()})
+    feature_groups = defaultdict(lambda: {"items": 0, "statuses": Counter()})
     seen_features = set()
     for feature in features:
         if feature["id"] in seen_features:
             raise ValueError(f"duplicate feature id: {feature['id']}")
         seen_features.add(feature["id"])
-        if feature["status"] not in feature_credit:
+        if feature["status"] not in allowed_feature_statuses:
             raise ValueError(f"invalid feature status: {feature['status']}")
         feature_statuses[feature["status"]] += 1
         group = feature_groups[feature["group"]]
         group["items"] += 1
-        group["credit"] += feature_credit[feature["status"]]
         group["statuses"][feature["status"]] += 1
 
     expected_checks = {item["id"]: item for item in fidelity_manifest["checks"]}
@@ -228,12 +227,11 @@ def build_report():
 
     total_functions = sum(row["functions"] for row in binary_rows)
     total_bytes = sum(row["analyzed_code_bytes"] for row in binary_rows)
-    feature_points = sum(feature_credit[item["status"]] for item in features)
     matching = function_statuses["matching"]
     complete_scope = function_scopes["complete"]
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "project": project["project"],
         "version": project["version"],
         "reconstruction": {
@@ -253,15 +251,11 @@ def build_report():
         "native_port": {
             "catalogued_features": len(features),
             "status_counts": dict(sorted(feature_statuses.items())),
-            "roadmap_points": feature_points,
-            "roadmap_completion_percent": round(feature_points * 100.0 / len(features), 2),
+            "measurement": "manually_catalogued_milestone_counts",
+            "playable_basketball_status": feature_index["game.input"]["status"],
             "groups": {
                 key: {
                     "items": feature_groups[key]["items"],
-                    "points": feature_groups[key]["credit"],
-                    "completion_percent": round(
-                        feature_groups[key]["credit"] * 100.0 / feature_groups[key]["items"], 2
-                    ),
                     "status_counts": dict(sorted(feature_groups[key]["statuses"].items())),
                 }
                 for key in sorted(feature_groups)
@@ -272,6 +266,19 @@ def build_report():
         },
         "methodology_notes": project["progress_model"]["notes"],
     }
+
+
+def milestone_counts(counts: dict) -> str:
+    labels = (("verified", "marked verified"), ("implemented", "implemented"),
+              ("partial", "partial"), ("not_started", "not started"))
+    return ", ".join(f"{counts[key]} {label}" for key, label in labels if counts.get(key))
+
+
+def gameplay_note(native: dict) -> str:
+    if native["playable_basketball_status"] == "not_started":
+        return "Playable basketball remains unimplemented."
+    status = native["playable_basketball_status"].replace("_", " ")
+    return f"Basketball controls are marked {status}; this is not a full-game completion claim."
 
 
 def render_markdown(report: dict) -> str:
@@ -293,8 +300,9 @@ def render_markdown(report: dict) -> str:
         f"({reconstruction['evidence_byte_coverage_percent']:.2f}%). Partial records do not mean the whole function is complete.",
         f"- **{reconstruction['complete_functions']}** functions are currently claimed behavior-complete and "
         f"**{reconstruction['matching_functions']}** are instruction-matching. We deliberately begin conservatively.",
-        f"- Native-port roadmap estimate: **{native['roadmap_completion_percent']:.2f}%** "
-        f"across {native['catalogued_features']} catalogued features.",
+        f"- Native port: **{native['catalogued_features']} catalogued milestones** — "
+        f"{milestone_counts(native['status_counts'])}. Not an overall completion score.",
+        f"- {gameplay_note(native)}",
         f"- View Rosters end-to-end fidelity: **{native['fidelity']['view_rosters']['fidelity_percent']:.2f}%** "
         "from weighted behavioral and local-only visual-reference checks.",
         f"- View Rosters original-MIPS accounting: "
@@ -323,14 +331,16 @@ def render_markdown(report: dict) -> str:
         lines.append(f"| {name} | {stats['functions']} | {stats['bytes']:,} | {stats['verified']} |")
     lines += [
         "",
-        "## Native-port roadmap",
+        "## Native-port milestone inventory",
         "",
-        "| Group | Items | Estimated completion | Status counts |",
-        "|---|---:|---:|---|",
+        "Manually maintained statuses; unequal-sized, non-exhaustive milestones. No partial-credit percentages or effort estimates.",
+        "",
+        "| Group | Items | Status counts |",
+        "|---|---:|---|",
     ]
     for name, group in native["groups"].items():
-        counts = ", ".join(f"{key}: {value}" for key, value in group["status_counts"].items())
-        lines.append(f"| {name} | {group['items']} | {group['completion_percent']:.2f}% | {counts} |")
+        counts = milestone_counts(group["status_counts"])
+        lines.append(f"| {name} | {group['items']} | {counts} |")
     fidelity = native["fidelity"]["view_rosters"]
     lines += [
         "",
@@ -401,8 +411,8 @@ def render_html(report: dict) -> str:
     for name, group in native["groups"].items():
         group_cards.append(
             f'<section class="card"><h3>{html.escape(name)}</h3>'
-            f'<div class="bar"><span style="width:{group["completion_percent"]}%"></span></div>'
-            f'<p>{group["completion_percent"]:.2f}% · {group["items"]} catalogued items</p></section>'
+            f'<p>{group["items"]} catalogued milestones</p>'
+            f'<p>{milestone_counts(group["status_counts"])}</p></section>'
         )
     notes = "".join(f"<li>{html.escape(note)}</li>" for note in report["methodology_notes"])
     return f"""<!doctype html>
@@ -420,10 +430,11 @@ code{{color:#ffd72d}}
 <div class="stat"><div class="value">{reconstruction['discovered_functions']:,}</div><div class="label">original functions discovered</div></div>
 <div class="stat"><div class="value">{reconstruction['evidence_coverage_percent']:.2f}%</div><div class="label">functions with explicit evidence records</div></div>
 <div class="stat"><div class="value">{reconstruction['matching_functions']}</div><div class="label">instruction-matching functions</div></div>
-<div class="stat"><div class="value">{native['roadmap_completion_percent']:.2f}%</div><div class="label">native-port roadmap estimate</div></div>
+<div class="stat"><div class="value">{native['catalogued_features']} milestones</div><div class="label">{milestone_counts(native['status_counts'])}</div></div>
 <div class="stat"><div class="value">{roster_fidelity:.2f}%</div><div class="label">View Rosters measured fidelity</div></div>
 <div class="stat"><div class="value">{semantic_accounting['accounted_instructions']}/{semantic_accounting['total_instructions']}</div><div class="label">View Rosters MIPS instructions explicitly accounted</div></div>
-</div><h2>Native-port groups</h2><div class="grid">{''.join(group_cards)}</div>
+</div><p>{gameplay_note(native)} Milestone counts are manually maintained, not an overall game-completion percentage.</p>
+<h2>Native-port milestone inventory</h2><div class="grid">{''.join(group_cards)}</div>
 <h2>How to read this</h2><ul>{notes}</ul>
 <p>Private game inputs and decoded assets remain under <code>.local/</code>.</p>
 </main></body></html>
@@ -435,14 +446,12 @@ def render_svg(report: dict) -> str:
     reconstruction = report["reconstruction"]
     native = report["native_port"]
     evidence = reconstruction["evidence_coverage_percent"]
-    roadmap = native["roadmap_completion_percent"]
     roster_fidelity = native["fidelity"]["view_rosters"]["fidelity_percent"]
     semantic_accounting = native["instruction_semantics"]["instruction_accounting"]
     evidence_width = round(330.0 * evidence / 100.0, 2)
-    roadmap_width = round(330.0 * roadmap / 100.0, 2)
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="760" height="178" viewBox="0 0 760 178" role="img" aria-labelledby="title desc">
 <title id="title">NBA Live 97 decompilation progress</title>
-<desc id="desc">{evidence:.2f} percent of discovered original functions have evidence records; the native port roadmap is {roadmap:.2f} percent complete.</desc>
+<desc id="desc">{evidence:.2f} percent of discovered original functions have evidence records. Native port: {native['catalogued_features']} catalogued milestones, {milestone_counts(native['status_counts'])}. Not an overall completion score. {gameplay_note(native)}</desc>
 <defs>
   <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121735"/><stop offset="1" stop-color="#080b1d"/></linearGradient>
   <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#ffe44a"/><stop offset="1" stop-color="#f6a800"/></linearGradient>
@@ -459,11 +468,9 @@ def render_svg(report: dict) -> str:
   <rect x="42" y="79" width="{evidence_width}" height="12" rx="6" fill="url(#gold)"/>
   <text x="42" y="108" fill="#aeb7e4" font-size="12">{reconstruction['evidence_tracked_functions']:,} / {reconstruction['discovered_functions']:,} discovered functions tracked with explicit evidence</text>
 
-  <text x="408" y="70" fill="#eef1ff" font-size="14" font-weight="600">NATIVE PORT ROADMAP</text>
-  <text x="738" y="70" fill="#60e6a8" font-size="15" font-weight="700" text-anchor="end">{roadmap:.2f}%</text>
-  <rect x="408" y="79" width="330" height="12" rx="6" fill="#282e54"/>
-  <rect x="408" y="79" width="{roadmap_width}" height="12" rx="6" fill="#35c98c"/>
-  <text x="408" y="108" fill="#aeb7e4" font-size="12">{native['catalogued_features']} catalogued, evidence-backed feature milestones</text>
+  <text x="408" y="70" fill="#eef1ff" font-size="14" font-weight="600">{native['catalogued_features']} CATALOGUED MILESTONES</text>
+  <text x="408" y="89" fill="#60e6a8" font-size="11">{milestone_counts(native['status_counts'])}</text>
+  <text x="408" y="108" fill="#aeb7e4" font-size="10">{gameplay_note(native)}</text>
 
   <line x1="42" y1="126" x2="738" y2="126" stroke="#29315f"/>
   <text x="42" y="150" fill="#8994ca" font-size="12">MIPS ACCOUNTED</text>
@@ -507,7 +514,8 @@ def main() -> int:
         print(
             f"Progress {verb}: {report['reconstruction']['discovered_functions']} functions, "
             f"{report['reconstruction']['evidence_tracked_functions']} evidence-tracked, "
-            f"native roadmap {report['native_port']['roadmap_completion_percent']:.2f}%"
+            f"{report['native_port']['catalogued_features']} native milestones "
+            f"({milestone_counts(report['native_port']['status_counts'])})"
         )
     return 0 if ok else 1
 

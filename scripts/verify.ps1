@@ -9,6 +9,8 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $repo
 try {
     Write-Host '[1/9] Validating committed progress metadata'
+    python -m unittest discover -s tools -p test_report_progress.py
+    if ($LASTEXITCODE -ne 0) { throw 'Milestone reporting regression tests failed.' }
     python tools/report_progress.py --check
     if ($LASTEXITCODE -ne 0) { throw 'Progress metadata verification failed.' }
 
