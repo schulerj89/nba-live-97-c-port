@@ -141,7 +141,13 @@ deterministic capture to refresh it. The score is useful regression evidence,
 not a byte-match claim: emulator scaling, color presentation, and animation
 phase can prevent identical pixels even when the recovered layout agrees.
 
-The parent Rosters card screen has a smaller focused regression pipeline:
+Re-order Rosters has a tested in-memory swap core and a CLI-tested two-stage
+selection/cancel controller (the original screen is not wired yet). Its
+[instruction ledger](docs/reorder_rosters_progress.md) lists pending blocks and
+separate feature gates. Run `pwsh -File scripts/verify_reorder_rosters.ps1` for
+fresh CLI tests; see the [workflow](docs/reorder_rosters_workflow.md).
+
+For the parent Rosters card screen:
 
 ```powershell
 pwsh -File scripts/verify_rosters_menu.ps1 -RequireReference

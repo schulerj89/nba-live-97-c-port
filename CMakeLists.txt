@@ -1,6 +1,22 @@
 cmake_minimum_required(VERSION 3.20)
 project(nba_live_97_decomp LANGUAGES C CXX)
 
+include(CTest)
+option(NBA97_RECOVERED_TESTS_ONLY "Build asset-free recovered logic tests without the UI" OFF)
+if(BUILD_TESTING)
+    add_executable(nba97_reorder_tests
+        tests/reorder_rosters_test.cpp
+        src/recovered/roster_reorder.c
+        src/roster_database.cpp
+        src/recovered/semantic_trace.c)
+    target_compile_features(nba97_reorder_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_reorder_tests PRIVATE src)
+    add_test(NAME reorder_rosters_core COMMAND nba97_reorder_tests)
+endif()
+if(NBA97_RECOVERED_TESTS_ONLY)
+    return()
+endif()
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_custom_target(progress
@@ -54,6 +70,7 @@ else()
 endif()
 
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_reorder.c)
 if(MSVC)
     target_compile_options(nba97_boot_decomp PRIVATE /W4 /permissive-)
 else()

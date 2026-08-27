@@ -22,6 +22,14 @@ jobs:
         run: python tools/verify_instruction_semantics.py --check
       - name: Verify View Rosters scenario contract
         run: python tools/verify_roster_scenarios.py --check-config
+      - name: Verify Re-order ledger regression tests
+        run: python -m unittest discover -s tools -p test_reorder_progress.py
+      - name: Build asset-free Re-order core tests
+        run: |
+          cmake -S . -B build-core -DNBA97_RECOVERED_TESTS_ONLY=ON
+          cmake --build build-core
+      - name: Verify Re-order ledger and fresh core scenarios
+        run: python tools/verify_reorder_rosters.py --check --native-test build-core/nba97_reorder_tests
       - name: Ensure private asset directory is not tracked
         shell: bash
         run: |

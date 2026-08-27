@@ -5,10 +5,10 @@
 ## Current baseline
 
 - **1,769** functions and **465,368** code bytes discovered by headless Ghidra in the currently scoped original binaries.
-- **63** functions (3.56%) have explicit recomp/Ghidra/source evidence records.
-- Evidence records touch **38,764** original code bytes (8.33%). Partial records do not mean the whole function is complete.
+- **66** functions (3.73%) have explicit recomp/Ghidra/source evidence records.
+- Evidence records touch **39,948** original code bytes (8.58%). Partial records do not mean the whole function is complete.
 - **8** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
-- Native port: **48 catalogued milestones** — 25 marked verified, 7 partial, 16 not started. Not an overall completion score.
+- Native port: **48 catalogued milestones** — 25 marked verified, 8 partial, 15 not started. Not an overall completion score.
 - Playable basketball remains unimplemented.
 - View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
 - View Rosters original-MIPS accounting: **997/997 instructions** have explicit block-level accounting; this is not an instruction-match percentage.
@@ -35,7 +35,7 @@
 | menus | 5 | 6,256 | 3 |
 | movie | 2 | 916 | 1 |
 | profiles | 4 | 7,472 | 3 |
-| rosters | 13 | 4,096 | 13 |
+| rosters | 16 | 5,280 | 16 |
 | settings | 3 | 332 | 3 |
 | ui | 4 | 968 | 3 |
 
@@ -50,7 +50,7 @@ Manually maintained statuses; unequal-sized, non-exhaustive milestones. No parti
 | Frontend menus | 8 | 7 marked verified, 1 partial |
 | Gameplay path | 8 | 8 not started |
 | Native platform | 5 | 4 marked verified, 1 partial |
-| Roster transactions | 7 | 7 not started |
+| Roster transactions | 7 | 1 partial, 6 not started |
 | Rosters | 6 | 4 marked verified, 2 partial |
 | Save and card | 3 | 2 partial, 1 not started |
 | User profiles | 3 | 3 marked verified |

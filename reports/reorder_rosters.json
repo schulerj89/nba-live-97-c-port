@@ -1,0 +1,798 @@
+{
+  "schema_version": 1,
+  "scope": "Re-order Rosters: initial ten-function core, not the full call graph",
+  "measurement": "reviewed source accounting, not runtime execution or binary equivalence",
+  "instructions": {
+    "accounted": 36,
+    "total": 875,
+    "pending": 839,
+    "percent": 4.11
+  },
+  "fully_accounted_functions": 1,
+  "function_count": 10,
+  "functions": [
+    {
+      "address": "0x80056A94",
+      "name": "Normalize team",
+      "slice": "core",
+      "accounted": 22,
+      "total": 22,
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "All five blocks represented by signed int16 input/return, team-29 branch, mode-2 branch, signed context-byte promotion, and fallback team 3. Verified against recomp and Ghidra; native boundary tests. Not binary equivalence."
+    },
+    {
+      "address": "0x80056AEC",
+      "name": "Enter Re-order",
+      "slice": "screen",
+      "accounted": 0,
+      "total": 22,
+      "pending": 22,
+      "pending_blocks": [
+        {
+          "end": "0x80056B43",
+          "instruction_count": 22,
+          "start": "0x80056AEC"
+        }
+      ],
+      "note": "Normalize team then construct shared lists of kinds 1 and 2; bind both callbacks and propagate result."
+    },
+    {
+      "address": "0x80056494",
+      "name": "Construct/run two-list screen",
+      "slice": "screen",
+      "accounted": 0,
+      "total": 276,
+      "pending": 276,
+      "pending_blocks": [
+        {
+          "end": "0x80056517",
+          "instruction_count": 33,
+          "start": "0x80056494"
+        },
+        {
+          "end": "0x8005653F",
+          "instruction_count": 10,
+          "start": "0x80056518"
+        },
+        {
+          "end": "0x8005656F",
+          "instruction_count": 12,
+          "start": "0x80056540"
+        },
+        {
+          "end": "0x8005657F",
+          "instruction_count": 4,
+          "start": "0x80056570"
+        },
+        {
+          "end": "0x80056583",
+          "instruction_count": 1,
+          "start": "0x80056580"
+        },
+        {
+          "end": "0x800565C7",
+          "instruction_count": 17,
+          "start": "0x80056584"
+        },
+        {
+          "end": "0x800565CF",
+          "instruction_count": 2,
+          "start": "0x800565C8"
+        },
+        {
+          "end": "0x800565DF",
+          "instruction_count": 4,
+          "start": "0x800565D0"
+        },
+        {
+          "end": "0x800565EF",
+          "instruction_count": 4,
+          "start": "0x800565E0"
+        },
+        {
+          "end": "0x80056617",
+          "instruction_count": 10,
+          "start": "0x800565F0"
+        },
+        {
+          "end": "0x8005661F",
+          "instruction_count": 2,
+          "start": "0x80056618"
+        },
+        {
+          "end": "0x8005662F",
+          "instruction_count": 4,
+          "start": "0x80056620"
+        },
+        {
+          "end": "0x8005663F",
+          "instruction_count": 4,
+          "start": "0x80056630"
+        },
+        {
+          "end": "0x8005664F",
+          "instruction_count": 4,
+          "start": "0x80056640"
+        },
+        {
+          "end": "0x80056653",
+          "instruction_count": 1,
+          "start": "0x80056650"
+        },
+        {
+          "end": "0x800566D3",
+          "instruction_count": 32,
+          "start": "0x80056654"
+        },
+        {
+          "end": "0x8005672B",
+          "instruction_count": 22,
+          "start": "0x800566D4"
+        },
+        {
+          "end": "0x80056737",
+          "instruction_count": 3,
+          "start": "0x8005672C"
+        },
+        {
+          "end": "0x80056743",
+          "instruction_count": 3,
+          "start": "0x80056738"
+        },
+        {
+          "end": "0x80056753",
+          "instruction_count": 4,
+          "start": "0x80056744"
+        },
+        {
+          "end": "0x80056767",
+          "instruction_count": 5,
+          "start": "0x80056754"
+        },
+        {
+          "end": "0x8005676B",
+          "instruction_count": 1,
+          "start": "0x80056768"
+        },
+        {
+          "end": "0x800567EF",
+          "instruction_count": 33,
+          "start": "0x8005676C"
+        },
+        {
+          "end": "0x8005681F",
+          "instruction_count": 12,
+          "start": "0x800567F0"
+        },
+        {
+          "end": "0x8005684B",
+          "instruction_count": 11,
+          "start": "0x80056820"
+        },
+        {
+          "end": "0x8005686B",
+          "instruction_count": 8,
+          "start": "0x8005684C"
+        },
+        {
+          "end": "0x80056883",
+          "instruction_count": 6,
+          "start": "0x8005686C"
+        },
+        {
+          "end": "0x800568E3",
+          "instruction_count": 24,
+          "start": "0x80056884"
+        }
+      ],
+      "note": "Private Z2PORT assets, 535-slot working snapshot, list construction/scrolling, callbacks and teardown; inspect callees before claiming this owner."
+    },
+    {
+      "address": "0x800568E4",
+      "name": "First-list input",
+      "slice": "interaction",
+      "accounted": 9,
+      "total": 54,
+      "pending": 45,
+      "pending_blocks": [
+        {
+          "end": "0x80056907",
+          "instruction_count": 9,
+          "start": "0x800568E4"
+        },
+        {
+          "end": "0x80056913",
+          "instruction_count": 3,
+          "start": "0x80056908"
+        },
+        {
+          "end": "0x8005691B",
+          "instruction_count": 2,
+          "start": "0x80056914"
+        },
+        {
+          "end": "0x8005692F",
+          "instruction_count": 5,
+          "start": "0x8005691C"
+        },
+        {
+          "end": "0x80056937",
+          "instruction_count": 2,
+          "start": "0x80056930"
+        },
+        {
+          "end": "0x8005693F",
+          "instruction_count": 2,
+          "start": "0x80056938"
+        },
+        {
+          "end": "0x80056947",
+          "instruction_count": 2,
+          "start": "0x80056940"
+        },
+        {
+          "end": "0x80056987",
+          "instruction_count": 7,
+          "start": "0x8005696C"
+        },
+        {
+          "end": "0x8005699F",
+          "instruction_count": 6,
+          "start": "0x80056988"
+        },
+        {
+          "end": "0x800569A7",
+          "instruction_count": 2,
+          "start": "0x800569A0"
+        },
+        {
+          "end": "0x800569BB",
+          "instruction_count": 5,
+          "start": "0x800569A8"
+        }
+      ],
+      "note": "View/compare dispatch, generic input-mask handling, empty-slot modal rendering, begin-selection animation and callback lifetime remain pending. Selection-state behavior is native-tested in the CLI harness."
+    },
+    {
+      "address": "0x800569BC",
+      "name": "Second-list input",
+      "slice": "interaction",
+      "accounted": 5,
+      "total": 54,
+      "pending": 49,
+      "pending_blocks": [
+        {
+          "end": "0x800569E3",
+          "instruction_count": 10,
+          "start": "0x800569BC"
+        },
+        {
+          "end": "0x800569EF",
+          "instruction_count": 3,
+          "start": "0x800569E4"
+        },
+        {
+          "end": "0x800569F7",
+          "instruction_count": 2,
+          "start": "0x800569F0"
+        },
+        {
+          "end": "0x80056A0B",
+          "instruction_count": 5,
+          "start": "0x800569F8"
+        },
+        {
+          "end": "0x80056A13",
+          "instruction_count": 2,
+          "start": "0x80056A0C"
+        },
+        {
+          "end": "0x80056A1B",
+          "instruction_count": 2,
+          "start": "0x80056A14"
+        },
+        {
+          "end": "0x80056A23",
+          "instruction_count": 2,
+          "start": "0x80056A1C"
+        },
+        {
+          "end": "0x80056A4B",
+          "instruction_count": 6,
+          "start": "0x80056A34"
+        },
+        {
+          "end": "0x80056A5B",
+          "instruction_count": 4,
+          "start": "0x80056A4C"
+        },
+        {
+          "end": "0x80056A67",
+          "instruction_count": 3,
+          "start": "0x80056A5C"
+        },
+        {
+          "end": "0x80056A77",
+          "instruction_count": 4,
+          "start": "0x80056A68"
+        },
+        {
+          "end": "0x80056A93",
+          "instruction_count": 6,
+          "start": "0x80056A7C"
+        }
+      ],
+      "note": "View/compare dispatch, generic input masks, shared validation and swap callees, original row refresh and finish-selection animation remain uncredited. Cancel and successful swap focus transitions are tested but do not credit whole caller blocks."
+    },
+    {
+      "address": "0x800552B4",
+      "name": "Begin second selection",
+      "slice": "interaction",
+      "accounted": 0,
+      "total": 24,
+      "pending": 24,
+      "pending_blocks": [
+        {
+          "end": "0x80055313",
+          "instruction_count": 24,
+          "start": "0x800552B4"
+        }
+      ],
+      "note": "Focus/state transition is implemented; the single original block also calls highlight animation and display refresh, which remain pending, so no whole-block credit."
+    },
+    {
+      "address": "0x80055314",
+      "name": "Finish/cancel second selection",
+      "slice": "interaction",
+      "accounted": 0,
+      "total": 34,
+      "pending": 34,
+      "pending_blocks": [
+        {
+          "end": "0x8005536F",
+          "instruction_count": 23,
+          "start": "0x80055314"
+        },
+        {
+          "end": "0x8005537F",
+          "instruction_count": 4,
+          "start": "0x80055370"
+        },
+        {
+          "end": "0x8005539B",
+          "instruction_count": 7,
+          "start": "0x80055380"
+        }
+      ],
+      "note": "First-focus restoration and state-2 latch=10 are implemented; highlight reset, FUN_80055068 refresh and FUN_8003B194 behavior remain pending. No whole-block credit for state-only fragments."
+    },
+    {
+      "address": "0x800556B0",
+      "name": "Validate pair (shared)",
+      "slice": "core",
+      "accounted": 0,
+      "total": 140,
+      "pending": 140,
+      "pending_blocks": [
+        {
+          "end": "0x8005570F",
+          "instruction_count": 24,
+          "start": "0x800556B0"
+        },
+        {
+          "end": "0x80055723",
+          "instruction_count": 5,
+          "start": "0x80055710"
+        },
+        {
+          "end": "0x80055733",
+          "instruction_count": 4,
+          "start": "0x80055724"
+        },
+        {
+          "end": "0x8005574F",
+          "instruction_count": 7,
+          "start": "0x80055734"
+        },
+        {
+          "end": "0x80055757",
+          "instruction_count": 2,
+          "start": "0x80055750"
+        },
+        {
+          "end": "0x80055773",
+          "instruction_count": 7,
+          "start": "0x80055758"
+        },
+        {
+          "end": "0x8005577B",
+          "instruction_count": 2,
+          "start": "0x80055774"
+        },
+        {
+          "end": "0x8005578B",
+          "instruction_count": 4,
+          "start": "0x8005577C"
+        },
+        {
+          "end": "0x8005579B",
+          "instruction_count": 4,
+          "start": "0x8005578C"
+        },
+        {
+          "end": "0x800557BB",
+          "instruction_count": 8,
+          "start": "0x8005579C"
+        },
+        {
+          "end": "0x800557C3",
+          "instruction_count": 2,
+          "start": "0x800557BC"
+        },
+        {
+          "end": "0x800557D3",
+          "instruction_count": 4,
+          "start": "0x800557C4"
+        },
+        {
+          "end": "0x800557DF",
+          "instruction_count": 3,
+          "start": "0x800557D4"
+        },
+        {
+          "end": "0x800557FF",
+          "instruction_count": 8,
+          "start": "0x800557E0"
+        },
+        {
+          "end": "0x80055807",
+          "instruction_count": 2,
+          "start": "0x80055800"
+        },
+        {
+          "end": "0x80055817",
+          "instruction_count": 4,
+          "start": "0x80055808"
+        },
+        {
+          "end": "0x80055837",
+          "instruction_count": 8,
+          "start": "0x80055818"
+        },
+        {
+          "end": "0x8005583F",
+          "instruction_count": 2,
+          "start": "0x80055838"
+        },
+        {
+          "end": "0x8005584F",
+          "instruction_count": 4,
+          "start": "0x80055840"
+        },
+        {
+          "end": "0x80055863",
+          "instruction_count": 5,
+          "start": "0x80055850"
+        },
+        {
+          "end": "0x8005586F",
+          "instruction_count": 3,
+          "start": "0x80055864"
+        },
+        {
+          "end": "0x8005588B",
+          "instruction_count": 7,
+          "start": "0x80055870"
+        },
+        {
+          "end": "0x80055893",
+          "instruction_count": 2,
+          "start": "0x8005588C"
+        },
+        {
+          "end": "0x8005589B",
+          "instruction_count": 2,
+          "start": "0x80055894"
+        },
+        {
+          "end": "0x800558A3",
+          "instruction_count": 2,
+          "start": "0x8005589C"
+        },
+        {
+          "end": "0x800558C7",
+          "instruction_count": 9,
+          "start": "0x800558A4"
+        },
+        {
+          "end": "0x800558CB",
+          "instruction_count": 1,
+          "start": "0x800558C8"
+        },
+        {
+          "end": "0x800558DF",
+          "instruction_count": 5,
+          "start": "0x800558CC"
+        }
+      ],
+      "note": "Re-order occupied/different-player behavior exists in nba97_reorder_swap; full blocks remain uncredited until shared minimum-size/injury/free-agent branches are reviewed and individually mapped or explicitly excluded from Re-order scope."
+    },
+    {
+      "address": "0x800558E0",
+      "name": "Swap slots (shared)",
+      "slice": "core",
+      "accounted": 0,
+      "total": 134,
+      "pending": 134,
+      "pending_blocks": [
+        {
+          "end": "0x8005592B",
+          "instruction_count": 19,
+          "start": "0x800558E0"
+        },
+        {
+          "end": "0x80055933",
+          "instruction_count": 2,
+          "start": "0x8005592C"
+        },
+        {
+          "end": "0x8005594B",
+          "instruction_count": 6,
+          "start": "0x80055934"
+        },
+        {
+          "end": "0x8005595F",
+          "instruction_count": 5,
+          "start": "0x8005594C"
+        },
+        {
+          "end": "0x80055977",
+          "instruction_count": 6,
+          "start": "0x80055960"
+        },
+        {
+          "end": "0x8005597B",
+          "instruction_count": 1,
+          "start": "0x80055978"
+        },
+        {
+          "end": "0x8005598B",
+          "instruction_count": 4,
+          "start": "0x8005597C"
+        },
+        {
+          "end": "0x80055993",
+          "instruction_count": 2,
+          "start": "0x8005598C"
+        },
+        {
+          "end": "0x800559AB",
+          "instruction_count": 6,
+          "start": "0x80055994"
+        },
+        {
+          "end": "0x800559BF",
+          "instruction_count": 5,
+          "start": "0x800559AC"
+        },
+        {
+          "end": "0x800559D7",
+          "instruction_count": 6,
+          "start": "0x800559C0"
+        },
+        {
+          "end": "0x800559DB",
+          "instruction_count": 1,
+          "start": "0x800559D8"
+        },
+        {
+          "end": "0x80055A07",
+          "instruction_count": 11,
+          "start": "0x800559DC"
+        },
+        {
+          "end": "0x80055A17",
+          "instruction_count": 4,
+          "start": "0x80055A08"
+        },
+        {
+          "end": "0x80055A23",
+          "instruction_count": 3,
+          "start": "0x80055A18"
+        },
+        {
+          "end": "0x80055A73",
+          "instruction_count": 20,
+          "start": "0x80055A24"
+        },
+        {
+          "end": "0x80055A83",
+          "instruction_count": 4,
+          "start": "0x80055A74"
+        },
+        {
+          "end": "0x80055ACB",
+          "instruction_count": 18,
+          "start": "0x80055A84"
+        },
+        {
+          "end": "0x80055AD3",
+          "instruction_count": 2,
+          "start": "0x80055ACC"
+        },
+        {
+          "end": "0x80055AE3",
+          "instruction_count": 4,
+          "start": "0x80055AD4"
+        },
+        {
+          "end": "0x80055AF7",
+          "instruction_count": 5,
+          "start": "0x80055AE4"
+        }
+      ],
+      "note": "Occupied same-team swap and 16-bit counter exist in nba97_reorder_swap; empty-slot search, count changes and compaction remain outside this implemented fragment. No full-function credit."
+    },
+    {
+      "address": "0x80055AF8",
+      "name": "Refresh both lists",
+      "slice": "screen",
+      "accounted": 0,
+      "total": 115,
+      "pending": 115,
+      "pending_blocks": [
+        {
+          "end": "0x80055B47",
+          "instruction_count": 20,
+          "start": "0x80055AF8"
+        },
+        {
+          "end": "0x80055B4F",
+          "instruction_count": 2,
+          "start": "0x80055B48"
+        },
+        {
+          "end": "0x80055B6F",
+          "instruction_count": 8,
+          "start": "0x80055B50"
+        },
+        {
+          "end": "0x80055B73",
+          "instruction_count": 1,
+          "start": "0x80055B70"
+        },
+        {
+          "end": "0x80055B83",
+          "instruction_count": 4,
+          "start": "0x80055B74"
+        },
+        {
+          "end": "0x80055B87",
+          "instruction_count": 1,
+          "start": "0x80055B84"
+        },
+        {
+          "end": "0x80055BAB",
+          "instruction_count": 9,
+          "start": "0x80055B88"
+        },
+        {
+          "end": "0x80055BAF",
+          "instruction_count": 1,
+          "start": "0x80055BAC"
+        },
+        {
+          "end": "0x80055BF3",
+          "instruction_count": 17,
+          "start": "0x80055BB0"
+        },
+        {
+          "end": "0x80055C0B",
+          "instruction_count": 6,
+          "start": "0x80055BF4"
+        },
+        {
+          "end": "0x80055C17",
+          "instruction_count": 3,
+          "start": "0x80055C0C"
+        },
+        {
+          "end": "0x80055C33",
+          "instruction_count": 7,
+          "start": "0x80055C18"
+        },
+        {
+          "end": "0x80055C77",
+          "instruction_count": 17,
+          "start": "0x80055C34"
+        },
+        {
+          "end": "0x80055CC3",
+          "instruction_count": 19,
+          "start": "0x80055C78"
+        }
+      ],
+      "note": "Rebind player IDs to row objects, visible-row refresh, selected-player globals and focus restoration."
+    }
+  ],
+  "instruction_slices": {
+    "core": {
+      "accounted": 22,
+      "total": 296,
+      "pending": 274
+    },
+    "screen": {
+      "accounted": 0,
+      "total": 413,
+      "pending": 413
+    },
+    "interaction": {
+      "accounted": 14,
+      "total": 166,
+      "pending": 152
+    }
+  },
+  "slices": [
+    {
+      "id": "core",
+      "name": "Team normalization and in-memory same-team swap",
+      "status": "native_tested",
+      "gate": "Fresh core tests plus local database invariants; exact slot order, counts, owners and rejected-input immutability."
+    },
+    {
+      "id": "interaction",
+      "name": "Two-step selection state machine",
+      "status": "native_tested",
+      "gate": "Source/destination focus, cancel at each phase, empty/same-player cases and scrolling have exact-state scenarios. CLI/database adapter tested; original visual/input/audio integration remains a separate gate."
+    },
+    {
+      "id": "screen",
+      "name": "Original two-list screen and menu entry",
+      "status": "pending",
+      "gate": "Original assets/font/layout and row refresh; menu enters the screen; source-mapped lifecycle and callback dependencies reviewed."
+    },
+    {
+      "id": "feedback",
+      "name": "Sound, highlights, help and View Player round trips",
+      "status": "pending",
+      "gate": "Recovered sound IDs/timing, focus restoration, original-sized help, player return and exit tested."
+    },
+    {
+      "id": "save",
+      "name": "Local roster persistence and Reset integration",
+      "status": "pending",
+      "gate": "Recover original commit/cancel semantics first; versioned local overrides, atomic save/reload, corrupt-file handling and Reset availability; never overwrite source assets."
+    },
+    {
+      "id": "reference",
+      "name": "Original-reference acceptance",
+      "status": "pending",
+      "gate": "Same-scenario original traces and screenshots; every relevant pending block resolved or explicitly justified as outside scope; transitive dependencies audited; known mismatches listed."
+    }
+  ],
+  "core_scenarios_defined": 17,
+  "local_scenarios_defined": 2,
+  "tests_executed_by_static_report": false,
+  "next_slice": "screen",
+  "direct_dependencies_outside_inventory": [
+    "0x8002AB88",
+    "0x8002AC90",
+    "0x80030D14",
+    "0x80039574",
+    "0x80039D08",
+    "0x8003B194",
+    "0x8003B26C",
+    "0x8003D930",
+    "0x80040A1C",
+    "0x8004ED50",
+    "0x80054B94",
+    "0x80055068",
+    "0x800555F4",
+    "0x80055ED4",
+    "0x80056128",
+    "0x8005FE14"
+  ],
+  "feature_acceptance": "pending",
+  "dependency_policy": "The ten-function denominator is a versioned starting inventory. Calls outside it are listed as dependency addresses, not silently credited or treated as implemented. Discovering additional owners expands the inventory with a documented scope revision. A 100% core percentage alone never opens the feature-completion gate."
+}

@@ -100,7 +100,8 @@ def verify(require_matching: bool):
             "native_test": item["native_test"],
         }
         if not item["match_eligible"]:
-            result["match_status"] = "fragment_behavior_only"
+            result["match_status"] = ("function_behavior_only" if item["scope"] == "full"
+                                      else "fragment_behavior_only")
             results.append(result)
             continue
 
@@ -152,7 +153,8 @@ def verify(require_matching: bool):
     return {
         "schema_version": 1,
         "c_recovery_records": len(results),
-        "behavior_only_fragments": sum(not item["match_eligible"] for item in results),
+        "behavior_only_fragments": sum(item["match_status"] == "fragment_behavior_only" for item in results),
+        "behavior_only_functions": sum(item["match_status"] == "function_behavior_only" for item in results),
         "match_eligible_functions": len(eligible),
         "matching_functions": len(matching),
         "functions": results,
@@ -176,6 +178,7 @@ def main() -> int:
             "C recovery validated: "
             f"{result['c_recovery_records']} records, "
             f"{result['behavior_only_fragments']} behavior-only fragments, "
+            f"{result['behavior_only_functions']} full native-behavior functions, "
             f"{result['matching_functions']}/{result['match_eligible_functions']} exact matches"
         )
         print(f"Local result: {output.relative_to(ROOT)}")

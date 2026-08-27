@@ -348,6 +348,40 @@ void RosterDatabase::load(const std::filesystem::path& path) {
     copySlotTable();
 }
 
+Nba97ReorderResult RosterDatabase::reorderSlots(
+    std::int16_t team_id, int source, int destination, std::uint16_t& session_changes) {
+    if (team_id < 0 || team_id >= 29) return NBA97_REORDER_INVALID_ARGUMENT;
+    const auto found = team_index_.find(static_cast<std::uint16_t>(team_id));
+    if (found == team_index_.end()) return NBA97_REORDER_INVALID_ARGUMENT;
+    auto& slots = teams_[found->second].roster;
+    if (slots.size() != NBA97_TEAM_SLOTS) return NBA97_REORDER_INVALID_ARGUMENT;
+    const auto result = nba97_reorder_swap(slots.data(), source, destination, &session_changes);
+    if (result == NBA97_REORDER_CHANGED) copySlotTable();
+    return result;
+}
+
+bool RosterDatabase::applyReorderSession(std::int16_t team_id, const Nba97ReorderSession& session) {
+    if (team_id < 0 || team_id >= 29 || session.phase != NBA97_REORDER_CLOSED || !session.accepted)
+        return false;
+    const auto found = team_index_.find(static_cast<std::uint16_t>(team_id));
+    if (found == team_index_.end()) return false;
+    const auto& current = teams_[found->second].roster;
+    if (current.size() != NBA97_TEAM_SLOTS ||
+        !std::equal(current.begin(), current.end(), std::begin(session.original))) return false;
+    auto before = current;
+    std::vector<std::uint16_t> after(std::begin(session.slots), std::end(session.slots));
+    std::sort(before.begin(), before.end());
+    std::sort(after.begin(), after.end());
+    if (before != after) return false; // Host guard: no insertion/deletion of IDs.
+    // Build all derived indexes before publishing; preserve the live database
+    // if allocating the new tables fails. This is a native transaction boundary.
+    auto candidate = *this;
+    candidate.teams_[found->second].roster.assign(std::begin(session.slots), std::end(session.slots));
+    candidate.copySlotTable();
+    *this = std::move(candidate);
+    return true;
+}
+
 void RosterDatabase::copySlotTable() {
     nba97_semantic_trace_record(0x80057864u);
     roster_counts_.fill(0);

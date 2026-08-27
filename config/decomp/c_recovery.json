@@ -4,6 +4,36 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x80056A94",
+      "original_name": "Rosters_NormalizeEditTeam",
+      "symbol": "nba97_reorder_normalize_team",
+      "source": "src/recovered/roster_reorder.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_reorder_tests normalize_identity/normalize_sentinel/normalize_signed_context"
+    },
+    {
+      "binary": "feonly",
+      "address": "0x800556B0",
+      "original_name": "Rosters_ValidateEditPair",
+      "symbol": "nba97_reorder_swap",
+      "source": "src/recovered/roster_reorder.c",
+      "scope": "fragment",
+      "match_eligible": false,
+      "native_test": "nba97_reorder_tests reject_same_player/reject_empty/all_slot_pairs"
+    },
+    {
+      "binary": "feonly",
+      "address": "0x800558E0",
+      "original_name": "Rosters_SwapEditSlots",
+      "symbol": "nba97_reorder_swap",
+      "source": "src/recovered/roster_reorder.c",
+      "scope": "fragment",
+      "match_eligible": false,
+      "native_test": "nba97_reorder_tests swap_exact/swap_roundtrip/counter_wrap/all_slot_pairs/database_invariants"
+    },
+    {
+      "binary": "feonly",
       "address": "0x8002F124",
       "original_name": "Frontend_ApplySfxVolume",
       "symbol": "nba97_frontend_sfx_volume",

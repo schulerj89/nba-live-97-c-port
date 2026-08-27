@@ -1,5 +1,7 @@
 #pragma once
 
+#include "recovered/roster_reorder.h"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -100,6 +102,12 @@ public:
     using ResolvedTeamSlots = std::array<const PlayerRecord*, 15>;
 
     void load(const std::filesystem::path& path);
+    // In-memory editing primitive. UI/session/save policy is a later slice.
+    Nba97ReorderResult reorderSlots(std::int16_t team_id, int source, int destination,
+                                    std::uint16_t& session_changes);
+    // Publish an accepted session only if its baseline still matches this team.
+    // No disk save; rejection leaves the database untouched.
+    bool applyReorderSession(std::int16_t team_id, const Nba97ReorderSession& session);
     [[nodiscard]] const PlayerRecord* player(std::uint16_t id) const noexcept;
     [[nodiscard]] const TeamRecord* team(std::uint16_t id) const noexcept;
     // Native representation of FEONLY FUN_8005770C. Empty signed roster

@@ -27,6 +27,8 @@ try {
     Write-Host '[4/9] Validating View Rosters state-scenario contract'
     python tools/verify_roster_scenarios.py --check-config
     if ($LASTEXITCODE -ne 0) { throw 'View Rosters scenario contract validation failed.' }
+    python tools/verify_reorder_rosters.py --check
+    if ($LASTEXITCODE -ne 0) { throw 'Re-order ledger validation failed.' }
 
     if ($SkipBuild) {
         Write-Host '[5/9] Native build skipped by request'
@@ -43,6 +45,7 @@ try {
         Write-Host '[9/9] Progress regeneration skipped with behavioral test'
     } else {
         Write-Host '[6/9] Running asset-backed behavioral self-test'
+        & (Join-Path $PSScriptRoot 'verify_reorder_rosters.ps1') -SkipBuild
         $exe = Join-Path $repo 'build-windows\Debug\nba97_boot_decomp.exe'
         if (-not (Test-Path -LiteralPath $exe)) { throw "Missing native test executable: $exe" }
         & $exe --self-test --trace '.local/logs/recovery_verification.log'

@@ -21,20 +21,21 @@
     ],
     "discovered_functions": 1769,
     "analyzed_code_bytes": 465368,
-    "evidence_tracked_functions": 63,
-    "evidence_tracked_bytes": 38764,
-    "evidence_coverage_percent": 3.56,
-    "evidence_byte_coverage_percent": 8.33,
+    "evidence_tracked_functions": 66,
+    "evidence_tracked_bytes": 39948,
+    "evidence_coverage_percent": 3.73,
+    "evidence_byte_coverage_percent": 8.58,
     "complete_functions": 8,
     "matching_functions": 0,
     "status_counts": {
-      "behavior_verified": 49,
+      "behavior_verified": 52,
       "implemented": 3,
       "researched": 11
     },
     "scope_counts": {
       "complete": 8,
-      "partial": 55
+      "full": 1,
+      "partial": 57
     },
     "subsystems": {
       "assets": {
@@ -93,9 +94,9 @@
         "verified": 3
       },
       "rosters": {
-        "functions": 13,
-        "bytes": 4096,
-        "verified": 13
+        "functions": 16,
+        "bytes": 5280,
+        "verified": 16
       },
       "settings": {
         "functions": 3,
@@ -112,8 +113,8 @@
   "native_port": {
     "catalogued_features": 48,
     "status_counts": {
-      "not_started": 16,
-      "partial": 7,
+      "not_started": 15,
+      "partial": 8,
       "verified": 25
     },
     "measurement": "manually_catalogued_milestone_counts",
@@ -155,7 +156,8 @@
       "Roster transactions": {
         "items": 7,
         "status_counts": {
-          "not_started": 7
+          "not_started": 6,
+          "partial": 1
         }
       },
       "Rosters": {
@@ -344,7 +346,8 @@
         "id": "rosters.reorder",
         "group": "Roster transactions",
         "name": "Re-order rosters",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Tested C swap core plus selection/cancel controller and in-memory database integration through CLI; original screen, audio and persistence pending. See docs/reorder_rosters_progress.md."
       },
       {
         "id": "rosters.create",
