@@ -14,6 +14,7 @@
 #include "psh_image.hpp"
 #include "psh_font.hpp"
 #include "roster_database.hpp"
+#include "reorder_preview.hpp"
 #include "user_profiles.hpp"
 
 #include <algorithm>
@@ -22,6 +23,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -56,6 +58,7 @@ struct Options {
     std::filesystem::path profiles_path = ".local/saves/user_profiles.n97sav";
     std::filesystem::path rosters_menu_capture_dir;
     std::filesystem::path view_rosters_capture_dir;
+    std::filesystem::path reorder_capture_dir;
     std::filesystem::path semantic_report_path =
         ".local/reports/view_rosters_semantic_trace.json";
     std::filesystem::path roster_scenario_report_path =
@@ -129,6 +132,24 @@ RECT psxPresentationRect(const RECT& client) noexcept {
 
 Options parseOptions(int argc, char** argv) {
     Options options;
+    // Direct EXE launch (including UI verification) must not depend on the
+    // shell's current directory. The desktop shortcut still supplies it.
+    if (!std::filesystem::exists(options.asset_root)) {
+        wchar_t executable[MAX_PATH]{};
+        const auto length = GetModuleFileNameW(nullptr, executable, MAX_PATH);
+        if (length && length < MAX_PATH) {
+            auto parent = std::filesystem::path(executable).parent_path();
+            for (int level = 0; level < 4 && !parent.empty(); ++level, parent = parent.parent_path()) {
+                if (std::filesystem::exists(parent / options.asset_root)) {
+                    options.asset_root = parent / options.asset_root;
+                    options.trace_path = parent / options.trace_path;
+                    options.settings_path = parent / options.settings_path;
+                    options.profiles_path = parent / options.profiles_path;
+                    break;
+                }
+            }
+        }
+    }
     if (const char* root = std::getenv("NBA97_ASSET_ROOT")) options.asset_root = root;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -144,6 +165,8 @@ Options parseOptions(int argc, char** argv) {
             options.rosters_menu_capture_dir = argv[++i];
         else if (arg == "--capture-view-rosters" && i + 1 < argc)
             options.view_rosters_capture_dir = argv[++i];
+        else if (arg == "--capture-reorder" && i + 1 < argc)
+            options.reorder_capture_dir = argv[++i];
         else if (arg == "--semantic-report" && i + 1 < argc)
             options.semantic_report_path = argv[++i];
         else if (arg == "--roster-scenario-report" && i + 1 < argc)
@@ -209,6 +232,7 @@ public:
             return captureRostersMenu();
         if (!options_.view_rosters_capture_dir.empty())
             return captureViewRosters();
+        if (!options_.reorder_capture_dir.empty()) return captureReorder();
         registerWindowClass();
         createMainWindow();
         ShowWindow(window_, SW_SHOWNORMAL);
@@ -339,6 +363,182 @@ private:
         trace_.log("RECOVERED", "0x8003E698 arcade; 0x8003E714 simulation; 0x8003E620 restores custom snapshot");
         menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
             menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, 0));
+    }
+
+    void openReorder() {
+        // Assets remain private; missing records are errors, never substitutes
+        // from Z1PORT or rendered screenshots of the original game.
+        const auto root = options_.asset_root / "menu";
+        validateMenuAsset(root / "Z2PORT.IDX", 3970);
+        validateMenuAsset(root / "Z2PORT.BIG", 2344626);
+        if (!std::filesystem::exists(options_.asset_root / "reorder/discard.n97ui"))
+            throw std::runtime_error("run tools/extract_reorder_dialogs.py for Re-order confirmation");
+        reorder_labels_ = std::make_unique<nba97::ReorderLabelPreview>(options_.asset_root);
+        for (const char* tag : {"ba22", "frmr", "110p", "111p"}) {
+            auto image = load_png_image(root / "ZSET4-decoded" / (std::string(tag)+".png"));
+            for (std::size_t i = 0; i < image.rgba.size(); i += 4)
+                if (!image.rgba[i] && !image.rgba[i+1] && !image.rgba[i+2]) image.rgba[i+3] = 0;
+            roster_sprites_[tag] = std::move(image);
+        }
+        const auto table = roster_database_.slotTable();
+        if (!nba97_reorder_screen_enter(&reorder_screen_, table.data(), reorder_team_, 0, nullptr,
+                reorder_saved_cursor_.data(), reorder_saved_top_.data(), 0))
+            throw std::runtime_error("invalid Re-order entry state");
+        reorder_portrait_ids_.fill(UINT16_MAX);
+        reorder_tick_ = menu_elapsed_ms_ / 17;
+        reorder_modal_frame_ = 0;
+        loadReorderPortraits();
+        trace_.log("REORDER-ENTRY", "80056AEC -> 80056494 -> 800560BC; state=0x0C layout=0x0D; "
+            "snapshot=535 slots; kinds=1/2; objects=30; visible=6; frame pump=native");
+        trace_.log("REORDER-LAYOUT", "ZSET4 graphics=0x0C ba22=(156,10); Z2PORT 87x51 portraits=(54/386,22); "
+            "frml/frmr=(30/368,15); heading=(256,70); rows=(60/270,112+16*n); arrows=6/10");
+        trace_.log("REORDER-KEYS", "arrows=rows/teams; C/Space=pick; X/Esc=cancel; Enter=accept; "
+            "edits published in memory only, original assets never overwritten; child View/Compare/help pending");
+        logReorder("constructed");
+    }
+
+    void loadReorderPortraits() {
+        for (int p = 0; p < 2; ++p) {
+            const auto id = reorder_screen_.selection.selected_ids[p];
+            if (id == reorder_portrait_ids_[p] && !reorder_portraits_[p].rgba.empty()) continue;
+            // 80030D14/portrait resolver: physical zero is fallback, N+1 is player N.
+            const unsigned record = id == UINT16_MAX ? 0u : static_cast<unsigned>(id)+1u;
+            char name[32]{}; sprintf_s(name, "player_%03u.png", record);
+            auto image = load_png_image(options_.asset_root / "menu/Z2PORT-decoded" / name);
+            if (image.width != 87 || image.height != 51) throw std::runtime_error("wrong Z2PORT portrait dimensions");
+            reorder_portraits_[p] = std::move(image);
+            reorder_portrait_ids_[p] = id;
+            trace_.log("REORDER-ASSET", "column=" + std::to_string(p) + " player=" +
+                std::to_string(id) + " Z2PORT record=" + std::to_string(record) + " 87x51");
+        }
+    }
+
+    void logReorder(const char* event) {
+        const auto& s = reorder_screen_.selection;
+        trace_.log("REORDER", std::string(event) + " team=" + std::to_string(reorder_screen_.team) +
+            " phase=" + nba97_reorder_phase_name(s.phase) + " cursor=" + std::to_string(s.cursor[0]) +
+            "/" + std::to_string(s.cursor[1]) + " top=" + std::to_string(s.top[0]) + "/" +
+            std::to_string(s.top[1]) + " selected=" + std::to_string(s.selected_ids[0]) + "/" +
+            std::to_string(s.selected_ids[1]) + " changes=" + std::to_string(s.changes) +
+            " row-revision=" + std::to_string(s.row_revision) +
+            " visible-redraws=" + std::to_string(s.visible_redraws) +
+            " present-requests=" + std::to_string(s.presentation_requests) +
+            " helpers=556B0/558E0/55AF8 (native; no disk save)");
+    }
+
+    PshImage renderReorder() {
+        return nba97::renderReorderScreen(reorder_screen_, roster_sprites_, menu_font_,
+            reorder_portraits_, reorder_labels_->renderFeedback(reorder_screen_.selection,
+                roster_database_, static_cast<std::uint16_t>(reorder_screen_.team),
+                reorder_modal_frame_, reorder_discard_yes_), menu_elapsed_ms_);
+    }
+
+    void updateReorder() {
+        if (frontend_page_ != nba97::FrontendPage::ReorderRosters) return;
+        const auto tick = menu_elapsed_ms_ / 17;
+        // Bound catch-up work after debugger pauses without freezing rendering.
+        const auto first = tick > 120 ? (std::max)(reorder_tick_, tick-120) : reorder_tick_;
+        const std::uint16_t held = (GetAsyncKeyState('X') & 0x8000) ||
+            (GetAsyncKeyState(VK_ESCAPE) & 0x8000) ? 0x100 : 0;
+        for (auto frame = first; frame < tick; ++frame) {
+            const std::uint16_t raw = held ? held :
+                ((GetAsyncKeyState('C') | GetAsyncKeyState(VK_SPACE)) & 0x8000) ? 0x800 :
+                (GetAsyncKeyState(VK_RETURN) & 0x8000) ? 0x80 :
+                (GetAsyncKeyState(VK_UP) & 0x8000) ? 1 :
+                (GetAsyncKeyState(VK_DOWN) & 0x8000) ? 2 :
+                (GetAsyncKeyState(VK_LEFT) & 0x8000) ? 8 :
+                (GetAsyncKeyState(VK_RIGHT) & 0x8000) ? 4 : 0;
+            nba97_reorder_frame(&reorder_screen_.selection, raw);
+            if (reorder_modal_frame_ < 32) ++reorder_modal_frame_;
+        }
+        reorder_tick_ = tick;
+    }
+
+    void handleReorderKey(WPARAM key) {
+        auto& s = reorder_screen_.selection;
+        if (s.waiting_input_change) return;
+        if (s.modal) {
+            if (reorder_modal_frame_ < 24) return;
+            nba97_reorder_dismiss_modal(&s);
+            // Sample the acknowledging press even if it fell between timers.
+            s.held_mask = key == VK_ESCAPE || key == 'X' ? 0x100 :
+                key == VK_RETURN ? 0x80 : key == VK_UP ? 1 : key == VK_DOWN ? 2 :
+                key == VK_LEFT ? 8 : key == VK_RIGHT ? 4 : 0x800;
+            playBottomMenuSound(8, "reorder-message-close");
+            return;
+        }
+        Nba97ReorderEvent event = NBA97_REORDER_NO_CHANGE;
+        std::uint32_t sound = 0;
+        if (s.phase == NBA97_REORDER_DISCARD_PROMPT) {
+            if (key == VK_UP || key == VK_DOWN) {
+                reorder_discard_yes_ = key == VK_UP;
+                playBottomMenuSound(key == VK_UP ? 2 : 1, "reorder-confirm-choice");
+                return;
+            }
+            if (key == 'X' || key == VK_ESCAPE) event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_DISCARD_NO);
+            else if (key == 'C' || key == VK_SPACE || key == VK_RETURN)
+                event = nba97_reorder_screen_input(&reorder_screen_, reorder_discard_yes_ ? NBA97_REORDER_DISCARD_YES : NBA97_REORDER_DISCARD_NO);
+        } else if (key == VK_LEFT || key == VK_RIGHT) {
+            const bool changed = nba97_reorder_screen_scan(&reorder_screen_, key == VK_LEFT ? -1 : 1) != 0;
+            if (changed) { sound = key == VK_LEFT ? 3 : 4; event = NBA97_REORDER_MOVED; }
+            else trace_.log("REORDER-GATE", "team scan ignored while replacement is active or no eligible team");
+        } else if (key == VK_UP || key == VK_DOWN) {
+            event = nba97_reorder_screen_input(&reorder_screen_, key == VK_UP ? NBA97_REORDER_UP : NBA97_REORDER_DOWN);
+            if (event == NBA97_REORDER_MOVED) sound = key == VK_UP ? 2 : 1;
+        } else if (key == 'C' || key == VK_SPACE) {
+            event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_SELECT); sound = 6;
+        } else if (key == 'X' || key == VK_ESCAPE) {
+            event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_CANCEL); sound = 8;
+        } else if (key == VK_RETURN) {
+            event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_ACCEPT); sound = 6;
+        } else if (key == 'D' || key == 'S' || key == 'F') {
+            trace_.log("REORDER-BOUNDARY", "View/Compare/help child integration is not part of construction; no fake child screen");
+            return;
+        }
+        if (event == NBA97_REORDER_ASK_DISCARD || s.modal) {
+            reorder_modal_frame_ = 0; reorder_discard_yes_ = false; sound = 5;
+        }
+        if (sound) playBottomMenuSound(sound, "reorder-input");
+        logReorder(nba97_reorder_event_name(event));
+        if (s.phase == NBA97_REORDER_CLOSED) {
+            if (s.accepted) {
+                if (!roster_database_.applyReorderScreen(reorder_screen_))
+                    throw std::runtime_error("Re-order baseline changed; refused publication");
+                std::uint8_t active = 0;
+                nba97_reorder_screen_save(&reorder_screen_, reorder_saved_cursor_.data(), reorder_saved_top_.data(), &active);
+                reorder_team_ = reorder_screen_.team;
+                trace_.log("REORDER-COMMIT", "accepted across 535-slot snapshot; database indexes refreshed; disk saves=none");
+            } else trace_.log("REORDER-DISCARD", "entire entry snapshot preserved; no live database writes");
+            beginFrontendTransition(nba97::FrontendPage::Rosters, "Re-order result=" +
+                std::to_string(nba97_reorder_screen_result(&reorder_screen_)) + "; release screen-owned resources");
+            reorder_labels_.reset(); reorder_portraits_ = {};
+            return;
+        }
+        loadReorderPortraits();
+        rebuildMenuFrame();
+    }
+
+    int captureReorder() {
+        openReorder();
+        auto capture = [&](const char* name) {
+            loadReorderPortraits();
+            writePpm(renderReorder(), options_.reorder_capture_dir / name);
+            logReorder(name);
+        };
+        for (int i=0;i<12;++i) nba97_reorder_frame(&reorder_screen_.selection,0);
+        capture("entry.ppm");
+        nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_SELECT);
+        for (int i=0;i<7;++i) nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_DOWN);
+        for (int i=0;i<12;++i) nba97_reorder_frame(&reorder_screen_.selection,0);
+        capture("replacement-scrolled.ppm");
+        nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_SELECT);
+        capture("swapped.ppm");
+        nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_CANCEL);
+        reorder_modal_frame_ = 32;
+        capture("discard-prompt.ppm");
+        nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_DISCARD_YES);
+        trace_.log("REORDER-CAPTURE", "four real compositor frames; live database unchanged; screenshot parity not asserted");
+        return 0;
     }
 
     void loadMenuSprites(const std::filesystem::path& root) {
@@ -1770,13 +1970,15 @@ private:
             if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                 frontend_page_ != nba97::FrontendPage::GameSetup &&
                 frontend_page_ != nba97::FrontendPage::ProfileSetup &&
-                frontend_page_ != nba97::FrontendPage::ViewRosters)
+                frontend_page_ != nba97::FrontendPage::ViewRosters &&
+                frontend_page_ != nba97::FrontendPage::ReorderRosters)
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      frontend_page_ == nba97::FrontendPage::ProfileSetup)
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
-                     frontend_page_ == nba97::FrontendPage::ViewRosters)
+                     (frontend_page_ == nba97::FrontendPage::ViewRosters ||
+                      frontend_page_ == nba97::FrontendPage::ReorderRosters))
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE) DestroyWindow(window_);
             else if (wparam == VK_SPACE && intro_player_.isPlaying())
@@ -1889,6 +2091,7 @@ private:
         if (flow_.screen() == nba97::BootScreen::MainMenu) {
             menu_elapsed_ms_ += now - previous_tick_;
             updateRosterHeldInput();
+            updateReorder();
             if (bottom_select_pending_ &&
                 menu_elapsed_ms_ - bottom_select_flash_start_ms_ >= kBottomSelectFlashMs) {
                 bottom_select_pending_ = false;
@@ -1898,7 +2101,9 @@ private:
             }
             rebuildMenuFrame();
             if (frontend_transition_active_) {
-                const auto elapsed = now - frontend_transition_tick_;
+                // Entry may load assets inside this update. Do not subtract a
+                // newer transition timestamp from the stale frame-start tick.
+                const auto elapsed = GetTickCount() - frontend_transition_tick_;
                 transition_frame_ = blendFrames(transition_source_, menu_frame_, elapsed,
                                                 kFrontendTransitionMs);
                 if (elapsed >= kFrontendTransitionMs) {
@@ -2081,6 +2286,10 @@ private:
     void handleMenuKey(WPARAM key) {
         if (frontend_transition_active_) return;
         if (bottom_select_pending_) return;
+        if (frontend_page_ == nba97::FrontendPage::ReorderRosters) {
+            handleReorderKey(key);
+            return;
+        }
         if (frontend_page_ == nba97::FrontendPage::ProfileSetup) {
             handleProfileKey(key);
             return;
@@ -2188,6 +2397,11 @@ private:
     }
 
     void completeRecoveredBottomSelection() {
+        if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 5) {
+            beginFrontendTransition(nba97::FrontendPage::ReorderRosters,
+                "Re-order selected; 80057CE4 -> state 0x0C -> 80056AEC");
+            return;
+        }
         if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 4) {
             beginFrontendTransition(nba97::FrontendPage::ViewRosters,
                 "view rosters selected; FUN_80057CE4 return=6 pushes state 0x10 FUN_800592C4");
@@ -2509,6 +2723,7 @@ private:
     }
 
     void handleMenuHover(int client_x, int client_y) {
+        if (frontend_page_ == nba97::FrontendPage::ReorderRosters) return;
         if (bottom_select_pending_) return;
         const bool genuinely_moved = last_mouse_x_ < 0 ||
             std::abs(client_x - last_mouse_x_) > 1 ||
@@ -2565,7 +2780,9 @@ private:
     }
 
     void rebuildMenuFrame() {
-        if (frontend_page_ == nba97::FrontendPage::GameSetup)
+        if (frontend_page_ == nba97::FrontendPage::ReorderRosters)
+            menu_frame_ = makeFrame(renderReorder());
+        else if (frontend_page_ == nba97::FrontendPage::GameSetup)
             menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
                 menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, menu_elapsed_ms_));
         else if (frontend_page_ == nba97::FrontendPage::ProfileSetup)
@@ -2601,6 +2818,7 @@ private:
         if (page == nba97::FrontendPage::Options) return "Options";
         if (page == nba97::FrontendPage::Rosters) return "Rosters";
         if (page == nba97::FrontendPage::ViewRosters) return "View Rosters";
+        if (page == nba97::FrontendPage::ReorderRosters) return "Re-order Rosters";
         if (page == nba97::FrontendPage::Users) return "Users";
         if (page == nba97::FrontendPage::Card) return "Memory Card";
         return "Game Setup";
@@ -2630,7 +2848,8 @@ private:
         transition_source_ = menu_frame_;
         const auto previous_page = frontend_page_;
         frontend_page_ = target;
-        if (target == nba97::FrontendPage::ProfileSetup)
+        if (target == nba97::FrontendPage::ReorderRosters) openReorder();
+        else if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
         else if (target == nba97::FrontendPage::ViewRosters) {
             roster_viewer_.open(roster_database_);
@@ -2649,6 +2868,8 @@ private:
             if (target == nba97::FrontendPage::Rosters &&
                 previous_page == nba97::FrontendPage::ViewRosters)
                 bottom_menu_.setSelected(4);
+            if (target == nba97::FrontendPage::Rosters && previous_page == nba97::FrontendPage::ReorderRosters)
+                bottom_menu_.setSelected(5);
         }
         rebuildMenuFrame();
         frontend_transition_tick_ = GetTickCount();
@@ -2657,6 +2878,7 @@ private:
         trace_.log("TRANSITION", reason + "; recovered FE state=" +
             std::to_string(target == nba97::FrontendPage::ProfileSetup ? 0x37010 :
                            target == nba97::FrontendPage::ViewRosters ? 0x10 :
+                           target == nba97::FrontendPage::ReorderRosters ? 0x0C :
                            target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
@@ -2702,6 +2924,15 @@ private:
     nba97::RecoveredBottomMenu bottom_menu_;
     nba97::RosterViewer roster_viewer_;
     nba97::RosterDatabase roster_database_;
+    Nba97ReorderScreen reorder_screen_{};
+    std::unique_ptr<nba97::ReorderLabelPreview> reorder_labels_;
+    std::array<PshImage, 2> reorder_portraits_;
+    std::array<std::uint16_t, 2> reorder_portrait_ids_{UINT16_MAX, UINT16_MAX};
+    std::array<std::int16_t, 2> reorder_saved_cursor_{-1,-1}, reorder_saved_top_{-1,-1};
+    std::int16_t reorder_team_ = 29;
+    std::uint32_t reorder_tick_ = 0;
+    int reorder_modal_frame_ = 0;
+    bool reorder_discard_yes_ = false;
     nba97::UserProfileStore profile_store_;
     nba97::UserProfileMenu profile_menu_;
     nba97::FrontendPage frontend_page_ = nba97::FrontendPage::GameSetup;

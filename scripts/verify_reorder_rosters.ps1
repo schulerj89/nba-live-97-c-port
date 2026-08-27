@@ -10,7 +10,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Re-order ledger tests failed.' }
     $arguments = @('tools/verify_reorder_rosters.py', '--check', '--native-test', $exe)
     $database = Join-Path $repo '.local\assetpacks\database\roster.n97db'
-    if (Test-Path -LiteralPath $database) { $arguments += @('--database', $database) }
+    if (Test-Path -LiteralPath $database) {
+        if (-not (Test-Path -LiteralPath '.local/assetpacks/reorder/dialogs.n97ui') -or
+            -not (Test-Path -LiteralPath '.local/assetpacks/reorder/discard.n97ui')) {
+            python tools/extract_reorder_dialogs.py .local/extracted/FEONLY.BIN
+            if ($LASTEXITCODE -ne 0) { throw 'Private Re-order dialog extraction failed.' }
+        }
+        $arguments += @('--database', $database)
+    }
     elseif ($RequireDatabase) { throw "Missing local roster database: $database" }
     else { Write-Host 'Local database absent: only asset-free scenarios will run.' }
     New-Item -ItemType Directory -Force -Path '.local/logs' | Out-Null

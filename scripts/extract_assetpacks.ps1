@@ -38,6 +38,8 @@ python $extractor $DiscImage (Join-Path $menu 'Z1COOL.BIG') --lba 165811 --size 
 python $extractor $DiscImage (Join-Path $menu 'Z1COOL.IDX') --lba 225665 --size 19746
 python $extractor $DiscImage (Join-Path $menu 'Z1PORT.BIG') --lba 225675 --size 13296378
 python $extractor $DiscImage (Join-Path $menu 'Z1PORT.IDX') --lba 232168 --size 3970
+python $extractor $DiscImage (Join-Path $menu 'Z2PORT.BIG') --lba 232170 --size 2344626
+python $extractor $DiscImage (Join-Path $menu 'Z2PORT.IDX') --lba 233315 --size 3970
 python $extractor $DiscImage (Join-Path $menu 'ZTMENU1.CNK') --lba 252406 --size 8522396
 python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 342448
 python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
@@ -68,4 +70,12 @@ python (Join-Path $repo 'tools\decode_player_portraits.py') `
     (Join-Path $menu 'Z1PORT-decoded') `
     --ea-tool (Join-Path $repo '.local\tools\EA-Graphics-Manager')
 if ($LASTEXITCODE -ne 0) { throw 'Private View Player portrait decoding failed.' }
+python (Join-Path $repo 'tools\decode_reorder_portraits.py') `
+    (Join-Path $menu 'Z2PORT.IDX') (Join-Path $menu 'Z2PORT.BIG') `
+    (Join-Path $menu 'Z2PORT-decoded') `
+    --ea-tool (Join-Path $repo '.local\tools\EA-Graphics-Manager')
+if ($LASTEXITCODE -ne 0) { throw 'Private Re-order portrait decoding failed.' }
+python (Join-Path $repo 'tools\extract_reorder_dialogs.py') $feonly --output `
+    (Join-Path $repo '.local\assetpacks\reorder\dialogs.n97ui')
+if ($LASTEXITCODE -ne 0) { throw 'Private Re-order dialog extraction failed.' }
 Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'

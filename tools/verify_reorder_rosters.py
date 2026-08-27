@@ -39,6 +39,19 @@ def calculate(config=None, inventory=None):
     tests = config["core_tests"] + config["local_tests"]
     if len(tests) != len(set(tests)):
         raise ValueError("duplicate scenario ID")
+    all_contracts = (config.get('selection_contracts', []) + config.get('screen_contracts', []) +
+                     config.get('shared_contracts', []))
+    contracts = {item['address']: item for item in all_contracts}
+    if len(contracts) != len(all_contracts):
+        raise ValueError('duplicate selection contract')
+    for contract in contracts.values():
+        if contract.get('status') != 'native_contract_tested' or not contract.get('scope') or not contract.get('integration_pending'):
+            raise ValueError('selection contract needs tested scope and integration boundary')
+        if not contract.get('tests') or not set(contract['tests']) <= set(tests):
+            raise ValueError('selection contract needs declared tests')
+        for source in contract['sources']:
+            if source['symbol'] not in (ROOT / source['path']).read_text(encoding='utf-8'):
+                raise ValueError('missing selection contract source')
     slices = {item["id"]: item for item in config["slices"]}
     if len(slices) != len(config["slices"]):
         raise ValueError("duplicate slice ID")
@@ -79,10 +92,24 @@ def calculate(config=None, inventory=None):
         if pending and not owner.get("pending"):
             raise ValueError("unaccounted instructions need a pending-work explanation")
         count = sum(blocks[b]["instruction_count"] for b in accounted)
+        if address in {'0x800556B0', '0x800558E0', '0x80055AF8'} and accounted:
+            evidence = owner.get('block_evidence', {})
+            if set(evidence) != set(accounted):
+                raise ValueError('shared owner needs exact per-block evidence coverage')
+            for item in evidence.values():
+                if not item.get('behavior') or not item.get('tests') or not set(item['tests']) <= set(owner['tests']):
+                    raise ValueError('block evidence needs behavior and owner-declared tests')
+        if not pending:
+            for callee in original['direct_calls']:
+                target = owners.get(callee)
+                fully_owned = target and len(target['accounted_blocks']) == len(originals[callee]['blocks'])
+                if not fully_owned and callee not in contracts:
+                    raise ValueError(f'complete owner has unresolved call contract: {callee}')
         rows.append({"address": address, "name": owner["name"], "slice": owner["slice"],
                      "accounted": count, "total": original["instruction_count"],
                      "pending": original["instruction_count"] - count,
-                     "pending_blocks": pending, "note": owner.get("pending", owner.get("basis"))})
+                     "pending_blocks": pending, "note": owner.get("pending", owner.get("basis")),
+                     "block_evidence": owner.get("block_evidence", {})})
         dependencies.update(set(original["direct_calls"]) - owners.keys())
     total = sum(row["total"] for row in rows)
     accounted = sum(row["accounted"] for row in rows)
@@ -105,7 +132,10 @@ def calculate(config=None, inventory=None):
             "next_slice": next_slice,
             "direct_dependencies_outside_inventory": sorted(dependencies),
             "feature_acceptance": "pending" if next_slice else "all declared gates reviewed; rerun acceptance evidence",
-            "dependency_policy": config["dependency_policy"]}
+            "dependency_policy": config["dependency_policy"],
+            "selection_contracts": config.get('selection_contracts', []),
+            "screen_contracts": config.get('screen_contracts', []),
+            "shared_contracts": config.get('shared_contracts', [])}
 
 
 def markdown(report):
@@ -123,6 +153,24 @@ def markdown(report):
     lines += [f"| {name} | {c['accounted']} / {c['total']} | {c['pending']} |" for name, c in report['instruction_slices'].items()]
     lines += ["", "## Original instructions", "", "| Function | Accounted | Pending |", "|---|---:|---:|"]
     lines += [f"| `{r['address']}` {r['name']} | {r['accounted']} / {r['total']} | {r['pending']} |" for r in report["functions"]]
+    lines += ["", "## Selection call contracts (not full callee coverage)", "",
+              "Completing selection-owner blocks means their native call contracts are represented and tested. "
+              "It does not transfer credit to shared callees or prove the game screen works. "
+              "The 166-instruction selection denominator excludes these callees' own instructions.", "",
+              "| Original helper | Tested native contract | Integration still pending |", "|---|---|---|"]
+    lines += [f"| `{c['address']}` | {c['scope']} | {c['integration_pending']} |" for c in report['selection_contracts']]
+    lines += ["", "## Construction call contracts (not full callee coverage)", "",
+              "The 298 entry/construction instructions cover the Re-order specialization. "
+              "Graphics state0x0C and input layout0x0D are deliberately separate. "
+              "The original shared-engine bodies are not credited by this owner.", "",
+              "| Original helper | Tested native contract | Still outside the claim |", "|---|---|---|"]
+    lines += [f"| `{c['address']}` | {c['scope']} | {c['integration_pending']} |" for c in report['screen_contracts']]
+    lines += ["", "## Shared-helper call contracts (not full callee coverage)", "",
+              "Each newly accounted shared block has a behavior note and named tests in the JSON report. "
+              "These are reviewed mappings, not automatically proven MIPS equivalence. "
+              "Cross-mode helper tests do not implement other transaction screens.", "",
+              "| Original helper | Tested native contract | Still outside the claim |", "|---|---|---|"]
+    lines += [f"| `{c['address']}` | {c['scope']} | {c['integration_pending']} |" for c in report['shared_contracts']]
     lines += ["", "## Next work / pending blocks", ""]
     for row in report["functions"]:
         if row["pending"]:
@@ -135,11 +183,12 @@ def markdown(report):
               "The static ledger does not assert these tests just ran. The wrapper builds, runs fresh tests, "
               "and writes ignored CLI/evidence logs under `.local/`.", "",
               "## Scope boundary", "", report["dependency_policy"], "",
-              "Direct callees still requiring dependency review (callbacks referenced as data must also be audited):", "",
+              "Direct callees outside the fixed instruction inventory (scoped contracts above are not full body coverage; data callbacks also need audit):", "",
               ", ".join(f"`{address}`" for address in report["direct_dependencies_outside_inventory"]), "",
-              "The menu card is still blocked. The CLI interaction controller now selects/swaps/cancels and "
-              "publishes accepted orders in memory. Original screen wiring, reference captures, audio and disk "
-              "saving remain pending. See [the workflow](reorder_rosters_workflow.md) before promoting a slice.", ""]
+              "The Re-order menu card now opens the original-asset two-list screen. Selection/swaps, team scans, "
+              "accept and full-snapshot discard are connected. Help, View/Compare child routes, exact audio/transition "
+              "timing, disk saving/Reset and original-reference acceptance remain pending. "
+              "See [the workflow](reorder_rosters_workflow.md) before promoting a slice.", ""]
     return "\n".join(lines)
 
 
@@ -171,15 +220,22 @@ def run_tests(executable, database, config):
         raise ValueError("fresh native test failed or scenario evidence differs from contract")
     evidence.update(status="passed", passed=seen, source_sha256={})
     for relative in ["src/recovered/roster_reorder.c", "src/recovered/roster_reorder.h",
+                     "src/recovered/roster_lists.c", "src/recovered/roster_lists.h", "tests/roster_lists_test.cpp",
+                     "src/recovered/reorder_screen.c", "src/recovered/reorder_screen.h",
                      "src/roster_database.cpp", "src/roster_database.hpp", "tests/reorder_rosters_test.cpp",
-                     "src/reorder_preview.cpp", "src/reorder_preview.hpp", "src/psh_font.cpp", "src/psh_font.hpp"]:
+                     "src/reorder_preview.cpp", "src/reorder_preview.hpp", "src/psh_font.cpp", "src/psh_font.hpp",
+                     "tools/extract_reorder_dialogs.py", "config/decomp/reorder_rosters.json"]:
         evidence["source_sha256"][relative] = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
     evidence["executable_sha256"] = hashlib.sha256(executable.read_bytes()).hexdigest()
     if database:
         font = database.resolve().parent.parent / "fonts/ZFONT0.PSH"
         evidence["asset_sha256"] = {
+            "extracted/FEONLY.BIN": hashlib.sha256((database.resolve().parent.parent.parent / 'extracted/FEONLY.BIN').read_bytes()).hexdigest(),
             "database/roster.n97db": hashlib.sha256(database.read_bytes()).hexdigest(),
             "fonts/ZFONT0.PSH": hashlib.sha256(font.read_bytes()).hexdigest(),
+            "fonts/ZFONT1.PSH": hashlib.sha256((font.parent / 'ZFONT1.PSH').read_bytes()).hexdigest(),
+            "reorder/dialogs.n97ui": hashlib.sha256((font.parent.parent / 'reorder/dialogs.n97ui').read_bytes()).hexdigest(),
+            "reorder/discard.n97ui": hashlib.sha256((font.parent.parent / 'reorder/discard.n97ui').read_bytes()).hexdigest(),
         }
     output.write_text(encoded(evidence), encoding="utf-8")
     print("REORDER EVIDENCE .local/reports/reorder_rosters_run.json (no original assets included)")

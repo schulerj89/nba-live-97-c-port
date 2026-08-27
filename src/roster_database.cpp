@@ -382,6 +382,38 @@ bool RosterDatabase::applyReorderSession(std::int16_t team_id, const Nba97Reorde
     return true;
 }
 
+RosterDatabase::SlotTable RosterDatabase::slotTable() const {
+    SlotTable result{};
+    for (std::uint16_t id = 0; id < 29; ++id) {
+        const auto* t = team(id);
+        if (!t || t->roster.size() != 15) throw std::runtime_error("incomplete 535-slot database");
+        std::copy(t->roster.begin(), t->roster.end(), result.begin() + id * 15);
+    }
+    std::copy(free_agent_slots_.begin(), free_agent_slots_.end(), result.begin() + 435);
+    return result;
+}
+
+bool RosterDatabase::applyReorderScreen(const Nba97ReorderScreen& s) {
+    if (!s.selection.accepted || s.selection.phase != NBA97_REORDER_CLOSED) return false;
+    const auto current = slotTable();
+    if (!std::equal(current.begin(), current.end(), s.snapshot) ||
+        !std::equal(current.begin() + 435, current.end(), s.working + 435)) return false;
+    for (int team_id = 0; team_id < 29; ++team_id) {
+        std::array<std::uint16_t, 15> before{}, after{};
+        std::copy_n(s.snapshot + team_id * 15, 15, before.begin());
+        std::copy_n(s.working + team_id * 15, 15, after.begin());
+        std::sort(before.begin(), before.end()); std::sort(after.begin(), after.end());
+        if (before != after) return false;
+    }
+    if (std::equal(current.begin(), current.end(), s.working)) return true;
+    auto candidate = *this;
+    for (auto& t : candidate.teams_)
+        t.roster.assign(s.working + t.id * 15, s.working + (t.id+1) * 15);
+    candidate.copySlotTable(); // Rebuild copied pointers against candidate-owned records.
+    *this = std::move(candidate);
+    return true;
+}
+
 void RosterDatabase::copySlotTable() {
     nba97_semantic_trace_record(0x80057864u);
     roster_counts_.fill(0);

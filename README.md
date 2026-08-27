@@ -27,6 +27,8 @@ The native Windows build currently covers:
 - local user-profile creation, editing, deletion, and versioned saves;
 - the Rosters frontend, team browsing, player statistics, portraits, and Cool
   Fact playback;
+- Re-order screen entry, two-list selection and in-memory accept/discard
+  ([scoped instruction ledger](docs/reorder_rosters_progress.md));
 - original frontend music and recovered menu sounds; and
 - a CLI trace describing recovered states, assets, audio, and transitions.
 
@@ -84,6 +86,7 @@ Linux testing; the main reconstruction targets native Win32.
 | Back | `Escape` or `Backspace` |
 | View Rosters | `Left/Right` changes team; `Up/Down` changes player; `Q/E` changes category; `Z/C` changes field |
 | View Player | `Left/Right` changes player; `J/K` changes team; `Q/E` changes stat layer; `Up/Down` scrolls |
+| Re-order | Arrows browse rows/teams; `C`/`Space` picks; `X`/`Escape` cancels; `Enter` accepts from first selection |
 | Cool Facts | `Enter` plays; `S` stops |
 | Help | `H` or `F1` |
 
@@ -141,10 +144,12 @@ deterministic capture to refresh it. The score is useful regression evidence,
 not a byte-match claim: emulator scaling, color presentation, and animation
 phase can prevent identical pixels even when the recovered layout agrees.
 
-Re-order Rosters has a tested in-memory swap core and a CLI-tested two-stage
-selection/cancel controller (the original screen is not wired yet). Its
-[instruction ledger](docs/reorder_rosters_progress.md) lists pending blocks and
-separate feature gates. Run `pwsh -File scripts/verify_reorder_rosters.ps1` for
+Re-order Rosters now opens the original-asset two-list screen, with selection,
+team scanning, shared validation/swap/refresh helpers and in-memory accept/discard.
+Its [instruction ledger](docs/reorder_rosters_progress.md) accounts for **875/875**
+instructions in the initial ten owners—not 100% of the feature. Help/child routes,
+disk persistence and original-reference acceptance remain pending.
+Run `pwsh -File scripts/verify_reorder_rosters.ps1` for
 fresh CLI tests; see the [workflow](docs/reorder_rosters_workflow.md).
 
 For the parent Rosters card screen:

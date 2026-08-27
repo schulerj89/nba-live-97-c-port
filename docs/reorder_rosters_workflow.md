@@ -1,48 +1,136 @@
-# Re-order Rosters implementation gates
+# Re-order Rosters implementation and verification
 
-Work one slice at a time using the [generated ledger](reorder_rosters_progress.md).
-Do not use its core-instruction percentage as a feature-completion estimate.
+Use the [generated ledger](reorder_rosters_progress.md). Its percentage is
+reviewed source accounting, **not feature completion or binary equivalence**.
 
-## First slice: native swap core
+## Current boundary
 
-The original dispatch maps menu return 7 to state `0x0C`, which calls
-`0x80056AEC`. That wrapper normalizes the team with `0x80056A94` and runs
-`0x80056494` with list kinds 1 and 2. Recomp agrees with headless Ghidra.
+The four selection/cancellation owners are now **166/166 source-accounted**:
+first input (54), replacement input (54), begin replacement (24), finish/cancel
+replacement (34). This finishes the previous 99 pending owner instructions.
 
-The implemented C core covers:
+Construction/entry adds **298/298 source-accounted** (wrapper22 + constructor276).
+The initial ten-function inventory is **875/875 source-accounted; 0 pending**.
+Shared refresh115, validation140 and mutation134 now have individual block
+evidence, reusable C implementations and targeted tests. No denominator was
+removed or dismissed as emulator overhead. This closes the ten-owner review,
+not the feature, its transitive callees, or original-execution equivalence.
 
-- Team 29 normalization: mode 2 uses a signed context-team byte; other modes
-  use team 3. Other signed team inputs pass through unchanged. The database
-  adapter separately rejects IDs outside the real-team range.
-- The Re-order branch of `0x800556B0`: both IDs must exist and differ.
-- The occupied same-team path of `0x800558E0`: swap two slots without shifting
-  intermediate players, then increment the 16-bit session change counter.
-- An in-memory `RosterDatabase::reorderSlots` adapter that refreshes the
-  existing resolved-slot/membership data. No assets or saves are overwritten.
+**The actual Re-order menu card now opens the native two-list screen.** It
+uses original local ZSET4 artwork, Z2PORT portraits and PSH fonts, with a C
+controller inside the C++ window loop. Captures are native output, not a claim
+of original-versus-port screenshot parity. The screen-area subtotal is413/413,
+including the separately reviewed shared refresh owner.
 
-This is **not yet a selectable menu screen**. There is no fake screen route.
-The UI still reports the child flow as unavailable.
+## Construction and entry
 
-The two shared validation/mutation functions deliberately retain **zero whole-
-block accounting credit** for now: their other branches handle different team
-lists, empty-slot compaction, injury checks and roster-count limits. Implementing
-one useful path is not implementing every instruction. Review those blocks in
-the next accounting pass; an exclusion needs a proven Re-order precondition,
-not merely an assumption that an instruction is an emulator detail.
+`src/recovered/reorder_screen.c` owns the535-slot entry snapshot, staged table,
+30 typed rows, saved cursor/top restoration, both selected IDs and original
+entry/exit callback contracts. The native host supplies the frame pump and
+local asset loading. Team scanning preserves both scroll/cursor positions;
+it is disabled during replacement selection. Accept atomically publishes all
+edited teams in memory; discard restores the entire snapshot. The100 free-agent
+slots must remain unchanged. Original database assets are never overwritten.
 
-## Reproducible check
+Important distinction recovered from the outer dispatcher:
+
+| Item | Original source | Native representation |
+|---|---|---|
+| Graphics | frontend state0x0C, layout80096BC4 | ZSET4 `ba22` at156,10; NOT Trade's `ba38` |
+| Controller | `80056494 -> 8003D930`, layout0x0D | restored two-list input state |
+| Portraits | `80030D14`, Z2PORT.IDX/BIG | 493 local87x51 images,88-byte padded rows; record0 fallback, playerN recordN+1 |
+| Header | objects18/19 at54/386,22 | small portraits behind frml/frmr at30/368,15 |
+| Rows | type0x33,30 objects,6 visible | x60/270; first baseline112, step16 |
+| Modal | `80056254 -> 80040A1C`, descriptor800AF4F8 | local `discard.n97ui`, four body lines/two choices |
+
+Keyboard: arrows navigate rows/teams; C or Space picks; X or Esc cancels;
+Enter accepts from the first-selection phase. The confirmation uses Up/Down
+and C/Enter. Help/View/Compare are explicitly logged as pending child routes.
+The existing desktop shortcut launches the rebuilt executable.
+
+## Recovered behavior and native representation
+
+| Original owner/helper | Native behavior and evidence |
+|---|---|
+| `800568E4`, `800569BC` | Exact input masks 0x10/0x40/0x800; other masks clear the latch. Normal and synthesized-cancel paths are tested exhaustively. |
+| `80054B94` | Checks active View ID or both Compare IDs. Empty entries show a message. Success sets result 2/3 for the **outer dispatcher**; this helper does not execute a child screen. Same-ID Compare is allowed. Handoff uses the edited working IDs. |
+| `800552B4` | Sets descriptor page, active page and object state to 1; pulses the selected second row; refreshes headers. |
+| `80055314` | Restores those fields to 0; resets the second-row color; refreshes headers. State 2 bypasses validation/swap/rebind and sets a held-input barrier plus latch 10. |
+| `8002AB88 -> 8002AB30 -> 8002AE5C` | Whole-row RGB modulation: neutral 128/128/128, gold 120/102/0, duration 20. Initial gold hold, then reversal at duration+1 with signed integer interpolation. |
+| `8002AC90 -> 8002AC2C` | Eight-update reset to neutral. Both recomp and Ghidra confirm the odd duplicate blue write and preserved start-red channel; regression preserves it. |
+| `8003B194` | Original pumps frames until the held input differs. Native frame API is nonblocking: continue rendering, but do not dispatch while it returns 0. |
+| `800556B0` | Shared injury precedence (mode + injuries + state13 + second ID), team29/full15 result-1, exact minimum8, kind2 occupied/different and one-empty modal. Both-empty is silent. Typed notices retain original message address and affected player/team. |
+| `800558E0` | Independent backwards empty-slot searches, two writes, symmetric counts before donor compaction, halfword counter. Does not validate: an identical occupied pair still increments if directly called. Re-order adapter validates first. |
+| `800555F4 -> 8005539C` | Donor compaction15/free100; starter repair chooses ranked natural position then earliest bench match using external preference data. Preserves the original post-decrement count bound and no-match0 return. Tested callee contract, no additional instruction credit. |
+| `80055AF8(0/1/2)` | Bind all requested rows, redraw visible only, sign-extend selected IDs; present-one-frame request, restore saved descriptor page, then refresh header. Cursors/tops untouched. |
+| `80055068 -> 80054ECC / 80054DB4` | Redraw team object 0x73 (city + nickname at 256,70), natural-position line at x60/270,y95. Bench marker at 8002654C is an underscore, not an empty string. |
+| `80040A1C` | Original private empty-slot/child-unavailable descriptors, message input ownership, acknowledgement and original-font feedback. Diagnostic draws warning rectangle growth/shrink; full shared modal/audio integration remains pending. |
+
+The native C ABI represents original stack/register setup and return. Those
+instructions count as reviewed platform replacements, not new visible gameplay.
+
+### Shared-helper boundaries and discoveries
+
+`src/recovered/roster_lists.c` owns all three helpers; the Re-order adapter uses
+them instead of maintaining duplicate swap/refresh logic. The63 original blocks
+have individual behavior/test mappings in `config/decomp/reorder_rosters.json`.
+These mappings are review evidence, **not programmatic MIPS equivalence proof**.
+
+Validation notices substitute typed player/team identities for original
+pointer-based name formatting. Existing Re-order empty messages use the private
+pack. Injury/minimum dialogs belong to future Trade/Sign/Release screens and are
+not falsely presented as integrated here. Likewise, the native `PRESENT` callback
+requests the retained host surface; it does not block for original vblank or
+guarantee the same intermediate framebuffer. Exact timing remains pending.
+
+Starter repair uses the private25-byte preference table at800265AC, not guessed
+ratings. A local regression reads that table and roster positions, performs145
+isolated starter transfers across29 teams, and checks exact slots/counts against
+an independent ranking oracle. No original table bytes are published. Synthetic
+cases also preserve the unusual shortened bench bound after count decrement and
+the no-match return0. Those quirks need original runtime comparison before any
+intentional behavioral change; future cross-mode UI must provide valid counts,
+positions, injury flags and private preference data to the compaction service.
+
+## Asset-backed feedback
+
+`ReorderLabelPreview::renderFeedback` consumes local `ZFONT0.PSH`,
+`ZFONT1.PSH`, the roster database, and the small `reorder/dialogs.n97ui` pack.
+Missing data fails; there is no substitute font or portrait/background artwork.
+
+The dialog pack is 155 bytes, extracted from FEONLY addresses 800AFFFA and
+800AFC22. It retains the original geometry, line records and text. Extraction
+is restricted to this repository's ignored `.local/` directory:
+
+```powershell
+python tools/extract_reorder_dialogs.py .local/extracted/FEONLY.BIN
+```
+
+The warning box grows from (246,110,20,10), by (-9,-4,+18,+8) per update,
+clamped to its descriptor. Closing reverses these increments. Warning colors
+come from 80030430: dark-red opposite corners and brighter-red opposite corners.
+This is a native Gouraud approximation, **not verified PSX raster equivalence**.
+Message open/close sound IDs5/8 now use the existing native cursor bank.
+The game-window close is currently immediate; the diagnostic supports shrink
+frames. Exact original audio/animation timing is still a separate feedback gate.
+
+Rows now compose position, jersey and surname at recovered offsets.
+Starters use slot positions in uppercase; bench rows use natural positions.
+The first baseline is **112**, because 80055ED4 increments 96 before returning.
+The old surname-only capture remains available as a deliberately separate test.
+
+## Fresh verification
 
 ```powershell
 pwsh -File scripts/verify_reorder_rosters.ps1 -RequireDatabase
 ```
 
-The command builds the application and standalone C/C++ test executable, checks
-the ledger, then runs 22 asset-free scenarios plus three optional local-asset
-scenarios. CLI output includes scenario names, original function addresses and
-per-team test counts. It writes only ignored logs/evidence under `.local/`.
-No interactive app or emulator is controlled, and no save is modified.
+The wrapper builds, runs ledger/extractor unit tests, checks report freshness,
+then executes **57 asset-free + 7 local-asset scenarios**. If needed it extracts
+the private message pack from the already-local FEONLY. It never edits original
+asset files or persistent saves.
 
-Public CI builds the same core tests without SDL or original assets:
+Public CI needs no original data or SDL:
 
 ```sh
 cmake -S . -B build-core -DNBA97_RECOVERED_TESTS_ONLY=ON
@@ -50,147 +138,89 @@ cmake --build build-core
 python tools/verify_reorder_rosters.py --check --native-test build-core/nba97_reorder_tests
 ```
 
-The generated JSON lists every pending block start and its instruction count.
-`--check` validates accounting and report freshness only; it does not fabricate
-test results. `--native-test` must execute successfully and emit exactly the
-declared scenario IDs. The local evidence records source and executable hashes;
-the wrapper rebuilds by default. `-SkipBuild` is diagnostic only: hashes alone
-do not prove that an old executable was built from current sources.
+Focused evidence includes:
 
-## Promoting a slice
+- All 65,536 first-callback masks; 131,072 normal/cancel second-callback masks.
+- All 256 object-state bytes; only state 2 bypasses validation/mutation.
+- 180 source/replacement cases checking row rebind, refresh order and focus.
+- 900 View/Compare availability cases, including same-ID comparison.
+- Exact highlight keyframes and signed interpolation; held-cancel barrier.
+- Modal input isolation, original descriptor bounds, expansion/shrink captures.
+- Real glyph pixels returning to neutral after cancellation; both columns
+  changing after a swap.
+- 6,525 local database pairs across 29 teams, plus isolated publication,
+  stale-baseline/membership rejection and discard checks.
+- 768 shared-validation combinations; exact rule precedence, result and notice.
+- Both transfer directions, interior/trailing empty searches, free-agent100
+  compaction, starter repair/injury exclusions and counter overflow.
+- Refresh selectors0/1/2, zero/negative display counts, six-row clipping,
+  signed selected IDs, descriptor restoration and present/header event order.
+- 145 private-data starter transfers; original preference data stays local.
 
-1. Recover the next owner's behavior from private recomp, with Ghidra fallback.
-   Follow called helpers and callback pointers; add newly scoped owners rather
-   than hiding them in the initial denominator.
-2. Implement in C where appropriate, with explicit native resource ownership
-   in the C++ adapter. Add small tests for state changes and no-change cases.
-3. Map complete reviewed basic blocks to code and test IDs. Partial fragments
-   stay uncredited unless an entire block is genuinely represented. Do not
-   mark a caller complete while its meaningful callbacks are placeholders.
-4. Run fresh tests; record remaining screen, audio and original-reference gaps.
-   Change the slice status only after its declared exit gate passes.
-5. Regenerate with `python tools/verify_reorder_rosters.py` and check the diff.
-   To expand/refresh original counts, use
-   `pwsh -File scripts/update_reorder_inventory.ps1` and document why scope changed.
+Local captures: `.local/verification/reorder/feedback_*.ppm`,
+`modal_*.ppm`, and legacy `labels_*.ppm`. They have been visually inspected as
+diagnostic layers, not compared against an original Re-order screen.
 
-## Next slice and final acceptance
+Full-screen captures (entry, replacement scroll, swap and confirmation):
 
-The first/second-selection state machine is now tested. The selected source is
-frozen while choosing its replacement. Both lists retain their cursor/scroll
-positions after cancelling the second selection. Empty and same-player choices
-do not mutate the roster. Successful swaps return focus to the first list.
+```powershell
+python tools/verify_reorder_screen.py
+```
 
-Private recomp and Ghidra show that generic input `0x8003D930` handles cancel
-(`0x100`) during the second selection by changing object state 1 to 2 and
-synthesizing confirm (`0x800`). `0x800569BC` skips validation/swap in that state;
-`0x80055314` restores first focus and sets the input latch to 10. Start/continue
-(`0x80`) exits only at first-selection state zero. The native C controller
-represents those transitions directly, not by emulating controller memory.
+This runs the actual compositor, checks dimensions/distinct states, hashes
+private inputs/output and checks that database data is unchanged. It does
+not assign a visual similarity percentage. Inspect the PNGs under
+`.local/verification/reorder/screen/`; original-reference comparison is pending.
 
-Exit callback `0x80056254` asks before discarding when the session change counter
-is nonzero. Confirming restores its 535-ID entry snapshot; declining keeps the
-screen open. In this single-team slice, a 15-slot isolated working copy contains
-every possible edit. `RosterDatabase::applyReorderSession` publishes an accepted
-order only when the original team baseline still matches and membership is
-unchanged. It refreshes derived tables before publication. Cancellation never
-publishes. No files are written. The future player/team screen integration must
-read session data rather than the pre-edit database while this session is open.
+`.local/reports/reorder_rosters_run.json` records fresh pass IDs, executable
+and source hashes, plus font/database/dialog pack hashes. A failed/aborted run
+cannot leave old success evidence current. `--check` alone checks metadata;
+it never pretends to run behavioral tests. `-SkipBuild` does not prove that an
+old executable corresponds to current sources.
 
-These generic dispatcher/exit helpers are evidence dependencies outside the
-initial 875-instruction inventory; they receive no implicit coverage credit.
-Only three newly reviewed blocks receive credit: `0x80056948` (9 instructions,
-selected-ID/empty check), `0x80056A24` (4, state-2 bypass) and `0x80056A78` (1,
-validation failure latch clear). Begin/finish helpers also call rendering and
-animation routines, so their whole blocks remain pending despite working state
-transitions. This is why native-tested interaction does not mean 166/166 credited.
-
-Try the actual controller through the isolated CLI harness:
+## CLI use
 
 ```powershell
 build-windows/Debug/nba97_reorder_tests.exe --reorder-cli .local/assetpacks/database/roster.n97db 0
 ```
 
-Commands: `up`, `down`, `select`, `back`, `continue`, `yes`, `no`, `view`, `compare`. Team IDs are
-0..28. `continue` accepts only from the first-player stage; `back` cancels a pick
-or requests exit. Only explicit `yes` discards when prompted. EOF aborts without
-publishing. This is a debugging harness, not a replacement for the game's screen,
-and accepted changes live only inside its process. It logs every action and phase.
+Commands: `up down select back continue yes no view compare tick ok`.
+`ok` acknowledges a message. `tick` advances feedback. CLI commands are discrete
+presses with release between them, not physical controller repeat simulation.
 
-## 23-instruction first-callback increment
+Logging includes phase, both pages, selected slots, row/header revisions,
+modal state, latch, child-result codes and edited player IDs. The CLI inspects
+child data and clears the result; it does **not** pretend to run a child screen.
+Feedback captures update under `.local/verification/reorder/`.
 
-Six additional blocks in `0x800568E4` are now represented:
+Only `continue` from first-selection phase accepts the in-memory working order.
+Cancelling a replacement preserves earlier swaps; cancelling a dirty first
+stage asks before discard. The adapter checks baseline and membership before
+publication and refreshes derived tables. EOF discards without publication.
+No disk save is written.
 
-| Block start | Instructions | Purpose |
-|---|---:|---|
-| `0x800568E4` | 9 | Context/input load, native frame replacement, View mask check |
-| `0x80056908` | 3 | Compare mask check |
-| `0x8005691C` | 5 | Confirm mask check |
-| `0x80056930` | 2 | Preserve latch for View |
-| `0x80056938` | 2 | Preserve latch for Compare |
-| `0x80056940` | 2 | Clear latch for other callback inputs |
+## Accounting gates and next work
 
-`nba97_reorder_first_callback` operates **after** generic navigation/cancel
-handling. Inputs are exact equality checks, not bit flags: `0x810` must not
-confirm. Tests cover every 16-bit mask plus invalid-phase and empty-slot cases.
-The CLI routes first-stage `select`, `view`, and `compare` through this function.
-View/Compare deliberately log pending-child requests; their availability helper
-and child screens are not implemented or credited here. Recomp control flow and
-the existing Ghidra block inventory agree on these six blocks.
+1. Recover behavior from private recomp, then use Ghidra to verify uncertain
+   branches, data and callees. Keep outputs private.
+2. Implement a native contract and tests before crediting a whole basic block.
+   Original state restrictions must be explicit, never called emulator overhead.
+3. Every fully accounted owner must have either a fully accounted callee
+   or a tested, source-linked `selection_contracts`/`screen_contracts`/`shared_contracts`
+   entry for every direct call. Shared owner credit also requires a behavior and
+   owner-declared tests for every credited block.
+   The verifier rejects missing contracts and missing integration-boundary notes.
+4. A contract does **not** award full callee credit. These contracts are
+   intentionally scoped; generic modal timing/audio, linked-object GPU behavior
+   and outer frontend dispatch are not silently counted as done.
+5. Expand the whole-function inventory only with a documented scope revision.
+   Regenerate with `python tools/verify_reorder_rosters.py`; fresh native tests
+   and local captures are required before promoting runtime integration.
 
-The diagnostic renderer reads `fonts/ZFONT0.PSH` and `database/roster.n97db`
-directly from the private asset packs. It uses the existing PSH decoder, including
-transposed glyph correction; there is no system-font fallback. It draws only
-surname labels in two six-row columns at the recovered list origins. This is a
-transparent label layer, **not an original-screen screenshot or finished row
-composition**. Portraits, backgrounds, borders and highlight animations are
-not represented by substitute art. `Z2PORT` portrait integration remains pending.
-
-The local asset test verifies 156 decoded glyphs, 47 transposed glyphs, rendered
-pixels, unchanged labels on pick/cancel, refreshed labels on swap, and restored
-pixels on discard. Missing packs fail. It writes before/after PPM captures under
-`.local/verification/reorder/`; the CLI writes `cli_labels.ppm` while interacting.
-Local run evidence records font/database hashes as well as source/executable
-hashes. No original glyph pixels, player data or captures are committed.
-
-## 30-instruction replacement-callback increment
-
-The replacement stage now consumes the original callback inputs through
-`nba97_reorder_second_callback`, including the generic loop's object-state byte.
-CLI `select`, `back`, `view`, and `compare` use this callback while choosing a
-replacement. `back` supplies confirm mask `0x800` and state `2`; it does not send
-the untranslated cancel mask to a callback that expects generic handling first.
-
-| Added block | Instructions | Native representation |
-|---|---:|---|
-| `0x800569BC` | 10 | Context/input arguments, native frame, View check |
-| `0x800569E4` | 3 | Compare check |
-| `0x800569F8` | 5 | Exact confirm check |
-| `0x80056A0C` | 2 | Preserve latch for View |
-| `0x80056A14` | 2 | Preserve latch for Compare |
-| `0x80056A1C` | 2 | Clear latch for other callback values |
-| `0x80056A7C` | 6 | Native compiler-managed return/frame restoration |
-
-This is 24 dispatch instructions plus 6 native ABI replacements, not 30 newly
-visible gameplay operations. The return tests check results and surrounding
-caller data; they do not assert matching MIPS registers or machine code.
-The state-2 bypass and validation-failure latch were already credited and are
-not counted twice. No additional credit goes to the five unresolved blocks:
-`0x800569F0` (2), `0x80056A34` (6), `0x80056A4C` (4), `0x80056A5C` (3), and
-`0x80056A68` (4). These include child dispatch, shared validation, row refresh,
-and finish-selection animation.
-
-Tests cover all 65,536 masks in both normal and synthesized-cancel states
-(131,072 exact-state cases), all 256 object-state bytes, empty/same-player
-returns, null/wrong-phase guards and caller canaries. The local PSH label test
-now also goes through this replacement callback for View/Compare requests,
-cancel and swap; it still checks real pack-backed glyph pixels and no disk save.
-
-Next: original two-list screen/assets and menu entry, consuming this same C
-controller. Keep row refresh, animations, View/Compare dispatch, sound, modal
-presentation and input-repeat timing pending until they are actually connected.
-
-Remaining slices cover original assets/layout, sound/flash/help/player round trips,
-versioned local persistence/Reset, then same-scenario original screenshots and
-traces. A feature can be accepted with documented platform replacements, but not
-with unresolved user-visible paths. All original data, portraits, sounds, screenshots,
-traces and decompiler output stay under `.local/`.
+Next: wire help/child screens, held-key repeat and modal timing into the real game loop,
+implement versioned local roster persistence/Reset, and compare matching original
+screenshots/traces. Current presentation still uses the existing title-jumble
+approximation and a native180ms crossfade; the fixed plate vertices are recovered
+but native triangle sampling is not asserted to match PSX rasterization exactly;
+these are known fidelity limits, not source instruction matches. These gates
+remain pending; 875/875 reviewed owner instructions does not close them.

@@ -6,9 +6,12 @@ option(NBA97_RECOVERED_TESTS_ONLY "Build asset-free recovered logic tests withou
 if(BUILD_TESTING)
     add_executable(nba97_reorder_tests
         tests/reorder_rosters_test.cpp
+        tests/roster_lists_test.cpp
         src/reorder_preview.cpp
         src/psh_font.cpp
         src/recovered/roster_reorder.c
+        src/recovered/roster_lists.c
+        src/recovered/reorder_screen.c
         src/roster_database.cpp
         src/recovered/semantic_trace.c)
     target_compile_features(nba97_reorder_tests PRIVATE c_std_99 cxx_std_17)
@@ -73,6 +76,8 @@ endif()
 
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_reorder.c)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_lists.c)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/reorder_screen.c src/reorder_preview.cpp)
 if(MSVC)
     target_compile_options(nba97_boot_decomp PRIVATE /W4 /permissive-)
 else()

@@ -3,12 +3,12 @@
   "scope": "Re-order Rosters: initial ten-function core, not the full call graph",
   "measurement": "reviewed source accounting, not runtime execution or binary equivalence",
   "instructions": {
-    "accounted": 89,
+    "accounted": 875,
     "total": 875,
-    "pending": 786,
-    "percent": 10.17
+    "pending": 0,
+    "percent": 100.0
   },
-  "fully_accounted_functions": 1,
+  "fully_accounted_functions": 10,
   "function_count": 10,
   "functions": [
     {
@@ -19,673 +19,596 @@
       "total": 22,
       "pending": 0,
       "pending_blocks": [],
-      "note": "All five blocks represented by signed int16 input/return, team-29 branch, mode-2 branch, signed context-byte promotion, and fallback team 3. Verified against recomp and Ghidra; native boundary tests. Not binary equivalence."
+      "note": "All five blocks represented by signed int16 input/return, team-29 branch, mode-2 branch, signed context-byte promotion, and fallback team 3. Verified against recomp and Ghidra; native boundary tests. Not binary equivalence.",
+      "block_evidence": {}
     },
     {
       "address": "0x80056AEC",
       "name": "Enter Re-order",
       "slice": "screen",
-      "accounted": 0,
+      "accounted": 22,
       "total": 22,
-      "pending": 22,
-      "pending_blocks": [
-        {
-          "end": "0x80056B43",
-          "instruction_count": 22,
-          "start": "0x80056AEC"
-        }
-      ],
-      "note": "Normalize team then construct shared lists of kinds 1 and 2; bind both callbacks and propagate result."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "22 instructions source-accounted at the Re-order wrapper boundary: signed team normalization, same team with kinds1/2 and the original callback identities, native construction and signed result accessor. Blocking PSX call/ABI becomes retained native state plus a frame pump; result2/3 child screens remain separate dispatcher work. Not binary equivalence.",
+      "block_evidence": {}
     },
     {
       "address": "0x80056494",
       "name": "Construct/run two-list screen",
       "slice": "screen",
-      "accounted": 0,
+      "accounted": 276,
       "total": 276,
-      "pending": 276,
-      "pending_blocks": [
-        {
-          "end": "0x80056517",
-          "instruction_count": 33,
-          "start": "0x80056494"
-        },
-        {
-          "end": "0x8005653F",
-          "instruction_count": 10,
-          "start": "0x80056518"
-        },
-        {
-          "end": "0x8005656F",
-          "instruction_count": 12,
-          "start": "0x80056540"
-        },
-        {
-          "end": "0x8005657F",
-          "instruction_count": 4,
-          "start": "0x80056570"
-        },
-        {
-          "end": "0x80056583",
-          "instruction_count": 1,
-          "start": "0x80056580"
-        },
-        {
-          "end": "0x800565C7",
-          "instruction_count": 17,
-          "start": "0x80056584"
-        },
-        {
-          "end": "0x800565CF",
-          "instruction_count": 2,
-          "start": "0x800565C8"
-        },
-        {
-          "end": "0x800565DF",
-          "instruction_count": 4,
-          "start": "0x800565D0"
-        },
-        {
-          "end": "0x800565EF",
-          "instruction_count": 4,
-          "start": "0x800565E0"
-        },
-        {
-          "end": "0x80056617",
-          "instruction_count": 10,
-          "start": "0x800565F0"
-        },
-        {
-          "end": "0x8005661F",
-          "instruction_count": 2,
-          "start": "0x80056618"
-        },
-        {
-          "end": "0x8005662F",
-          "instruction_count": 4,
-          "start": "0x80056620"
-        },
-        {
-          "end": "0x8005663F",
-          "instruction_count": 4,
-          "start": "0x80056630"
-        },
-        {
-          "end": "0x8005664F",
-          "instruction_count": 4,
-          "start": "0x80056640"
-        },
-        {
-          "end": "0x80056653",
-          "instruction_count": 1,
-          "start": "0x80056650"
-        },
-        {
-          "end": "0x800566D3",
-          "instruction_count": 32,
-          "start": "0x80056654"
-        },
-        {
-          "end": "0x8005672B",
-          "instruction_count": 22,
-          "start": "0x800566D4"
-        },
-        {
-          "end": "0x80056737",
-          "instruction_count": 3,
-          "start": "0x8005672C"
-        },
-        {
-          "end": "0x80056743",
-          "instruction_count": 3,
-          "start": "0x80056738"
-        },
-        {
-          "end": "0x80056753",
-          "instruction_count": 4,
-          "start": "0x80056744"
-        },
-        {
-          "end": "0x80056767",
-          "instruction_count": 5,
-          "start": "0x80056754"
-        },
-        {
-          "end": "0x8005676B",
-          "instruction_count": 1,
-          "start": "0x80056768"
-        },
-        {
-          "end": "0x800567EF",
-          "instruction_count": 33,
-          "start": "0x8005676C"
-        },
-        {
-          "end": "0x8005681F",
-          "instruction_count": 12,
-          "start": "0x800567F0"
-        },
-        {
-          "end": "0x8005684B",
-          "instruction_count": 11,
-          "start": "0x80056820"
-        },
-        {
-          "end": "0x8005686B",
-          "instruction_count": 8,
-          "start": "0x8005684C"
-        },
-        {
-          "end": "0x80056883",
-          "instruction_count": 6,
-          "start": "0x8005686C"
-        },
-        {
-          "end": "0x800568E3",
-          "instruction_count": 24,
-          "start": "0x80056884"
-        }
-      ],
-      "note": "Private Z2PORT assets, 535-slot working snapshot, list construction/scrolling, callbacks and teardown; inspect callees before claiming this owner."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "276 instructions source-accounted for state0x0C/kinds1,2: local Z2PORT loader contract; immutable535-slot snapshot; normalized same-team descriptors; fresh/saved absolute cursors and tops; two15-row type0x33 lists with endpoint scroll and team callbacks; selected IDs; four arrow offsets6/10; portrait object IDs18/19; heading256,70; controller layout0x0D, entry/exit contracts and signed result. Native arrays/RAII replace stack/object allocation. Graphics are independently state0x0C (ba22), NOT controller layout0x0D (Trade graphics). Shared engine/helper instruction bodies and child routes get no implicit credit.",
+      "block_evidence": {}
     },
     {
       "address": "0x800568E4",
       "name": "First-list input",
       "slice": "interaction",
-      "accounted": 32,
+      "accounted": 54,
       "total": 54,
-      "pending": 22,
-      "pending_blocks": [
-        {
-          "end": "0x8005691B",
-          "instruction_count": 2,
-          "start": "0x80056914"
-        },
-        {
-          "end": "0x80056987",
-          "instruction_count": 7,
-          "start": "0x8005696C"
-        },
-        {
-          "end": "0x8005699F",
-          "instruction_count": 6,
-          "start": "0x80056988"
-        },
-        {
-          "end": "0x800569A7",
-          "instruction_count": 2,
-          "start": "0x800569A0"
-        },
-        {
-          "end": "0x800569BB",
-          "instruction_count": 5,
-          "start": "0x800569A8"
-        }
-      ],
-      "note": "Actual View/Compare availability/child dispatch (FUN_80054B94), state-12 empty-slot modal, begin-selection animation and epilogue remain pending. Local font-backed label diagnostics are tested but do not count as the complete original screen."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "All 54 instructions represented at the Re-order callback boundary. Exact masks and native ABI replace input/context/register operations. 56914 performs the recovered availability/result contract (54B94 returns 2/3; child execution is owned by the outer dispatcher). 5696C/56988 specialize frontend state 0x0C and open the original asset-backed empty-slot message. 569A0 invokes begin-second including tint/header state; 569A8 is compiler-managed return. Modal raster/audio integration and child screens remain separate explicit gates, not credited by this owner.",
+      "block_evidence": {}
     },
     {
       "address": "0x800569BC",
       "name": "Second-list input",
       "slice": "interaction",
-      "accounted": 35,
+      "accounted": 54,
       "total": 54,
-      "pending": 19,
-      "pending_blocks": [
-        {
-          "end": "0x800569F7",
-          "instruction_count": 2,
-          "start": "0x800569F0"
-        },
-        {
-          "end": "0x80056A4B",
-          "instruction_count": 6,
-          "start": "0x80056A34"
-        },
-        {
-          "end": "0x80056A5B",
-          "instruction_count": 4,
-          "start": "0x80056A4C"
-        },
-        {
-          "end": "0x80056A67",
-          "instruction_count": 3,
-          "start": "0x80056A5C"
-        },
-        {
-          "end": "0x80056A77",
-          "instruction_count": 4,
-          "start": "0x80056A68"
-        }
-      ],
-      "note": "Five blocks (19 instructions): FUN_80054B94 View/Compare availability/dispatch call; shared validation/result handling; swap plus original row refresh; post-validation continuation branch; finish-selection animation call. They remain uncredited despite the working Re-order-only state paths."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "All 54 instructions represented at the Re-order callback boundary. 569F0 validates child IDs and returns dispatcher code. 56A34 uses occupied/different-player validation under same-team/list-kind-2 preconditions; shared helper owners now have separate block evidence and synthetic cross-mode tests; other screens are not claimed. 56A4C performs swap and both-list rebind, 56A5C preserves the success-only continuation, 56A68 invokes finish including tint reset/header refresh/input-change barrier. State-2 skips validation/mutation/rebind. Original register/frame return is native compiler ABI. No full shared-helper or game-screen credit.",
+      "block_evidence": {}
     },
     {
       "address": "0x800552B4",
       "name": "Begin second selection",
       "slice": "interaction",
-      "accounted": 0,
+      "accounted": 24,
       "total": 24,
-      "pending": 24,
-      "pending_blocks": [
-        {
-          "end": "0x80055313",
-          "instruction_count": 24,
-          "start": "0x800552B4"
-        }
-      ],
-      "note": "Focus/state transition is implemented; the single original block also calls highlight animation and display refresh, which remain pending, so no whole-block credit."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "Single 24-instruction block represented by synchronized descriptor/active/object-state values 1, second-row pulse with recovered modulation endpoints 0x80808000/0x78660000 and duration20, then refreshed selected identities/team/natural-position presentation. Asset-backed diagnostic consumes these values into real font pixels. Native retained rows replace linked text objects. Native Re-order screen consumes this state; original screenshot/timing parity remains pending.",
+      "block_evidence": {}
     },
     {
       "address": "0x80055314",
       "name": "Finish/cancel second selection",
       "slice": "interaction",
-      "accounted": 0,
+      "accounted": 34,
       "total": 34,
-      "pending": 34,
-      "pending_blocks": [
-        {
-          "end": "0x8005536F",
-          "instruction_count": 23,
-          "start": "0x80055314"
-        },
-        {
-          "end": "0x8005537F",
-          "instruction_count": 4,
-          "start": "0x80055370"
-        },
-        {
-          "end": "0x8005539B",
-          "instruction_count": 7,
-          "start": "0x80055380"
-        }
-      ],
-      "note": "First-focus restoration and state-2 latch=10 are implemented; highlight reset, FUN_80055068 refresh and FUN_8003B194 behavior remain pending. No whole-block credit for state-only fragments."
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "All 34 instructions represented: 55314 resets the active second-row tint toward neutral over8 updates, preserves the original red-channel reset quirk, restores all focus/state fields to0 and refreshes headers. 55370 represents the blocking input-change loop as a nonblocking frame barrier and latch10 (visible to the next permitted dispatch). 55380 uses compiler-managed return. Tests distinguish successful swap from cancellation, preserve scroll/previous edits, verify actual glyph reset pixels. No original framebuffer or generic input-repeat equivalence claim.",
+      "block_evidence": {}
     },
     {
       "address": "0x800556B0",
       "name": "Validate pair (shared)",
       "slice": "core",
-      "accounted": 0,
+      "accounted": 140,
       "total": 140,
-      "pending": 140,
-      "pending_blocks": [
-        {
-          "end": "0x8005570F",
-          "instruction_count": 24,
-          "start": "0x800556B0"
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "140 instructions reviewed against private recomp (including split entry556C0) and Ghidra. Native signed result1/0/-1; injury precedence, team29/full15, exact minimum8, same-ID/kind2 and empty branches; typed message+subject contracts replace modal/name-pointer calls. 768 synthetic cases plus targeted gates; no claim of original execution parity or Trade/Sign/Release UI.",
+      "block_evidence": {
+        "0x800556B0": {
+          "behavior": "Native descriptor/selected-ID loads and compiler ABI; mode/injuries/state13 gate; injury lookup and player-specific notice.",
+          "tests": [
+            "shared_validate_injury"
+          ]
         },
-        {
-          "end": "0x80055723",
-          "instruction_count": 5,
-          "start": "0x80055710"
+        "0x80055710": {
+          "behavior": "Native descriptor/selected-ID loads and compiler ABI; mode/injuries/state13 gate; injury lookup and player-specific notice.",
+          "tests": [
+            "shared_validate_injury"
+          ]
         },
-        {
-          "end": "0x80055733",
-          "instruction_count": 4,
-          "start": "0x80055724"
+        "0x80055724": {
+          "behavior": "Native descriptor/selected-ID loads and compiler ABI; mode/injuries/state13 gate; injury lookup and player-specific notice.",
+          "tests": [
+            "shared_validate_injury"
+          ]
         },
-        {
-          "end": "0x8005574F",
-          "instruction_count": 7,
-          "start": "0x80055734"
+        "0x80055734": {
+          "behavior": "Native descriptor/selected-ID loads and compiler ABI; mode/injuries/state13 gate; injury lookup and player-specific notice.",
+          "tests": [
+            "shared_validate_injury"
+          ]
         },
-        {
-          "end": "0x80055757",
-          "instruction_count": 2,
-          "start": "0x80055750"
+        "0x80055750": {
+          "behavior": "Native descriptor/selected-ID loads and compiler ABI; mode/injuries/state13 gate; injury lookup and player-specific notice.",
+          "tests": [
+            "shared_validate_injury"
+          ]
         },
-        {
-          "end": "0x80055773",
-          "instruction_count": 7,
-          "start": "0x80055758"
+        "0x80055758": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x8005577B",
-          "instruction_count": 2,
-          "start": "0x80055774"
+        "0x80055774": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x8005578B",
-          "instruction_count": 4,
-          "start": "0x8005577C"
+        "0x8005577C": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x8005579B",
-          "instruction_count": 4,
-          "start": "0x8005578C"
+        "0x8005578C": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800557BB",
-          "instruction_count": 8,
-          "start": "0x8005579C"
+        "0x8005579C": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800557C3",
-          "instruction_count": 2,
-          "start": "0x800557BC"
+        "0x800557BC": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800557D3",
-          "instruction_count": 4,
-          "start": "0x800557C4"
+        "0x800557C4": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800557DF",
-          "instruction_count": 3,
-          "start": "0x800557D4"
+        "0x800557D4": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800557FF",
-          "instruction_count": 8,
-          "start": "0x800557E0"
+        "0x800557E0": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x80055807",
-          "instruction_count": 2,
-          "start": "0x80055800"
+        "0x80055800": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x80055817",
-          "instruction_count": 4,
-          "start": "0x80055808"
+        "0x80055808": {
+          "behavior": "Team29 dispatch; silent both-empty path; exact count8 checks in both donor directions, affected team retained.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x80055837",
-          "instruction_count": 8,
-          "start": "0x80055818"
+        "0x80055818": {
+          "behavior": "Second kind2: occupied/different accepted, identical rejected, single-empty original message; result preserved.",
+          "tests": [
+            "shared_validate_reorder"
+          ]
         },
-        {
-          "end": "0x8005583F",
-          "instruction_count": 2,
-          "start": "0x80055838"
+        "0x80055838": {
+          "behavior": "Second kind2: occupied/different accepted, identical rejected, single-empty original message; result preserved.",
+          "tests": [
+            "shared_validate_reorder"
+          ]
         },
-        {
-          "end": "0x8005584F",
-          "instruction_count": 4,
-          "start": "0x80055840"
+        "0x80055840": {
+          "behavior": "Second kind2: occupied/different accepted, identical rejected, single-empty original message; result preserved.",
+          "tests": [
+            "shared_validate_reorder"
+          ]
         },
-        {
-          "end": "0x80055863",
-          "instruction_count": 5,
-          "start": "0x80055850"
+        "0x80055850": {
+          "behavior": "Second kind2: occupied/different accepted, identical rejected, single-empty original message; result preserved.",
+          "tests": [
+            "shared_validate_reorder"
+          ]
         },
-        {
-          "end": "0x8005586F",
-          "instruction_count": 3,
-          "start": "0x80055864"
+        "0x80055864": {
+          "behavior": "Second kind2: occupied/different accepted, identical rejected, single-empty original message; result preserved.",
+          "tests": [
+            "shared_validate_reorder"
+          ]
         },
-        {
-          "end": "0x8005588B",
-          "instruction_count": 7,
-          "start": "0x80055870"
+        "0x80055870": {
+          "behavior": "Non-kind2 result return or affected-team-name minimum notice; typed subjects replace pointers.",
+          "tests": [
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x80055893",
-          "instruction_count": 2,
-          "start": "0x8005588C"
+        "0x8005588C": {
+          "behavior": "Non-kind2 result return or affected-team-name minimum notice; typed subjects replace pointers.",
+          "tests": [
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x8005589B",
-          "instruction_count": 2,
-          "start": "0x80055894"
+        "0x80055894": {
+          "behavior": "Non-kind2 result return or affected-team-name minimum notice; typed subjects replace pointers.",
+          "tests": [
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800558A3",
-          "instruction_count": 2,
-          "start": "0x8005589C"
+        "0x8005589C": {
+          "behavior": "Non-kind2 result return or affected-team-name minimum notice; typed subjects replace pointers.",
+          "tests": [
+            "shared_validate_minimum",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800558C7",
-          "instruction_count": 9,
-          "start": "0x800558A4"
+        "0x800558A4": {
+          "behavior": "Free-agent empty and full15 result branches, signed -1/0/1 and compiler-managed return.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800558CB",
-          "instruction_count": 1,
-          "start": "0x800558C8"
+        "0x800558C8": {
+          "behavior": "Free-agent empty and full15 result branches, signed -1/0/1 and compiler-managed return.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_matrix"
+          ]
         },
-        {
-          "end": "0x800558DF",
-          "instruction_count": 5,
-          "start": "0x800558CC"
+        "0x800558CC": {
+          "behavior": "Free-agent empty and full15 result branches, signed -1/0/1 and compiler-managed return.",
+          "tests": [
+            "shared_validate_free_agents",
+            "shared_validate_matrix"
+          ]
         }
-      ],
-      "note": "Re-order occupied/different-player behavior exists in nba97_reorder_swap; full blocks remain uncredited until shared minimum-size/injury/free-agent branches are reviewed and individually mapped or explicitly excluded from Re-order scope."
+      }
     },
     {
       "address": "0x800558E0",
       "name": "Swap slots (shared)",
       "slice": "core",
-      "accounted": 0,
+      "accounted": 134,
       "total": 134,
-      "pending": 134,
-      "pending_blocks": [
-        {
-          "end": "0x8005592B",
-          "instruction_count": 19,
-          "start": "0x800558E0"
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "134 instructions reviewed against private recomp (including split entry558F0) and Ghidra. Two independent backward empty searches, both-empty return, two slot writes, symmetric count updates before typed donor compaction, 16-bit counter and native ABI. Callee555F4 has an explicit tested native contract, not implicit instruction credit. Cross-mode screens and real private starter-preference provider integration remain outside this owner.",
+      "block_evidence": {
+        "0x800558E0": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x80055933",
-          "instruction_count": 2,
-          "start": "0x8005592C"
+        "0x8005592C": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x8005594B",
-          "instruction_count": 6,
-          "start": "0x80055934"
+        "0x80055934": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x8005595F",
-          "instruction_count": 5,
-          "start": "0x8005594C"
+        "0x8005594C": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x80055977",
-          "instruction_count": 6,
-          "start": "0x80055960"
+        "0x80055960": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x8005597B",
-          "instruction_count": 1,
-          "start": "0x80055978"
+        "0x80055978": {
+          "behavior": "Native loads/ABI and first-list backward scan to occupied predecessor or -1; choose original occupied slot or next empty.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_receive",
+            "shared_mutate_gap"
+          ]
         },
-        {
-          "end": "0x8005598B",
-          "instruction_count": 4,
-          "start": "0x8005597C"
+        "0x8005597C": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x80055993",
-          "instruction_count": 2,
-          "start": "0x8005598C"
+        "0x8005598C": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x800559AB",
-          "instruction_count": 6,
-          "start": "0x80055994"
+        "0x80055994": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x800559BF",
-          "instruction_count": 5,
-          "start": "0x800559AC"
+        "0x800559AC": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x800559D7",
-          "instruction_count": 6,
-          "start": "0x800559C0"
+        "0x800559C0": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x800559DB",
-          "instruction_count": 1,
-          "start": "0x800559D8"
+        "0x800559D8": {
+          "behavior": "Second-list cursor-base and independent backward scan with -1 sentinel; next empty normalization.",
+          "tests": [
+            "shared_mutate_empty",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x80055A07",
-          "instruction_count": 11,
-          "start": "0x800559DC"
+        "0x800559DC": {
+          "behavior": "Effective IDs; both-empty no-op; otherwise two writes even for identical occupied values (validation is caller-owned).",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_empty"
+          ]
         },
-        {
-          "end": "0x80055A17",
-          "instruction_count": 4,
-          "start": "0x80055A08"
+        "0x80055A08": {
+          "behavior": "Effective IDs; both-empty no-op; otherwise two writes even for identical occupied values (validation is caller-owned).",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_empty"
+          ]
         },
-        {
-          "end": "0x80055A23",
-          "instruction_count": 3,
-          "start": "0x80055A18"
+        "0x80055A18": {
+          "behavior": "Effective IDs; both-empty no-op; otherwise two writes even for identical occupied values (validation is caller-owned).",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_empty"
+          ]
         },
-        {
-          "end": "0x80055A73",
-          "instruction_count": 20,
-          "start": "0x80055A24"
+        "0x80055A24": {
+          "behavior": "First empty: second donor count--, first recipient count++, select donor list/team/effective index.",
+          "tests": [
+            "shared_mutate_receive"
+          ]
         },
-        {
-          "end": "0x80055A83",
-          "instruction_count": 4,
-          "start": "0x80055A74"
+        "0x80055A74": {
+          "behavior": "Occupied second skips compaction; second empty transfers first to second with symmetric count updates.",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x80055ACB",
-          "instruction_count": 18,
-          "start": "0x80055A84"
+        "0x80055A84": {
+          "behavior": "Occupied second skips compaction; second empty transfers first to second with symmetric count updates.",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_send"
+          ]
         },
-        {
-          "end": "0x80055AD3",
-          "instruction_count": 2,
-          "start": "0x80055ACC"
+        "0x80055ACC": {
+          "behavior": "Typed555F4 donor compaction after updated slots/counts; team15/free100 and starter-repair dependency contract.",
+          "tests": [
+            "shared_compact_starter",
+            "shared_compact_injury",
+            "shared_compact_boundaries",
+            "shared_mutate_free_agents"
+          ]
         },
-        {
-          "end": "0x80055AE3",
-          "instruction_count": 4,
-          "start": "0x80055AD4"
+        "0x80055AD4": {
+          "behavior": "Halfword change counter increments/wraps; native return and register lifetime.",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_empty"
+          ]
         },
-        {
-          "end": "0x80055AF7",
-          "instruction_count": 5,
-          "start": "0x80055AE4"
+        "0x80055AE4": {
+          "behavior": "Halfword change counter increments/wraps; native return and register lifetime.",
+          "tests": [
+            "shared_mutate_occupied",
+            "shared_mutate_empty"
+          ]
         }
-      ],
-      "note": "Occupied same-team swap and 16-bit counter exist in nba97_reorder_swap; empty-slot search, count changes and compaction remain outside this implemented fragment. No full-function credit."
+      }
     },
     {
       "address": "0x80055AF8",
       "name": "Refresh both lists",
       "slice": "screen",
-      "accounted": 0,
+      "accounted": 115,
       "total": 115,
-      "pending": 115,
-      "pending_blocks": [
-        {
-          "end": "0x80055B47",
-          "instruction_count": 20,
-          "start": "0x80055AF8"
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "115 instructions reviewed against recomp and Ghidra: selector0/1/2, saved descriptor page, all row identities, visible-only redraw, signed selected IDs, present-one-frame contract BEFORE page restore and header refresh. Retained native adapter consumes events, logs counts. PRESENT is an asynchronous host request, not emulated GPU/vblank or exact temporal equivalence.",
+      "block_evidence": {
+        "0x80055AF8": {
+          "behavior": "Native ABI, selector2 expands pages0..1, selectors0/1 single page; save16-bit descriptor page and loop bounds.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_single"
+          ]
         },
-        {
-          "end": "0x80055B4F",
-          "instruction_count": 2,
-          "start": "0x80055B48"
+        "0x80055B48": {
+          "behavior": "Native ABI, selector2 expands pages0..1, selectors0/1 single page; save16-bit descriptor page and loop bounds.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_single"
+          ]
         },
-        {
-          "end": "0x80055B6F",
-          "instruction_count": 8,
-          "start": "0x80055B50"
+        "0x80055B50": {
+          "behavior": "Native ABI, selector2 expands pages0..1, selectors0/1 single page; save16-bit descriptor page and loop bounds.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_single"
+          ]
         },
-        {
-          "end": "0x80055B73",
-          "instruction_count": 1,
-          "start": "0x80055B70"
+        "0x80055B70": {
+          "behavior": "Native ABI, selector2 expands pages0..1, selectors0/1 single page; save16-bit descriptor page and loop bounds.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_single"
+          ]
         },
-        {
-          "end": "0x80055B83",
-          "instruction_count": 4,
-          "start": "0x80055B74"
+        "0x80055B74": {
+          "behavior": "Choose descriptor/page, selected cursor minus base, signed row count and object base; nonpositive count skips row loop.",
+          "tests": [
+            "shared_refresh_single",
+            "shared_refresh_empty_count"
+          ]
         },
-        {
-          "end": "0x80055B87",
-          "instruction_count": 1,
-          "start": "0x80055B84"
+        "0x80055B84": {
+          "behavior": "Choose descriptor/page, selected cursor minus base, signed row count and object base; nonpositive count skips row loop.",
+          "tests": [
+            "shared_refresh_single",
+            "shared_refresh_empty_count"
+          ]
         },
-        {
-          "end": "0x80055BAB",
-          "instruction_count": 9,
-          "start": "0x80055B88"
+        "0x80055B88": {
+          "behavior": "Choose descriptor/page, selected cursor minus base, signed row count and object base; nonpositive count skips row loop.",
+          "tests": [
+            "shared_refresh_single",
+            "shared_refresh_empty_count"
+          ]
         },
-        {
-          "end": "0x80055BAF",
-          "instruction_count": 1,
-          "start": "0x80055BAC"
+        "0x80055BAC": {
+          "behavior": "Choose descriptor/page, selected cursor minus base, signed row count and object base; nonpositive count skips row loop.",
+          "tests": [
+            "shared_refresh_single",
+            "shared_refresh_empty_count"
+          ]
         },
-        {
-          "end": "0x80055BF3",
-          "instruction_count": 17,
-          "start": "0x80055BB0"
+        "0x80055BB0": {
+          "behavior": "Bind each object ID from slot; redraw only top<=object<top+visible; advance row/object and repeat.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_free_agents"
+          ]
         },
-        {
-          "end": "0x80055C0B",
-          "instruction_count": 6,
-          "start": "0x80055BF4"
+        "0x80055BF4": {
+          "behavior": "Bind each object ID from slot; redraw only top<=object<top+visible; advance row/object and repeat.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_free_agents"
+          ]
         },
-        {
-          "end": "0x80055C17",
-          "instruction_count": 3,
-          "start": "0x80055C0C"
+        "0x80055C0C": {
+          "behavior": "Bind each object ID from slot; redraw only top<=object<top+visible; advance row/object and repeat.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_free_agents"
+          ]
         },
-        {
-          "end": "0x80055C33",
-          "instruction_count": 7,
-          "start": "0x80055C18"
+        "0x80055C18": {
+          "behavior": "Bind each object ID from slot; redraw only top<=object<top+visible; advance row/object and repeat.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_free_agents"
+          ]
         },
-        {
-          "end": "0x80055C77",
-          "instruction_count": 17,
-          "start": "0x80055C34"
+        "0x80055C34": {
+          "behavior": "Sign-extend selected halfword to32-bit global, continue requested-page loop.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_free_agents"
+          ]
         },
-        {
-          "end": "0x80055CC3",
-          "instruction_count": 19,
-          "start": "0x80055C78"
+        "0x80055C78": {
+          "behavior": "Emit39574(0,1) present, restore descriptor page, emit55068 header, compiler-managed return.",
+          "tests": [
+            "shared_refresh_both",
+            "shared_refresh_native_adapter"
+          ]
         }
-      ],
-      "note": "Rebind player IDs to row objects, visible-row refresh, selected-player globals and focus restoration."
+      }
     }
   ],
   "instruction_slices": {
     "core": {
-      "accounted": 22,
+      "accounted": 296,
       "total": 296,
-      "pending": 274
+      "pending": 0
     },
     "screen": {
-      "accounted": 0,
+      "accounted": 413,
       "total": 413,
-      "pending": 413
+      "pending": 0
     },
     "interaction": {
-      "accounted": 67,
+      "accounted": 166,
       "total": 166,
-      "pending": 99
+      "pending": 0
     }
   },
   "slices": [
     {
       "id": "core",
-      "name": "Team normalization and in-memory same-team swap",
+      "name": "Team normalization and shared roster-list operations",
       "status": "native_tested",
-      "gate": "Fresh core tests plus local database invariants; exact slot order, counts, owners and rejected-input immutability."
+      "gate": "Shared validation/mutation owners and native contracts tested, including cross-mode synthetic branch cases; real Re-order uses these helpers. Other roster transaction screens are NOT thereby implemented."
     },
     {
       "id": "interaction",
       "name": "Two-step selection state machine",
       "status": "native_tested",
-      "gate": "Source/destination focus, cancel at each phase, empty/same-player cases and scrolling have exact-state scenarios. CLI/database adapter tested; original visual/input/audio integration remains a separate gate."
+      "gate": "All four selection owners source-accounted with tested Re-order call contracts: masks, two-stage focus, rejections/modals, row refresh, pulse/reset and cancel barrier. This is controller/diagnostic coverage, not full transitive or game-window completion."
     },
     {
       "id": "screen",
       "name": "Original two-list screen and menu entry",
-      "status": "pending",
-      "gate": "Original assets/font/layout and row refresh; menu enters the screen; source-mapped lifecycle and callback dependencies reviewed."
+      "status": "native_tested",
+      "gate": "Real Rosters card5 enters state0x0C; private Z2PORT/ZSET4/font assets; 535-slot snapshot, 30 rows/six visible, saved selection, source-mapped entry/exit and native captures. Source/accounting tests pass; original image/timing parity remains the separate reference gate."
     },
     {
       "id": "feedback",
@@ -706,10 +629,10 @@
       "gate": "Same-scenario original traces and screenshots; every relevant pending block resolved or explicitly justified as outside scope; transitive dependencies audited; known mismatches listed."
     }
   ],
-  "core_scenarios_defined": 22,
-  "local_scenarios_defined": 3,
+  "core_scenarios_defined": 57,
+  "local_scenarios_defined": 7,
   "tests_executed_by_static_report": false,
-  "next_slice": "screen",
+  "next_slice": "feedback",
   "direct_dependencies_outside_inventory": [
     "0x8002AB88",
     "0x8002AC90",
@@ -729,5 +652,334 @@
     "0x8005FE14"
   ],
   "feature_acceptance": "pending",
-  "dependency_policy": "The ten-function denominator is a versioned starting inventory. Calls outside it are listed as dependency addresses, not silently credited or treated as implemented. Discovering additional owners expands the inventory with a documented scope revision. A 100% core percentage alone never opens the feature-completion gate."
+  "dependency_policy": "Fixed inventory:875 original instructions across ten owners, now fully reviewed source-accounted at explicit native call-contract boundaries. No denominator removed. Not binary matching, full transitive coverage, original execution proof, visual fidelity or whole-feature completion. Shared Trade/Sign/Release helper branches are synthetic-tested, but those screens and their private starter-preference data provider remain unconnected. Re-order entry/selection/refresh works. Help, View/Compare round trips, exact audio/frame timing, persistent overrides/Reset and original-reference acceptance remain separate pending gates.",
+  "selection_contracts": [
+    {
+      "address": "0x80054B94",
+      "scope": "Re-order availability: active View ID, both Compare IDs; empty rejection; result2/3 plus working IDs. Same-player Compare is allowed.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "child_request"
+        }
+      ],
+      "tests": [
+        "selection_child_handoff",
+        "selection_modal_assets"
+      ],
+      "integration_pending": "Outer frontend View/Compare routing and child-screen round trips.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80040A1C",
+      "scope": "Two private message descriptors, blocking acknowledgement, original font, warning rectangle, growth/shrink and formatted child name. Shared validator emits typed injury/minimum/empty notices with original descriptor address and player/team subject.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "nba97_reorder_dismiss_modal"
+        },
+        {
+          "path": "src/reorder_preview.cpp",
+          "symbol": "renderFeedback"
+        },
+        {
+          "path": "src/recovered/roster_lists.c",
+          "symbol": "nba97_roster_validate"
+        }
+      ],
+      "tests": [
+        "selection_modal_blocking",
+        "selection_modal_assets",
+        "shared_validate_injury",
+        "shared_validate_minimum",
+        "shared_validate_reorder"
+      ],
+      "integration_pending": "Generic modal loop timing/raster comparison and sound5/8 playback in the game window; diagnostic is not the full modal engine. Trade/Sign/Release injury/minimum message presentation remains unconnected; no original message strings included.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8002AB88",
+      "scope": "Whole-row pulse using 2AB30 endpoints/flags and 2AE5C integer updates; actual pack-glyph modulation.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "pulse"
+        },
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "tint_frame"
+        },
+        {
+          "path": "src/reorder_preview.cpp",
+          "symbol": "renderFeedback"
+        }
+      ],
+      "tests": [
+        "selection_highlight_frames",
+        "selection_feedback_assets"
+      ],
+      "integration_pending": "Generic text-object flags outside selection and original framebuffer/timing comparison.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8002AC90",
+      "scope": "Whole-row eight-update neutral transition via2AC2C, including duplicated blue write/start-red preservation.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "unpulse"
+        },
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "tint_frame"
+        },
+        {
+          "path": "src/reorder_preview.cpp",
+          "symbol": "renderFeedback"
+        }
+      ],
+      "tests": [
+        "selection_highlight_frames",
+        "selection_feedback_assets"
+      ],
+      "integration_pending": "Generic text-object effects and original game-window raster comparison.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80055068",
+      "scope": "Re-order-only refresh: team object0x73 at256,70 and natural-position line via54ECC/54DB4 at60/270,95; bench underscore.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "refresh_header"
+        },
+        {
+          "path": "src/reorder_preview.cpp",
+          "symbol": "renderFeedback"
+        }
+      ],
+      "tests": [
+        "selection_refresh_pairs",
+        "selection_feedback_assets"
+      ],
+      "integration_pending": "Other frontend states and exact original screenshot parity; native Re-order portrait/background composition is now connected.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8003B194",
+      "scope": "Pump native color frames while held mask is unchanged; resume on changed input. Discrete CLI actions include release.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "nba97_reorder_frame"
+        },
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "nba97_reorder_finish_second"
+        }
+      ],
+      "tests": [
+        "selection_cancel_barrier"
+      ],
+      "integration_pending": "Physical controller sampling and generic repeat timing in the game loop.",
+      "status": "native_contract_tested"
+    }
+  ],
+  "screen_contracts": [
+    {
+      "address": "0x80030D14",
+      "scope": "Bind private Z2PORT index/archive, decode87x51 PAL8 rows at88-byte stride; record0 fallback/playerN recordN+1; lazy portrait refresh.",
+      "sources": [
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "openReorder"
+        },
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "loadReorderPortraits"
+        },
+        {
+          "path": "tools/decode_reorder_portraits.py",
+          "symbol": "main"
+        }
+      ],
+      "tests": [
+        "screen_entry_snapshot"
+      ],
+      "integration_pending": "No full asynchronous CD loader/cache instruction credit. Portrait asset hashes/captures require local screen verification; native core test alone cannot prove image decoding.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80056128",
+      "scope": "Re-order same-team descriptors: kinds1/2, bases0/15,15slots each, mode2 eligibility fallback; normalized first team feeds second.",
+      "sources": [
+        {
+          "path": "src/recovered/reorder_screen.c",
+          "symbol": "nba97_reorder_screen_enter"
+        }
+      ],
+      "tests": [
+        "screen_entry_snapshot",
+        "screen_team_eligibility"
+      ],
+      "integration_pending": "Free-agent100-row and Trade/Sign descriptor paths not part of this Re-order specialization.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80039D08",
+      "scope": "Thirty retained type0x33 rows; positions60/270 and112+16n; pages0/1; endpoint navigation; team-scan and selection callback identities.",
+      "sources": [
+        {
+          "path": "src/recovered/reorder_screen.c",
+          "symbol": "nba97_reorder_screen_rebind"
+        },
+        {
+          "path": "src/reorder_preview.cpp",
+          "symbol": "renderFeedback"
+        }
+      ],
+      "tests": [
+        "screen_object_construction",
+        "screen_saved_entry"
+      ],
+      "integration_pending": "Other frontend object types and PSX GPU/text allocation not claimed. Hardware rasterization parity remains reference work.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80055ED4",
+      "scope": "Increment16 before returning the next baseline from initial96; restored top offsets represented in retained row geometry.",
+      "sources": [
+        {
+          "path": "src/recovered/reorder_screen.c",
+          "symbol": "nba97_reorder_screen_rebind"
+        }
+      ],
+      "tests": [
+        "screen_object_construction",
+        "screen_saved_entry"
+      ],
+      "integration_pending": "No standalone callee instruction credit in fixed inventory.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8003D930",
+      "scope": "Retained native frame pump replaces blocking engine; 0x0D controller restoration; entry560BC, exit56254, six-row input/selection/cancel and signed0/1/2/3 result contracts.",
+      "sources": [
+        {
+          "path": "src/recovered/reorder_screen.c",
+          "symbol": "nba97_reorder_screen_enter"
+        },
+        {
+          "path": "src/recovered/reorder_screen.c",
+          "symbol": "nba97_reorder_screen_result"
+        },
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "handleReorderKey"
+        },
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "updateReorder"
+        }
+      ],
+      "tests": [
+        "screen_saved_entry",
+        "screen_result_contract",
+        "screen_multi_team_discard",
+        "screen_database_publication"
+      ],
+      "integration_pending": "Full generic engine, held-key repeat, help, View/Compare dispatch, modal closing animation, exact audio/transition timing and original-reference comparison remain pending.",
+      "status": "native_contract_tested"
+    }
+  ],
+  "shared_contracts": [
+    {
+      "address": "0x8004ED50",
+      "scope": "Minimum-roster notice carries the affected team ID and original message address; C++ name lookup/presentation remains host-owned.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_lists.c",
+          "symbol": "nba97_roster_validate"
+        }
+      ],
+      "tests": [
+        "shared_validate_minimum"
+      ],
+      "integration_pending": "Generic city/name formatting and cross-mode minimum modal are not integrated.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8005FE14",
+      "scope": "Injury notice carries selected second-player ID, replacing record+0x29 name pointer; no guessed name or copied source text.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_lists.c",
+          "symbol": "nba97_roster_validate"
+        }
+      ],
+      "tests": [
+        "shared_validate_injury"
+      ],
+      "integration_pending": "Cross-mode player-name formatting/modal and original provider execution evidence pending.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x800555F4",
+      "scope": "Donor15/free100 compaction; starter repair scans ranked positions with mode/injury gate using caller-supplied private data; observes post-decrement count and original no-match0 behavior.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_lists.c",
+          "symbol": "nba97_roster_compact"
+        },
+        {
+          "path": "tests/roster_lists_test.cpp",
+          "symbol": "rosterListsLocalTests"
+        }
+      ],
+      "tests": [
+        "shared_compact_starter",
+        "shared_compact_injury",
+        "shared_compact_boundaries",
+        "shared_mutate_receive",
+        "shared_mutate_send",
+        "shared_mutate_free_agents",
+        "shared_local_compaction"
+      ],
+      "integration_pending": "Real private preference/position provider tested across145 isolated starter transfers, plus synthetic injury cases. Trade/Sign/Release screens/providers remain unconnected. No standalone555F4/5539C instruction credit.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x8003B26C",
+      "scope": "Redraw event emitted only for visible object IDs, native adapter consumes into retained row state and redraw diagnostics.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "refresh_sink"
+        }
+      ],
+      "tests": [
+        "shared_refresh_both",
+        "shared_refresh_single",
+        "shared_refresh_native_adapter"
+      ],
+      "integration_pending": "Generic PSX object redraw engine/raster not translated; retained compositor redraws its native surface.",
+      "status": "native_contract_tested"
+    },
+    {
+      "address": "0x80039574",
+      "scope": "Present-one-frame request between row/selected-ID updates and restored descriptor/header; native request counter consumed by retained host rendering.",
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "refresh_sink"
+        }
+      ],
+      "tests": [
+        "shared_refresh_both",
+        "shared_refresh_native_adapter"
+      ],
+      "integration_pending": "Host presents asynchronously, not blocking original vblank; exact frame/audio timing and intermediate framebuffer equivalence pending.",
+      "status": "native_contract_tested"
+    }
+  ]
 }

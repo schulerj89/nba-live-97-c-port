@@ -56,7 +56,7 @@ with src.open("rb") as stream:
     if src.stem.upper() == "ZSET4":
         pal0_targets = {
             "brte", "brtf", "brtg", "brth", "brle", "brri",
-            "brbe", "brbf", "brbg", "brbh", "frml",
+            "brbe", "brbf", "brbg", "brbh", "frml", "frmr",
         }
     elif src.stem.upper() == "ZSET8":
         # State 0x24's layout routes its A-D frame records through ZSET8

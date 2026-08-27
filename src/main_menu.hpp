@@ -343,6 +343,12 @@ using MenuSpritePack = std::unordered_map<std::string, PshImage>;
 using MenuCardPack = std::array<PshImage, 4>;
 using RosterCardPack = std::array<PshImage, 8>;
 
+// Graphics state 0x0C, input layout 0x0D: original Re-order construction.
+PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
+    const MenuSpritePack& sprites, const PshFont& font,
+    const std::array<PshImage, 2>& portraits, const PshImage& text_layer,
+    std::uint32_t elapsed_ms);
+
 PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
                              const PshFont& font, const MenuSpritePack& sprites,
                              const MenuCardPack& cards,

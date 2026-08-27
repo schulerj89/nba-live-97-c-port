@@ -1,6 +1,7 @@
 #pragma once
 
 #include "recovered/roster_reorder.h"
+#include "recovered/reorder_screen.h"
 
 #include <array>
 #include <cstdint>
@@ -108,6 +109,11 @@ public:
     // Publish an accepted session only if its baseline still matches this team.
     // No disk save; rejection leaves the database untouched.
     bool applyReorderSession(std::int16_t team_id, const Nba97ReorderSession& session);
+    using SlotTable = std::array<std::uint16_t, NBA97_ROSTER_TABLE_SLOTS>;
+    [[nodiscard]] SlotTable slotTable() const;
+    // Atomic multi-team publication. Baseline conflicts/membership edits fail
+    // before changing live data. Never writes the original database asset.
+    bool applyReorderScreen(const Nba97ReorderScreen& screen);
     [[nodiscard]] const PlayerRecord* player(std::uint16_t id) const noexcept;
     [[nodiscard]] const TeamRecord* team(std::uint16_t id) const noexcept;
     // Native representation of FEONLY FUN_8005770C. Empty signed roster

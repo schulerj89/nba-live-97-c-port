@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <deque>
+#include <stdexcept>
 #include <tuple>
 #include <vector>
 
@@ -82,6 +83,31 @@ void blitRotatedClockwise(PshImage& destination, const PshImage& source,
             const int dy = target_y + sx;
             putPixel(destination, dx, dy, source.rgba[from], source.rgba[from + 1],
                      source.rgba[from + 2], source.rgba[from + 3]);
+        }
+    }
+}
+
+void blitReorderPlate(PshImage& destination, const PshImage& source, int x, int y, int side) {
+    // 8009370C/80093714, interpreted by 80034A5C: two fixed, four-corner
+    // plate shapes. Ordinary native textured triangles, not a GPU emulator.
+    static constexpr int quads[2][8] = {{0,0,86,10,0,58,106,60}, {20,10,106,0,0,60,106,58}};
+    const auto& q = quads[side];
+    static constexpr int triangles[2][3] = {{0,1,2}, {1,3,2}};
+    for (const auto& t : triangles) {
+        const int a=t[0], b=t[1], c=t[2];
+        const double denominator = (q[2*b+1]-q[2*c+1])*(q[2*a]-q[2*c]) +
+                                   (q[2*c]-q[2*b])*(q[2*a+1]-q[2*c+1]);
+        for (int yy=0; yy<60; ++yy) for (int xx=0; xx<106; ++xx) {
+            const double u=((q[2*b+1]-q[2*c+1])*(xx+0.5-q[2*c]) +
+                            (q[2*c]-q[2*b])*(yy+0.5-q[2*c+1]))/denominator;
+            const double v=((q[2*c+1]-q[2*a+1])*(xx+0.5-q[2*c]) +
+                            (q[2*a]-q[2*c])*(yy+0.5-q[2*c+1]))/denominator;
+            const double w=1-u-v;
+            if (u<0 || v<0 || w<0) continue;
+            const int sx=std::clamp(static_cast<int>((u*(a&1)+v*(b&1)+w*(c&1))*source.width),0,int(source.width)-1);
+            const int sy=std::clamp(static_cast<int>((u*(a>>1)+v*(b>>1)+w*(c>>1))*source.height),0,int(source.height)-1);
+            const auto at=(static_cast<std::size_t>(sy)*source.width+sx)*4;
+            if(source.rgba[at+3]) putPixel(destination,x+xx,y+yy,source.rgba[at],source.rgba[at+1],source.rgba[at+2]);
         }
     }
 }
@@ -1880,6 +1906,59 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
             drawText(image, font, instructions[row], 155, y + 2, 1, 245, 245, 245);
         }
     }
+    return image;
+}
+
+PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
+        const MenuSpritePack& sprites, const PshFont& font,
+        const std::array<PshImage, 2>& portraits, const PshImage& text_layer,
+        std::uint32_t elapsed_ms) {
+    PshImage image;
+    image.width = 512; image.height = 240; image.tag = "REORDER";
+    image.rgba.assign(512 * 240 * 4, 255);
+    static constexpr const char* teams[] = {"atl","bos","cha","chi","cle","dal","den","det",
+        "gol","hou","ind","lac","lal","mia","mil","min","nwj","nwy","orl","phi",
+        "pho","por","sac","san","sea","tor","uta","van","was"};
+    if (screen.team < 0 || screen.team >= 29) throw std::runtime_error("invalid Re-order team");
+    for (int i = 0; i < 4; ++i) {
+        const std::string tag = std::string(teams[screen.team]) + "Bkg" + static_cast<char>('a'+i);
+        if (!sprite(sprites, tag.c_str())) throw std::runtime_error("missing Re-order background " + tag);
+        blitAt(image, sprites, tag.c_str(), i*128, 0);
+    }
+    // FEONLY graphics layout 80096BC4. Depth 4 border is behind title (3), portrait
+    // (2), and aperture frame (1). There are NO NBA/EA logos on this screen.
+    const std::array<std::tuple<const char*, int, int>, 10> borders{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}};
+    for (const auto& b : borders) blitAt(image, sprites, std::get<0>(b), std::get<1>(b), std::get<2>(b));
+    blitJumbledTitleSprite(image, sprites, "ba22", 156, 10, elapsed_ms);
+    for (int p = 0; p < 2; ++p) {
+        const char* frame_tag = p ? "frmr" : "frml";
+        const auto* frame = sprite(sprites, frame_tag);
+        if (!frame) throw std::runtime_error("missing Re-order aperture");
+        const int frame_x = p ? 368 : 30;
+        // Runtime image objects 18/19 use the rectangular Z2PORT image at
+        // 54/386,22. Objects 20/21 are the authored plate underneath it.
+        const auto* plate = sprite(sprites, p ? "111p" : "110p");
+        if (!plate) throw std::runtime_error("missing Re-order plate");
+        blitReorderPlate(image, *plate, p ? 370 : 40, 16, p);
+        blitInsideFrame(image, portraits[p], *frame, p ? 386 : 54, 22, frame_x, 15);
+        blitAt(image, sprites, frame_tag, frame_x, 15);
+    }
+    // Generic list markers use original ZFONT0 control glyphs, never Unicode.
+    const auto& s = screen.selection;
+    const int p = s.active_page;
+    // 8003A224: row-x minus20 plus6; controller top106 plus10; row spacing16.
+    const int x = (p ? 270 : 60) - 20 + screen.arrow_x[p];
+    const auto arrow = [&](unsigned char code, int y) {
+        const std::string text(1, static_cast<char>(code));
+        draw_psh_text_centered(image, font, text, x + font.textWidth(text)/2, y);
+    };
+    if (s.top[p]) arrow(0x8b, 106 + screen.arrow_y[p]);
+    if (s.top[p] < 9) arrow(0x8c, 186 + screen.arrow_y[p+2]);
+    blitAt(image, sprites, "help", 235, 217);
+    blitScaled(image, text_layer, 0, 0, 512, 240, 0, 0, 512, 240);
     return image;
 }
 
