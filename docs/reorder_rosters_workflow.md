@@ -37,7 +37,7 @@ pwsh -File scripts/verify_reorder_rosters.ps1 -RequireDatabase
 ```
 
 The command builds the application and standalone C/C++ test executable, checks
-the ledger, then runs 17 asset-free scenarios plus two optional local-database
+the ledger, then runs 19 asset-free scenarios plus three optional local-asset
 scenarios. CLI output includes scenario names, original function addresses and
 per-team test counts. It writes only ignored logs/evidence under `.local/`.
 No interactive app or emulator is controlled, and no save is modified.
@@ -110,11 +110,47 @@ Try the actual controller through the isolated CLI harness:
 build-windows/Debug/nba97_reorder_tests.exe --reorder-cli .local/assetpacks/database/roster.n97db 0
 ```
 
-Commands: `up`, `down`, `select`, `back`, `continue`, `yes`, `no`. Team IDs are
+Commands: `up`, `down`, `select`, `back`, `continue`, `yes`, `no`, `view`, `compare`. Team IDs are
 0..28. `continue` accepts only from the first-player stage; `back` cancels a pick
 or requests exit. Only explicit `yes` discards when prompted. EOF aborts without
 publishing. This is a debugging harness, not a replacement for the game's screen,
 and accepted changes live only inside its process. It logs every action and phase.
+
+## 23-instruction first-callback increment
+
+Six additional blocks in `0x800568E4` are now represented:
+
+| Block start | Instructions | Purpose |
+|---|---:|---|
+| `0x800568E4` | 9 | Context/input load, native frame replacement, View mask check |
+| `0x80056908` | 3 | Compare mask check |
+| `0x8005691C` | 5 | Confirm mask check |
+| `0x80056930` | 2 | Preserve latch for View |
+| `0x80056938` | 2 | Preserve latch for Compare |
+| `0x80056940` | 2 | Clear latch for other callback inputs |
+
+`nba97_reorder_first_callback` operates **after** generic navigation/cancel
+handling. Inputs are exact equality checks, not bit flags: `0x810` must not
+confirm. Tests cover every 16-bit mask plus invalid-phase and empty-slot cases.
+The CLI routes first-stage `select`, `view`, and `compare` through this function.
+View/Compare deliberately log pending-child requests; their availability helper
+and child screens are not implemented or credited here. Recomp control flow and
+the existing Ghidra block inventory agree on these six blocks.
+
+The diagnostic renderer reads `fonts/ZFONT0.PSH` and `database/roster.n97db`
+directly from the private asset packs. It uses the existing PSH decoder, including
+transposed glyph correction; there is no system-font fallback. It draws only
+surname labels in two six-row columns at the recovered list origins. This is a
+transparent label layer, **not an original-screen screenshot or finished row
+composition**. Portraits, backgrounds, borders and highlight animations are
+not represented by substitute art. `Z2PORT` portrait integration remains pending.
+
+The local asset test verifies 156 decoded glyphs, 47 transposed glyphs, rendered
+pixels, unchanged labels on pick/cancel, refreshed labels on swap, and restored
+pixels on discard. Missing packs fail. It writes before/after PPM captures under
+`.local/verification/reorder/`; the CLI writes `cli_labels.ppm` while interacting.
+Local run evidence records font/database hashes as well as source/executable
+hashes. No original glyph pixels, player data or captures are committed.
 
 Next: original two-list screen/assets and menu entry, consuming this same C
 controller. Keep row refresh, animations, View/Compare dispatch, sound, modal

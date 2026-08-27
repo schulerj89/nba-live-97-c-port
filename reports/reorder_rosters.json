@@ -3,10 +3,10 @@
   "scope": "Re-order Rosters: initial ten-function core, not the full call graph",
   "measurement": "reviewed source accounting, not runtime execution or binary equivalence",
   "instructions": {
-    "accounted": 36,
+    "accounted": 59,
     "total": 875,
-    "pending": 839,
-    "percent": 4.11
+    "pending": 816,
+    "percent": 6.74
   },
   "fully_accounted_functions": 1,
   "function_count": 10,
@@ -192,44 +192,14 @@
       "address": "0x800568E4",
       "name": "First-list input",
       "slice": "interaction",
-      "accounted": 9,
+      "accounted": 32,
       "total": 54,
-      "pending": 45,
+      "pending": 22,
       "pending_blocks": [
-        {
-          "end": "0x80056907",
-          "instruction_count": 9,
-          "start": "0x800568E4"
-        },
-        {
-          "end": "0x80056913",
-          "instruction_count": 3,
-          "start": "0x80056908"
-        },
         {
           "end": "0x8005691B",
           "instruction_count": 2,
           "start": "0x80056914"
-        },
-        {
-          "end": "0x8005692F",
-          "instruction_count": 5,
-          "start": "0x8005691C"
-        },
-        {
-          "end": "0x80056937",
-          "instruction_count": 2,
-          "start": "0x80056930"
-        },
-        {
-          "end": "0x8005693F",
-          "instruction_count": 2,
-          "start": "0x80056938"
-        },
-        {
-          "end": "0x80056947",
-          "instruction_count": 2,
-          "start": "0x80056940"
         },
         {
           "end": "0x80056987",
@@ -252,7 +222,7 @@
           "start": "0x800569A8"
         }
       ],
-      "note": "View/compare dispatch, generic input-mask handling, empty-slot modal rendering, begin-selection animation and callback lifetime remain pending. Selection-state behavior is native-tested in the CLI harness."
+      "note": "Actual View/Compare availability/child dispatch (FUN_80054B94), state-12 empty-slot modal, begin-selection animation and epilogue remain pending. Local font-backed label diagnostics are tested but do not count as the complete original screen."
     },
     {
       "address": "0x800569BC",
@@ -728,9 +698,9 @@
       "pending": 413
     },
     "interaction": {
-      "accounted": 14,
+      "accounted": 37,
       "total": 166,
-      "pending": 152
+      "pending": 129
     }
   },
   "slices": [
@@ -771,8 +741,8 @@
       "gate": "Same-scenario original traces and screenshots; every relevant pending block resolved or explicitly justified as outside scope; transitive dependencies audited; known mismatches listed."
     }
   ],
-  "core_scenarios_defined": 17,
-  "local_scenarios_defined": 2,
+  "core_scenarios_defined": 19,
+  "local_scenarios_defined": 3,
   "tests_executed_by_static_report": false,
   "next_slice": "screen",
   "direct_dependencies_outside_inventory": [

@@ -171,9 +171,16 @@ def run_tests(executable, database, config):
         raise ValueError("fresh native test failed or scenario evidence differs from contract")
     evidence.update(status="passed", passed=seen, source_sha256={})
     for relative in ["src/recovered/roster_reorder.c", "src/recovered/roster_reorder.h",
-                     "src/roster_database.cpp", "src/roster_database.hpp", "tests/reorder_rosters_test.cpp"]:
+                     "src/roster_database.cpp", "src/roster_database.hpp", "tests/reorder_rosters_test.cpp",
+                     "src/reorder_preview.cpp", "src/reorder_preview.hpp", "src/psh_font.cpp", "src/psh_font.hpp"]:
         evidence["source_sha256"][relative] = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
     evidence["executable_sha256"] = hashlib.sha256(executable.read_bytes()).hexdigest()
+    if database:
+        font = database.resolve().parent.parent / "fonts/ZFONT0.PSH"
+        evidence["asset_sha256"] = {
+            "database/roster.n97db": hashlib.sha256(database.read_bytes()).hexdigest(),
+            "fonts/ZFONT0.PSH": hashlib.sha256(font.read_bytes()).hexdigest(),
+        }
     output.write_text(encoded(evidence), encoding="utf-8")
     print("REORDER EVIDENCE .local/reports/reorder_rosters_run.json (no original assets included)")
 

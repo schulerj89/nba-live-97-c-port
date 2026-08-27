@@ -6,6 +6,8 @@ option(NBA97_RECOVERED_TESTS_ONLY "Build asset-free recovered logic tests withou
 if(BUILD_TESTING)
     add_executable(nba97_reorder_tests
         tests/reorder_rosters_test.cpp
+        src/reorder_preview.cpp
+        src/psh_font.cpp
         src/recovered/roster_reorder.c
         src/roster_database.cpp
         src/recovered/semantic_trace.c)

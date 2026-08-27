@@ -14,8 +14,8 @@ class ReorderProgressTests(unittest.TestCase):
 
     def test_small_scope_and_no_fragment_inflation(self):
         report = ledger.calculate(self.config, self.inventory)
-        self.assertEqual(report['instructions'], dict(accounted=36, total=875, pending=839, percent=4.11))
-        self.assertEqual(report['instruction_slices']['interaction'], dict(accounted=14, total=166, pending=152))
+        self.assertEqual(report['instructions'], dict(accounted=59, total=875, pending=816, percent=6.74))
+        self.assertEqual(report['instruction_slices']['interaction'], dict(accounted=37, total=166, pending=129))
         self.assertEqual(report['next_slice'], 'screen')
         self.assertEqual(report['fully_accounted_functions'], 1)
         self.assertFalse(report['tests_executed_by_static_report'])

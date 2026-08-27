@@ -42,7 +42,8 @@ typedef enum Nba97ReorderEvent {
     NBA97_REORDER_NO_CHANGE, NBA97_REORDER_MOVED, NBA97_REORDER_PICKED,
     NBA97_REORDER_SWAPPED, NBA97_REORDER_REJECTED_EMPTY, NBA97_REORDER_REJECTED_SAME,
     NBA97_REORDER_CANCELLED_PICK, NBA97_REORDER_ASK_DISCARD,
-    NBA97_REORDER_RESUMED, NBA97_REORDER_EXIT_DISCARDED, NBA97_REORDER_EXIT_ACCEPTED
+    NBA97_REORDER_RESUMED, NBA97_REORDER_EXIT_DISCARDED, NBA97_REORDER_EXIT_ACCEPTED,
+    NBA97_REORDER_REQUEST_VIEW, NBA97_REORDER_REQUEST_COMPARE
 } Nba97ReorderEvent;
 
 typedef struct Nba97ReorderSession {
@@ -62,6 +63,9 @@ typedef struct Nba97ReorderSession {
  * Rendering/audio effects are deliberately not implemented by this controller. */
 int nba97_reorder_begin(Nba97ReorderSession *session, const uint16_t slots[NBA97_TEAM_SLOTS]);
 Nba97ReorderEvent nba97_reorder_input(Nba97ReorderSession *session, Nba97ReorderAction action);
+/* First-list callback AFTER generic navigation/cancel processing. Exact values,
+ * not bit tests. View/Compare return requests; their child screens are pending. */
+Nba97ReorderEvent nba97_reorder_first_callback(Nba97ReorderSession *session, uint16_t input_mask);
 const char *nba97_reorder_phase_name(Nba97ReorderPhase phase);
 const char *nba97_reorder_event_name(Nba97ReorderEvent event);
 

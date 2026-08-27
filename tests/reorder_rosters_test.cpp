@@ -1,8 +1,10 @@
 #include "roster_database.hpp"
+#include "reorder_preview.hpp"
 #include <algorithm>
 #include <array>
 #include <climits>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -193,6 +195,88 @@ void selection() {
     pass("selection_accept", "continue exits first stage with accepted working order");
 }
 
+void callbackMasks() {
+    auto slots = synthetic();
+    Nba97ReorderSession session{};
+    for (unsigned mask = 0; mask <= UINT16_MAX; ++mask) {
+        nba97_reorder_begin(&session, slots.data());
+        session.input_latch = 10;
+        auto expected = NBA97_REORDER_NO_CHANGE;
+        if (mask == 0x10) expected = NBA97_REORDER_REQUEST_VIEW;
+        if (mask == 0x40) expected = NBA97_REORDER_REQUEST_COMPARE;
+        if (mask == 0x800) expected = NBA97_REORDER_PICKED;
+        check(nba97_reorder_first_callback(&session, static_cast<std::uint16_t>(mask)) == expected,
+            "exact callback mask dispatch");
+        check(session.input_latch == (expected == NBA97_REORDER_NO_CHANGE ? 0 : 10), "callback latch");
+        check(session.phase == (mask == 0x800 ? NBA97_REORDER_REPLACEMENT : NBA97_REORDER_FIRST) &&
+            session.changes == 0 && std::equal(slots.begin(), slots.end(), session.slots),
+            "callback must not swap or advance on combined masks");
+    }
+    pass("first_callback_masks", "65536 exact masks; 0x10 View, 0x40 Compare, 0x800 confirm; others clear latch");
+    slots[0] = UINT16_MAX;
+    nba97_reorder_begin(&session, slots.data());
+    check(nba97_reorder_first_callback(&session, 0x800) == NBA97_REORDER_REJECTED_EMPTY &&
+        session.phase == NBA97_REORDER_FIRST, "empty raw confirm stays first");
+    // Child requests remain requests: their own availability/callee isn't claimed.
+    check(nba97_reorder_first_callback(&session, 0x10) == NBA97_REORDER_REQUEST_VIEW &&
+        nba97_reorder_first_callback(&session, 0x40) == NBA97_REORDER_REQUEST_COMPARE,
+        "view/compare must not become confirm");
+    session.phase = NBA97_REORDER_REPLACEMENT;
+    session.input_latch = 10;
+    check(nba97_reorder_first_callback(&session, 0x800) == NBA97_REORDER_NO_CHANGE &&
+        session.input_latch == 10 && session.changes == 0, "wrong-phase guard");
+    check(nba97_reorder_first_callback(nullptr, 0) == NBA97_REORDER_NO_CHANGE, "null guard");
+    pass("first_callback_guards", "empty confirm; child requests unconsumed; wrong phase/null are inert");
+}
+
+void writeLabels(const PshImage& image, const char* name) {
+    const auto root = std::filesystem::path(".local/verification/reorder");
+    std::filesystem::create_directories(root);
+    std::ofstream out(root / name, std::ios::binary);
+    out << "P6\n" << image.width << ' ' << image.height << "\n255\n";
+    for (std::size_t i = 0; i < image.rgba.size(); i += 4)
+        out.write(reinterpret_cast<const char*>(image.rgba.data() + i), 3);
+    if (!out) throw std::runtime_error("Re-order diagnostic capture write failed");
+}
+
+void fontAssets(const std::string& path) {
+    nba97::RosterDatabase db;
+    db.load(path);
+    const auto asset_root = std::filesystem::path(path).parent_path().parent_path();
+    nba97::ReorderLabelPreview preview(asset_root);
+    check(preview.font().glyphCount() == 156 && preview.font().transposedGlyphCount() == 47,
+        "expected original ZFONT0 inventory");
+    Nba97ReorderSession session{};
+    nba97_reorder_begin(&session, db.teams().front().roster.data());
+    const auto before = preview.render(session, db);
+    check(std::count_if(before.rgba.begin(), before.rgba.end(), [](auto c) {return c != 0;}) > 100,
+        "original glyphs must render");
+    nba97_reorder_first_callback(&session, 0x800);
+    check(preview.render(session, db).rgba == before.rgba, "pick must preserve label layer");
+    nba97_reorder_input(&session, NBA97_REORDER_DOWN);
+    nba97_reorder_input(&session, NBA97_REORDER_CANCEL);
+    check(preview.render(session, db).rgba == before.rgba, "cancel must preserve label layer");
+    nba97_reorder_first_callback(&session, 0x800);
+    nba97_reorder_input(&session, NBA97_REORDER_SELECT);
+    const auto swapped = preview.render(session, db);
+    check(swapped.rgba != before.rgba, "swap must refresh both label columns from working slots");
+    // Rows 2..5 and all pixels outside the first two glyph rows stay unchanged.
+    for (int y = 128; y < 240; ++y) for (int x = 0; x < 512 * 4; ++x)
+        check(swapped.rgba[y * 512 * 4 + x] == before.rgba[y * 512 * 4 + x], "unrelated label rows changed");
+    nba97_reorder_input(&session, NBA97_REORDER_CANCEL);
+    nba97_reorder_input(&session, NBA97_REORDER_DISCARD_YES);
+    check(preview.render(session, db).rgba == before.rgba, "discard must restore original glyph output");
+    writeLabels(before, "labels_before.ppm");
+    writeLabels(swapped, "labels_swapped.ppm");
+    bool rejected = false;
+    try { nba97::ReorderLabelPreview missing(asset_root / "missing-pack"); }
+    catch (const std::exception&) { rejected = true; }
+    check(rejected, "missing font pack cannot silently substitute a system font");
+    std::cout << "REORDER ASSET fonts/ZFONT0.PSH glyphs=156 transposed=47; database/roster.n97db; "
+                 "captures=.local/verification/reorder/labels_*.ppm; diagnostic-layer-only\n";
+    pass("selection_font_assets", "real local PSH glyphs + database; pick/cancel stable, swap refresh, discard restores, missing pack rejected");
+}
+
 void database(const std::string& path) {
     nba97::RosterDatabase db;
     db.load(path);
@@ -264,13 +348,16 @@ void database(const std::string& path) {
 void interactive(const std::string& path, int team_id) {
     nba97::RosterDatabase db;
     db.load(path);
+    nba97::ReorderLabelPreview preview(std::filesystem::path(path).parent_path().parent_path());
     if (team_id < 0 || team_id >= 29 || !db.team(static_cast<std::uint16_t>(team_id)))
         throw std::runtime_error("team must be 0..28");
     Nba97ReorderSession session{};
     nba97_reorder_begin(&session, db.team(static_cast<std::uint16_t>(team_id))->roster.data());
     std::cout << "REORDER CLI interaction harness; not original screen; no disk saves\n"
-                 "commands: up down select back continue yes no (EOF aborts without publishing)\n";
+                 "commands: up down select back continue yes no view compare (EOF aborts without publishing)\n"
+                 "label layer from local ZFONT0.PSH: .local/verification/reorder/cli_labels.ppm\n";
     while (session.phase != NBA97_REORDER_CLOSED) {
+        writeLabels(preview.render(session, db), "cli_labels.ppm");
         const int active = session.phase == NBA97_REORDER_REPLACEMENT ? 1 : 0;
         std::cout << "REORDER STATE phase=" << nba97_reorder_phase_name(session.phase)
                   << " source=" << static_cast<int>(session.cursor[0])
@@ -283,6 +370,13 @@ void interactive(const std::string& path, int team_id) {
         }
         std::string command;
         if (!std::getline(std::cin, command)) { std::cout << "REORDER ABORT no changes published\n"; return; }
+        if (session.phase == NBA97_REORDER_FIRST &&
+            (command == "select" || command == "view" || command == "compare")) {
+            const std::uint16_t mask = command == "select" ? 0x800 : command == "view" ? 0x10 : 0x40;
+            std::cout << "REORDER CALLBACK mask=" << mask << " event="
+                      << nba97_reorder_event_name(nba97_reorder_first_callback(&session, mask)) << '\n';
+            continue;
+        }
         Nba97ReorderAction action;
         if (command == "up") action = NBA97_REORDER_UP;
         else if (command == "down") action = NBA97_REORDER_DOWN;
@@ -309,7 +403,8 @@ int main(int argc, char** argv) {
             throw std::runtime_error("usage: nba97_reorder_tests [--database <local roster.n97db>]");
         core();
         selection();
-        if (argc == 3) database(argv[2]);
+        callbackMasks();
+        if (argc == 3) { database(argv[2]); fontAssets(argv[2]); }
         else std::cout << "REORDER SKIP database_invariants | local database not supplied\n";
         std::cout << "REORDER CORE PASS | UI/audio/persistence/original-trace comparison still pending\n";
         return 0;

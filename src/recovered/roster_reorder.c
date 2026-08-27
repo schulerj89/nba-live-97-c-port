@@ -118,6 +118,20 @@ Nba97ReorderEvent nba97_reorder_input(Nba97ReorderSession *session, Nba97Reorder
     return NBA97_REORDER_SWAPPED;
 }
 
+Nba97ReorderEvent nba97_reorder_first_callback(Nba97ReorderSession *session, uint16_t input_mask) {
+    if (!session || session->phase != NBA97_REORDER_FIRST) return NBA97_REORDER_NO_CHANGE;
+    /* FUN_800568E4 checks 0x10, then 0x40 before checking confirm. These
+     * return requests only: FUN_80054B94 availability and child dispatch are
+     * intentionally not counted as recovered by these comparisons. */
+    if (input_mask == 0x10) return NBA97_REORDER_REQUEST_VIEW;
+    if (input_mask == 0x40) return NBA97_REORDER_REQUEST_COMPARE;
+    if (input_mask == 0x800) return nba97_reorder_input(session, NBA97_REORDER_SELECT);
+    /* All other values, including combined masks, clear the original +0x1B
+     * input latch. Navigation and cancellation were handled by the caller. */
+    session->input_latch = 0;
+    return NBA97_REORDER_NO_CHANGE;
+}
+
 const char *nba97_reorder_phase_name(Nba97ReorderPhase phase) {
     switch (phase) {
     case NBA97_REORDER_FIRST: return "first-player";
@@ -139,6 +153,8 @@ const char *nba97_reorder_event_name(Nba97ReorderEvent event) {
     case NBA97_REORDER_RESUMED: return "resumed";
     case NBA97_REORDER_EXIT_DISCARDED: return "exit-discarded";
     case NBA97_REORDER_EXIT_ACCEPTED: return "exit-accepted";
+    case NBA97_REORDER_REQUEST_VIEW: return "request-view-child-pending";
+    case NBA97_REORDER_REQUEST_COMPARE: return "request-compare-child-pending";
     default: return "no-change";
     }
 }
