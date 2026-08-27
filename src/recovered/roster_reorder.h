@@ -66,6 +66,12 @@ Nba97ReorderEvent nba97_reorder_input(Nba97ReorderSession *session, Nba97Reorder
 /* First-list callback AFTER generic navigation/cancel processing. Exact values,
  * not bit tests. View/Compare return requests; their child screens are pending. */
 Nba97ReorderEvent nba97_reorder_first_callback(Nba97ReorderSession *session, uint16_t input_mask);
+/* Replacement callback AFTER generic input processing. Original object state
+ * 2 means a synthesized cancel-confirm; every other byte follows validation.
+ * In particular raw 0x100 here is NOT a cancel (the generic loop translates it).
+ * Child-screen requests still require a host consumer, which is pending. */
+Nba97ReorderEvent nba97_reorder_second_callback(Nba97ReorderSession *session,
+                                               uint16_t input_mask, uint8_t object_state);
 const char *nba97_reorder_phase_name(Nba97ReorderPhase phase);
 const char *nba97_reorder_event_name(Nba97ReorderEvent event);
 

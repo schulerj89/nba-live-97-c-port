@@ -5,8 +5,8 @@
 ## Current baseline
 
 - **1,769** functions and **465,368** code bytes discovered by headless Ghidra in the currently scoped original binaries.
-- **67** functions (3.79%) have explicit recomp/Ghidra/source evidence records.
-- Evidence records touch **40,164** original code bytes (8.63%). Partial records do not mean the whole function is complete.
+- **68** functions (3.84%) have explicit recomp/Ghidra/source evidence records.
+- Evidence records touch **40,380** original code bytes (8.68%). Partial records do not mean the whole function is complete.
 - **8** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
 - Native port: **48 catalogued milestones** — 25 marked verified, 8 partial, 15 not started. Not an overall completion score.
 - Playable basketball remains unimplemented.
@@ -35,7 +35,7 @@
 | menus | 5 | 6,256 | 3 |
 | movie | 2 | 916 | 1 |
 | profiles | 4 | 7,472 | 3 |
-| rosters | 17 | 5,496 | 17 |
+| rosters | 18 | 5,712 | 18 |
 | settings | 3 | 332 | 3 |
 | ui | 4 | 968 | 3 |
 

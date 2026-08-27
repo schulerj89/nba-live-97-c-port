@@ -229,6 +229,81 @@ void callbackMasks() {
     pass("first_callback_guards", "empty confirm; child requests unconsumed; wrong phase/null are inert");
 }
 
+void secondCallbackMasks() {
+    const auto original = synthetic();
+    struct GuardedSession {
+        std::uint64_t before = 0x12345678abcdef01ULL;
+        Nba97ReorderSession session{};
+        std::uint64_t after = 0xfedcba9876543210ULL;
+    } guarded;
+    auto& session = guarded.session;
+    for (std::uint8_t state : {1, 2}) for (unsigned mask = 0; mask <= UINT16_MAX; ++mask) {
+        nba97_reorder_begin(&session, original.data());
+        nba97_reorder_first_callback(&session, 0x800);
+        nba97_reorder_input(&session, NBA97_REORDER_DOWN);
+        session.input_latch = 7;
+        auto expected_slots = original;
+        auto expected = NBA97_REORDER_NO_CHANGE;
+        auto expected_phase = NBA97_REORDER_REPLACEMENT;
+        int expected_latch = 0, expected_changes = 0;
+        if (mask == 0x10 || mask == 0x40) {
+            expected = mask == 0x10 ? NBA97_REORDER_REQUEST_VIEW : NBA97_REORDER_REQUEST_COMPARE;
+            expected_latch = 7;
+        } else if (mask == 0x800) {
+            expected_phase = NBA97_REORDER_FIRST;
+            if (state == 2) {
+                expected = NBA97_REORDER_CANCELLED_PICK;
+                expected_latch = 10;
+            } else {
+                expected = NBA97_REORDER_SWAPPED;
+                expected_latch = 7;
+                expected_changes = 1;
+                std::swap(expected_slots[0], expected_slots[1]);
+            }
+        }
+        check(nba97_reorder_second_callback(&session, static_cast<std::uint16_t>(mask), state) == expected,
+            "second callback exact mask result");
+        check(session.phase == expected_phase && session.input_latch == expected_latch &&
+            session.changes == expected_changes && session.cursor[0] == 0 && session.cursor[1] == 1 &&
+            session.top[0] == 0 && session.top[1] == 0 && !session.accepted &&
+            std::equal(expected_slots.begin(), expected_slots.end(), session.slots) &&
+            std::equal(original.begin(), original.end(), session.original), "second callback state delta");
+        check(guarded.before == 0x12345678abcdef01ULL && guarded.after == 0xfedcba9876543210ULL,
+            "callback return must preserve surrounding caller data");
+    }
+    pass("second_callback_masks", "131072 normal/cancel mask cases; exact results, slots, cursors, latch and caller guards");
+
+    // State 2 alone bypasses validation. Check every original object-state byte.
+    for (unsigned state = 0; state <= UINT8_MAX; ++state) {
+        nba97_reorder_begin(&session, original.data());
+        nba97_reorder_first_callback(&session, 0x800);
+        nba97_reorder_input(&session, NBA97_REORDER_DOWN);
+        check(nba97_reorder_second_callback(&session, 0x800, static_cast<std::uint8_t>(state)) ==
+            (state == 2 ? NBA97_REORDER_CANCELLED_PICK : NBA97_REORDER_SWAPPED), "state-2-only bypass");
+    }
+    pass("second_callback_object_state", "all 256 state bytes; only 2 bypasses validation/mutation");
+
+    nba97_reorder_begin(&session, original.data());
+    nba97_reorder_first_callback(&session, 0x800);
+    check(nba97_reorder_second_callback(&session, 0x800, 1) == NBA97_REORDER_REJECTED_SAME &&
+        session.phase == NBA97_REORDER_REPLACEMENT && session.changes == 0, "same-player return");
+    session.slots[1] = UINT16_MAX;
+    nba97_reorder_input(&session, NBA97_REORDER_DOWN);
+    check(nba97_reorder_second_callback(&session, 0x800, 1) == NBA97_REORDER_REJECTED_EMPTY &&
+        session.phase == NBA97_REORDER_REPLACEMENT && session.changes == 0, "empty-player return");
+    check(nba97_reorder_second_callback(&session, 0x800, 2) == NBA97_REORDER_CANCELLED_PICK &&
+        session.phase == NBA97_REORDER_FIRST && session.slots[1] == UINT16_MAX &&
+        session.changes == 0 && session.input_latch == 10, "cancel bypasses even invalid pair");
+    for (auto phase : {NBA97_REORDER_FIRST, NBA97_REORDER_DISCARD_PROMPT, NBA97_REORDER_CLOSED}) {
+        session.phase = phase;
+        check(nba97_reorder_second_callback(&session, 0x800, 2) == NBA97_REORDER_NO_CHANGE &&
+            session.phase == phase && session.input_latch == 10 && session.changes == 0, "wrong-phase return");
+    }
+    check(nba97_reorder_second_callback(nullptr, 0x800, 1) == NBA97_REORDER_NO_CHANGE, "null return");
+    check(guarded.before == 0x12345678abcdef01ULL && guarded.after == 0xfedcba9876543210ULL, "guarded exit paths");
+    pass("second_callback_returns", "same/empty/cancel/invalid-phase/null returns; caller canaries intact, no accidental commit");
+}
+
 void writeLabels(const PshImage& image, const char* name) {
     const auto root = std::filesystem::path(".local/verification/reorder");
     std::filesystem::create_directories(root);
@@ -254,10 +329,13 @@ void fontAssets(const std::string& path) {
     nba97_reorder_first_callback(&session, 0x800);
     check(preview.render(session, db).rgba == before.rgba, "pick must preserve label layer");
     nba97_reorder_input(&session, NBA97_REORDER_DOWN);
-    nba97_reorder_input(&session, NBA97_REORDER_CANCEL);
+    check(nba97_reorder_second_callback(&session, 0x10, 1) == NBA97_REORDER_REQUEST_VIEW &&
+        nba97_reorder_second_callback(&session, 0x40, 1) == NBA97_REORDER_REQUEST_COMPARE &&
+        preview.render(session, db).rgba == before.rgba, "child requests must preserve asset-backed labels");
+    nba97_reorder_second_callback(&session, 0x800, 2);
     check(preview.render(session, db).rgba == before.rgba, "cancel must preserve label layer");
     nba97_reorder_first_callback(&session, 0x800);
-    nba97_reorder_input(&session, NBA97_REORDER_SELECT);
+    nba97_reorder_second_callback(&session, 0x800, 1);
     const auto swapped = preview.render(session, db);
     check(swapped.rgba != before.rgba, "swap must refresh both label columns from working slots");
     // Rows 2..5 and all pixels outside the first two glyph rows stay unchanged.
@@ -377,6 +455,15 @@ void interactive(const std::string& path, int team_id) {
                       << nba97_reorder_event_name(nba97_reorder_first_callback(&session, mask)) << '\n';
             continue;
         }
+        if (session.phase == NBA97_REORDER_REPLACEMENT &&
+            (command == "select" || command == "back" || command == "view" || command == "compare")) {
+            const std::uint16_t mask = command == "view" ? 0x10 : command == "compare" ? 0x40 : 0x800;
+            const std::uint8_t object_state = command == "back" ? 2 : 1;
+            std::cout << "REORDER SECOND-CALLBACK mask=" << mask << " object-state=" << static_cast<int>(object_state)
+                      << " event=" << nba97_reorder_event_name(
+                          nba97_reorder_second_callback(&session, mask, object_state)) << '\n';
+            continue;
+        }
         Nba97ReorderAction action;
         if (command == "up") action = NBA97_REORDER_UP;
         else if (command == "down") action = NBA97_REORDER_DOWN;
@@ -404,6 +491,7 @@ int main(int argc, char** argv) {
         core();
         selection();
         callbackMasks();
+        secondCallbackMasks();
         if (argc == 3) { database(argv[2]); fontAssets(argv[2]); }
         else std::cout << "REORDER SKIP database_invariants | local database not supplied\n";
         std::cout << "REORDER CORE PASS | UI/audio/persistence/original-trace comparison still pending\n";

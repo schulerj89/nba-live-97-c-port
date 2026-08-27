@@ -132,6 +132,28 @@ Nba97ReorderEvent nba97_reorder_first_callback(Nba97ReorderSession *session, uin
     return NBA97_REORDER_NO_CHANGE;
 }
 
+Nba97ReorderEvent nba97_reorder_second_callback(Nba97ReorderSession *session,
+                                               uint16_t input_mask, uint8_t object_state) {
+    /* FUN_800569BC/800569E4: typed arguments replace input/context loads and
+     * the native C frame replaces saved MIPS registers. No emulated stack. */
+    if (!session || session->phase != NBA97_REORDER_REPLACEMENT)
+        return NBA97_REORDER_NO_CHANGE;
+    if (input_mask == 0x10) return NBA97_REORDER_REQUEST_VIEW;
+    if (input_mask == 0x40) return NBA97_REORDER_REQUEST_COMPARE;
+    /* 800569F8/80056A0C/80056A14/80056A1C: exact confirm and preservation
+     * checks; only non-View/Compare/confirm callback values clear +0x1B. */
+    if (input_mask != 0x800) {
+        session->input_latch = 0;
+        return NBA97_REORDER_NO_CHANGE;
+    }
+    /* 80056A24 already accounted: generic cancel state 2 skips mutation.
+     * The remaining visual refresh/finish calls are still unimplemented.
+     * 80056A7C is represented by ordinary C return to the caller on all paths,
+     * without leaking frame/register state or overwriting unrelated data. */
+    return nba97_reorder_input(session,
+        object_state == 2 ? NBA97_REORDER_CANCEL : NBA97_REORDER_SELECT);
+}
+
 const char *nba97_reorder_phase_name(Nba97ReorderPhase phase) {
     switch (phase) {
     case NBA97_REORDER_FIRST: return "first-player";

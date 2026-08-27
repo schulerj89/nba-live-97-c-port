@@ -37,7 +37,7 @@ pwsh -File scripts/verify_reorder_rosters.ps1 -RequireDatabase
 ```
 
 The command builds the application and standalone C/C++ test executable, checks
-the ledger, then runs 19 asset-free scenarios plus three optional local-asset
+the ledger, then runs 22 asset-free scenarios plus three optional local-asset
 scenarios. CLI output includes scenario names, original function addresses and
 per-team test counts. It writes only ignored logs/evidence under `.local/`.
 No interactive app or emulator is controlled, and no save is modified.
@@ -151,6 +151,39 @@ pixels on discard. Missing packs fail. It writes before/after PPM captures under
 `.local/verification/reorder/`; the CLI writes `cli_labels.ppm` while interacting.
 Local run evidence records font/database hashes as well as source/executable
 hashes. No original glyph pixels, player data or captures are committed.
+
+## 30-instruction replacement-callback increment
+
+The replacement stage now consumes the original callback inputs through
+`nba97_reorder_second_callback`, including the generic loop's object-state byte.
+CLI `select`, `back`, `view`, and `compare` use this callback while choosing a
+replacement. `back` supplies confirm mask `0x800` and state `2`; it does not send
+the untranslated cancel mask to a callback that expects generic handling first.
+
+| Added block | Instructions | Native representation |
+|---|---:|---|
+| `0x800569BC` | 10 | Context/input arguments, native frame, View check |
+| `0x800569E4` | 3 | Compare check |
+| `0x800569F8` | 5 | Exact confirm check |
+| `0x80056A0C` | 2 | Preserve latch for View |
+| `0x80056A14` | 2 | Preserve latch for Compare |
+| `0x80056A1C` | 2 | Clear latch for other callback values |
+| `0x80056A7C` | 6 | Native compiler-managed return/frame restoration |
+
+This is 24 dispatch instructions plus 6 native ABI replacements, not 30 newly
+visible gameplay operations. The return tests check results and surrounding
+caller data; they do not assert matching MIPS registers or machine code.
+The state-2 bypass and validation-failure latch were already credited and are
+not counted twice. No additional credit goes to the five unresolved blocks:
+`0x800569F0` (2), `0x80056A34` (6), `0x80056A4C` (4), `0x80056A5C` (3), and
+`0x80056A68` (4). These include child dispatch, shared validation, row refresh,
+and finish-selection animation.
+
+Tests cover all 65,536 masks in both normal and synthesized-cancel states
+(131,072 exact-state cases), all 256 object-state bytes, empty/same-player
+returns, null/wrong-phase guards and caller canaries. The local PSH label test
+now also goes through this replacement callback for View/Compare requests,
+cancel and swap; it still checks real pack-backed glyph pixels and no disk save.
 
 Next: original two-list screen/assets and menu entry, consuming this same C
 controller. Keep row refresh, animations, View/Compare dispatch, sound, modal

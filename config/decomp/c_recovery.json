@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x800569BC",
+      "original_name": "Rosters_SecondSelectionInput",
+      "symbol": "nba97_reorder_second_callback",
+      "source": "src/recovered/roster_reorder.c",
+      "scope": "fragment",
+      "match_eligible": false,
+      "native_test": "nba97_reorder_tests second_callback_masks/second_callback_object_state/second_callback_returns"
+    },
+    {
+      "binary": "feonly",
       "address": "0x800568E4",
       "original_name": "Rosters_FirstSelectionInput",
       "symbol": "nba97_reorder_first_callback",
