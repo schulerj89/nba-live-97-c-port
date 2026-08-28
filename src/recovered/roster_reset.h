@@ -5,8 +5,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* 57C48 + 58104. Caller chooses working table (states 7/27 use +124,
- * normal frontend uses +1196). No filesystem/session dirty flag involved. */
+/* 58104: states 7/27 compare the inline context table (+124); every other
+ * signed frontend state compares the ordinary table (pointer at+1196).
+ * The caller borrows both tables; no session/save dirty flag is involved.
+ * Null chosen/default tables return false as an extra native safety guard. */
+int nba97_reset_table_differs(int16_t frontend_state, const uint16_t *normal,
+                             const uint16_t *context, const uint16_t *defaults);
+/* 57C48: special-active AND signed kind1 disables the card. This existing
+ * normal-frontend convenience API does not claim season-mode integration. */
 int nba97_reset_enabled(const uint16_t *working, const uint16_t *defaults,
                         uint8_t special_active, int8_t special_kind);
 typedef struct Nba97ResetPrompt {

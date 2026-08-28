@@ -20,6 +20,34 @@ int main(int argc,char** argv) {
         }
         check(!nba97_reset_enabled(nullptr,base.data(),0,0),"null table enabled");
         std::cout<<"RESET PASS all535 slot differences; exact two-byte special gate; restored defaults locked\n";
+        // 58104 picks a table by signed frontend state, not by whether a save
+        // exists. Test all states with opposite normal/context differences.
+        auto context=base;
+        work[534]^=1;
+        for(int state=-32768;state<=32767;++state) {
+            const bool special=state==7 || state==27;
+            check(nba97_reset_table_differs(static_cast<std::int16_t>(state),work.data(),context.data(),base.data())==int(!special),
+                  "normal/context source selection");
+            check(nba97_reset_table_differs(static_cast<std::int16_t>(state),context.data(),work.data(),base.data())==int(special),
+                  "inverse normal/context source selection");
+        }
+        for(unsigned active=0;active<256;++active) for(int kind=-128;kind<128;++kind)
+            check(nba97_reset_enabled(work.data(),base.data(),static_cast<std::uint8_t>(active),static_cast<std::int8_t>(kind))==
+                  int(!(active && kind==1)),"exact special byte gate");
+        std::cout<<"RESET PASS eligibility_all_byte_pairs\n";
+        std::cout<<"RESET PASS comparison_all_signed_states\n";
+        for(auto state:{0,7,27,-1}) for(unsigned slot=0;slot<535;++slot) {
+            context=base;context[slot]^=1;
+            check(nba97_reset_table_differs(static_cast<std::int16_t>(state),context.data(),context.data(),base.data())==1,
+                  "comparison missed slot");
+        }
+        check(!nba97_reset_table_differs(0,nullptr,work.data(),base.data()),"normal null guard");
+        check(!nba97_reset_table_differs(7,work.data(),nullptr,base.data()),"context null guard");
+        check(!nba97_reset_table_differs(27,work.data(),work.data(),nullptr),"default null guard");
+        check(nba97_reset_table_differs(0,work.data(),nullptr,base.data())==1,"unused context pointer required");
+        check(nba97_reset_table_differs(7,nullptr,work.data(),base.data())==1,"unused normal pointer required");
+        check(!nba97_reset_table_differs(27,work.data(),base.data(),base.data()),"equal contextual table");
+        std::cout<<"RESET PASS comparison_all_slots_and_null_guards\n";
         for(int pref=0;pref<2;++pref) {
             Nba97ResetPrompt p{};
             check(nba97_reset_open(&p,{121,75,270,110},0x800,pref)==NBA97_RESET_OPEN,"open");

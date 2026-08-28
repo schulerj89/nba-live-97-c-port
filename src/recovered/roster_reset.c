@@ -1,12 +1,18 @@
 #include "roster_reset.h"
 #include <string.h>
 
-int nba97_reset_enabled(const uint16_t *working, const uint16_t *defaults,
-                        uint8_t special_active, int8_t special_kind) {
+int nba97_reset_table_differs(int16_t frontend_state, const uint16_t *normal,
+                             const uint16_t *context, const uint16_t *defaults) {
+    const uint16_t *working=(frontend_state==7 || frontend_state==27) ? context : normal;
     unsigned i;
-    if (!working || !defaults || (special_active && special_kind == 1)) return 0;
+    if (!working || !defaults) return 0;
     for (i=0;i<535;++i) if (working[i]!=defaults[i]) return 1;
     return 0;
+}
+int nba97_reset_enabled(const uint16_t *working, const uint16_t *defaults,
+                        uint8_t special_active, int8_t special_kind) {
+    if (special_active && special_kind == 1) return 0;
+    return nba97_reset_table_differs(0,working,0,defaults);
 }
 int nba97_reset_open(Nba97ResetPrompt *p, Nba97HelpRect rect, uint16_t held, int preference) {
     if (!p || nba97_help_open(&p->modal,rect,held)!=NBA97_HELP_OPEN_SOUND) return 0;

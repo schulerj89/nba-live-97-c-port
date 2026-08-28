@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "scope": "Reset: five bounded owners, not transitive shared engine or overall fidelity",
+  "instruction_total": 237,
+  "source": "src/recovered/roster_reset.c",
+  "test_source": "tests/roster_reset_test.cpp",
+  "core_tests": [
+    "eligibility_all_byte_pairs",
+    "comparison_all_signed_states",
+    "comparison_all_slots_and_null_guards"
+  ],
+  "functions": [
+    {
+      "address": "0x80057864",
+      "name": "Restore default roster slots",
+      "size_bytes": 252,
+      "instruction_count": 63,
+      "symbol": null,
+      "blocks": [
+        {
+          "end": "0x80057897",
+          "instruction_count": 13,
+          "start": "0x80057864",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x800578CF",
+          "instruction_count": 14,
+          "start": "0x80057898",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x800578F7",
+          "instruction_count": 10,
+          "start": "0x800578D0",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x8005792F",
+          "instruction_count": 14,
+          "start": "0x800578F8",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x8005795F",
+          "instruction_count": 12,
+          "start": "0x80057930",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        }
+      ]
+    },
+    {
+      "address": "0x80057960",
+      "name": "Reset card callback and overflow decision",
+      "size_bytes": 264,
+      "instruction_count": 66,
+      "symbol": null,
+      "blocks": [
+        {
+          "end": "0x80057983",
+          "instruction_count": 9,
+          "start": "0x80057960",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057993",
+          "instruction_count": 4,
+          "start": "0x80057984",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x800579BB",
+          "instruction_count": 10,
+          "start": "0x80057994",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x800579F7",
+          "instruction_count": 15,
+          "start": "0x800579BC",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057A13",
+          "instruction_count": 7,
+          "start": "0x800579F8",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057A23",
+          "instruction_count": 4,
+          "start": "0x80057A14",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057A33",
+          "instruction_count": 4,
+          "start": "0x80057A24",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057A4B",
+          "instruction_count": 6,
+          "start": "0x80057A34",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80057A67",
+          "instruction_count": 7,
+          "start": "0x80057A4C",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        }
+      ]
+    },
+    {
+      "address": "0x80057C48",
+      "name": "Reset availability gate",
+      "size_bytes": 80,
+      "instruction_count": 20,
+      "symbol": "nba97_reset_enabled",
+      "blocks": [
+        {
+          "end": "0x80057C67",
+          "instruction_count": 8,
+          "start": "0x80057C48",
+          "accounted": true,
+          "behavior": "Exact active-byte/signed-kind1 gate; delegate default comparison; native ABI replaces stack/register bookkeeping.",
+          "tests": [
+            "eligibility_all_byte_pairs"
+          ]
+        },
+        {
+          "end": "0x80057C77",
+          "instruction_count": 4,
+          "start": "0x80057C68",
+          "accounted": true,
+          "behavior": "Exact active-byte/signed-kind1 gate; delegate default comparison; native ABI replaces stack/register bookkeeping.",
+          "tests": [
+            "eligibility_all_byte_pairs"
+          ]
+        },
+        {
+          "end": "0x80057C87",
+          "instruction_count": 4,
+          "start": "0x80057C78",
+          "accounted": true,
+          "behavior": "Exact active-byte/signed-kind1 gate; delegate default comparison; native ABI replaces stack/register bookkeeping.",
+          "tests": [
+            "eligibility_all_byte_pairs"
+          ]
+        },
+        {
+          "end": "0x80057C97",
+          "instruction_count": 4,
+          "start": "0x80057C88",
+          "accounted": true,
+          "behavior": "Exact active-byte/signed-kind1 gate; delegate default comparison; native ABI replaces stack/register bookkeeping.",
+          "tests": [
+            "eligibility_all_byte_pairs"
+          ]
+        }
+      ]
+    },
+    {
+      "address": "0x80058104",
+      "name": "Context-aware default comparison",
+      "size_bytes": 128,
+      "instruction_count": 32,
+      "symbol": "nba97_reset_table_differs",
+      "blocks": [
+        {
+          "end": "0x80058127",
+          "instruction_count": 9,
+          "start": "0x80058104",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x8005812F",
+          "instruction_count": 2,
+          "start": "0x80058128",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x80058137",
+          "instruction_count": 2,
+          "start": "0x80058130",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x8005813F",
+          "instruction_count": 2,
+          "start": "0x80058138",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x80058143",
+          "instruction_count": 1,
+          "start": "0x80058140",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x80058147",
+          "instruction_count": 1,
+          "start": "0x80058144",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x8005815B",
+          "instruction_count": 5,
+          "start": "0x80058148",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x80058177",
+          "instruction_count": 7,
+          "start": "0x8005815C",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x8005817B",
+          "instruction_count": 1,
+          "start": "0x80058178",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        },
+        {
+          "end": "0x80058183",
+          "instruction_count": 2,
+          "start": "0x8005817C",
+          "accounted": true,
+          "behavior": "Signed states7/27 choose context table, all other states choose normal table; compare535 halfwords with early difference return. Null guards are uncredited native safety.",
+          "tests": [
+            "comparison_all_signed_states",
+            "comparison_all_slots_and_null_guards"
+          ]
+        }
+      ]
+    },
+    {
+      "address": "0x800582C4",
+      "name": "Reconcile created players into free agents",
+      "size_bytes": 224,
+      "instruction_count": 56,
+      "symbol": null,
+      "blocks": [
+        {
+          "end": "0x800582F7",
+          "instruction_count": 13,
+          "start": "0x800582C4",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x8005833B",
+          "instruction_count": 17,
+          "start": "0x800582F8",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80058363",
+          "instruction_count": 10,
+          "start": "0x8005833C",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x8005836B",
+          "instruction_count": 2,
+          "start": "0x80058364",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80058377",
+          "instruction_count": 3,
+          "start": "0x8005836C",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x80058387",
+          "instruction_count": 4,
+          "start": "0x80058378",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        },
+        {
+          "end": "0x800583A3",
+          "instruction_count": 7,
+          "start": "0x80058388",
+          "accounted": false,
+          "behavior": "Pending detailed native contract review; existing normal-roster implementation is not automatic instruction credit.",
+          "tests": []
+        }
+      ]
+    }
+  ],
+  "shared_dependencies": [
+    {
+      "address": "0x8004AEBC",
+      "instruction_count": 24,
+      "counted_in_scope": false
+    },
+    {
+      "address": "0x80054CBC",
+      "instruction_count": 62,
+      "counted_in_scope": false
+    },
+    {
+      "address": "0x8005770C",
+      "instruction_count": 65,
+      "counted_in_scope": false
+    },
+    {
+      "address": "0x8005DB34",
+      "instruction_count": 369,
+      "counted_in_scope": false
+    }
+  ],
+  "limitations": [
+    "52/237 reviewed source-contract instructions is not a functional completion percentage, binary match or visual-fidelity score.",
+    "Normal-roster Reset confirmation, durable default restore, cancel/failure/retry/restart/relock already have isolated host coverage. Source accounting for callback/restore remains pending.",
+    "States7/27 table selection is tested at the C API only; the native frontend does not implement career/season context routing.",
+    "Created-player reconciliation and overflow dialog remain unwired until created-player data/runtime support exists; do not erase created records or pretend default-only reset covers that path.",
+    "Shared confirmation, flashes, pointer rebuilding, ownership/counts, ranking, allocator and save functions are excluded from this bounded denominator. Help-style shading, original transition cadence and audio waveforms remain separate."
+  ]
+}

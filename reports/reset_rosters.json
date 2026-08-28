@@ -1,0 +1,51 @@
+{
+  "scope": "Reset: five bounded owners, not transitive shared engine or overall fidelity",
+  "total": 237,
+  "accounted": 52,
+  "pending": 185,
+  "functions": [
+    {
+      "address": "0x80057864",
+      "name": "Restore default roster slots",
+      "total": 63,
+      "accounted": 0,
+      "pending": 63
+    },
+    {
+      "address": "0x80057960",
+      "name": "Reset card callback and overflow decision",
+      "total": 66,
+      "accounted": 0,
+      "pending": 66
+    },
+    {
+      "address": "0x80057C48",
+      "name": "Reset availability gate",
+      "total": 20,
+      "accounted": 20,
+      "pending": 0
+    },
+    {
+      "address": "0x80058104",
+      "name": "Context-aware default comparison",
+      "total": 32,
+      "accounted": 32,
+      "pending": 0
+    },
+    {
+      "address": "0x800582C4",
+      "name": "Reconcile created players into free agents",
+      "total": 56,
+      "accounted": 0,
+      "pending": 56
+    }
+  ],
+  "static_report_executes_tests": false,
+  "limitations": [
+    "52/237 reviewed source-contract instructions is not a functional completion percentage, binary match or visual-fidelity score.",
+    "Normal-roster Reset confirmation, durable default restore, cancel/failure/retry/restart/relock already have isolated host coverage. Source accounting for callback/restore remains pending.",
+    "States7/27 table selection is tested at the C API only; the native frontend does not implement career/season context routing.",
+    "Created-player reconciliation and overflow dialog remain unwired until created-player data/runtime support exists; do not erase created records or pretend default-only reset covers that path.",
+    "Shared confirmation, flashes, pointer rebuilding, ownership/counts, ranking, allocator and save functions are excluded from this bounded denominator. Help-style shading, original transition cadence and audio waveforms remain separate."
+  ]
+}

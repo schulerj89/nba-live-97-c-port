@@ -30,6 +30,10 @@ jobs:
         run: python -m unittest discover -s tools -p test_sign_free_agent.py
       - name: Verify Release accounting and private extraction with synthetic fixtures
         run: python -m unittest discover -s tools -p 'test_release_*.py'
+      - name: Verify bounded Reset ledger regression tests
+        run: python -m unittest discover -s tools -p test_reset_rosters.py
+      - name: Test Release-to-Reset evidence validation without game assets
+        run: python -m unittest discover -s tools -p test_reset_release_host.py
       - name: Verify reference comparator with synthetic media only
         run: |
           python -m pip install Pillow==10.4.0
@@ -91,6 +95,8 @@ jobs:
         run: ./build-core/nba97_roster_save_store_tests
       - name: Verify Reset eligibility and confirmation lifecycle
         run: ./build-core/nba97_roster_reset_tests
+      - name: Verify bounded Reset instruction accounting
+        run: python tools/verify_reset_rosters.py --check --native-test build-core/nba97_roster_reset_tests
       - name: Verify Reset extractor with synthetic descriptors
         run: python -m unittest discover -s tools -p test_roster_reset.py
       - name: Verify Player warning modal and private-data extractor without assets

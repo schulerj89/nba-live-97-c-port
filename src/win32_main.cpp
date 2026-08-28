@@ -2020,6 +2020,7 @@ private:
 
     int verifyReorderSave() {
         const auto& scenario=options_.verify_reorder_save;
+        if(scenario=="release-seed" || scenario=="release-probe") return verifyReleaseResetSetup();
         if(scenario.rfind("reset-",0)==0) return verifyRosterReset();
         if(scenario!="save" && scenario!="reload" && scenario!="cancel" && scenario!="failure" &&
            scenario!="blocked" && scenario!="repair" && scenario!="noop" && scenario!="postcommit" &&
@@ -2122,6 +2123,80 @@ private:
         return 0;
     }
 
+    // Small Release -> Reset fixture, deliberately separate from the long
+    // editor/child-flow capture. No direct slot mutation or commit shortcut:
+    // release uses the real C/Enter handlers; subsequent processes drive Reset.
+    int verifyReleaseResetSetup() {
+        const bool release=options_.verify_reorder_save=="release-seed";
+        auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        require(roster_store_!=nullptr,"Release/Reset requires isolated save store");
+        const auto before=roster_database_.slotTable();
+        const auto generation=roster_store_->accepted().generation;
+        const auto original=roster_database_.originalSlots();
+        const auto player=original[45]; // Chicago's original first slot, not a hardcoded player ID.
+        require(player!=UINT16_MAX,"Release/Reset fixture has no original starter");
+        if(release) require(before==original && generation==0,"Release seed must start from fresh defaults");
+        beginFrontendTransition(nba97::FrontendPage::Rosters,"isolated Release/Reset setup");
+        frontend_transition_active_=false;
+        release_team_=3;
+        bottom_menu_.setSelected(2);
+        require(bottom_menu_.selected()==2,"Release setup card disabled");
+        handleMenuKey(VK_SPACE); // Native card-menu binding; editor C remains Release.
+        require(bottom_select_pending_,"Release setup missing card selection");
+        bottom_select_pending_=false;completeRecoveredBottomSelection();
+        require(isRelease(),"Release setup did not enter editor");
+        auto settle=[&] {
+            for(int i=0;i<50 && isRelease();++i) {
+                menu_elapsed_ms_+=17;nba97_trade_frame(&trade_screen_,0);
+                nba97_reorder_child_input_ready(&reorder_child_,0);
+                if(trade_choice_address_) tradeChoiceEvent(nba97_reset_tick(&trade_choice_,0));
+                else stepReorderHelp(0,true);
+                if(!isRelease())break;
+                nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
+                advanceComparePalette();if(compare_refresh_.remaining)advanceCompareRefresh();
+                if(compare_repeat_.post_frames)--compare_repeat_.post_frames;
+            }
+            frontend_transition_active_=false;
+        };
+        auto capture=[&](const char* name) {
+            settle();updatePlayerPhoto(true);
+            writePpm(isRelease()?renderTrade():renderBottomMenu(),
+                options_.reorder_save_capture_dir/(std::string(name)+".ppm"));
+            trace_.log("RESET-RELEASE-CHECKPOINT",name);
+        };
+        capture("entry");
+        if(release) {
+            const auto pool_count=roster_database_.freeAgentCount();
+            const auto team_count=trade_screen_.counts[3];
+            require(trade_screen_.selected[0]==player,"Release seed selected wrong starter");
+            handleTradeKey('C');capture("released-draft");
+            require(!reorder_notice_ && nba97_trade_dirty(&trade_screen_) &&
+                trade_screen_.counts[3]==team_count-1 && trade_screen_.counts[29]==pool_count+1 &&
+                trade_screen_.working[435+pool_count]==player && roster_database_.slotTable()==before &&
+                roster_store_->accepted().generation==generation,"Release seed draft isolation/counts failed");
+            handleTradeKey(VK_RETURN);capture("accepted");
+            require(frontend_page_==nba97::FrontendPage::Rosters &&
+                roster_database_.rosterOwner(player)==29 && roster_store_->accepted().generation==generation+1 &&
+                bottom_menu_.enabled(3),"Release seed accept/ownership/Reset availability failed");
+        } else {
+            require(roster_database_.slotTable()==roster_store_->accepted().slots,"Release probe reload mismatch");
+            handleTradeKey('X');capture("returned");
+            require(frontend_page_==nba97::FrontendPage::Rosters && roster_database_.slotTable()==before &&
+                roster_store_->accepted().generation==generation,"Release probe mutated accepted data");
+        }
+        trace_.log("RESET-RELEASE-CHECK","player="+std::to_string(player)+
+            "; owner="+std::to_string(roster_database_.rosterOwner(player))+
+            "; pool-count="+std::to_string(roster_database_.freeAgentCount())+
+            "; reset-enabled="+std::to_string(bottom_menu_.enabled(3)));
+        const auto final=roster_database_.slotTable();
+        trace_.log("REORDER-SAVE-VERIFY",options_.verify_reorder_save+" PASS; generation="+
+            std::to_string(roster_store_->accepted().generation)+
+            "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
+            "; team=3; first="+std::to_string(final[45])+"; second="+std::to_string(final[46])+
+            "; Release host handlers; isolated fixture; no original timing parity claim");
+        return 0;
+    }
+
     int verifyRosterReset() {
         const auto& scenario=options_.verify_reorder_save;
         if(scenario!="reset-cancel" && scenario!="reset-confirm" && scenario!="reset-failure" &&
@@ -2183,7 +2258,8 @@ private:
             tickReset(0);
             if(scenario=="reset-cancel") {
                 if(bottom_select_pending_ || roster_database_.slotTable()!=before ||
-                   roster_store_->accepted().generation!=generation) throw std::runtime_error("Cancel mutated accepted roster");
+                   roster_store_->accepted().generation!=generation || bottom_menu_.selected()!=3 ||
+                   !bottom_menu_.enabled(3)) throw std::runtime_error("Cancel mutated roster or lost Reset focus/availability");
             } else {
                 if(!bottom_select_pending_) throw std::runtime_error("confirmed Reset missing card flash");
                 capture("flash");
@@ -2193,8 +2269,8 @@ private:
                        roster_store_->accepted().generation!=generation || !bottom_menu_.enabled(3))
                         throw std::runtime_error("failed Reset lost accepted roster or eligibility");
                 } else if(roster_database_.differsFromOriginal() || bottom_menu_.enabled(3) ||
-                          roster_store_->accepted().generation!=generation+1)
-                    throw std::runtime_error("Reset failed to persist defaults/relock");
+                          roster_store_->accepted().generation!=generation+1 || bottom_menu_.selected()!=4)
+                    throw std::runtime_error("Reset failed to persist defaults/relock/focus View Rosters");
                 if(scenario=="reset-postcommit" && (!injected || !reset_notice_))
                     throw std::runtime_error("Reset committed-warning not shown");
                 if(reset_notice_) {
@@ -2212,6 +2288,7 @@ private:
             std::to_string(roster_store_ ? roster_store_->accepted().generation:0)+
             "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
             "; team=3; first="+std::to_string(final[45])+"; second="+std::to_string(final[46])+
+            "; selected="+std::to_string(bottom_menu_.selected())+
             "; actual Reset host handlers; no original fidelity score");
         return 0;
     }
