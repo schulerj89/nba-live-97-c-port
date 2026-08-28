@@ -336,6 +336,17 @@ int main(int argc,char** argv) {
     try {
         if(argc>2) throw std::runtime_error("usage: nba97_reorder_child_tests [private roster.n97db]");
         core();
+        {
+            nba97::RecoveredBottomMenu menu;menu.open(nba97::FrontendPage::Rosters);
+            menu.setSelected(2);menu.setReleaseAvailable(false);
+            check(!menu.enabled(2) && menu.selected()==4,"disabled Release falls back to View");
+            menu.setSelected(1);
+            check(!menu.move(1,0) && menu.selected()==1,"navigation skips disabled Release and Reset");
+            check(!menu.hover(270,100) && menu.selected()==1,"disabled Release cannot be hovered");
+            menu.setReleaseAvailable(true);
+            check(menu.move(1,0) && menu.selected()==2 && menu.enabled(2),"Release re-enables after vacancy");
+            pass("release_card_availability_navigation");
+        }
         Fixture fixture; viewTeamScan(fixture.path); catalogueAndView(fixture.path,"synthetic_");
         if(argc==2) catalogueAndView(argv[1],"private_");
         std::cout<<"CHILD SUMMARY View round trips; Compare draft/controller/return tested; UI covered separately by host captures; disk writes=none\n";

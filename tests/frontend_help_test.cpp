@@ -44,6 +44,11 @@ void packTests() {
         check(rejected,"malformed pack accepted");
     };
     auto b=bytes; b[4]=2; bad(b);
+    auto release=bytes;release.erase(release.begin()+33,release.begin()+58);release[6]=3;release[8]=17;
+    nba97::FrontendHelpPack releasePack(release);
+    check(releasePack.descriptor(17,0).rect.width==270,"Release single-stage Help accepted");
+    b=release;b[9]=1;bad(b);
+    b=release;b[8]=14;bad(b);
     b=bytes; b[6]=5; bad(b);
     b=bytes; b.push_back(0); bad(b);
     b=bytes; b.resize(16385); bad(b);

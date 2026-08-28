@@ -4,8 +4,8 @@
 #include <stdexcept>
 namespace {
 void check(bool ok){if(!ok)throw std::runtime_error("Trade pack test failed");}
-std::vector<uint8_t> fixture(bool sign=false) {
-    std::vector<uint8_t> out{'N','9','7','T',1,0,uint8_t(sign?25:21),0};
+std::vector<uint8_t> fixture(bool sign=false,bool release=false) {
+    std::vector<uint8_t> out{'N','9','7','T',1,0,uint8_t(sign||release?25:21),0};
     auto word=[&](uint32_t v){for(int i=0;i<4;++i)out.push_back(uint8_t(v>>(8*i)));};
     auto record=[&](uint32_t a,const std::vector<uint8_t>& b){word(a);word(uint32_t(b.size()));out.insert(out.end(),b.begin(),b.end());};
     for(auto a:{0x8002655Cu,0x80026574u,0x80026588u,0x8002659Cu,0x80026508u,0x8002650Cu,
@@ -17,9 +17,10 @@ std::vector<uint8_t> fixture(bool sign=false) {
         std::vector<uint8_t> b{121,0,70,0,14,1,100,1,1,choices,1,'%','s',0};
         for(int i=0;i<choices;++i)b.insert(b.end(),{1,'o','k',0});record(a,b);
     }
-    if(sign) {
+    if(sign||release) {
         record(0x8009D83A,{'f','r','e','e',0});
-        for(auto a:{0x800AED20u,0x800AEC72u,0x800AED88u})
+        for(auto a:release?std::vector<uint32_t>{0x800AEB54u,0x800AEBEAu,0x800AEC1Eu}:
+                           std::vector<uint32_t>{0x800AED20u,0x800AEC72u,0x800AED88u})
             record(a,{121,0,70,0,14,1,100,1,1,0,1,'%','s',0});
     }
     record(0x800265AC,std::vector<uint8_t>(25,0));return out;
@@ -46,5 +47,17 @@ int main(){try{
     for(size_t n=0;n<sign.size();++n)reject({sign.begin(),sign.begin()+n});
     b=sign;b[6]=21;reject(b);b=valid;b[6]=25;reject(b);
     std::cout<<"SIGN-ASSET PASS required_routes_substitution_truncation_and_screen_counts\n";
+    const auto release=fixture(false,true);nba97::TradeAssets releaseAssets(release);
+    for(auto a:{0x800AEB54u,0x800AEBEAu,0x800AEC1Eu})
+        check(releaseAssets.notice(a,"donor").state==17);
+    for(size_t n=0;n<release.size();++n)reject({release.begin(),release.begin()+n});
+    b=release;
+    for(size_t i=8;i+8<b.size();) {
+        uint32_t a=0,n=0;for(int j=0;j<4;++j){a|=uint32_t(b[i+j])<<(8*j);n|=uint32_t(b[i+4+j])<<(8*j);}
+        if(a==0x800AEB54) {const uint32_t wrong=0x800AED20;for(int j=0;j<4;++j)b[i+j]=uint8_t(wrong>>(8*j));break;}
+        i+=8+n;
+    }
+    reject(b);
+    std::cout<<"RELEASE-ASSET PASS screen_routes_truncation_mixed_pack_rejection\n";
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

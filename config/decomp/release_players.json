@@ -1,0 +1,461 @@
+{
+  "schema_version": 1,
+  "scope": "Release Players: four directly owned bodies only; not shared engine instructions or whole-feature fidelity",
+  "instruction_total": 208,
+  "source": "src/recovered/roster_release.c",
+  "test_source": "tests/roster_release_test.cpp",
+  "core_tests": [
+    "entry_all_100_vacancy_positions",
+    "entry_first_sentinel_not_count",
+    "entry_native_bounds_guards",
+    "availability_modes_restrictions_3584_cases",
+    "availability_all_halfword_values",
+    "availability_last_slot_only_and_guards",
+    "constructor_100_positions_kinds_callbacks_snapshot",
+    "single_stage_navigation_empty_notices_signed_exits",
+    "constructor_mode_context_and_invalid_inputs",
+    "release_8400_mutations_population_and_scroll_matrix",
+    "refusal_precedence_and_full_pool_one_past_guard",
+    "injury_matrix_exact_minimum_and_provider_guards",
+    "view_compare_returns_rebase_undo_without_adoption",
+    "dirty_accept_keep_discard_transactions",
+    "compare_retained_then_reopen_discard_only_new_release"
+  ],
+  "functions": [
+    {
+      "address": "0x80056FF4",
+      "size_bytes": 144,
+      "instruction_count": 36,
+      "blocks": [
+        {
+          "end": "0x80057027",
+          "instruction_count": 13,
+          "start": "0x80056FF4",
+          "accounted": true,
+          "behavior": "Read receiver cursor/top and branch on cursor-top >=4; native relative IDs preserve subtraction.",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x8005702F",
+          "instruction_count": 2,
+          "start": "0x80057028",
+          "accounted": true,
+          "behavior": "Skip scroll at absolute top109 (relative94).",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x8005705B",
+          "instruction_count": 11,
+          "start": "0x80057030",
+          "accounted": true,
+          "behavior": "Temporarily address right bottom row, down-scroll by one, nine-tick continuation, restore receiver before increment. Pixel interpolation remains separate.",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x80057083",
+          "instruction_count": 10,
+          "start": "0x8005705C",
+          "accounted": true,
+          "behavior": "Increment receiver even99->100; native sentinel bounds protect storage; native ABI replaces return mechanics.",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        }
+      ],
+      "name": "Advance free-agent cursor and conditional scroll",
+      "symbol": "nba97_release_advance"
+    },
+    {
+      "address": "0x80057084",
+      "size_bytes": 408,
+      "instruction_count": 102,
+      "blocks": [
+        {
+          "end": "0x8005709B",
+          "instruction_count": 6,
+          "start": "0x80057084",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570A7",
+          "instruction_count": 3,
+          "start": "0x8005709C",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570AF",
+          "instruction_count": 2,
+          "start": "0x800570A8",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570C3",
+          "instruction_count": 5,
+          "start": "0x800570B0",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570CB",
+          "instruction_count": 2,
+          "start": "0x800570C4",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570D3",
+          "instruction_count": 2,
+          "start": "0x800570CC",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x800570E3",
+          "instruction_count": 4,
+          "start": "0x800570D4",
+          "accounted": true,
+          "behavior": "Exact masks; View/Compare dispatch54B94, unknown clears latch. Release Compare allows empty receiver; shared5A074 resolves identities.",
+          "tests": [
+            "view_compare_returns_rebase_undo_without_adoption",
+            "injury_matrix_exact_minimum_and_provider_guards"
+          ]
+        },
+        {
+          "end": "0x8005711B",
+          "instruction_count": 14,
+          "start": "0x800570E4",
+          "accounted": true,
+          "behavior": "Signed-1 donor silently clears latch before provider/count checks.",
+          "tests": [
+            "single_stage_navigation_empty_notices_signed_exits"
+          ]
+        },
+        {
+          "end": "0x80057123",
+          "instruction_count": 2,
+          "start": "0x8005711C",
+          "accounted": true,
+          "behavior": "Signed-1 donor silently clears latch before provider/count checks.",
+          "tests": [
+            "single_stage_navigation_empty_notices_signed_exits"
+          ]
+        },
+        {
+          "end": "0x80057133",
+          "instruction_count": 4,
+          "start": "0x80057124",
+          "accounted": true,
+          "behavior": "Nonzero mode, enabled injuries and player injury byte yield original800AEBEA notice/player subject.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x80057147",
+          "instruction_count": 5,
+          "start": "0x80057134",
+          "accounted": true,
+          "behavior": "Nonzero mode, enabled injuries and player injury byte yield original800AEBEA notice/player subject.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x80057163",
+          "instruction_count": 7,
+          "start": "0x80057148",
+          "accounted": true,
+          "behavior": "Nonzero mode, enabled injuries and player injury byte yield original800AEBEA notice/player subject.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x80057187",
+          "instruction_count": 9,
+          "start": "0x80057164",
+          "accounted": true,
+          "behavior": "Nonzero mode, enabled injuries and player injury byte yield original800AEBEA notice/player subject.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x800571A7",
+          "instruction_count": 8,
+          "start": "0x80057188",
+          "accounted": true,
+          "behavior": "Exactly8 donor players yields team notice800AEB54 after injury, before full-pool check. Preserve equality.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x800571CB",
+          "instruction_count": 9,
+          "start": "0x800571A8",
+          "accounted": true,
+          "behavior": "Exactly8 donor players yields team notice800AEB54 after injury, before full-pool check. Preserve equality.",
+          "tests": [
+            "injury_matrix_exact_minimum_and_provider_guards",
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x800571DB",
+          "instruction_count": 4,
+          "start": "0x800571CC",
+          "accounted": true,
+          "behavior": "Exactly100 free agents yields no-subject800AEC1E notice, without mutation.",
+          "tests": [
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x800571F3",
+          "instruction_count": 6,
+          "start": "0x800571DC",
+          "accounted": true,
+          "behavior": "Exactly100 free agents yields no-subject800AEC1E notice, without mutation.",
+          "tests": [
+            "refusal_precedence_and_full_pool_one_past_guard"
+          ]
+        },
+        {
+          "end": "0x8005720B",
+          "instruction_count": 6,
+          "start": "0x800571F4",
+          "accounted": true,
+          "behavior": "558E0 transfer/compaction,55AF8 both-list refresh,56FF4 advance, native return; shared selector owns cue6, no explicit duplicate audio call.",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "dirty_accept_keep_discard_transactions"
+          ]
+        },
+        {
+          "end": "0x8005721B",
+          "instruction_count": 4,
+          "start": "0x8005720C",
+          "accounted": true,
+          "behavior": "558E0 transfer/compaction,55AF8 both-list refresh,56FF4 advance, native return; shared selector owns cue6, no explicit duplicate audio call.",
+          "tests": [
+            "release_8400_mutations_population_and_scroll_matrix",
+            "dirty_accept_keep_discard_transactions"
+          ]
+        }
+      ],
+      "name": "Release input, refusal precedence and mutation",
+      "symbol": "nba97_release_callback"
+    },
+    {
+      "address": "0x8005721C",
+      "size_bytes": 212,
+      "instruction_count": 53,
+      "blocks": [
+        {
+          "end": "0x80057243",
+          "instruction_count": 10,
+          "start": "0x8005721C",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x80057247",
+          "instruction_count": 1,
+          "start": "0x80057244",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x80057267",
+          "instruction_count": 8,
+          "start": "0x80057248",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x8005727F",
+          "instruction_count": 6,
+          "start": "0x80057268",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x80057287",
+          "instruction_count": 2,
+          "start": "0x80057280",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x80057293",
+          "instruction_count": 3,
+          "start": "0x80057288",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x80057297",
+          "instruction_count": 1,
+          "start": "0x80057294",
+          "accounted": true,
+          "behavior": "Bounded native first-sentinel search and signed count-minus4 clamp to0..94; no constructor or original global writes credited.",
+          "tests": [
+            "entry_all_100_vacancy_positions",
+            "entry_first_sentinel_not_count",
+            "entry_native_bounds_guards"
+          ]
+        },
+        {
+          "end": "0x800572EF",
+          "instruction_count": 22,
+          "start": "0x80057298",
+          "accounted": true,
+          "behavior": "22 instructions: typed saved cursor/top state with right object base15; normalize signed donor once; bind donor/kind1 and29/kind0 through shared56494 editor with first callback and NULL second; signed selector result through native frame pump. Callee bodies excluded: native first-callback actions remain explicit development gates, not recovered release behavior.",
+          "tests": [
+            "constructor_100_positions_kinds_callbacks_snapshot",
+            "single_stage_navigation_empty_notices_signed_exits",
+            "constructor_mode_context_and_invalid_inputs"
+          ]
+        }
+      ],
+      "name": "Release entry and constructor handoff",
+      "symbol": "nba97_release_begin"
+    },
+    {
+      "address": "0x80057B6C",
+      "size_bytes": 68,
+      "instruction_count": 17,
+      "blocks": [
+        {
+          "end": "0x80057B7B",
+          "instruction_count": 4,
+          "start": "0x80057B6C",
+          "accounted": true,
+          "behavior": "Mode2 restriction short-circuit, exact final-slot signed sentinel test, native return; null safety is extra and uncredited.",
+          "tests": [
+            "availability_modes_restrictions_3584_cases",
+            "availability_all_halfword_values",
+            "availability_last_slot_only_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B8F",
+          "instruction_count": 5,
+          "start": "0x80057B7C",
+          "accounted": true,
+          "behavior": "Mode2 restriction short-circuit, exact final-slot signed sentinel test, native return; null safety is extra and uncredited.",
+          "tests": [
+            "availability_modes_restrictions_3584_cases",
+            "availability_all_halfword_values",
+            "availability_last_slot_only_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057BA7",
+          "instruction_count": 6,
+          "start": "0x80057B90",
+          "accounted": true,
+          "behavior": "Mode2 restriction short-circuit, exact final-slot signed sentinel test, native return; null safety is extra and uncredited.",
+          "tests": [
+            "availability_modes_restrictions_3584_cases",
+            "availability_all_halfword_values",
+            "availability_last_slot_only_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057BAF",
+          "instruction_count": 2,
+          "start": "0x80057BA8",
+          "accounted": true,
+          "behavior": "Mode2 restriction short-circuit, exact final-slot signed sentinel test, native return; null safety is extra and uncredited.",
+          "tests": [
+            "availability_modes_restrictions_3584_cases",
+            "availability_all_halfword_values",
+            "availability_last_slot_only_and_guards"
+          ]
+        }
+      ],
+      "name": "Release card availability",
+      "symbol": "nba97_release_available"
+    }
+  ],
+  "limitations": [
+    "208/208 is reviewed source-contract accounting, not binary/CFG matching, full shared-engine coverage or measured feature fidelity.",
+    "Portable callbacks cover release, exact refusal precedence, conditional scroll continuation and availability. Shared mutation/selector/renderer/save bodies are not counted again.",
+    "Native host scenarios verify assets, child routing, isolated save failure/retry/restart/Reset and population preservation. Original Compare/Cancel/reopen retains Longley without a prompt; subsequent ordinary discard restores Parish while retaining Longley; ordinary accept/reopen retains Parish with Wennington starting; View/Cancel/reopen independently retains Wennington with Salley starting and no prompt. These are session checks, not original memory-card persistence.",
+    "Nine-frame scroll wait/state is implemented; original intermediate glyph animation, transition cadence and audio waveform comparison remain unverified. Full-pool one-past cursor is safely represented without emulating out-of-bounds reads."
+  ]
+}

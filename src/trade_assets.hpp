@@ -8,6 +8,7 @@ namespace nba97 {
 class TradeAssets {
 public:
     explicit TradeAssets(const std::filesystem::path& root,bool sign=false);
+    TradeAssets(const std::filesystem::path& root,std::uint8_t frontend_state);
     explicit TradeAssets(const std::vector<std::uint8_t>& bytes);
     const std::uint8_t* preference() const {return preference_.data();}
     const std::string& freeAgentName() const {return text_.at(0x8009D83A);}
@@ -22,6 +23,6 @@ private:
     std::map<std::uint32_t,std::string> text_;
     std::array<std::uint8_t,25> preference_{};
     PshFont font_,small_;
-    bool sign_=false;
+    std::uint8_t state_=13;
 };
 }

@@ -28,7 +28,8 @@ typedef enum Nba97TradeEvent {
     NBA97_TRADE_IDLE, NBA97_TRADE_ROW, NBA97_TRADE_TEAM, NBA97_TRADE_PICK,
     NBA97_TRADE_SWAPPED, NBA97_TRADE_CANCEL_PICK, NBA97_TRADE_NOTICE,
     NBA97_TRADE_DISCARD_PROMPT, NBA97_TRADE_ACCEPT, NBA97_TRADE_DISCARD,
-    NBA97_TRADE_VIEW, NBA97_TRADE_COMPARE, NBA97_TRADE_INVALID
+    NBA97_TRADE_VIEW, NBA97_TRADE_COMPARE, NBA97_TRADE_INVALID,
+    NBA97_TRADE_PENDING /* Native development gate; never an original event. */
 } Nba97TradeEvent;
 struct Nba97TradeScreen;
 struct Nba97TradeData;
@@ -49,6 +50,7 @@ typedef struct Nba97TradeScreen {
     /* Shared 56494 editor: Sign's first list has 100 rows, Trade has15.
        Cursors are native relative slots; list descriptors add the object base. */
     uint8_t frontend_state, selector_action;
+    uint8_t release_scroll_remaining, release_restore_cursor;
     Nba97ReorderTint tint[2][100];
     uint32_t row_revision, presents;
 } Nba97TradeScreen;

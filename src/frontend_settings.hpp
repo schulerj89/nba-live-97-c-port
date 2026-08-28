@@ -18,7 +18,8 @@ enum class FrontendPage : std::uint8_t {
     Card,
     ReorderRosters,
     TradePlayers,
-    SignFreeAgent
+    SignFreeAgent,
+    ReleasePlayers
 };
 
 class FrontendSettings final {

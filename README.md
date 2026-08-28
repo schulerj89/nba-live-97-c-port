@@ -40,6 +40,9 @@ This is not yet a complete game. Gameplay, remaining roster transactions, and se
 deeper frontend paths remain unfinished. See the generated
 [progress report](docs/progress.md) for the measured breakdown.
 
+Release Players supports releases, refusals, Help/View/Compare and persistent saves;
+original-game animation/audio acceptance remains open ([bounded ledger](docs/release_players_progress.md)).
+
 Recovered game behavior is moving into portable C modules under
 `src/recovered/`. The existing C++ code remains the native Win32 platform shell
 for rendering, input, movies, audio devices, and resource ownership. A recovered

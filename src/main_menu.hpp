@@ -45,6 +45,7 @@ public:
     void setSelected(int selected) noexcept;
     void setRosterCapabilities(bool roster_modified, bool injuries_present) noexcept;
     void setSignAvailable(bool available) noexcept { sign_available_=available; if(!enabled(selected_)) selected_=4; }
+    void setReleaseAvailable(bool available) noexcept { release_available_=available; if(!enabled(selected_)) selected_=4; }
     bool move(int horizontal, int vertical) noexcept;
     bool hover(int psx_x, int psx_y) noexcept;
 
@@ -60,6 +61,7 @@ private:
     bool roster_modified_ = false;
     bool injuries_present_ = false;
     bool sign_available_ = true;
+    bool release_available_ = true;
 };
 
 enum class RosterViewMode : std::uint8_t { TeamRoster, PlayerCard };

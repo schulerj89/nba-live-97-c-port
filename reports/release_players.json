@@ -1,0 +1,43 @@
+{
+  "scope": "Release Players: four directly owned bodies only; not shared engine instructions or whole-feature fidelity",
+  "total": 208,
+  "accounted": 208,
+  "pending": 0,
+  "functions": [
+    {
+      "name": "Advance free-agent cursor and conditional scroll",
+      "address": "0x80056FF4",
+      "total": 36,
+      "accounted": 36,
+      "pending": 0
+    },
+    {
+      "name": "Release input, refusal precedence and mutation",
+      "address": "0x80057084",
+      "total": 102,
+      "accounted": 102,
+      "pending": 0
+    },
+    {
+      "name": "Release entry and constructor handoff",
+      "address": "0x8005721C",
+      "total": 53,
+      "accounted": 53,
+      "pending": 0
+    },
+    {
+      "name": "Release card availability",
+      "address": "0x80057B6C",
+      "total": 17,
+      "accounted": 17,
+      "pending": 0
+    }
+  ],
+  "static_report_executes_tests": false,
+  "limitations": [
+    "208/208 is reviewed source-contract accounting, not binary/CFG matching, full shared-engine coverage or measured feature fidelity.",
+    "Portable callbacks cover release, exact refusal precedence, conditional scroll continuation and availability. Shared mutation/selector/renderer/save bodies are not counted again.",
+    "Native host scenarios verify assets, child routing, isolated save failure/retry/restart/Reset and population preservation. Original Compare/Cancel/reopen retains Longley without a prompt; subsequent ordinary discard restores Parish while retaining Longley; ordinary accept/reopen retains Parish with Wennington starting; View/Cancel/reopen independently retains Wennington with Salley starting and no prompt. These are session checks, not original memory-card persistence.",
+    "Nine-frame scroll wait/state is implemented; original intermediate glyph animation, transition cadence and audio waveform comparison remain unverified. Full-pool one-past cursor is safely represented without emulating out-of-bounds reads."
+  ]
+}

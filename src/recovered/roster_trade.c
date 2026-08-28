@@ -31,7 +31,8 @@ unsigned nba97_roster_editor_capacity(const Nba97TradeScreen *s,unsigned p) {
 }
 void bind(Nba97TradeScreen *s) {
     int p;
-    for(p=0;p<2;++p) s->selected[p]=s->working[s->team[p]*15+s->cursor[p]];
+    for(p=0;p<2;++p) s->selected[p]=s->cursor[p]<nba97_roster_editor_capacity(s,p)?
+        s->working[s->team[p]*15+s->cursor[p]]:UINT16_MAX;
     ++s->row_revision; ++s->presents; /*55AF8 present request, not emulated vblank*/
 }
 int nba97_trade_dirty(const Nba97TradeScreen *s) {
@@ -72,19 +73,22 @@ int nba97_roster_editor_begin(Nba97TradeScreen *s,const uint16_t table[535],
         Nba97TradeCallback first,Nba97TradeCallback second) {
     Nba97TradeScreen fresh;
     int p,i,hole;
-    if(!s || !table || !first || !second || (mode==2 && !teams) || (state!=13 && state!=14)) return 0;
+    if(!s || !table || !first || (state==17 ? second!=0 : !second) ||
+       (mode==2 && !teams) || (state!=13 && state!=14 && state!=17)) return 0;
     memset(&fresh,0,sizeof(fresh));fresh.mode=mode;
     fresh.frontend_state=state;
     if(teams) memcpy(fresh.eligible,teams,16);
     fresh.team[0]=left;fresh.team[1]=right;
     /* 56D28..56D4C: two kind1 lists, first56B44 / second56C50.
        Native function pointers replace original stack-passed code addresses. */
-    fresh.list_kind[0]=state==14?0:1;fresh.list_kind[1]=1;
+    fresh.list_kind[0]=state==14?0:1;fresh.list_kind[1]=state==17?0:1;
     fresh.input_callback[0]=first;
     fresh.input_callback[1]=second;
     for(p=0;p<2;++p) {
         unsigned capacity;
-        if(fresh.team[p]<0 || fresh.team[p]>(state==14 && p==0?29:28)) return 0;
+        const int free_side=(state==14 && p==0)||(state==17 && p==1);
+        if(fresh.team[p]<0 || fresh.team[p]>(free_side?29:28) ||
+           (free_side && fresh.team[p]!=29)) return 0;
         if(fresh.team[p]!=29 && !eligible(&fresh,fresh.team[p])) fresh.team[p]=teams[p]; /*56128*/
         if(fresh.team[p]<0 || fresh.team[p]>29) return 0;
         capacity=nba97_roster_editor_capacity(&fresh,p);
@@ -116,6 +120,10 @@ int nba97_trade_frame(Nba97TradeScreen *s,uint16_t raw) {
     int p,i;
     if(!s) return 0;
     for(p=0;p<2;++p) for(i=0;i<(int)nba97_roster_editor_capacity(s,p);++i) nba97_reorder_tint_tick(&s->tint[p][i]);
+    if(s->release_scroll_remaining) {
+        if(!--s->release_scroll_remaining) s->cursor[1]=(uint8_t)(s->release_restore_cursor+1);
+        s->held=raw;return 0;
+    }
     if(s->waiting) {if(raw==s->held) return 0;s->waiting=0;}
     s->held=raw;return 1;
 }
@@ -138,8 +146,9 @@ static Nba97TradeEvent reject(Nba97TradeScreen *s,Nba97RosterDecision d) {
 }
 Nba97TradeEvent nba97_trade_input(Nba97TradeScreen *s,uint16_t raw,const Nba97TradeData *data) {
     int p,next,attempt;
-    if(!s || s->phase==NBA97_TRADE_CLOSED || s->child || s->waiting || s->notice.notice)
+    if(!s || s->phase==NBA97_TRADE_CLOSED || s->child || s->waiting || s->notice.notice || s->release_scroll_remaining)
         return NBA97_TRADE_IDLE;
+    if(s->frontend_state==17 && s->phase!=NBA97_TRADE_FIRST) return NBA97_TRADE_INVALID;
     p=s->phase==NBA97_TRADE_SECOND;
     if(raw==1 || raw==2) {
         next=s->cursor[p]+(raw==1?-1:1);
@@ -170,14 +179,16 @@ Nba97TradeEvent nba97_trade_input(Nba97TradeScreen *s,uint16_t raw,const Nba97Tr
         if(p) return NBA97_TRADE_IDLE;
         s->phase=NBA97_TRADE_CLOSED;s->selector_result=1;return NBA97_TRADE_ACCEPT;
     }
-    if(!s->input_callback[p] || s->list_kind[0]!=(s->frontend_state==14?0:1) || s->list_kind[1]!=1) return NBA97_TRADE_INVALID;
+    if(!s->input_callback[p] || s->list_kind[0]!=(s->frontend_state==14?0:1) ||
+       s->list_kind[1]!=(s->frontend_state==17?0:1)) return NBA97_TRADE_INVALID;
     return s->input_callback[p](s,raw,data);
 }
 Nba97TradeEvent trade_child_callback(Nba97TradeScreen *s,uint16_t raw) {
     const int p=s->phase==NBA97_TRADE_SECOND;
     if(raw==0x10 || raw==0x40) {
         if((raw==0x10 && s->selected[p]==UINT16_MAX) ||
-           (raw==0x40 && (s->selected[0]==UINT16_MAX || s->selected[1]==UINT16_MAX))) {
+           (raw==0x40 && (s->selected[0]==UINT16_MAX ||
+                         (s->selected[1]==UINT16_MAX && s->frontend_state!=17)))) {
             return reject(s,(Nba97RosterDecision){0,NBA97_ROSTER_NOTICE_EMPTY,0x800afc22,-1});
         }
         s->selector_result=(int16_t)(raw==0x10?2:3); /*54B94 -> selector ->56D50*/
@@ -256,6 +267,27 @@ int nba97_trade_return_child(Nba97TradeScreen *s,uint16_t mask,
     int p,first,last;
     if(!s || (s->child!=0x23 && s->child!=0x24)) return 0;
     if(adopt && !nba97_trade_child_proposal(s,mask,teams,slots)) return 0;
+    if(s->frontend_state==17) {
+        unsigned vacancy=0;
+        /*401CC ->5721C recomputes the first vacancy on child return.
+          Full pool cursor100 is retained safely, with viewport94; the
+          original unbounded sentinel scan is NOT a native array access.*/
+        while(vacancy<100 && s->working[435+vacancy]!=UINT16_MAX)++vacancy;
+        s->cursor[1]=(uint8_t)vacancy;
+        s->top[1]=(uint8_t)(vacancy<4?0:vacancy>98?94:vacancy-4);
+        s->release_scroll_remaining=0;
+        /*Shared56494 re-entry renews undo, including ignored child changes.
+          Original no$psx confirmation2026-08-28: Longley released from Chicago,
+          Compare shows Parish twice, Start returns, Select exits without a
+          discard prompt; reopening Release still has Longley in free agents.
+          Separate View check: release Wennington, View shows Salley starting,
+          Start returns, Select exits without a prompt; reopen retains Wennington
+          in free agents and Salley starting. Both child routes are confirmed.
+          Preserve this original quirk; durable snapshot stays intact. This
+          observation confirms session retention, not original memory-card I/O.*/
+        memcpy(s->undo,s->working,sizeof(s->undo));s->changes=0;
+        s->child=0;s->selector_result=0;s->waiting=1;s->held=mask;bind(s);return 1;
+    }
     if(s->frontend_state==14) {
         Nba97TradeScreen fresh;
         /* Original Sign quirk: 40154 reads global left-team+70E (29), not

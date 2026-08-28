@@ -39,9 +39,10 @@ FrontendHelpPack::FrontendHelpPack(const std::vector<std::uint8_t>& b) {
     if (b.size() < 8 || b.size() > kLimit || !std::equal(b.begin(),b.begin()+4,"N97H")) fail();
     auto half = [&](std::size_t at) { return unsigned(b[at]) | (unsigned(b[at+1])<<8); };
     auto word = [&](std::size_t at) { return std::uint32_t(half(at)) | (std::uint32_t(half(at+2))<<16); };
-    if (half(4) != 1 || half(6) != 4) fail();
+    const unsigned count=half(6);
+    if (half(4) != 1 || (count!=4 && count!=3)) fail();
     std::size_t at=8;
-    for (unsigned record=0;record<4;++record) {
+    for (unsigned record=0;record<count;++record) {
         if (b.size()-at < 18) fail();
         FrontendHelpDescriptor d{};
         d.state=b[at]; d.index=b[at+1];
@@ -51,7 +52,8 @@ FrontendHelpPack::FrontendHelpPack(const std::vector<std::uint8_t>& b) {
         const unsigned x=half(at), y=half(at+2), w=half(at+4), h=b[at+6], lines=b[at+8];
         if (x>246 || y>110 || w<20 || x+w>512 || h<10 || y+h>240 ||
             b[at+7] || b[at+9] || !lines || lines>16 || y+10+16*(lines-1)>y+h) fail();
-        if (!(((d.state==12 || d.state==13 || d.state==14) && d.index<2) || ((d.state==35 || d.state==36) && d.index==0))) fail();
+        if (!(((d.state==12 || d.state==13 || d.state==14) && d.index<2 && count==4) ||
+              (d.state==17 && d.index==0 && count==3) || ((d.state==35 || d.state==36) && d.index==0))) fail();
         for (const auto& prior : descriptors_) if (prior.state==d.state && prior.index==d.index) fail();
         d.rect={static_cast<std::int16_t>(x),static_cast<std::int16_t>(y),
                 static_cast<std::int16_t>(w),static_cast<std::int16_t>(h)};

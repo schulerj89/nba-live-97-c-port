@@ -87,6 +87,8 @@ python (Join-Path $repo 'tools\extract_trade_assets.py') $feonly
 if ($LASTEXITCODE -ne 0) { throw 'Private Trade text/Help extraction failed.' }
 python (Join-Path $repo 'tools\extract_trade_assets.py') $feonly --sign
 if ($LASTEXITCODE -ne 0) { throw 'Sign UI/Help extraction failed.' }
+python (Join-Path $repo 'tools\extract_release_assets.py') $feonly
+if ($LASTEXITCODE -ne 0) { throw 'Release UI/Help extraction failed.' }
 python (Join-Path $repo 'tools\extract_compare_assets.py') $feonly --output `
     (Join-Path $repo '.local\assetpacks\reorder\compare.n97ui')
 if ($LASTEXITCODE -ne 0) { throw 'Private Compare extraction failed.' }

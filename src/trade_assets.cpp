@@ -34,8 +34,10 @@ std::string header(std::string value,const std::string& team,int empty) {
     if(p!=std::string::npos) value.replace(p,2,std::to_string(empty));return value;
 }
 }
-TradeAssets::TradeAssets(const std::filesystem::path& root,bool sign):TradeAssets(read(root/(sign?"sign/ui.n97trade":"trade/ui.n97trade"))) {
-    if(sign_!=sign) throw std::runtime_error("roster editor UI pack belongs to the wrong screen");
+TradeAssets::TradeAssets(const std::filesystem::path& root,bool sign):TradeAssets(root,std::uint8_t(sign?14:13)) {}
+TradeAssets::TradeAssets(const std::filesystem::path& root,std::uint8_t state):TradeAssets(read(root/
+        (state==17?"release/ui.n97trade":state==14?"sign/ui.n97trade":"trade/ui.n97trade"))) {
+    if(state_!=state) throw std::runtime_error("roster editor UI pack belongs to the wrong screen");
     font_=load_psh_font(root/"fonts/ZFONT0.PSH",10,1);
     small_=load_psh_font(root/"fonts/ZFONT1.PSH",10,1);
 }
@@ -45,7 +47,7 @@ TradeAssets::TradeAssets(const std::vector<std::uint8_t>& b) {
     auto half=[&](std::size_t i){return unsigned(b[i])|(unsigned(b[i+1])<<8);};
     auto word=[&](std::size_t i){return std::uint32_t(half(i))|(std::uint32_t(half(i+2))<<16);};
     if(half(4)!=1 || (half(6)!=21 && half(6)!=25)) fail();
-    sign_=half(6)==25;
+    const bool extra=half(6)==25;
     std::size_t at=8;bool have_preferences=false;
     for(unsigned r=0;r<half(6);++r) {
         if(at+8>b.size()) fail();auto addr=word(at),size=word(at+4);at+=8;
@@ -69,9 +71,14 @@ TradeAssets::TradeAssets(const std::vector<std::uint8_t>& b) {
         }
         if(at!=end) fail();
     }
-    if(at!=b.size() || !have_preferences || text_.size()!=(sign_?15:14) || dialogs_.size()!=(sign_?9:6)) fail();
-    if(sign_ && (!text_.count(0x8009D83A) || !dialogs_.count(0x800AED20) ||
-        !dialogs_.count(0x800AEC72) || !dialogs_.count(0x800AED88))) fail();
+    if(at!=b.size() || !have_preferences || text_.size()!=(extra?15:14) || dialogs_.size()!=(extra?9:6)) fail();
+    if(extra) {
+        if(!text_.count(0x8009D83A)) fail();
+        const bool sign=dialogs_.count(0x800AED20)&&dialogs_.count(0x800AEC72)&&dialogs_.count(0x800AED88);
+        const bool release=dialogs_.count(0x800AEB54)&&dialogs_.count(0x800AEBEA)&&dialogs_.count(0x800AEC1E);
+        if(sign==release) fail(); // Reject mixed/incomplete screen records.
+        state_=release?17:14;
+    }
     for(auto a:{0x8002655Cu,0x80026574u,0x80026588u,0x8002659Cu,0x80026508u,0x8002650Cu,
                 0x80026510u,0x80026514u,0x80026518u,0x8002651Cu,0x8002502Cu,0x80024E60u,
                 0x800264ECu,0x800264F8u}) if(!text_.count(a)) fail();
@@ -80,7 +87,7 @@ TradeAssets::TradeAssets(const std::vector<std::uint8_t>& b) {
 FrontendHelpDescriptor TradeAssets::notice(std::uint32_t address,const std::string& subject) const {
     const auto& d=dialogs_.at(address);FrontendHelpDescriptor result{};
     if(!d.choices.empty()) throw std::runtime_error("choice descriptor used as warning");
-    result.state=sign_?14:13;result.address=address;result.rect=d.rect;result.style=1;
+    result.state=state_;result.address=address;result.rect=d.rect;result.style=1;
     for(const auto& line:d.body) {
         if(subject.empty() && line.find("%s")!=std::string::npos)
             throw std::runtime_error("original Trade notice requires a subject");
@@ -115,7 +122,7 @@ PshImage TradeAssets::labels(const Nba97TradeScreen& s,const RosterDatabase& db)
     for(int p=0;p<2;++p) {
         const auto* team=db.team(s.team[p]);
         const bool free=s.team[p]==29;
-        if(!team && !(free && sign_)) throw std::runtime_error("editor team missing");
+        if(!team && !(free && (state_==14 || state_==17))) throw std::runtime_error("editor team missing");
         const int empty=(free?100:15)-s.counts[s.team[p]];
         const auto name=free?text_.at(0x8009D83A):std::string(team->city);
         const auto value=header(text_.at(p?(empty?0x80026588:0x8002659c):(empty?0x8002655c:0x80026574)),name,empty);

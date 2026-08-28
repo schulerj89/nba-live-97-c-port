@@ -877,6 +877,7 @@ bool RecoveredBottomMenu::enabled(int index) const noexcept {
     // 536 recovered injury bytes; at least one must be non-zero.
     if (index == 3) return roster_modified_;
     if (index == 1) return sign_available_;
+    if (index == 2) return release_available_;
     if (index == 7) return injuries_present_;
     return true;
 }
@@ -2119,9 +2120,10 @@ PshImage renderTradeScreen(const Nba97TradeScreen& s,const MenuSpritePack& sprit
         blitAt(im,sprites,std::get<0>(b),std::get<1>(b),std::get<2>(b));
     }
     const bool sign=s.frontend_state==14;
-    const char* title=sign?"ba30":"ba38"; // state14 layout80096E84
+    const bool release=s.frontend_state==17;
+    const char* title=release?"ba23":sign?"ba30":"ba38"; // state17 layout80097104
     if(!sprite(sprites,title)) throw std::runtime_error("missing editor title");
-    blitJumbledTitleSprite(im,sprites,title,sign?156:155,10,elapsed,corners);
+    blitJumbledTitleSprite(im,sprites,title,release?140:sign?156:155,10,elapsed,corners);
     for(int p=0;p<2;++p) {
         const auto* frame=sprite(sprites,p?"frmr":"frml");
         const auto* plate=sprite(sprites,p?"111p":"110p");
@@ -2134,7 +2136,7 @@ PshImage renderTradeScreen(const Nba97TradeScreen& s,const MenuSpritePack& sprit
             draw_psh_text_centered(im,font,glyph,(p?270:60)-14+font.textWidth(glyph)/2,116+down*80);
         }
     }
-    const char* help=s.phase==NBA97_TRADE_SECOND?"hel2":"hel1";
+    const char* help=release?"help":s.phase==NBA97_TRADE_SECOND?"hel2":"hel1";
     if(!sprite(sprites,help)) throw std::runtime_error("missing Trade footer");
     blitAt(im,sprites,help,235,217);
     blitScaled(im,labels,0,0,512,240,0,0,512,240);return im;

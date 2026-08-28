@@ -21,6 +21,7 @@
 #include "reorder_preview.hpp"
 #include "trade_assets.hpp"
 #include "recovered/roster_sign.h"
+#include "recovered/roster_release.h"
 #include "frontend_help.hpp"
 #include "recovered/reorder_children.h"
 #include "user_profiles.hpp"
@@ -87,6 +88,7 @@ struct Options {
     std::filesystem::path reorder_capture_dir;
     std::filesystem::path trade_capture_dir;
     std::filesystem::path sign_capture_dir;
+    std::filesystem::path release_capture_dir;
     std::filesystem::path native_record_dir;
     bool native_record_audio=false;
     std::size_t native_record_limit=nba97::NativeFrameCapture::default_frame_limit;
@@ -210,6 +212,8 @@ Options parseOptions(int argc, char** argv) {
             options.trade_capture_dir = argv[++i];
         else if (arg == "--capture-sign" && i + 1 < argc)
             options.sign_capture_dir = argv[++i];
+        else if (arg == "--capture-release" && i + 1 < argc)
+            options.release_capture_dir = argv[++i];
         else if (arg == "--record-native-frames" && i + 1 < argc)
             options.native_record_dir = argv[++i];
         else if (arg == "--record-native-audio") options.native_record_audio=true;
@@ -231,7 +235,7 @@ Options parseOptions(int argc, char** argv) {
         throw std::runtime_error("--record-native-audio requires --record-native-frames");
     if(!options.native_record_dir.empty() && (options.self_test || !options.verify_reorder_save.empty() ||
        !options.reorder_capture_dir.empty() || !options.trade_capture_dir.empty() || !options.sign_capture_dir.empty() || !options.view_rosters_capture_dir.empty() ||
-       !options.rosters_menu_capture_dir.empty()))
+       !options.rosters_menu_capture_dir.empty() || !options.release_capture_dir.empty()))
         throw std::runtime_error("native recording requires the live window, not checkpoint/self-test mode");
     return options;
 }
@@ -297,6 +301,7 @@ public:
         if (!options_.reorder_capture_dir.empty()) return captureReorder();
         if (!options_.trade_capture_dir.empty()) return captureTrade();
         if (!options_.sign_capture_dir.empty()) return captureSign();
+        if (!options_.release_capture_dir.empty()) return captureRelease();
         registerWindowClass();
         createMainWindow();
         ShowWindow(window_, SW_SHOWNORMAL);
@@ -439,6 +444,126 @@ private:
         trace_.log("RECOVERED", "0x8003E698 arcade; 0x8003E714 simulation; 0x8003E620 restores custom snapshot");
         menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
             menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, 0));
+    }
+
+    int captureRelease() {
+        const auto dir=std::filesystem::weakly_canonical(options_.release_capture_dir);
+        const auto root=std::filesystem::weakly_canonical(".local/verification");
+        const auto relative=dir.lexically_relative(root);
+        if(relative.empty() || relative=="." || *relative.begin()==".." || std::filesystem::exists(dir))
+            throw std::runtime_error("Release verification requires a fresh directory under .local/verification");
+        std::filesystem::create_directories(dir);
+        const auto original=roster_database_.slotTable();
+        roster_store_=std::make_unique<nba97::RosterSaveStore>(dir/"rosters.n97rst");roster_store_->load(roster_database_);
+        auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        const auto generation=roster_store_->accepted().generation;
+        const auto empty=roster_database_.freeAgentCount();
+        auto settle=[&]{for(int i=0;i<50&&isRelease();++i){menu_elapsed_ms_+=17;
+            nba97_trade_frame(&trade_screen_,0);nba97_reorder_child_input_ready(&reorder_child_,0);
+            if(trade_choice_address_)tradeChoiceEvent(nba97_reset_tick(&trade_choice_,0));else stepReorderHelp(0,true);
+            if(!isRelease())break;nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
+            advanceComparePalette();if(compare_refresh_.remaining)advanceCompareRefresh();
+            if(compare_repeat_.post_frames)--compare_repeat_.post_frames;}
+            frontend_transition_active_=false;};
+        auto capture=[&](const char* name,bool advance=true){if(advance)settle();updatePlayerPhoto(true);
+            writePpm(isRelease()?renderTrade():renderBottomMenu(),dir/(std::string(name)+".ppm"));
+            trace_.log("RELEASE-CHECKPOINT",name);};
+        auto enter=[&]{frontend_page_=nba97::FrontendPage::Rosters;bottom_menu_.open(frontend_page_);
+            bottom_menu_.setReleaseAvailable(nba97_release_available(original.data(),0,0)!=0);
+            bottom_menu_.setSelected(2);rebuildMenuFrame();completeRecoveredBottomSelection();
+            require(isRelease()&&frontend_transition_active_,"Release card did not route through native transition");
+            require(transition_source_.width==512&&transition_frame_.width==512,"transition frame missing");};
+        enter();capture("entry");
+        unsigned released_cases=0,empty_cases=0;
+        for(int team=0;team<29;++team)for(unsigned slot=0;slot<15;++slot) {
+            Nba97TradeScreen test{};
+            require(nba97_release_begin(&test,original.data(),int16_t(team),0,nullptr,uint8_t(slot),uint8_t((std::min)(slot,9u)))!=0,"real Release matrix entry");
+            const bool occupied=test.selected[0]!=UINT16_MAX;
+            const auto data=tradeData();const auto event=nba97_trade_input(&test,0x800,&data);
+            require(event==(occupied?NBA97_TRADE_SWAPPED:NBA97_TRADE_IDLE),"real Release matrix outcome");
+            nba97::RosterSlots proposal;std::copy_n(test.working,535,proposal.begin());
+            (void)roster_database_.prepareSlotTable(proposal);
+            if(occupied)++released_cases;else ++empty_cases;
+        }
+        trace_.log("RELEASE-MATRIX","PASS 435 real-data donor slots; released="+std::to_string(released_cases)+
+            " empty="+std::to_string(empty_cases)+"; original preference pack; every population validated; saved=no");
+        require(trade_screen_.frontend_state==17 && trade_screen_.team[1]==29 &&
+            trade_screen_.cursor[1]==empty && trade_screen_.top[1]==(empty<4?0:(std::min)(empty-4,std::size_t(94))),"Release receiver positioning");
+        require(trade_screen_.list_kind[0]==1&&trade_screen_.list_kind[1]==0&&!trade_screen_.input_callback[1],"Release constructor binding");
+        handleTradeKey(VK_DOWN);capture("donor-row");
+        require(trade_screen_.cursor[0]==1&&trade_screen_.cursor[1]==empty,"donor movement changed receiver");
+        const auto team=trade_screen_.team[0];
+        handleTradeKey(VK_RIGHT);capture("donor-team");
+        require(trade_screen_.team[0]==(team+1)%29&&trade_screen_.team[1]==29,"team scan wrong side");
+        handleTradeKey(VK_LEFT);settle();
+        for(int i=0;i<20;++i)handleTradeKey(VK_DOWN);
+        capture("donor-bottom");require(trade_screen_.cursor[0]==14&&trade_screen_.top[0]==9,"six row scroll bounds");
+        for(int i=0;i<20;++i)handleTradeKey(VK_UP);settle();
+        handleTradeKey('F');capture("help-growing",false);
+        require(reorder_help_state_==17&&reorder_help_index_==0&&reorder_help_.rect.width==20&&reorder_help_.rect.height==10,"small Help opening");
+        capture("help-open");
+        require(reorder_help_.rect.x==121&&reorder_help_.rect.y==80&&
+            reorder_help_.rect.width==270&&reorder_help_.rect.height==125&&nba97_help_text_visible(&reorder_help_),"original Release modal rectangle");
+        handleTradeKey(VK_RETURN);capture("help-return");
+        require(isRelease()&&reorder_help_.phase==NBA97_HELP_CLOSED,"Help dismissal incorrectly left Release");
+        auto dismiss=[&]{handleTradeKey(VK_RETURN);settle();};
+        handleTradeKey('D');capture("view");
+        require(reorder_child_.state==0x24&&roster_viewer_.selectedPlayer(viewerDatabase())->id==original[team*15],"Release View donor identity");
+        handleTradeKey('F');capture("view-help");dismiss();
+        handleTradeKey('K');capture("view-browsed");
+        require(roster_viewer_.teamIndex()!=std::size_t(team),"View team browse");
+        handleTradeKey(VK_RETURN);capture("view-return");
+        require(!reorder_child_.state&&!trade_choice_address_&&trade_screen_.team[0]==team,"Release View must not adopt");
+        handleTradeKey('S');capture("compare");
+        require(reorder_compare_.team[0]==team&&reorder_compare_.team[1]==team&&
+            reorder_compare_.player[0]==original[team*15]&&reorder_compare_.player[1]==original[team*15],"Release Compare repeats donor, not empty pool");
+        handleTradeKey('C');settle();handleTradeKey('K');capture("compare-browsed");
+        require(reorder_compare_.team[1]!=team,"Compare right team browse");
+        handleTradeKey('F');capture("compare-help");dismiss();
+        handleTradeKey(VK_RETURN);capture("compare-return");
+        require(!reorder_child_.state&&!trade_choice_address_&&trade_screen_.team[0]==team,"Compare must not adopt");
+        for(int i=0;i<5;++i)handleTradeKey(VK_DOWN);
+        const auto outgoing=trade_screen_.selected[0];
+        handleTradeKey('C');capture("release-start",false);capture("released");
+        require(trade_screen_.counts[29]==empty+1&&trade_screen_.working[435+empty]==outgoing&&
+            trade_screen_.cursor[1]==empty+1&&roster_database_.slotTable()==original,"release isolated draft");
+        handleTradeKey('X');capture("discard-prompt");require(trade_choice_address_==0x800af4f8,"Release discard prompt");
+        handleTradeKey('C');capture("discard-kept");require(isRelease()&&!trade_choice_address_&&nba97_trade_dirty(&trade_screen_),"default keep edit");
+        handleTradeKey('X');settle();handleTradeKey(VK_UP);settle();handleTradeKey('C');capture("discard-return");
+        require(frontend_page_==nba97::FrontendPage::Rosters&&roster_database_.slotTable()==original,"Release discard changed live roster");
+        require(roster_database_.slotTable()==original && roster_store_->accepted().generation==generation &&
+            !std::filesystem::exists(dir/"rosters.n97rst"),"discarded screen wrote a roster save");
+        enter();capture("reentry");
+        require(trade_screen_.cursor[0]==0&&trade_screen_.top[0]==0&&trade_screen_.cursor[1]==empty,"menu reentry positions");
+        handleTradeKey('X');capture("cancel-return");
+        require(frontend_page_==nba97::FrontendPage::Rosters&&nba97_trade_result(&trade_screen_)==-1,"clean cancel result");
+        enter();settle();for(int i=0;i<5;++i)handleTradeKey(VK_DOWN);handleTradeKey('C');settle();
+        const auto draft=tradeDraft()->slotTable();bool injected=false;
+        reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){if(stage==nba97::RosterSaveStage::PartialWrite){
+            *static_cast<bool*>(p)=true;throw std::runtime_error("injected Release save failure");}},&injected};
+        handleTradeKey(VK_RETURN);capture("save-failed");
+        require(injected&&isRelease()&&roster_database_.slotTable()==original&&tradeDraft()->slotTable()==draft,"failed Release save corrupted draft/live");
+        dismiss();reorder_save_hooks_={};handleTradeKey(VK_RETURN);capture("accept-return");
+        require(frontend_page_==nba97::FrontendPage::Rosters&&roster_database_.slotTable()==draft,"Release accepted publish");
+        auto restart=roster_database_.prepareSlotTable(original);nba97::RosterSaveStore reopened(dir/"rosters.n97rst");
+        reopened.load(restart);require(restart.slotTable()==draft&&restart.rosterOwner(outgoing)==29,"Release restart ownership");
+        enter();capture("restart");
+        for(int i=0;i<5;++i)handleTradeKey(VK_DOWN);
+        while(trade_screen_.counts[team]>8){handleTradeKey('C');settle();}
+        handleTradeKey('C');capture("minimum-refused");
+        require(reorder_notice_&&trade_screen_.notice.message_address==0x800aeb54,"eight-player minimum original notice");dismiss();
+        const auto retained=tradeDraft()->slotTable();handleTradeKey('D');capture("quirk-view");
+        handleTradeKey(VK_RETURN);capture("quirk-return");
+        require(nba97_trade_dirty(&trade_screen_)&&!nba97_trade_undo_dirty(&trade_screen_),"Release shared constructor checkpoint");
+        handleTradeKey('X');settle();require(frontend_page_==nba97::FrontendPage::Rosters&&!trade_choice_address_&&
+            roster_database_.slotTable()==retained,"Release pre-child changes must survive Cancel");
+        auto retained_restart=roster_database_.prepareSlotTable(original);nba97::RosterSaveStore retained_store(dir/"rosters.n97rst");
+        retained_store.load(retained_restart);require(retained_restart.slotTable()==retained,"Release checkpoint restart mismatch");
+        enter();capture("retained-restart");handleTradeKey('X');settle();commitRosterReset();capture("reset-return");
+        auto reset_restart=restart;nba97::RosterSaveStore reset_store(dir/"rosters.n97rst");reset_store.load(reset_restart);
+        require(reset_restart.slotTable()==original&&roster_database_.slotTable()==original,"Release Reset persistence");
+        trace_.log("RELEASE-HOST-VERIFY","PASS 30 checkpoints; release/refusals/Help/View/Compare/discard/save failure/restart/Reset; isolated save only; not original-reference equivalence");
+        return 0;
     }
 
     int captureSign() {
@@ -902,21 +1027,26 @@ private:
     }
 
     bool isSign() const { return frontend_page_==nba97::FrontendPage::SignFreeAgent; }
-    bool isRosterEditor() const { return isSign() || frontend_page_==nba97::FrontendPage::TradePlayers; }
+    bool isRelease() const { return frontend_page_==nba97::FrontendPage::ReleasePlayers; }
+    bool isRosterEditor() const { return isRelease() || isSign() || frontend_page_==nba97::FrontendPage::TradePlayers; }
+    std::uint8_t editorState() const {return isRelease()?17:isSign()?14:13;}
     void openTrade() {
-        trade_assets_=std::make_unique<nba97::TradeAssets>(options_.asset_root,isSign());
+        trade_assets_=std::make_unique<nba97::TradeAssets>(options_.asset_root,editorState());
         reorder_labels_=std::make_unique<nba97::ReorderLabelPreview>(options_.asset_root);
-        reorder_help_pack_=std::make_unique<nba97::FrontendHelpPack>(options_.asset_root/(isSign()?"sign/help.n97ui":"trade/help.n97ui"));
+        reorder_help_pack_=std::make_unique<nba97::FrontendHelpPack>(options_.asset_root/
+            (isRelease()?"release/help.n97ui":isSign()?"sign/help.n97ui":"trade/help.n97ui"));
         reorder_help_={};reorder_notice_.reset();reorder_exit_after_notice_=false;
         trade_choice_={};trade_choice_address_=0;reorder_child_={};reorder_child_database_.reset();
-        for(const char* tag:{isSign()?"ba30":"ba38","ba02","frmr","110p","111p","hel1","hel2"}) {
+        for(const char* tag:{isRelease()?"ba23":isSign()?"ba30":"ba38","ba02","frmr","110p","111p",
+                            isRelease()?"help":"hel1","hel2"}) {
             auto im=load_png_image(options_.asset_root/"menu/ZSET4-decoded"/(std::string(tag)+".png"));
             for(std::size_t i=0;i<im.rgba.size();i+=4)
                 if(!im.rgba[i]&&!im.rgba[i+1]&&!im.rgba[i+2])im.rgba[i+3]=0;
             roster_sprites_[tag]=std::move(im);
         }
         const auto table=roster_database_.slotTable();
-        const int opened=isSign()?nba97_sign_begin(&trade_screen_,table.data(),sign_team_,0,nullptr,sign_cursors_.data(),sign_tops_.data()):
+        const int opened=isRelease()?nba97_release_begin(&trade_screen_,table.data(),release_team_,0,nullptr,0,0):
+            isSign()?nba97_sign_begin(&trade_screen_,table.data(),sign_team_,0,nullptr,sign_cursors_.data(),sign_tops_.data()):
             nba97_trade_begin(&trade_screen_,table.data(),trade_teams_[0],trade_teams_[1],0,nullptr,trade_cursors_.data(),trade_tops_.data());
         if(!opened) throw std::runtime_error("invalid roster editor entry");
         std::size_t count=0;for(const auto& p:roster_database_.players())count=(std::max)(count,std::size_t(p.id)+1);
@@ -928,12 +1058,18 @@ private:
             throw std::runtime_error("invalid Trade palettes");
         trade_portrait_ids_.fill(UINT16_MAX);trade_portraits_={};loadTradePortraits();
         trade_tick_=menu_elapsed_ms_/17;
+        if(isRelease()) {
+            trace_.log("RELEASE-ENTRY","8005721C -> 80056494; state17 kinds1/0 capacities15/100 right-base15; first callback57084, second NULL; single-stage; signed selector result");
+            trace_.log("RELEASE-ASSETS","80093330[17] -> 80097104; ba23=(140,10); help=(235,217); Z2PORT 87x51; private state17 Help rect121,80,270,125; ZFONT0/1");
+            trace_.log("RELEASE-KEYS","arrows=donor rows/team; F=Help; X/Esc=cancel/discard; Enter=accept; C/Space=release; D=View; S=Compare (both start on donor, source8005A074); edits remain a private draft until exit");
+        } else {
         trace_.log(isSign()?"SIGN-ENTRY":"TRADE-ENTRY",isSign()?"80056F9C -> 80056494; state14 kinds0/1 capacity100/15 right-base100; callbacks56D6C/56E40; six visible rows; 535-slot isolated snapshot":
             "80056CD0 -> 80056494; graphics/controller state13; kinds1/1; 535-slot isolated snapshot; 30 rows/6 visible per side");
         trace_.log(isSign()?"SIGN-ASSETS":"TRADE-ASSETS",isSign()?"80096E84 ba30=(156,10); Z2PORT 87x51; state14 private Help/notice pack":"80096D24 ba38=(155,10); Z2PORT 87x51; private UI/preference/Help packs; independent indexed CLUT halves");
         trace_.log(isSign()?"SIGN-KEYS":"TRADE-KEYS",isSign()?
             "Up/Down=active rows; Left/Right=receiver team; C/Space=pick/sign into empty slot; X/Esc=cancel; Enter=accept/save from first stage; D=View; S=Compare; F=Help; normal mode0":
             "arrows=active list rows/teams; C/Space=pick/trade; X/Esc=cancel; Enter=accept/save; D=View; S=Compare; F=Help; normal frontend mode0/no injury context");
+        }
         logTrade("constructed");
         if(!roster_load_error_.empty())showReorderSaveNotice("save unavailable","file needs attention","see CLI for details",false,0x800);
     }
@@ -947,12 +1083,12 @@ private:
             auto im=load_png_image(options_.asset_root/"menu/Z2PORT-decoded"/file);
             if(im.width!=87||im.height!=51)throw std::runtime_error("invalid Trade Z2PORT portrait");
             trade_portraits_[p]=std::move(im);trade_portrait_ids_[p]=id;
-            trace_.log("TRADE-PORTRAIT","side="+std::to_string(p)+" player="+std::to_string(id)+" record="+file);
+            trace_.log(isRelease()?"RELEASE-PORTRAIT":"TRADE-PORTRAIT","side="+std::to_string(p)+" player="+std::to_string(id)+" record="+file);
         }
     }
     void logTrade(const char* event) {
         const auto& s=trade_screen_;
-        trace_.log(isSign()?"SIGN":"TRADE",std::string(event)+" teams="+std::to_string(s.team[0])+"/"+std::to_string(s.team[1])+
+        trace_.log(isRelease()?"RELEASE":isSign()?"SIGN":"TRADE",std::string(event)+" teams="+std::to_string(s.team[0])+"/"+std::to_string(s.team[1])+
             " phase="+std::to_string(s.phase)+" selected="+std::to_string(s.selected[0])+"/"+std::to_string(s.selected[1])+
             " cursor="+std::to_string(s.cursor[0])+"/"+std::to_string(s.cursor[1])+" top="+std::to_string(s.top[0])+"/"+std::to_string(s.top[1])+
             " counts="+std::to_string(s.counts[s.team[0]])+"/"+std::to_string(s.counts[s.team[1]])+
@@ -966,7 +1102,7 @@ private:
             trade_portraits_,trade_assets_->labels(trade_screen_,roster_database_),*compare_backgrounds_,trade_palette_,menu_elapsed_ms_,frontend_title_.corners());
         if(!reorder_child_.state && nba97_help_visible(&reorder_help_))
             nba97::FrontendHelpPack::draw(im,reorder_labels_->smallFont(),reorder_notice_?*reorder_notice_:
-                reorder_help_pack_->descriptor(isSign()?14:13,trade_screen_.phase==NBA97_TRADE_SECOND),reorder_help_);
+                reorder_help_pack_->descriptor(editorState(),trade_screen_.phase==NBA97_TRADE_SECOND),reorder_help_);
         if(trade_choice_address_)trade_assets_->drawChoice(im,trade_choice_address_,trade_choice_);
         return im;
     }
@@ -1005,11 +1141,13 @@ private:
     void finishTrade(bool accepted) {
         if(nba97_trade_result(&trade_screen_)!=(accepted?1:-1))throw std::runtime_error("Trade selector exit contract mismatch");
         if(accepted)for(unsigned p=0;p<2;++p){
-            if(isSign()){sign_team_=nba97_reorder_normalize_team(trade_screen_.team[0],trade_screen_.mode,trade_screen_.eligible[0]);sign_cursors_[p]=trade_screen_.cursor[p];sign_tops_[p]=trade_screen_.top[p];}
+            if(isRelease()){release_team_=trade_screen_.team[0];}
+            else if(isSign()){sign_team_=nba97_reorder_normalize_team(trade_screen_.team[0],trade_screen_.mode,trade_screen_.eligible[0]);sign_cursors_[p]=trade_screen_.cursor[p];sign_tops_[p]=trade_screen_.top[p];}
             else {trade_teams_[p]=trade_screen_.team[p];trade_cursors_[p]=trade_screen_.cursor[p];trade_tops_[p]=trade_screen_.top[p];}}
         logTrade(accepted?"accepted and durably published":nba97_trade_dirty(&trade_screen_)?
             "cancelled; pre-child checkpoint retained and durably published":"cancelled; entry roster unchanged");
-        beginFrontendTransition(nba97::FrontendPage::Rosters,isSign()?
+        beginFrontendTransition(nba97::FrontendPage::Rosters,isRelease()?
+            (accepted?"Release saved":"Release cancelled"):isSign()?
             (accepted?"Sign saved":"Sign cancelled"):(accepted?"Trade saved":"Trade cancelled"));
         // 57CE4 resets both cursor fields to-1;56494 maps them to row0 on
         // next menu entry. Direct child returns do NOT go through57CE4.
@@ -1030,11 +1168,11 @@ private:
                 nba97::RosterSlots proposed;std::copy_n(trade_screen_.working,535,proposed.begin());
                 saved=roster_store_->commit(roster_database_,proposed,reorder_save_hooks_);
             }catch(const std::exception& e){
-                trade_screen_=before;syncTrade();trace_.log(isSign()?"SIGN-SAVE-FAILED":"TRADE-SAVE-FAILED",e.what());
+                trade_screen_=before;syncTrade();trace_.log(isRelease()?"RELEASE-SAVE-FAILED":isSign()?"SIGN-SAVE-FAILED":"TRADE-SAVE-FAILED",e.what());
                 showReorderSaveNotice("save failed","draft kept - exit cancelled","see CLI then retry",false,held);
                 rebuildMenuFrame();return;
             }
-            trace_.log(isSign()?"SIGN-COMMIT":"TRADE-COMMIT","generation="+std::to_string(saved.generation)+" bytes="+std::to_string(saved.bytes)+
+            trace_.log(isRelease()?"RELEASE-COMMIT":isSign()?"SIGN-COMMIT":"TRADE-COMMIT","generation="+std::to_string(saved.generation)+" bytes="+std::to_string(saved.bytes)+
                 " sync="+std::to_string(saved.sync_completed)+" selector-result="+std::to_string(result)+
                 (accepted?" reason=Start":" reason=retained-pre-child-checkpoint"));
             if(!saved.sync_completed){
@@ -1053,7 +1191,12 @@ private:
                 if(GetForegroundWindow()==window_ && !IsIconic(window_) && (GetAsyncKeyState(key)&0x8000))raw|=tradeKey(key);
             if(!reorder_notice_) {
                 if(reorder_child_.state)nba97_reorder_child_input_ready(&reorder_child_,raw);
-                else if(!trade_choice_address_)nba97_trade_frame(&trade_screen_,raw);
+                else if(!trade_choice_address_) {
+                    const auto release_wait=trade_screen_.release_scroll_remaining;
+                    nba97_trade_frame(&trade_screen_,raw);
+                    if(release_wait && !trade_screen_.release_scroll_remaining)
+                        logTrade("80056FF4 nine-frame receiver scroll complete; donor stays active");
+                }
             }
             nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
             advanceComparePalette();
@@ -1076,16 +1219,26 @@ private:
             else handleRosterViewKey(key=='C'?VK_SPACE:key=='D'?'S':key);
             rebuildMenuFrame();return;
         }
-        if(trade_screen_.waiting)return;
+        if(trade_screen_.waiting || trade_screen_.release_scroll_remaining)return;
         if(raw==0x20){openReorderHelp();rebuildMenuFrame();return;}
         const auto before=trade_screen_;const auto data=tradeData();
         const auto event=nba97_trade_input(&trade_screen_,raw,&data);
+        if(event==NBA97_TRADE_PENDING) {
+            trace_.log("RELEASE-PENDING","raw="+std::to_string(raw)+
+                " callback80057084 not implemented in entry slice; no phase change, mutation, modal or sound; View/Compare await Release-specific routing");
+            rebuildMenuFrame();return;
+        }
         if(event==NBA97_TRADE_SWAPPED) {
             try {(void)tradeDraft();} // Native invariant: preserve the entire base population.
             catch(const std::exception& e) {
                 trade_screen_=before;trace_.log("TRADE-MUTATION-BLOCKED",std::string(e.what())+"; draft rolled back; live/save untouched");
                 showReorderSaveNotice("trade rejected","draft kept unchanged","see CLI for details",false,raw);rebuildMenuFrame();return;
             }
+            if(isRelease()) trace_.log("RELEASE-MUTATE","80057084 ->558E0 ->55AF8(2) ->56FF4; player="+
+                std::to_string(before.selected[0])+" donor="+std::to_string(trade_screen_.team[0])+
+                " donor_count="+std::to_string(trade_screen_.counts[trade_screen_.team[0]])+
+                " free_count="+std::to_string(trade_screen_.counts[29])+
+                " scroll_wait="+std::to_string(trade_screen_.release_scroll_remaining)+"; save=no (isolated draft)");
         }
         if(event==NBA97_TRADE_NOTICE) {
             const auto& d=trade_screen_.notice;std::string subject;
@@ -1094,15 +1247,15 @@ private:
             reorder_notice_=d.message_address==0x800AFC22?trade_assets_->emptyNotice(raw==0x40):
                 trade_assets_->notice(d.message_address,subject);
             nba97_help_open(&reorder_help_,reorder_notice_->rect,raw);playBottomMenuSound(5,"trade-warning");
-            trace_.log(isSign()?"SIGN-REFUSE":"TRADE-REJECT","source descriptor="+std::to_string(d.message_address)+" subject="+std::to_string(d.subject)+" draft unchanged");
+            trace_.log(isRelease()?"RELEASE-REFUSE":isSign()?"SIGN-REFUSE":"TRADE-REJECT","source descriptor="+std::to_string(d.message_address)+" subject="+std::to_string(d.subject)+" draft unchanged");
         } else if(event==NBA97_TRADE_DISCARD_PROMPT)openTradeChoice(0x800AF4F8,raw);
         else if(event==NBA97_TRADE_VIEW || event==NBA97_TRADE_COMPARE)openTradeChild();
         else if(event==NBA97_TRADE_ACCEPT||event==NBA97_TRADE_DISCARD){completeTradeExit(before,raw);return;}
         else if(event==NBA97_TRADE_INVALID)throw std::runtime_error("Trade controller rejected invalid data");
         const auto cue=nba97_trade_event_sound(event,raw);
-        trace_.log(isSign()?"SIGN-CUE":"TRADE-CUE","event="+std::to_string(event)+" raw="+std::to_string(raw)+
+        trace_.log(isRelease()?"RELEASE-CUE":isSign()?"SIGN-CUE":"TRADE-CUE","event="+std::to_string(event)+" raw="+std::to_string(raw)+
             " cue="+std::to_string(cue)+" source=8003D930/80055314; zero=no selector cue");
-        if(cue)playBottomMenuSound(cue,isSign()?"sign-selector":"trade-selector");
+        if(cue)playBottomMenuSound(cue,isRelease()?"release-selector":isSign()?"sign-selector":"trade-selector");
         syncTrade();logTrade(("event="+std::to_string(event)).c_str());rebuildMenuFrame();
     }
 
@@ -1202,6 +1355,10 @@ private:
     }
 
     void loadRosterSave() {
+        if(!options_.release_capture_dir.empty()) {
+            trace_.log("ROSTER-SAVE","disabled for Release capture; active save untouched");
+            return;
+        }
         // Existing deterministic capture/self-test modes must never read/write
         // the active save. The dedicated save harness requires explicit paths.
         if(options_.verify_reorder_save.empty() && (options_.self_test ||
@@ -1297,7 +1454,7 @@ private:
         if(frontend_page_==nba97::FrontendPage::ReorderRosters || isRosterEditor()) {
             if(reorder_child_.state==0x24) {tag="ba41";x=40;y=18;pack=&player_sprites_;}
             else if(reorder_child_.state==0x23) {tag="ba02";x=170;y=15;}
-            else {const bool trade=isRosterEditor();tag=isSign()?"ba30":trade?"ba38":"ba22";x=trade&&!isSign()?155:156;y=10;}
+            else {const bool trade=isRosterEditor();tag=isRelease()?"ba23":isSign()?"ba30":trade?"ba38":"ba22";x=isRelease()?140:trade&&!isSign()?155:156;y=10;}
         } else if(frontend_page_==nba97::FrontendPage::ViewRosters) {
             if(roster_viewer_.mode()==nba97::RosterViewMode::PlayerCard) {tag="ba41";x=40;y=18;pack=&player_sprites_;}
             else {tag="ba35";x=142;y=10;}
@@ -1380,8 +1537,8 @@ private:
         nba97::RosterViewer child;
         const auto p = reorder_child_.parent_page;
         if (!child.openPlayerFromRoster(*draft, {reorder_child_.cursor[p], reorder_child_.top[p], reorder_child_.team},
-                {0, false, static_cast<std::int16_t>(isSign()?14:trade?0x0d:0x0c), p},
-                isSign()?trade_assets_->freeAgentName():std::string{}))
+                {0, false, static_cast<std::int16_t>(trade?editorState():0x0c), p},
+                (isRelease()||isSign())?trade_assets_->freeAgentName():std::string{}))
             throw std::runtime_error("Re-order child identity could not be resolved from draft");
         if (child.selectedPlayer(*draft)->id != reorder_child_.player_id[0])
             throw std::runtime_error("Re-order draft/child selected identity mismatch");
@@ -1451,7 +1608,11 @@ private:
         if(event!=NBA97_REORDER_REQUEST_COMPARE) return;
         auto draft=trade?tradeDraft():std::make_unique<const nba97::RosterDatabase>(roster_database_.draftView(reorder_screen_));
         const auto table=draft->slotTable();
-        if(!(trade?nba97_compare_begin_teams(&reorder_compare_,trade_screen_.team,trade_screen_.cursor,table.data()):
+        //8005A17C..5A198: parent16/17 do NOT increment source side. Release
+        //Compare starts BOTH identities on the donor, not its empty receiver.
+        const int16_t compare_teams[2]={trade_screen_.team[0],isRelease()?trade_screen_.team[0]:trade_screen_.team[1]};
+        const uint8_t compare_slots[2]={trade_screen_.cursor[0],isRelease()?trade_screen_.cursor[0]:trade_screen_.cursor[1]};
+        if(!(trade?nba97_compare_begin_teams(&reorder_compare_,compare_teams,compare_slots,table.data()):
              nba97_compare_begin(&reorder_compare_,&reorder_child_,table.data()))) throw std::runtime_error("Compare draft identity mismatch");
         if(!nba97_compare_refresh_begin(&compare_refresh_,&reorder_compare_)) throw std::runtime_error("Compare refresh entry failed");
         compare_refresh_painted_=false;
@@ -1701,7 +1862,7 @@ private:
 
     void openReorderHelp() {
         const bool trade=isRosterEditor();
-        reorder_help_state_ = reorder_child_.state ? reorder_child_.state : isSign()?14:trade?13:12;
+        reorder_help_state_ = reorder_child_.state ? reorder_child_.state : trade?editorState():12;
         reorder_help_index_ = reorder_child_.state ? 0 : trade?(trade_screen_.phase==NBA97_TRADE_SECOND):reorder_screen_.selection.descriptor_page;
         const auto& d = reorder_help_pack_->descriptor(reorder_help_state_, reorder_help_index_);
         const auto before=reorder_help_;
@@ -1710,7 +1871,7 @@ private:
         reorderHelpEvent(event);
         char route[64]{};
         sprintf_s(route, "state=0x%02X descriptor=0x%08X", unsigned(reorder_help_state_), unsigned(d.address));
-        trace_.log(trade?"TRADE-HELP":"REORDER-HELP", "40FCC -> 40A1C index=" + std::to_string(reorder_help_index_) +
+        trace_.log(isRelease()?"RELEASE-HELP":trade?"TRADE-HELP":"REORDER-HELP", "40FCC -> 40A1C index=" + std::to_string(reorder_help_index_) +
             " " + route + " rect=" + std::to_string(d.rect.x) + "," +
             std::to_string(d.rect.y) + "," + std::to_string(d.rect.width) + "," + std::to_string(d.rect.height) +
             " lines=" + std::to_string(d.lines.size()) + " sound=7; private Help/font pack; input barrier active");
@@ -4734,6 +4895,10 @@ private:
     }
 
     void completeRecoveredBottomSelection() {
+        if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==2) {
+            if(!bottom_menu_.enabled(2))return;
+            beginFrontendTransition(nba97::FrontendPage::ReleasePlayers,"Release selected; 80057CE4 -> state17 -> 8005721C");return;
+        }
         if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==1) {
             beginFrontendTransition(nba97::FrontendPage::SignFreeAgent,"Sign selected; 80057CE4 -> state14 -> 80056F9C");return;
         }
@@ -5409,6 +5574,7 @@ private:
         if (page == nba97::FrontendPage::ReorderRosters) return "Re-order Rosters";
         if (page == nba97::FrontendPage::TradePlayers) return "Trade Players";
         if (page == nba97::FrontendPage::SignFreeAgent) return "Sign Free Agent";
+        if (page == nba97::FrontendPage::ReleasePlayers) return "Release Players";
         if (page == nba97::FrontendPage::Users) return "Users";
         if (page == nba97::FrontendPage::Card) return "Memory Card";
         return "Game Setup";
@@ -5438,7 +5604,7 @@ private:
         transition_source_ = menu_frame_;
         const auto previous_page = frontend_page_;
         frontend_page_ = target;
-        if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent)openTrade();
+        if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent || target==nba97::FrontendPage::ReleasePlayers)openTrade();
         else if (target == nba97::FrontendPage::ReorderRosters) openReorder();
         else if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
@@ -5454,6 +5620,12 @@ private:
                 bottom_menu_.setRosterCapabilities(rosterResetEligible(), false);
                 const int vacancies=nba97_sign_available(roster_database_.slotTable().data(),0,0,nullptr);
                 bottom_menu_.setSignAvailable(vacancies!=0);
+                const int release_available=nba97_release_available(roster_database_.slotTable().data(),0,0);
+                bottom_menu_.setReleaseAvailable(release_available!=0);
+                trace_.log("RELEASE-AVAILABILITY","80057B6C enabled="+std::to_string(release_available)+
+                    " free="+std::to_string(roster_database_.freeAgentCount())+
+                    " last-slot="+std::to_string(roster_database_.slotTable()[534])+
+                    " mode0 restriction0; last-slot sentinel gate, not team minimum; single-stage release callback80057084");
                 trace_.log("SIGN-AVAILABILITY","80057B00 vacancies="+std::to_string(vacancies)+" free="+std::to_string(roster_database_.freeAgentCount())+" mode0 restriction0");
                 trace_.log("ROSTER-CARD-STATE", "Reset eligible="+
                     std::to_string(rosterResetEligible())+"; 535-slot default comparison; normal frontend context "
@@ -5476,6 +5648,7 @@ private:
                            target == nba97::FrontendPage::ReorderRosters ? 0x0C :
                            target == nba97::FrontendPage::TradePlayers ? 0x0D :
                            target == nba97::FrontendPage::SignFreeAgent ? 0x0E :
+                           target == nba97::FrontendPage::ReleasePlayers ? 0x11 :
                            target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
@@ -5557,6 +5730,7 @@ private:
     std::array<int16_t,2> trade_teams_{2,24},trade_child_teams_{};
     std::array<uint8_t,2> trade_cursors_{},trade_tops_{},trade_child_slots_{};
     int16_t sign_team_=2;
+    int16_t release_team_=2; // Native remembered donor; original default context not asserted.
     std::array<uint8_t,2> sign_cursors_{},sign_tops_{};
     std::vector<uint8_t> trade_positions_,trade_injuries_;
     std::array<PshImage,2> trade_portraits_{};

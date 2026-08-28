@@ -17,11 +17,11 @@ def cstring(data, at):
     if end<0 or any(c<32 or c>126 for c in data[at:end]): raise ValueError('invalid original text')
     return data[at:end+1]
 
-def extract(data, sign=False):
+def extract(data, sign=False, *, extra_texts=(), extra_dialogs=()):
     records=[]
-    for address in TEXTS + ((0x8009D83A,) if sign else ()):
+    for address in TEXTS + ((0x8009D83A,) if sign else ()) + extra_texts:
         records.append((address,cstring(data,address-BASE)))
-    for address in DIALOGS + ((0x800AED20,0x800AEC72,0x800AED88) if sign else ()):
+    for address in DIALOGS + ((0x800AED20,0x800AEC72,0x800AED88) if sign else ()) + extra_dialogs:
         at=address-BASE
         if at<0 or at+10>len(data): raise ValueError('descriptor outside overlay')
         x,y,w,h,style,lines,choices=struct.unpack_from('<hhhBBBB',data,at)
