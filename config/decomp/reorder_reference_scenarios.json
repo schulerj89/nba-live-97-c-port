@@ -1,0 +1,493 @@
+{
+  "schema_version": 1,
+  "scope": "reorder_reference",
+  "gates": [
+    "help",
+    "view",
+    "compare",
+    "persistence_reset",
+    "animation_audio"
+  ],
+  "comparison_policy": {
+    "video": "unfiltered_512x240_rgb_by_frame_no_warp",
+    "audio": "pcm16_no_gain_normalization_no_latency_search",
+    "result": "supplied_media_only_not_overall_fidelity",
+    "private_root": ".local",
+    "max_frames": 6000
+  },
+  "scenarios": [
+    {
+      "id": "help_first",
+      "gate": "help",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "help",
+        "dismiss_help"
+      ],
+      "events": [
+        "help_complete",
+        "dismiss_help_complete"
+      ],
+      "source_anchors": [
+        "0x80040FCC",
+        "0x80040A1C"
+      ],
+      "min_frames": 64,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "help_replacement",
+      "gate": "help",
+      "initial": {
+        "screen": "reorder",
+        "phase": "replacement",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "help",
+        "dismiss_help"
+      ],
+      "events": [
+        "help_complete",
+        "dismiss_help_complete"
+      ],
+      "source_anchors": [
+        "0x80040FCC",
+        "0x80040A1C"
+      ],
+      "min_frames": 64,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "view_first",
+      "gate": "view",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_view",
+        "next_player",
+        "next_team",
+        "next_stat_layer",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_view_complete",
+        "next_player_complete",
+        "next_team_complete",
+        "next_stat_layer_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A538",
+        "0x80059928",
+        "0x80059ABC",
+        "0x80059610",
+        "0x80040A1C",
+        "0x8005A6F0"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "compare_first",
+      "gate": "compare",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_compare",
+        "switch_side",
+        "next_player",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_compare_complete",
+        "switch_side_complete",
+        "next_player_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A880",
+        "0x80059A88",
+        "0x80059928",
+        "0x80040A1C",
+        "0x8005A3FC"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "view_replacement",
+      "gate": "view",
+      "initial": {
+        "screen": "reorder",
+        "phase": "replacement",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_view",
+        "next_player",
+        "next_team",
+        "next_stat_layer",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_view_complete",
+        "next_player_complete",
+        "next_team_complete",
+        "next_stat_layer_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A538",
+        "0x80059928",
+        "0x80059ABC",
+        "0x80059610",
+        "0x80040A1C",
+        "0x8005A6F0"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "compare_replacement",
+      "gate": "compare",
+      "initial": {
+        "screen": "reorder",
+        "phase": "replacement",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_compare",
+        "switch_side",
+        "next_player",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_compare_complete",
+        "switch_side_complete",
+        "next_player_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A880",
+        "0x80059A88",
+        "0x80059928",
+        "0x80040A1C",
+        "0x8005A3FC"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "view_swapped",
+      "gate": "view",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 1
+      },
+      "actions": [
+        "open_view",
+        "next_player",
+        "next_team",
+        "next_stat_layer",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_view_complete",
+        "next_player_complete",
+        "next_team_complete",
+        "next_stat_layer_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A538",
+        "0x80059928",
+        "0x80059ABC",
+        "0x80059610",
+        "0x80040A1C",
+        "0x8005A6F0"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "compare_swapped",
+      "gate": "compare",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 1
+      },
+      "actions": [
+        "open_compare",
+        "switch_side",
+        "next_player",
+        "help",
+        "dismiss_help",
+        "return_child"
+      ],
+      "events": [
+        "open_compare_complete",
+        "switch_side_complete",
+        "next_player_complete",
+        "help_complete",
+        "dismiss_help_complete",
+        "return_child_complete"
+      ],
+      "source_anchors": [
+        "0x8005A880",
+        "0x80059A88",
+        "0x80059928",
+        "0x80040A1C",
+        "0x8005A3FC"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "reorder_navigation",
+      "gate": "animation_audio",
+      "initial": {
+        "screen": "reorder",
+        "phase": "first",
+        "team": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "next_team",
+        "previous_team",
+        "next_row",
+        "next_row",
+        "next_row",
+        "next_row",
+        "next_row",
+        "next_row",
+        "previous_row"
+      ],
+      "events": [
+        "next_team_complete",
+        "previous_team_complete",
+        "next_row_complete",
+        "next_row_complete",
+        "next_row_complete",
+        "next_row_complete",
+        "next_row_complete",
+        "next_row_complete",
+        "previous_row_complete"
+      ],
+      "source_anchors": [
+        "0x80056254",
+        "0x800556B0",
+        "0x800558E0",
+        "0x8002F124"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "compare_navigation",
+      "gate": "compare",
+      "initial": {
+        "screen": "compare",
+        "team": 0,
+        "draft_changes": 0,
+        "active_side": 0,
+        "stat_layer": 2,
+        "stat_top_left": 0,
+        "stat_top_right": 0
+      },
+      "event_state_int_ranges": {
+        "active_side": [0, 1],
+        "stat_layer": [0, 3],
+        "stat_top_left": [-255, 255],
+        "stat_top_right": [-255, 255]
+      },
+      "actions": [
+        "previous_stat",
+        "switch_side",
+        "previous_stat",
+        "next_team",
+        "next_stat_layer",
+        "next_stat_layer",
+        "next_stat",
+        "previous_stat",
+        "previous_stat",
+        "previous_team"
+      ],
+      "events": [
+        "previous_stat_complete",
+        "switch_side_complete",
+        "previous_stat_complete",
+        "next_team_complete",
+        "next_stat_layer_complete",
+        "next_stat_layer_complete",
+        "next_stat_complete",
+        "previous_stat_complete",
+        "previous_stat_complete",
+        "previous_team_complete"
+      ],
+      "source_anchors": [
+        "0x80059ABC",
+        "0x80059610",
+        "0x8005A1EC",
+        "0x8003D930",
+        "0x8003AB64"
+      ],
+      "min_frames": 128,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "cool_fact_play_stop",
+      "gate": "animation_audio",
+      "initial": {
+        "screen": "view_player",
+        "team": 0,
+        "player": 0,
+        "draft_changes": 0
+      },
+      "actions": [
+        "play_fact",
+        "stop_fact",
+        "stop_fact"
+      ],
+      "events": [
+        "play_fact_complete",
+        "stop_fact_complete",
+        "stop_fact_complete"
+      ],
+      "source_anchors": [
+        "0x80059E14",
+        "0x80031770",
+        "0x80059DB8"
+      ],
+      "min_frames": 64,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "no_cool_fact",
+      "gate": "view",
+      "initial": {
+        "screen": "view_player",
+        "player": 62,
+        "draft_changes": 0
+      },
+      "actions": [
+        "play_fact",
+        "dismiss_notice"
+      ],
+      "events": [
+        "play_fact_complete",
+        "dismiss_notice_complete"
+      ],
+      "source_anchors": [
+        "0x80059E14",
+        "0x80040A1C"
+      ],
+      "min_frames": 64,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "reset_cancel",
+      "gate": "persistence_reset",
+      "initial": {
+        "screen": "rosters",
+        "accepted_changes": 1,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_reset",
+        "cancel_reset"
+      ],
+      "events": [
+        "open_reset_complete",
+        "cancel_reset_complete"
+      ],
+      "source_anchors": [
+        "0x80057960",
+        "0x80057C48",
+        "0x80058104",
+        "0x80057864"
+      ],
+      "min_frames": 96,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    },
+    {
+      "id": "reset_confirm",
+      "gate": "persistence_reset",
+      "initial": {
+        "screen": "rosters",
+        "accepted_changes": 1,
+        "draft_changes": 0
+      },
+      "actions": [
+        "open_reset",
+        "confirm_reset"
+      ],
+      "events": [
+        "open_reset_complete",
+        "confirm_reset_complete"
+      ],
+      "source_anchors": [
+        "0x80057960",
+        "0x80057C48",
+        "0x80058104",
+        "0x80057864"
+      ],
+      "min_frames": 96,
+      "require_motion": true,
+      "require_nonzero_audio": true
+    }
+  ]
+}

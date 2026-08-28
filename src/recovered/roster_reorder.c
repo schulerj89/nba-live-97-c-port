@@ -137,7 +137,16 @@ static void tint_frame(Nba97ReorderTint *t) {
                 t->alternate[c] = t->start[c];
             }
             t->elapsed = 0;
+        } else if((t->flags & 0xc0)==0x40) {
+            t->flags |= 0xc0; t->duration=10; t->elapsed=0;
+            t->start[1]=t->target[1];t->start[2]=t->target[2];
+            return; /* Other primitive buffer contains the last final color. */
+        } else if((t->flags & 0xc0)==0xc0) {
+            t->flags ^= 0x40; t->duration=4; t->elapsed=0;
+            memcpy(t->start,t->target,3);memset(t->target,128,3);
+            return;
         } else {
+            t->flags &= 0x3f;
             t->flags &= 0xf8;
             t->elapsed = t->duration;
             t->start[1] = t->target[1];
@@ -145,10 +154,24 @@ static void tint_frame(Nba97ReorderTint *t) {
             return; /* Native single surface retains the previous final color. */
         }
     }
+    else if((t->flags & 0xc0)==0xc0) return; /* Hold without recoloring. */
     for (c = 0; c < 3; ++c)
         t->rgb[c] = (uint8_t)(t->start[c] +
             ((int)t->target[c] - (int)t->start[c]) * t->elapsed / t->duration);
 }
+
+void nba97_reorder_tint_pulse(Nba97ReorderTint *t) {if(t) pulse(t);}
+void nba97_reorder_tint_unpulse(Nba97ReorderTint *t) {if(t) unpulse(t);}
+void nba97_reorder_tint_flash(Nba97ReorderTint *t) {
+    static const uint8_t gold[3]={120,102,0};
+    if(!t || (t->flags & 0xc0)==0x40) return;
+    if((t->flags & 0xc0)==0xc0) {t->elapsed=0;return;}
+    t->flags=(uint8_t)((t->flags & 0x3f)|0x40);
+    if(t->flags & 2) {t->start[1]=t->target[1];t->start[2]=t->target[2];}
+    memcpy(t->target,gold,3);t->duration=4;t->elapsed=0;
+    t->flags=(uint8_t)((t->flags & 0xfe)|2);
+}
+void nba97_reorder_tint_tick(Nba97ReorderTint *t) {if(t) tint_frame(t);}
 
 void nba97_reorder_begin_second(Nba97ReorderSession *s) {
     if (!s || s->phase != NBA97_REORDER_FIRST) return;

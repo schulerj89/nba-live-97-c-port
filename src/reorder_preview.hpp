@@ -16,6 +16,7 @@ public:
                             std::uint16_t team_id, int modal_frame = 32,
                             bool discard_yes = false) const;
     const PshFont& font() const noexcept { return font_; }
+    const PshFont& smallFont() const noexcept { return small_font_; }
 private:
     PshFont font_;
     PshFont small_font_;

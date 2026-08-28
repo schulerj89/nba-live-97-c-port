@@ -10,8 +10,33 @@ publishing either the source assets or decoded output.
 from __future__ import annotations
 
 import argparse
+import struct
 import sys
 from pathlib import Path
+
+PALETTE_TAGS = tuple(t + 'P' for t in (
+    'atl bos cha chi cle dal den det gol hou ind lac lal mia mil min nwj nwy '
+    'orl phi pho por sac san sea tor uta van was xea xwe zc1 zc2').split())
+
+
+def indexed_pack(palettes, strips):
+    """Versioned raw CLUT/index pack; no RGB reconstruction or palette guessing.
+
+    16-byte header, 33 ordered (tag,160-word) palettes, then four strips:
+    128*240 index bytes followed by 96 local CLUT words. Little endian.
+    """
+    if tuple(tag for tag, _ in palettes) != PALETTE_TAGS or len(strips) != 4:
+        raise ValueError('unexpected original palette/strip order')
+    out = bytearray(struct.pack('<4s6H', b'N97P', 1, 4, 33, 128, 240, 0))
+    for tag, palette in palettes:
+        if len(palette) != 320:
+            raise ValueError('team palette must contain 160 original words')
+        out += tag.encode('ascii') + palette
+    for indices, local in strips:
+        if len(indices) != 128*240 or len(local) != 192:
+            raise ValueError('wrong indexed strip/local palette size')
+        out += indices + local
+    return bytes(out)
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,6 +62,9 @@ def load_archive(path: Path):
 
 def main() -> int:
     args = parse_args()
+    private = Path(__file__).resolve().parents[1] / '.local'
+    if not args.output.resolve().is_relative_to(private.resolve()):
+        raise ValueError('decoded backgrounds must remain under repository .local')
     sys.path.insert(0, str(args.ea_tool.resolve()))
 
     from PIL import Image
@@ -53,7 +81,21 @@ def main() -> int:
     if len(backgrounds) != 8:
         raise RuntimeError("ZSET4 does not contain all eight frontend background strips")
 
+    raw_palettes = [(e.tag, bytes(get_palette_info_dto_from_dir_entry(e, palettes).data[:320]))
+                    for e in palettes.dir_entry_list]
+    raw_strips = []
+    for tag in ('Bkga', 'Bkgb', 'Bkgc', 'Bkgd'):
+        e = backgrounds[tag]
+        if (e.h_width, e.h_height, e.h_record_id & 0x7f) != (128, 240, 0x41):
+            raise ValueError('unsupported indexed background encoding')
+        pixels = RefpackHandler().decompress_data(e.raw_data) if e.h_record_id & 0x80 else e.raw_data
+        local = get_palette_info_dto_from_dir_entry(e, zset4).data[320:512]
+        raw_strips.append((bytes(pixels), bytes(local)))
+    packed = indexed_pack(raw_palettes, raw_strips)
+
     args.output.mkdir(parents=True, exist_ok=True)
+    (args.output / 'indexed.n97pal').write_bytes(packed)
+    print(f'PALETTE ASSET raw CLUT/index pack bytes={len(packed)} teams=33 strips=4 local-only')
     for palette_entry in palettes.dir_entry_list:
         if not palette_entry.tag.endswith("P") or len(palette_entry.tag) != 4:
             continue

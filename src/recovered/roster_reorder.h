@@ -57,6 +57,13 @@ typedef struct Nba97ReorderTint {
     uint8_t start[3], alternate[3], target[3], rgb[3];
     uint8_t duration, elapsed, flags;
 } Nba97ReorderTint;
+/* Shared original text-object animation, also used by choice dialogs. */
+void nba97_reorder_tint_pulse(Nba97ReorderTint*);
+void nba97_reorder_tint_unpulse(Nba97ReorderTint*);
+/*2ADEC arrow flash: fade4, hold10 (+transition updates), return4.
+ * Retrigger during hold resets the hold clock; initial start RGB is caller-owned. */
+void nba97_reorder_tint_flash(Nba97ReorderTint*);
+void nba97_reorder_tint_tick(Nba97ReorderTint*);
 
 typedef struct Nba97ReorderSession {
     uint16_t slots[NBA97_TEAM_SLOTS];

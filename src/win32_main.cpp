@@ -11,11 +11,25 @@
 #include "intro_player.hpp"
 #include "main_menu.hpp"
 #include "png_image.hpp"
+#include "player_photo_loader.hpp"
+#include "frontend_title.hpp"
 #include "psh_image.hpp"
 #include "psh_font.hpp"
 #include "roster_database.hpp"
+#include "roster_save_store.hpp"
+#include "roster_reset_assets.hpp"
 #include "reorder_preview.hpp"
+#include "trade_assets.hpp"
+#include "recovered/roster_sign.h"
+#include "frontend_help.hpp"
+#include "recovered/reorder_children.h"
 #include "user_profiles.hpp"
+#include "player_notice.hpp"
+#include "cool_fact_index.hpp"
+#include "native_frame_capture.hpp"
+#include "process_audio_capture.hpp"
+#include "sha256.hpp"
+#include "recovered/cool_fact_selection.h"
 
 #include <algorithm>
 #include <chrono>
@@ -24,6 +38,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -38,6 +53,13 @@ constexpr UINT kFrameIntervalMs = 16;
 constexpr int kPressStartCenterX = 0x100;
 constexpr int kPressStartY = 0x1e;
 constexpr int kRecoveredPressStartWidth = 97;
+
+PshImage decodePlayerPhotoOnWorker(const std::filesystem::path& path) {
+    const auto result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(result)) throw std::runtime_error("portrait worker COM initialization failed");
+    struct ComScope { ~ComScope() { CoUninitialize(); } } scope;
+    return load_png_image(path);
+}
 
 constexpr std::uint32_t recoveredMenuDirectionSound(int horizontal,
                                                     int vertical) noexcept {
@@ -56,9 +78,18 @@ struct Options {
     std::filesystem::path trace_path = ".local/logs/boot_decomp_trace.log";
     std::filesystem::path settings_path = ".local/config/frontend_settings.ini";
     std::filesystem::path profiles_path = ".local/saves/user_profiles.n97sav";
+    std::filesystem::path roster_save_path = ".local/saves/rosters/default.n97rst";
+    bool roster_save_explicit = false;
+    std::string verify_reorder_save;
+    std::filesystem::path reorder_save_capture_dir;
     std::filesystem::path rosters_menu_capture_dir;
     std::filesystem::path view_rosters_capture_dir;
     std::filesystem::path reorder_capture_dir;
+    std::filesystem::path trade_capture_dir;
+    std::filesystem::path sign_capture_dir;
+    std::filesystem::path native_record_dir;
+    bool native_record_audio=false;
+    std::size_t native_record_limit=nba97::NativeFrameCapture::default_frame_limit;
     std::filesystem::path semantic_report_path =
         ".local/reports/view_rosters_semantic_trace.json";
     std::filesystem::path roster_scenario_report_path =
@@ -145,6 +176,7 @@ Options parseOptions(int argc, char** argv) {
                     options.trace_path = parent / options.trace_path;
                     options.settings_path = parent / options.settings_path;
                     options.profiles_path = parent / options.profiles_path;
+                    options.roster_save_path = parent / options.roster_save_path;
                     break;
                 }
             }
@@ -161,17 +193,46 @@ Options parseOptions(int argc, char** argv) {
         else if (arg == "--trace" && i + 1 < argc) options.trace_path = argv[++i];
         else if (arg == "--settings" && i + 1 < argc) options.settings_path = argv[++i];
         else if (arg == "--profiles" && i + 1 < argc) options.profiles_path = argv[++i];
+        else if (arg == "--roster-save" && i + 1 < argc) {
+            options.roster_save_path = argv[++i]; options.roster_save_explicit = true;
+        }
+        else if (arg == "--verify-reorder-save" && i + 1 < argc)
+            options.verify_reorder_save = argv[++i];
+        else if (arg == "--capture-reorder-save" && i + 1 < argc)
+            options.reorder_save_capture_dir = argv[++i];
         else if (arg == "--capture-rosters-menu" && i + 1 < argc)
             options.rosters_menu_capture_dir = argv[++i];
         else if (arg == "--capture-view-rosters" && i + 1 < argc)
             options.view_rosters_capture_dir = argv[++i];
         else if (arg == "--capture-reorder" && i + 1 < argc)
             options.reorder_capture_dir = argv[++i];
+        else if (arg == "--capture-trade" && i + 1 < argc)
+            options.trade_capture_dir = argv[++i];
+        else if (arg == "--capture-sign" && i + 1 < argc)
+            options.sign_capture_dir = argv[++i];
+        else if (arg == "--record-native-frames" && i + 1 < argc)
+            options.native_record_dir = argv[++i];
+        else if (arg == "--record-native-audio") options.native_record_audio=true;
+        else if (arg == "--record-native-limit" && i + 1 < argc) {
+            const std::string value=argv[++i];std::size_t used=0;
+            const auto limit=std::stoul(value,&used);
+            if(used!=value.size() || !limit || limit>nba97::NativeFrameCapture::max_frames)
+                throw std::runtime_error("native recording limit must be 1..6000");
+            options.native_record_limit=limit;
+        }
         else if (arg == "--semantic-report" && i + 1 < argc)
             options.semantic_report_path = argv[++i];
         else if (arg == "--roster-scenario-report" && i + 1 < argc)
             options.roster_scenario_report_path = argv[++i];
     }
+    if(!options.verify_reorder_save.empty() && (!options.roster_save_explicit || options.reorder_save_capture_dir.empty()))
+        throw std::runtime_error("save verification requires explicit --roster-save and --capture-reorder-save paths");
+    if(options.native_record_audio && options.native_record_dir.empty())
+        throw std::runtime_error("--record-native-audio requires --record-native-frames");
+    if(!options.native_record_dir.empty() && (options.self_test || !options.verify_reorder_save.empty() ||
+       !options.reorder_capture_dir.empty() || !options.trade_capture_dir.empty() || !options.sign_capture_dir.empty() || !options.view_rosters_capture_dir.empty() ||
+       !options.rosters_menu_capture_dir.empty()))
+        throw std::runtime_error("native recording requires the live window, not checkpoint/self-test mode");
     return options;
 }
 
@@ -227,12 +288,15 @@ public:
     BootApplication& operator=(const BootApplication&) = delete;
 
     int run() {
+        if(!options_.verify_reorder_save.empty()) return verifyReorderSave();
         if (options_.self_test) return runSelfTest();
         if (!options_.rosters_menu_capture_dir.empty())
             return captureRostersMenu();
         if (!options_.view_rosters_capture_dir.empty())
             return captureViewRosters();
         if (!options_.reorder_capture_dir.empty()) return captureReorder();
+        if (!options_.trade_capture_dir.empty()) return captureTrade();
+        if (!options_.sign_capture_dir.empty()) return captureSign();
         registerWindowClass();
         createMainWindow();
         ShowWindow(window_, SW_SHOWNORMAL);
@@ -241,6 +305,9 @@ public:
         if (!SetTimer(window_, kFrameTimer, kFrameIntervalMs, nullptr))
             throw std::runtime_error("SetTimer failed");
         trace_.log("DISPLAY", "native C++ Win32 app visible at (80,80); SPACE advances, ESC exits");
+        if(!options_.native_record_dir.empty())
+            trace_.log("RECORD-ARMED",std::string("F9 starts/stops passive frontend capture; limit=")+std::to_string(options_.native_record_limit)+" presentations; audio="+
+                (options_.native_record_audio?"current-process Windows mix (no microphone/system fallback)":"absent"));
 
         MSG message{};
         while (true) {
@@ -333,6 +400,15 @@ private:
         trace_.log("PLAYER-POSITION", "descriptor case 0x13: roster slots 0..4 use original starting C/PF/SF/SG/PG strings at 0x80024C98..0x80024CC8; bench uses database position");
         trace_.log("COOL-FACT", "view-card help descriptor 0x800B22F0 uses ZFONT control glyph 0x94 play / 0x93 stop; input 0x800 routes FUN_80059F30 -> FUN_80059E14");
         roster_database_.load(options_.asset_root / "database" / "roster.n97db");
+        std::string roster_base_hex;
+        for(auto byte:roster_database_.baseIdentity()) {
+            constexpr char digits[]="0123456789abcdef";
+            roster_base_hex+=digits[byte>>4]; roster_base_hex+=digits[byte&15];
+        }
+        trace_.log("ROSTER-BASE","canonical-v1 SHA256="+roster_base_hex+
+            "; immutable defaults=1070 bytes shared with drafts; differs-from-original="+
+            std::to_string(roster_database_.differsFromOriginal())+"; before local overrides");
+        loadRosterSave();
         trace_.log("ROSTER-DB", "external private pack version=" +
             std::to_string(roster_database_.version()) + " teams=" +
             std::to_string(roster_database_.teams().size()) + " players=" +
@@ -365,6 +441,722 @@ private:
             menu_, title_source_, menu_font_, menu_sprites_, menu_cards_, 0));
     }
 
+    int captureSign() {
+        const auto dir=std::filesystem::weakly_canonical(options_.sign_capture_dir);
+        const auto root=std::filesystem::weakly_canonical(".local/verification");
+        const auto relative=dir.lexically_relative(root);
+        if(relative.empty() || relative=="." || *relative.begin()==".." || std::filesystem::exists(dir))
+            throw std::runtime_error("Sign verification requires a fresh directory under .local/verification");
+        std::filesystem::create_directories(dir);
+        const auto original=roster_database_.slotTable();
+        roster_store_=std::make_unique<nba97::RosterSaveStore>(dir/"rosters.n97rst");roster_store_->load(roster_database_);
+        frontend_page_=nba97::FrontendPage::SignFreeAgent;openTrade();
+        auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        auto settle=[&]{for(int i=0;i<50&&isSign();++i){menu_elapsed_ms_+=17;
+            nba97_trade_frame(&trade_screen_,0);nba97_reorder_child_input_ready(&reorder_child_,0);
+            if(trade_choice_address_)tradeChoiceEvent(nba97_reset_tick(&trade_choice_,0));else stepReorderHelp(0,true);
+            if(!isSign())break;nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
+            advanceComparePalette();if(compare_refresh_.remaining)advanceCompareRefresh();
+            if(compare_repeat_.post_frames)--compare_repeat_.post_frames;}
+            frontend_transition_active_=false;};
+        auto capture=[&](const char* name){settle();updatePlayerPhoto(true);auto frame=renderTrade();
+            if(reorder_child_.state==0x24&&roster_viewer_.teamIndex()==29&&!nba97_help_visible(&reorder_help_)) {
+                const auto& strip=player_sprites_.at("xfrZ");unsigned checked=0;
+                require(strip.width==39&&strip.height==156,"free-agent strip dimensions");
+                for(unsigned y=0;y<strip.height;++y)for(unsigned x=0;x<strip.width;++x) {
+                    auto from=(y*strip.width+x)*4,to=((35+y)*512+296+x)*4;
+                    if(!strip.rgba[from+3])continue;
+                    require(std::equal(strip.rgba.begin()+from,strip.rgba.begin()+from+3,frame.rgba.begin()+to),
+                        "original xfrZ strip missing/shifted/replaced");++checked;
+                }
+                require(checked>1000,"free-agent strip opacity coverage");
+                trace_.log("SIGN-STRIP-VERIFY","xfrZ 39x156 at296,35; original opaque pixels="+std::to_string(checked));
+            }
+            writePpm(frame,dir/(std::string(name)+".ppm"));
+            trace_.log("SIGN-CHECKPOINT",name);};
+        auto dismiss=[&]{handleTradeKey(VK_RETURN);settle();};
+        capture("entry");
+        require(trade_screen_.team[0]==29&&trade_screen_.frontend_state==14,"Sign entry identity");
+        handleTradeKey('F');capture("help-first");require(reorder_help_state_==14&&reorder_help_index_==0,"Sign first Help routing");dismiss();
+        handleTradeKey(VK_RIGHT);capture("destination-scan");handleTradeKey(VK_LEFT);settle();
+        handleTradeKey('D');capture("view-free-agent");
+        require(roster_viewer_.teamIndex()==29&&roster_viewer_.selectedPlayer(viewerDatabase())->id==original[435],"View free agent identity");
+        handleTradeKey(VK_RIGHT);capture("view-next-free-agent");require(roster_viewer_.playerIndex()==1,"free agent cycle");
+        handleTradeKey('F');capture("view-help");dismiss();handleTradeKey('X');settle();
+        require(!reorder_child_.state&&trade_screen_.team[0]==29,"free-agent View return");
+        require(trade_screen_.team[1]==3&&trade_screen_.phase==NBA97_TRADE_FIRST,"original Sign re-entry to Chicago");
+        handleTradeKey(VK_LEFT);settle(); // Restore Charlotte for the next independent case.
+        handleTradeKey('S');capture("compare-free-agent");
+        require(reorder_compare_.team[0]==29&&reorder_compare_.player[0]==original[435],"Compare free agent");
+        handleTradeKey('X');settle();
+        require(trade_screen_.team[1]==3,"Compare re-entry normalizes receiver");
+        handleTradeKey(VK_LEFT);settle();
+        handleTradeKey('C');capture("second");handleTradeKey('F');capture("help-second");
+        require(reorder_help_state_==14&&reorder_help_index_==1,"second Help routing");dismiss();
+        handleTradeKey('D');settle();handleTradeKey('K');capture("second-view-browsed");
+        require(roster_viewer_.teamIndex()!=trade_screen_.team[1],"Sign second View team browse");
+        handleTradeKey(VK_RETURN);capture("second-view-return");
+        require(!reorder_child_.state&&!trade_choice_address_&&trade_screen_.team[0]==29&&
+            trade_screen_.team[1]==3&&trade_screen_.phase==NBA97_TRADE_SECOND,"Sign View original receiver/phase re-entry");
+        handleTradeKey(VK_LEFT);settle();
+        handleTradeKey('S');settle();handleTradeKey(VK_RIGHT);capture("second-compare-browsed");
+        handleTradeKey(VK_RETURN);capture("second-compare-return");
+        require(!reorder_child_.state&&!trade_choice_address_&&trade_screen_.cursor[0]==0&&
+            trade_screen_.cursor[1]==0&&trade_screen_.team[1]==3&&trade_screen_.phase==NBA97_TRADE_SECOND,
+            "Sign Compare original receiver/phase re-entry");
+        handleTradeKey(VK_LEFT);settle();
+        handleTradeKey('C');capture("occupied-refused");
+        require(trade_screen_.notice.message_address==0x800aed88&&!trade_screen_.changes,"occupied refusal");dismiss();
+        handleTradeKey('X');settle();require(trade_screen_.phase==NBA97_TRADE_FIRST,"cancel second");
+        for(int i=0;i<99;++i)handleTradeKey(VK_DOWN);
+        capture("empty-tail");handleTradeKey('C');capture("empty-source-refused");
+        require(trade_screen_.notice.message_address==0x800aed20,"empty source notice");dismiss();
+        for(int i=0;i<99;++i)handleTradeKey(VK_UP);
+        handleTradeKey('C');
+        const auto target=trade_screen_.team[1];const unsigned count=trade_screen_.counts[target];
+        require(count<15,"fixture needs a team vacancy");
+        for(unsigned i=0;i<14;++i)handleTradeKey(VK_DOWN);
+        capture("vacancy-selected");const auto player=trade_screen_.selected[0];
+        handleTradeKey('C');capture("signed");
+        require(trade_screen_.changes==1&&trade_screen_.working[target*15+count]==player&&
+            trade_screen_.counts[29]==roster_database_.freeAgentCount()-1&&roster_database_.slotTable()==original,"sign draft mutation");
+        const auto draft=tradeDraft()->slotTable();
+        bool injected=false;
+        reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){if(stage==nba97::RosterSaveStage::PartialWrite){*static_cast<bool*>(p)=true;throw std::runtime_error("injected Sign save failure");}},&injected};
+        handleTradeKey(VK_RETURN);capture("save-failed");
+        require(injected&&isSign()&&roster_database_.slotTable()==original&&tradeDraft()->slotTable()==draft,"failed Sign save changed state");
+        dismiss();reorder_save_hooks_={};handleTradeKey(VK_RETURN);settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters&&roster_database_.slotTable()==draft,"Sign accept publish");
+        auto restart=roster_database_.prepareSlotTable(original);nba97::RosterSaveStore reopened(dir/"rosters.n97rst");
+        reopened.load(restart);require(restart.slotTable()==draft&&restart.rosterOwner(player)==target,"Sign restart ownership");
+        frontend_page_=nba97::FrontendPage::SignFreeAgent;openTrade();capture("restart");
+        require(trade_screen_.team[1]==3,"accepted Sign re-entry uses remembered left29, not receiver");
+        handleTradeKey(VK_LEFT);settle();
+        handleTradeKey('C');settle();
+        for(unsigned i=0;i<14;++i)handleTradeKey(VK_DOWN);
+        handleTradeKey('C');capture("second-signing");handleTradeKey('X');capture("discard");
+        require(trade_choice_address_==0x800af4f8,"Sign discard prompt");
+        handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters&&roster_database_.slotTable()==draft,"Sign discard persisted draft");
+        const auto expected=roster_database_.originalSlots();commitRosterReset();
+        require(roster_database_.slotTable()==expected,"Reset failed to restore free agents");
+        auto resetRestart=restart; nba97::RosterSaveStore resetStore(dir/"rosters.n97rst");resetStore.load(resetRestart);
+        require(resetRestart.slotTable()==expected,"Reset restart mismatch");
+        // Independent reproduction of the manually observed Sign/View/Cancel
+        // quirk. Save retention must survive a fresh store, not just the UI.
+        sign_team_=2;sign_cursors_={0,13};sign_tops_={0,9};
+        frontend_page_=nba97::FrontendPage::SignFreeAgent;openTrade();
+        handleTradeKey('C');handleTradeKey('C');capture("quirk-signed");
+        const auto retained=tradeDraft()->slotTable();
+        handleTradeKey('D');capture("quirk-view-alston");
+        handleTradeKey(VK_RETURN);capture("quirk-view-return");
+        require(trade_screen_.team[1]==3&&trade_screen_.cursor[1]==13&&trade_screen_.top[1]==9&&
+            trade_screen_.phase==NBA97_TRADE_FIRST&&!trade_screen_.changes&&
+            nba97_trade_dirty(&trade_screen_)&&!nba97_trade_undo_dirty(&trade_screen_),"Sign constructor undo/receiver quirk");
+        handleTradeKey('X');settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters&&!trade_choice_address_&&
+            roster_database_.slotTable()==retained,"Sign pre-View change not retained on Cancel");
+        auto retainedRestart=roster_database_.prepareSlotTable(expected);
+        nba97::RosterSaveStore retainedStore(dir/"rosters.n97rst");retainedStore.load(retainedRestart);
+        require(retainedRestart.slotTable()==retained&&retainedRestart.rosterOwner(player)==2,"Sign quirk retained only in memory");
+        frontend_page_=nba97::FrontendPage::SignFreeAgent;openTrade();capture("quirk-retained-restart");
+        require(trade_screen_.team[1]==3&&trade_screen_.cursor[0]==0&&trade_screen_.cursor[1]==0&&
+            trade_screen_.top[0]==0&&trade_screen_.top[1]==0,"Rosters menu must reset Sign row positions");
+        handleTradeKey('X');settle();commitRosterReset();
+        require(roster_database_.slotTable()==expected,"final isolated Reset");
+        trace_.log("SIGN-HOST-VERIFY","PASS 26 checkpoints: original assets/Help/View/Compare/100-row tail/refusals/signing/save failure/restart/discard/Reset/retained-child-undo; isolated save only");
+        return 0;
+    }
+
+    int captureTrade() {
+        const auto dir=std::filesystem::weakly_canonical(options_.trade_capture_dir);
+        const auto root=std::filesystem::weakly_canonical(".local/verification");
+        const auto relative=dir.lexically_relative(root);
+        if(relative.empty() || relative=="." || *relative.begin()==".." || std::filesystem::exists(dir))
+            throw std::runtime_error("Trade verification needs a fresh directory inside .local/verification");
+        std::filesystem::create_directories(dir);
+        const auto original=roster_database_.slotTable();
+        roster_store_=std::make_unique<nba97::RosterSaveStore>(dir/"rosters.n97rst");
+        roster_store_->load(roster_database_);
+        frontend_page_=nba97::FrontendPage::TradePlayers;
+        trade_teams_={2,24};openTrade();
+        auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        // Every slot pair on29 adjacent-team pairs, with the real private
+        // catalogue/preference table. Validate conservation without publication.
+        std::array<unsigned,4> matrix_results{}; // swap, transfer, both empty, minimum
+        for(int team=0;team<29;++team)for(unsigned a=0;a<15;++a)for(unsigned b=0;b<15;++b) {
+            Nba97TradeScreen candidate{};const uint8_t cursors[]{uint8_t(a),uint8_t(b)};
+            const uint8_t tops[]{uint8_t((std::min)(a,9u)),uint8_t((std::min)(b,9u))};
+            require(nba97_trade_begin(&candidate,original.data(),int16_t(team),int16_t((team+1)%29),0,nullptr,cursors,tops)!=0,"private matrix entry");
+            const auto before=candidate;
+            const bool empty_left=before.selected[0]==UINT16_MAX,empty_right=before.selected[1]==UINT16_MAX;
+            const bool both_empty=empty_left&&empty_right,transfer=empty_left!=empty_right;
+            const int donor=empty_left?1:0;
+            const bool minimum=transfer&&before.counts[before.team[donor]]==8;
+            const auto expected=both_empty?NBA97_TRADE_IDLE:minimum?NBA97_TRADE_NOTICE:NBA97_TRADE_SWAPPED;
+            auto data=tradeData();
+            require(nba97_trade_input(&candidate,0x800,&data)==NBA97_TRADE_PICK,"private matrix first callback");
+            auto event=nba97_trade_input(&candidate,0x800,&data);
+            require(event==expected,"private matrix wrong swap/transfer/rejection outcome");
+            ++matrix_results[both_empty?2:minimum?3:transfer?1:0];
+            require(!std::memcmp(candidate.snapshot,original.data(),sizeof(candidate.snapshot)),"private matrix snapshot mutated");
+            if(event!=NBA97_TRADE_SWAPPED) {
+                require(!std::memcmp(candidate.working,before.working,sizeof(candidate.working))&&
+                    !std::memcmp(candidate.counts,before.counts,sizeof(candidate.counts))&&candidate.changes==0&&
+                    candidate.phase==NBA97_TRADE_SECOND,"private matrix rejection changed draft or phase");
+                if(minimum)require(candidate.notice.notice==NBA97_ROSTER_NOTICE_MINIMUM&&
+                    candidate.notice.subject==before.team[donor],"private matrix minimum notice subject");
+            } else {
+                require(candidate.changes==1&&candidate.phase==NBA97_TRADE_FIRST&&nba97_trade_dirty(&candidate),"private matrix successful trade not committed to draft");
+                for(int p=0;p<2;++p) {
+                    const int t=before.team[p];
+                    const int delta=transfer?(p==donor?-1:1):0;
+                    require(candidate.counts[t]==before.counts[t]+delta,"private matrix wrong team count");
+                    std::array<uint16_t,15> expected_members{},actual_members{};
+                    std::copy_n(before.working+t*15,15,expected_members.begin());
+                    std::copy_n(candidate.working+t*15,15,actual_members.begin());
+                    // Independent membership oracle; donor starter ordering is
+                    // tested separately by the recovered compaction tests.
+                    expected_members[before.cursor[p]]=before.selected[1-p];
+                    std::sort(expected_members.begin(),expected_members.end());
+                    std::sort(actual_members.begin(),actual_members.end());
+                    require(expected_members==actual_members,"private matrix wrong player moved");
+                }
+            }
+            for(int t=0;t<30;++t)if(t!=before.team[0]&&t!=before.team[1]) {
+                require(candidate.counts[t]==before.counts[t]&&!std::memcmp(candidate.working+t*15,
+                    before.working+t*15,(t==29?100:15)*sizeof(uint16_t)),"private matrix unrelated roster changed");
+            }
+            nba97::RosterSlots proposed;std::copy_n(candidate.working,535,proposed.begin());
+            (void)roster_database_.prepareSlotTable(proposed);
+        }
+        trace_.log("TRADE-MATRIX","PASS 6525 real-data slot pairs; bounded adjacent-team sample, not all team pairs; population/contiguity/ownership validated; no publication");
+        trace_.log("TRADE-MATRIX-OUTCOMES","swap="+std::to_string(matrix_results[0])+" transfer="+std::to_string(matrix_results[1])+
+            " both-empty="+std::to_string(matrix_results[2])+" minimum="+std::to_string(matrix_results[3])+"; exact event, phase, identities, counts, snapshot and unrelated rosters checked");
+        auto settle=[&] {
+            for(int i=0;i<50 && isRosterEditor();++i) {
+                menu_elapsed_ms_+=17;
+                nba97_trade_frame(&trade_screen_,0);
+                nba97_reorder_child_input_ready(&reorder_child_,0);
+                if(trade_choice_address_)tradeChoiceEvent(nba97_reset_tick(&trade_choice_,0));
+                else stepReorderHelp(0,true);
+                if(!isRosterEditor())break;
+                nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
+                advanceComparePalette();
+                if(compare_refresh_.remaining)advanceCompareRefresh();
+                if(compare_repeat_.post_frames)--compare_repeat_.post_frames;
+            }
+            frontend_transition_active_=false;
+        };
+        auto capture=[&](const char* name){
+            settle();updatePlayerPhoto(true);
+            const auto recorded=nativeRecordState();
+            require(recorded[1]==static_cast<int>(nba97::FrontendPage::TradePlayers)&&
+                recorded[3]==trade_screen_.team[0]&&recorded[4]==trade_screen_.phase&&
+                recorded[5]==reorder_child_.state&&recorded[6]==reorder_help_.phase,
+                "Trade recording used another screen's controller state");
+            for(unsigned side=0;side<2;++side)
+                require(recorded[7+side]==trade_screen_.cursor[side]&&
+                    recorded[9+side]==trade_screen_.top[side]&&recorded[11+side]==trade_screen_.selected[side],
+                    "Trade recording lost parent cursor/viewport/player identity");
+            std::array<uint8_t,1070> slot_bytes{};
+            for(unsigned i=0;i<535;++i) {
+                slot_bytes[2*i]=uint8_t(trade_screen_.working[i]);
+                slot_bytes[2*i+1]=uint8_t(trade_screen_.working[i]>>8);
+            }
+            nba97::Sha256 expected_hash;expected_hash.update(slot_bytes.data(),slot_bytes.size());
+            require(nativeRecordSlotsHash()==expected_hash.digest(),"Trade recording hashed a stale Re-order draft");
+            writePpm(renderTrade(),dir/(std::string(name)+".ppm"));trace_.log("TRADE-CHECKPOINT",name);
+        };
+        auto help=[&](const char* name){handleTradeKey('F');capture(name);handleTradeKey(VK_RETURN);settle();};
+        capture("entry");help("help-first");
+        for(int i=0;i<14;++i)handleTradeKey(VK_DOWN);capture("empty-first");
+        handleTradeKey('D');capture("empty-view-notice");handleTradeKey(VK_RETURN);settle();
+        require(!reorder_child_.state,"empty row opened child");
+        handleTradeKey('S');capture("empty-compare-notice");handleTradeKey(VK_RETURN);settle();
+        require(!reorder_child_.state && !nba97_trade_dirty(&trade_screen_),"empty Compare changed roster");
+        for(int i=0;i<14;++i)handleTradeKey(VK_UP);
+        handleTradeKey('C');capture("second");help("help-second");
+        handleTradeKey('X');capture("cancel-second");
+        require(trade_screen_.phase==NBA97_TRADE_FIRST&&!trade_screen_.child&&
+            trade_screen_.team[0]==2&&trade_screen_.team[1]==24&&trade_screen_.cursor[0]==0&&trade_screen_.cursor[1]==0&&
+            !std::memcmp(trade_screen_.working,original.data(),sizeof(trade_screen_.working))&&roster_database_.slotTable()==original,
+            "replacement cancellation changed selection or roster");
+        trace_.log("TRADE-CANCEL-VERIFY","PASS second -> first; Charlotte/Seattle cursor0/0; full draft and accepted roster unchanged");
+        handleTradeKey('C');settle();
+        handleTradeKey(VK_RIGHT);capture("second-team");
+        require(trade_screen_.team[1]==25,"second team scan failed");
+        handleTradeKey(VK_LEFT);settle();require(trade_screen_.team[1]==24,"second team reverse scan failed");
+        handleTradeKey('X');settle();
+        handleTradeKey('D');capture("view");help("view-help");
+        auto view_team=roster_viewer_.teamIndex();handleTradeKey('K');capture("view-team-scan");
+        require(roster_viewer_.teamIndex()!=view_team,"View R1 not routed");handleTradeKey('J');settle();
+        handleTradeKey('E');capture("view-layer");handleTradeKey('Q');settle();
+        handleTradeKey(VK_RIGHT);capture("view-browsed");handleTradeKey(VK_RETURN);capture("view-keep");
+        require(trade_choice_address_==0x800AEE88&&trade_choice_.choice==1,"View keep modal/default ignore missing");
+        handleTradeKey('C');capture("view-ignore");
+        require(!reorder_child_.state&&trade_screen_.team[0]==2&&trade_screen_.team[1]==24&&
+            trade_screen_.cursor[0]==0&&nba97_trade_result(&trade_screen_)==0&&!nba97_trade_dirty(&trade_screen_),
+            "View ignored proposal changed parent");
+        handleTradeKey('S');capture("compare-initial");handleTradeKey('X');settle();
+        require(!reorder_child_.state&&!trade_choice_address_&&trade_screen_.cursor[0]==0&&
+            nba97_trade_result(&trade_screen_)==0,"unmodified Compare cancel failed");
+        handleTradeKey('S');settle();handleTradeKey(VK_RIGHT);settle();handleTradeKey(VK_RETURN);capture("compare-initial-keep");
+        require(trade_choice_address_==0x800AEEF6&&trade_choice_.choice==1,"Compare keep modal/default ignore missing");
+        handleTradeKey(VK_UP);settle();handleTradeKey('C');capture("compare-initial-return");
+        require(!reorder_child_.state&&trade_screen_.team[0]==2&&trade_screen_.team[1]==24&&
+            trade_screen_.cursor[0]==1&&trade_screen_.top[0]==1&&trade_screen_.cursor[1]==0&&
+            !nba97_trade_dirty(&trade_screen_)&&roster_database_.slotTable()==original,"Compare keep changed roster or wrong selection");
+        handleTradeKey(VK_UP);settle(); // Restore Divac for the independent View keep path.
+        handleTradeKey('D');settle();handleTradeKey(VK_RIGHT);settle();handleTradeKey(VK_RETURN);settle();
+        require(trade_choice_address_==0x800AEE88&&trade_choice_.choice==1,"second View proposal missing");
+        handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();capture("view-return");
+        require(!reorder_child_.state && trade_screen_.cursor[0]==1,"View adoption failed");
+        handleTradeKey('S');capture("compare");help("compare-help");
+        handleTradeKey('E');settle();require(reorder_compare_.layer==3,"Compare R2 not routed");capture("compare-layer");
+        handleTradeKey('Q');settle();handleTradeKey('K');settle();require(reorder_compare_.team[0]==3,"Compare R1 not routed");
+        handleTradeKey('J');settle();
+        handleTradeKey(VK_RIGHT);settle();capture("compare-browsed");handleTradeKey(VK_RETURN);capture("compare-keep");
+        require(trade_choice_address_==0x800AEEF6,"Compare keep modal missing");
+        handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();capture("compare-return");
+        require(!reorder_child_.state && trade_screen_.cursor[0]==2,"Compare adoption failed");
+        handleTradeKey(VK_UP);settle(); // Match original reference: Mason versus McIlvaine.
+        handleTradeKey('C');handleTradeKey('C');capture("traded");
+        require(nba97_trade_dirty(&trade_screen_) && roster_database_.slotTable()==original,"trade draft isolation failed");
+        const auto traded_draft=tradeDraft()->slotTable();
+        const auto traded_left=trade_screen_.selected[0],traded_right=trade_screen_.selected[1];
+        handleTradeKey('X');capture("discard-after-trade");
+        require(trade_choice_address_==0x800AF4F8&&trade_choice_.choice==1,
+            "post-trade discard prompt/default don't exit missing");
+        handleTradeKey('C');settle();
+        require(!trade_choice_address_&&isRosterEditor()&&
+            !std::memcmp(trade_screen_.working,traded_draft.data(),sizeof(trade_screen_.working))&&
+            roster_database_.slotTable()==original,"declining discard changed draft or published it");
+        handleTradeKey('D');capture("view-after-trade");
+        require(viewerDatabase().slotTable()==traded_draft&&
+            viewerDatabase().teams().at(roster_viewer_.teamIndex()).id==2&&
+            viewerDatabase().slotTable()[2*15+roster_viewer_.playerIndex()]==traded_left,
+            "View after trade used accepted/original ownership instead of draft");
+        handleTradeKey('X');settle();
+        handleTradeKey('S');capture("compare-after-trade");
+        require(reorder_compare_.player[0]==traded_left&&reorder_compare_.player[1]==traded_right&&
+            viewerDatabase().slotTable()==traded_draft,"Compare after trade used stale player identities");
+        handleTradeKey('X');settle();
+        require(!reorder_child_.state&&!trade_choice_address_&&
+            !std::memcmp(trade_screen_.working,traded_draft.data(),sizeof(trade_screen_.working))&&
+            roster_database_.slotTable()==original&&roster_store_->accepted().generation==0,
+            "post-trade child round trip mutated or published draft");
+        trace_.log("TRADE-DRAFT-CHILDREN","PASS View/Compare see traded ownership; child returns keep working slots; live roster/save generation unchanged");
+        bool injected=false;
+        reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){if(stage==nba97::RosterSaveStage::PartialWrite){*static_cast<bool*>(p)=true;throw std::runtime_error("injected Trade save failure");}},&injected};
+        const auto before=trade_screen_;handleTradeKey(VK_RETURN);
+        require(injected && !std::memcmp(&before,&trade_screen_,sizeof(before)) && roster_database_.slotTable()==original,"failed save changed draft/live state");
+        capture("save-failed");handleTradeKey(VK_RETURN);settle();reorder_save_hooks_={};
+        handleTradeKey(VK_RETURN);settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters && roster_database_.slotTable()!=original,"Trade save did not publish");
+        const auto accepted=roster_database_.slotTable();
+        auto restart=roster_database_.prepareSlotTable(original);nba97::RosterSaveStore reopened(dir/"rosters.n97rst");
+        reopened.load(restart);require(restart.slotTable()==accepted,"Trade restart lost changes");
+        frontend_page_=nba97::FrontendPage::TradePlayers;openTrade();capture("restart");
+        handleTradeKey('C');handleTradeKey('C');handleTradeKey('X');capture("discard");
+        require(trade_choice_address_==0x800AF4F8,"discard modal missing");
+        handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters && roster_database_.slotTable()==accepted,"discard changed accepted save");
+        frontend_page_=nba97::FrontendPage::TradePlayers;openTrade();
+        // Use a different replacement so this edit doesn't merely undo the
+        // first trade: the subsequent Reset must exercise a real commit.
+        handleTradeKey('C');handleTradeKey(VK_DOWN);handleTradeKey('C');settle();
+        const auto sync_draft=tradeDraft()->slotTable();
+        const auto previous_generation=roster_store_->accepted().generation;
+        bool sync_injected=false;
+        reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){
+            if(stage==nba97::RosterSaveStage::BeforeDirectorySync){*static_cast<bool*>(p)=true;
+                throw std::runtime_error("injected Trade post-replacement sync failure");}},&sync_injected};
+        handleTradeKey(VK_RETURN);capture("save-sync-uncertain");reorder_save_hooks_={};
+        require(sync_injected&&reorder_exit_after_notice_&&reorder_notice_&&
+            nba97_trade_result(&trade_screen_)==1&&roster_database_.slotTable()==sync_draft&&
+            roster_store_->accepted().generation==previous_generation+1,
+            "postcommit sync warning failed to publish exactly once");
+        auto sync_restart=roster_database_.prepareSlotTable(original);
+        nba97::RosterSaveStore sync_reopened(dir/"rosters.n97rst");sync_reopened.load(sync_restart);
+        require(sync_restart.slotTable()==sync_draft&&sync_reopened.accepted().generation==previous_generation+1,
+            "postcommit sync warning disk/live state diverged");
+        handleTradeKey(VK_RETURN);settle();
+        require(frontend_page_==nba97::FrontendPage::Rosters&&!reorder_exit_after_notice_&&
+            !reorder_notice_&&roster_store_->accepted().generation==previous_generation+1&&
+            roster_database_.slotTable()==sync_draft,"closing committed warning retried or lost the trade");
+        trace_.log("TRADE-SYNC-VERIFY","PASS post-replacement failure publishes once; fresh load matches; notice acknowledgement exits without retry");
+        commitRosterReset();require(roster_database_.slotTable()==original && !rosterResetEligible(),"Reset did not restore defaults");
+        // Intentionally preserve the original child-return undo bug. Separate
+        // the constructor checkpoint from the native durable-save baseline.
+        for(int scenario=0;scenario<4;++scenario) {
+            frontend_page_=nba97::FrontendPage::TradePlayers;
+            trade_teams_={2,24};trade_cursors_={0,0};trade_tops_={0,0};openTrade();
+            const auto generation=roster_store_->accepted().generation;
+            handleTradeKey(VK_DOWN); // Navigate to Mason; don't fake remembered cursors on reopen.
+            handleTradeKey('C');handleTradeKey('C');settle();
+            const auto retained=tradeDraft()->slotTable();
+            require(retained!=original&&nba97_trade_undo_dirty(&trade_screen_),"quirk fixture trade missing");
+            handleTradeKey('F');settle();handleTradeKey(VK_RETURN);settle();
+            require(nba97_trade_undo_dirty(&trade_screen_),"Help must not renew the original constructor checkpoint");
+            const bool second=scenario%2!=0;
+            if(second){handleTradeKey('C');settle();}
+            handleTradeKey(second?'S':'D');settle();handleTradeKey('X');settle();
+            require(!reorder_child_.state&&!nba97_trade_undo_dirty(&trade_screen_)&&
+                nba97_trade_dirty(&trade_screen_)&&trade_screen_.phase==(second?NBA97_TRADE_SECOND:NBA97_TRADE_FIRST)&&
+                trade_screen_.changes==0&&roster_database_.slotTable()==original&&
+                roster_store_->accepted().generation==generation,"child quirk rebased wrong state or autosaved");
+            if(second){handleTradeKey('X');settle();require(isRosterEditor(),
+                "cancel second pick must not exit or persist");}
+            if(second) {
+                handleTradeKey('C');handleTradeKey(VK_DOWN);handleTradeKey('C');settle();
+                const auto later=tradeDraft()->slotTable();require(later!=retained,"later quirk edit missing");
+                handleTradeKey('X');capture(("quirk-later-discard-"+std::to_string(scenario)).c_str());
+                require(trade_choice_address_==0x800AF4F8,"later edits must request discard");
+                handleTradeKey('C');settle();require(tradeDraft()->slotTable()==later,"declining quirk discard lost later edits");
+                handleTradeKey('X');settle();handleTradeKey(VK_UP);settle();
+            }
+            bool fault=false;
+            if(scenario==1)reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){
+                if(stage==nba97::RosterSaveStage::PartialWrite){*static_cast<bool*>(p)=true;
+                    throw std::runtime_error("injected retained-checkpoint cancel save failure");}},&fault};
+            if(scenario==2)reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* p){
+                if(stage==nba97::RosterSaveStage::BeforeDirectorySync){*static_cast<bool*>(p)=true;
+                    throw std::runtime_error("injected retained-checkpoint cancel sync uncertainty");}},&fault};
+            const auto pre_exit=trade_screen_;
+            handleTradeKey(second?'C':'X');settle();
+            if(scenario==1) {
+                require(fault&&reorder_notice_&&!reorder_exit_after_notice_&&
+                    !std::memcmp(trade_screen_.working,pre_exit.working,sizeof(pre_exit.working))&&
+                    !std::memcmp(trade_screen_.undo,pre_exit.undo,sizeof(pre_exit.undo))&&
+                    nba97_trade_result(&trade_screen_)==0&&roster_database_.slotTable()==original&&
+                    roster_store_->accepted().generation==generation,"failed cancel save lost draft/checkpoint or published");
+                capture("quirk-cancel-save-failed");
+                handleTradeKey(VK_RETURN);settle();reorder_save_hooks_={};
+                handleTradeKey('X');settle();handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();
+            } else if(scenario==2) {
+                require(fault&&reorder_notice_&&reorder_exit_after_notice_&&
+                    nba97_trade_result(&trade_screen_)==-1&&roster_database_.slotTable()==retained&&
+                    roster_store_->accepted().generation==generation+1,"cancel sync warning must retain signed result and publish once");
+                capture("quirk-cancel-sync-uncertain");reorder_save_hooks_={};handleTradeKey(VK_RETURN);settle();
+            }
+            require(frontend_page_==nba97::FrontendPage::Rosters&&roster_database_.slotTable()==retained&&
+                nba97_trade_result(&trade_screen_)==-1&&roster_store_->accepted().generation==generation+1,
+                "original quirk cancel failed to retain exactly the pre-child roster");
+            auto disk=roster_database_.prepareSlotTable(original);nba97::RosterSaveStore reload(dir/"rosters.n97rst");reload.load(disk);
+            require(disk.slotTable()==retained&&reload.accepted().generation==generation+1,"retained cancel restart mismatch");
+            frontend_page_=nba97::FrontendPage::TradePlayers;openTrade();
+            require(trade_screen_.cursor[0]==0&&trade_screen_.top[0]==0&&trade_screen_.cursor[1]==0,
+                "cancel exit must not overwrite remembered entry cursors");
+            capture(("quirk-retained-reopen-"+std::to_string(scenario)).c_str());
+            if(scenario==0) {
+                // Original reference continues from this retained roster:
+                // Divac versus Mason, then last empty Charlotte slot receives Mason.
+                handleTradeKey('S');capture("compare-retained");handleTradeKey('X');settle();
+                require(!reorder_child_.state&&trade_screen_.cursor[0]==0&&trade_screen_.cursor[1]==0&&
+                    !nba97_trade_dirty(&trade_screen_),"retained Compare return changed selection/roster");
+                for(int i=0;i<14;++i)handleTradeKey(VK_DOWN);
+                capture("transfer-receiver-empty");
+                require(trade_screen_.selected[0]==UINT16_MAX&&trade_screen_.cursor[0]==14,
+                    "reference transfer receiver must be the last empty slot");
+                const auto transfer_before=trade_screen_;
+                handleTradeKey('C');capture("transfer-second");
+                require(trade_screen_.phase==NBA97_TRADE_SECOND,"empty receiver selection failed");
+                handleTradeKey('C');capture("transfer-complete");
+                require(trade_screen_.phase==NBA97_TRADE_FIRST&&
+                    trade_screen_.counts[2]==transfer_before.counts[2]+1&&
+                    trade_screen_.counts[24]==transfer_before.counts[24]-1&&
+                    roster_database_.slotTable()==retained&&roster_store_->accepted().generation==generation+1,
+                    "reference transfer failed counts/phase/draft isolation");
+                for(int side=0;side<2;++side) {
+                    const int team=side==0?2:24;
+                    std::array<uint16_t,15> expected{},actual{};
+                    std::copy_n(retained.data()+team*15,15,expected.begin());
+                    std::copy_n(trade_screen_.working+team*15,15,actual.begin());
+                    expected[side==0?14:0]=side==0?transfer_before.selected[1]:UINT16_MAX;
+                    std::sort(expected.begin(),expected.end());std::sort(actual.begin(),actual.end());
+                    require(expected==actual,"reference transfer moved the wrong player");
+                }
+                (void)tradeDraft();
+                handleTradeKey('X');capture("transfer-discard");
+                require(trade_choice_address_==0x800AF4F8,"reference transfer discard prompt missing");
+                handleTradeKey(VK_UP);settle();handleTradeKey('C');settle();
+                require(roster_database_.slotTable()==retained,"transfer discard lost retained pre-child roster");
+                require(frontend_page_==nba97::FrontendPage::Rosters,"transfer discard did not exit to cards");
+                frontend_page_=nba97::FrontendPage::TradePlayers;openTrade();
+                require(!std::memcmp(trade_screen_.working,retained.data(),sizeof(trade_screen_.working))&&
+                    trade_screen_.counts[2]==13&&trade_screen_.counts[24]==13&&
+                    trade_screen_.cursor[0]==0&&trade_screen_.cursor[1]==0,
+                    "transfer discard reopening changed retained roster/counts/cursors");
+                capture("transfer-discard-reopened");handleTradeKey('X');settle();
+                trace_.log("TRADE-TRANSFER-VERIFY","PASS Mason Seattle -> last empty Charlotte slot; counts+1/-1; exact membership; discard restores retained roster without save");
+            } else {handleTradeKey('X');settle();}
+            require(frontend_page_==nba97::FrontendPage::Rosters&&
+                roster_store_->accepted().generation==generation+1,"unchanged reopening must not republish");
+            commitRosterReset();require(roster_database_.slotTable()==original&&!rosterResetEligible(),"quirk Reset failed");
+        }
+        trace_.log("TRADE-QUIRK-VERIFY","PASS 4 host routes; Help does not rebase; View/Compare rebase without save; cancel keeps pre-child trades; later discard/decline; failure/retry and sync warning; restart/Reset");
+        trace_.log("TRADE-RECORD-VERIFY","PASS all checkpoints: Trade parent team/phase/cursors/viewport/player IDs and 535-slot little-endian draft hash; v1 timeline right-team field absent");
+        trace_.log("TRADE-HOST-VERIFY","PASS entry/second-team/cancel/Help/View/Compare/keep/trade/save-failure/retry/restart/discard/Reset; isolated save only");
+        return 0;
+    }
+
+    bool isSign() const { return frontend_page_==nba97::FrontendPage::SignFreeAgent; }
+    bool isRosterEditor() const { return isSign() || frontend_page_==nba97::FrontendPage::TradePlayers; }
+    void openTrade() {
+        trade_assets_=std::make_unique<nba97::TradeAssets>(options_.asset_root,isSign());
+        reorder_labels_=std::make_unique<nba97::ReorderLabelPreview>(options_.asset_root);
+        reorder_help_pack_=std::make_unique<nba97::FrontendHelpPack>(options_.asset_root/(isSign()?"sign/help.n97ui":"trade/help.n97ui"));
+        reorder_help_={};reorder_notice_.reset();reorder_exit_after_notice_=false;
+        trade_choice_={};trade_choice_address_=0;reorder_child_={};reorder_child_database_.reset();
+        for(const char* tag:{isSign()?"ba30":"ba38","ba02","frmr","110p","111p","hel1","hel2"}) {
+            auto im=load_png_image(options_.asset_root/"menu/ZSET4-decoded"/(std::string(tag)+".png"));
+            for(std::size_t i=0;i<im.rgba.size();i+=4)
+                if(!im.rgba[i]&&!im.rgba[i+1]&&!im.rgba[i+2])im.rgba[i+3]=0;
+            roster_sprites_[tag]=std::move(im);
+        }
+        const auto table=roster_database_.slotTable();
+        const int opened=isSign()?nba97_sign_begin(&trade_screen_,table.data(),sign_team_,0,nullptr,sign_cursors_.data(),sign_tops_.data()):
+            nba97_trade_begin(&trade_screen_,table.data(),trade_teams_[0],trade_teams_[1],0,nullptr,trade_cursors_.data(),trade_tops_.data());
+        if(!opened) throw std::runtime_error("invalid roster editor entry");
+        std::size_t count=0;for(const auto& p:roster_database_.players())count=(std::max)(count,std::size_t(p.id)+1);
+        trade_positions_.assign(count,99);trade_injuries_.assign(count,0);
+        for(const auto& p:roster_database_.players())trade_positions_[p.id]=p.position;
+        if(!compare_backgrounds_)compare_backgrounds_=std::make_unique<nba97::FrontendPaletteAssets>(
+            options_.asset_root/"menu/ZSET4-team-backgrounds/indexed.n97pal");
+        if(!nba97_frontend_palette_begin(&trade_palette_,compare_backgrounds_->bank(),33,trade_screen_.team[0],trade_screen_.team[1]))
+            throw std::runtime_error("invalid Trade palettes");
+        trade_portrait_ids_.fill(UINT16_MAX);trade_portraits_={};loadTradePortraits();
+        trade_tick_=menu_elapsed_ms_/17;
+        trace_.log(isSign()?"SIGN-ENTRY":"TRADE-ENTRY",isSign()?"80056F9C -> 80056494; state14 kinds0/1 capacity100/15 right-base100; callbacks56D6C/56E40; six visible rows; 535-slot isolated snapshot":
+            "80056CD0 -> 80056494; graphics/controller state13; kinds1/1; 535-slot isolated snapshot; 30 rows/6 visible per side");
+        trace_.log(isSign()?"SIGN-ASSETS":"TRADE-ASSETS",isSign()?"80096E84 ba30=(156,10); Z2PORT 87x51; state14 private Help/notice pack":"80096D24 ba38=(155,10); Z2PORT 87x51; private UI/preference/Help packs; independent indexed CLUT halves");
+        trace_.log(isSign()?"SIGN-KEYS":"TRADE-KEYS",isSign()?
+            "Up/Down=active rows; Left/Right=receiver team; C/Space=pick/sign into empty slot; X/Esc=cancel; Enter=accept/save from first stage; D=View; S=Compare; F=Help; normal mode0":
+            "arrows=active list rows/teams; C/Space=pick/trade; X/Esc=cancel; Enter=accept/save; D=View; S=Compare; F=Help; normal frontend mode0/no injury context");
+        logTrade("constructed");
+        if(!roster_load_error_.empty())showReorderSaveNotice("save unavailable","file needs attention","see CLI for details",false,0x800);
+    }
+    Nba97TradeData tradeData() const {
+        return {trade_positions_.data(),trade_injuries_.data(),trade_assets_->preference(),trade_positions_.size(),0};
+    }
+    void loadTradePortraits() {
+        for(unsigned p=0;p<2;++p) {
+            auto id=trade_screen_.selected[p];if(id==trade_portrait_ids_[p]&&!trade_portraits_[p].rgba.empty())continue;
+            char file[40]{};sprintf_s(file,"player_%03u.png",id==UINT16_MAX?0u:unsigned(id)+1);
+            auto im=load_png_image(options_.asset_root/"menu/Z2PORT-decoded"/file);
+            if(im.width!=87||im.height!=51)throw std::runtime_error("invalid Trade Z2PORT portrait");
+            trade_portraits_[p]=std::move(im);trade_portrait_ids_[p]=id;
+            trace_.log("TRADE-PORTRAIT","side="+std::to_string(p)+" player="+std::to_string(id)+" record="+file);
+        }
+    }
+    void logTrade(const char* event) {
+        const auto& s=trade_screen_;
+        trace_.log(isSign()?"SIGN":"TRADE",std::string(event)+" teams="+std::to_string(s.team[0])+"/"+std::to_string(s.team[1])+
+            " phase="+std::to_string(s.phase)+" selected="+std::to_string(s.selected[0])+"/"+std::to_string(s.selected[1])+
+            " cursor="+std::to_string(s.cursor[0])+"/"+std::to_string(s.cursor[1])+" top="+std::to_string(s.top[0])+"/"+std::to_string(s.top[1])+
+            " counts="+std::to_string(s.counts[s.team[0]])+"/"+std::to_string(s.counts[s.team[1]])+
+            " changes="+std::to_string(s.changes)+" save-dirty="+std::to_string(nba97_trade_dirty(&s))+
+            " undo-dirty="+std::to_string(nba97_trade_undo_dirty(&s))+" child="+std::to_string(s.child)+
+            " selector-result="+std::to_string(nba97_trade_result(&s))+" kinds="+std::to_string(s.list_kind[0])+"/"+std::to_string(s.list_kind[1]));
+    }
+    PshImage renderTrade() {
+        prepareFrontendTitle();
+        auto im=reorder_child_.state ? renderReorder() : nba97::renderTradeScreen(trade_screen_,roster_sprites_,menu_font_,
+            trade_portraits_,trade_assets_->labels(trade_screen_,roster_database_),*compare_backgrounds_,trade_palette_,menu_elapsed_ms_,frontend_title_.corners());
+        if(!reorder_child_.state && nba97_help_visible(&reorder_help_))
+            nba97::FrontendHelpPack::draw(im,reorder_labels_->smallFont(),reorder_notice_?*reorder_notice_:
+                reorder_help_pack_->descriptor(isSign()?14:13,trade_screen_.phase==NBA97_TRADE_SECOND),reorder_help_);
+        if(trade_choice_address_)trade_assets_->drawChoice(im,trade_choice_address_,trade_choice_);
+        return im;
+    }
+    static uint16_t tradeKey(WPARAM key) {
+        return key=='J'||key==VK_OEM_4?0x200:key=='K'||key==VK_OEM_6?0x400:key=='Q'?0x1000:key=='E'?0x2000:
+            key==VK_UP?1:key==VK_DOWN?2:key==VK_LEFT?8:key==VK_RIGHT?4:
+            key=='C'||key==VK_SPACE?0x800:key=='X'||key==VK_ESCAPE||key==VK_BACK?0x100:
+            key==VK_RETURN?0x80:key=='D'?0x10:key=='S'?0x40:
+            key=='F'||key=='H'||key==VK_F1?0x20:0;
+    }
+    void syncTrade() {
+        loadTradePortraits();
+        for(unsigned p=0;p<2;++p)nba97_frontend_palette_request(&trade_palette_,p,trade_screen_.team[p],33);
+    }
+    void tradeChoiceEvent(int event) {
+        if(event&NBA97_RESET_OPEN)playBottomMenuSound(12,"trade-confirm-open");
+        if(event&NBA97_RESET_UP)playBottomMenuSound(3,"trade-confirm-up");
+        if(event&NBA97_RESET_DOWN)playBottomMenuSound(4,"trade-confirm-down");
+        if(event&NBA97_RESET_CHOSEN){playBottomMenuSound(6,"trade-confirm-choice");playBottomMenuSound(8,"trade-confirm-close");}
+        if(event&NBA97_RESET_RETURN) {
+            auto address=trade_choice_address_;trade_choice_address_=0;
+            const bool yes=trade_choice_.choice==0;
+            if(address==0x800AF4F8) {
+                const auto before=trade_screen_;
+                auto result=nba97_trade_discard_answer(&trade_screen_,yes,0x800);
+                if(result==NBA97_TRADE_DISCARD)completeTradeExit(before,0x800);
+                else logTrade("discard declined");
+            } else completeTradeChild(yes);
+        }
+    }
+    void openTradeChoice(uint32_t address,uint16_t held) {
+        trade_choice_={};trade_choice_address_=address;
+        tradeChoiceEvent(nba97_reset_open(&trade_choice_,trade_assets_->rect(address),held,0));
+        trace_.log("TRADE-CONFIRM","descriptor="+std::to_string(address)+" default=ignore/cancel; original red modal; no mutation before choice");
+    }
+    void finishTrade(bool accepted) {
+        if(nba97_trade_result(&trade_screen_)!=(accepted?1:-1))throw std::runtime_error("Trade selector exit contract mismatch");
+        if(accepted)for(unsigned p=0;p<2;++p){
+            if(isSign()){sign_team_=nba97_reorder_normalize_team(trade_screen_.team[0],trade_screen_.mode,trade_screen_.eligible[0]);sign_cursors_[p]=trade_screen_.cursor[p];sign_tops_[p]=trade_screen_.top[p];}
+            else {trade_teams_[p]=trade_screen_.team[p];trade_cursors_[p]=trade_screen_.cursor[p];trade_tops_[p]=trade_screen_.top[p];}}
+        logTrade(accepted?"accepted and durably published":nba97_trade_dirty(&trade_screen_)?
+            "cancelled; pre-child checkpoint retained and durably published":"cancelled; entry roster unchanged");
+        beginFrontendTransition(nba97::FrontendPage::Rosters,isSign()?
+            (accepted?"Sign saved":"Sign cancelled"):(accepted?"Trade saved":"Trade cancelled"));
+        // 57CE4 resets both cursor fields to-1;56494 maps them to row0 on
+        // next menu entry. Direct child returns do NOT go through57CE4.
+        if(trade_screen_.frontend_state==14){sign_cursors_={};sign_tops_={};}
+        trade_assets_.reset();trade_portraits_={};reorder_help_pack_.reset();reorder_labels_.reset();
+        reorder_help_={};reorder_notice_.reset();reorder_exit_after_notice_=false;
+    }
+    void completeTradeExit(const Nba97TradeScreen& before,uint16_t held) {
+        const auto result=nba97_trade_result(&trade_screen_);
+        if(result!=1&&result!=-1)throw std::runtime_error("Trade exit without signed selector result");
+        const bool accepted=result==1;
+        if(accepted||nba97_trade_dirty(&trade_screen_)) {
+            nba97::RosterCommitResult saved;
+            try {
+                if(!roster_store_)throw std::runtime_error("roster save unavailable");
+                if(std::memcmp(roster_database_.slotTable().data(),trade_screen_.snapshot,sizeof(trade_screen_.snapshot)))
+                    throw std::runtime_error("Trade baseline conflict");
+                nba97::RosterSlots proposed;std::copy_n(trade_screen_.working,535,proposed.begin());
+                saved=roster_store_->commit(roster_database_,proposed,reorder_save_hooks_);
+            }catch(const std::exception& e){
+                trade_screen_=before;syncTrade();trace_.log(isSign()?"SIGN-SAVE-FAILED":"TRADE-SAVE-FAILED",e.what());
+                showReorderSaveNotice("save failed","draft kept - exit cancelled","see CLI then retry",false,held);
+                rebuildMenuFrame();return;
+            }
+            trace_.log(isSign()?"SIGN-COMMIT":"TRADE-COMMIT","generation="+std::to_string(saved.generation)+" bytes="+std::to_string(saved.bytes)+
+                " sync="+std::to_string(saved.sync_completed)+" selector-result="+std::to_string(result)+
+                (accepted?" reason=Start":" reason=retained-pre-child-checkpoint"));
+            if(!saved.sync_completed){
+                showReorderSaveNotice("saved - sync uncertain","do not retry this edit","see CLI for details",true,held);
+                rebuildMenuFrame();return;
+            }
+        }
+        playBottomMenuSound(accepted?9:10,accepted?"trade-accept":"trade-discard");finishTrade(accepted);
+    }
+    void updateTrade() {
+        if(!isRosterEditor())return;
+        const auto now=menu_elapsed_ms_/17;
+        const auto first=now>120?(std::max)(trade_tick_,now-120):trade_tick_;
+        for(auto n=first;n<now;++n) {
+            uint16_t raw=0;for(int key:std::array<int,21>{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,'C',VK_SPACE,'X',VK_ESCAPE,VK_RETURN,'D','S','F','H',VK_F1,VK_BACK,'J','K','Q','E',VK_OEM_4,VK_OEM_6})
+                if(GetForegroundWindow()==window_ && !IsIconic(window_) && (GetAsyncKeyState(key)&0x8000))raw|=tradeKey(key);
+            if(!reorder_notice_) {
+                if(reorder_child_.state)nba97_reorder_child_input_ready(&reorder_child_,raw);
+                else if(!trade_choice_address_)nba97_trade_frame(&trade_screen_,raw);
+            }
+            nba97_frontend_palette_tick(&trade_palette_,compare_backgrounds_->bank(),33);
+            advanceComparePalette();
+            if(trade_choice_address_)tradeChoiceEvent(nba97_reset_tick(&trade_choice_,raw));
+            else stepReorderHelp(raw,true);
+            if(!isRosterEditor())break;
+        }
+        trade_tick_=now;
+    }
+    void handleTradeKey(WPARAM key) {
+        const auto raw=tradeKey(key);if(!raw || cool_fact_flash_.remaining)return;
+        if(player_notice_.phase!=NBA97_HELP_CLOSED){playerNoticeEvent(nba97_help_input(&player_notice_,raw));return;}
+        if(trade_choice_address_){tradeChoiceEvent(nba97_reset_input(&trade_choice_,raw==0x80?0x800:raw));rebuildMenuFrame();return;}
+        if(reorder_help_.phase!=NBA97_HELP_CLOSED){stepReorderHelp(raw,false);rebuildMenuFrame();return;}
+        if(reorder_child_.state) {
+            if(reorder_child_.waiting_input_change)return;
+            if(reorder_child_.state==0x23)handleCompareKey(key);
+            else if(raw==0x20)openReorderHelp();
+            else if(raw==0x80||raw==0x100)requestTradeChildReturn(raw);
+            else handleRosterViewKey(key=='C'?VK_SPACE:key=='D'?'S':key);
+            rebuildMenuFrame();return;
+        }
+        if(trade_screen_.waiting)return;
+        if(raw==0x20){openReorderHelp();rebuildMenuFrame();return;}
+        const auto before=trade_screen_;const auto data=tradeData();
+        const auto event=nba97_trade_input(&trade_screen_,raw,&data);
+        if(event==NBA97_TRADE_SWAPPED) {
+            try {(void)tradeDraft();} // Native invariant: preserve the entire base population.
+            catch(const std::exception& e) {
+                trade_screen_=before;trace_.log("TRADE-MUTATION-BLOCKED",std::string(e.what())+"; draft rolled back; live/save untouched");
+                showReorderSaveNotice("trade rejected","draft kept unchanged","see CLI for details",false,raw);rebuildMenuFrame();return;
+            }
+        }
+        if(event==NBA97_TRADE_NOTICE) {
+            const auto& d=trade_screen_.notice;std::string subject;
+            if(d.notice==NBA97_ROSTER_NOTICE_INJURED)subject=roster_database_.player(d.subject)->displayName();
+            else if(d.subject>=0)subject=std::string(roster_database_.team(d.subject)->city);
+            reorder_notice_=d.message_address==0x800AFC22?trade_assets_->emptyNotice(raw==0x40):
+                trade_assets_->notice(d.message_address,subject);
+            nba97_help_open(&reorder_help_,reorder_notice_->rect,raw);playBottomMenuSound(5,"trade-warning");
+            trace_.log(isSign()?"SIGN-REFUSE":"TRADE-REJECT","source descriptor="+std::to_string(d.message_address)+" subject="+std::to_string(d.subject)+" draft unchanged");
+        } else if(event==NBA97_TRADE_DISCARD_PROMPT)openTradeChoice(0x800AF4F8,raw);
+        else if(event==NBA97_TRADE_VIEW || event==NBA97_TRADE_COMPARE)openTradeChild();
+        else if(event==NBA97_TRADE_ACCEPT||event==NBA97_TRADE_DISCARD){completeTradeExit(before,raw);return;}
+        else if(event==NBA97_TRADE_INVALID)throw std::runtime_error("Trade controller rejected invalid data");
+        const auto cue=nba97_trade_event_sound(event,raw);
+        trace_.log(isSign()?"SIGN-CUE":"TRADE-CUE","event="+std::to_string(event)+" raw="+std::to_string(raw)+
+            " cue="+std::to_string(cue)+" source=8003D930/80055314; zero=no selector cue");
+        if(cue)playBottomMenuSound(cue,isSign()?"sign-selector":"trade-selector");
+        syncTrade();logTrade(("event="+std::to_string(event)).c_str());rebuildMenuFrame();
+    }
+
+    std::unique_ptr<const nba97::RosterDatabase> tradeDraft() const {
+        if(std::memcmp(roster_database_.slotTable().data(),trade_screen_.snapshot,sizeof(trade_screen_.snapshot)))
+            throw std::runtime_error("Trade draft baseline changed");
+        nba97::RosterSlots slots;std::copy_n(trade_screen_.working,535,slots.begin());
+        return std::make_unique<const nba97::RosterDatabase>(roster_database_.prepareSlotTable(slots));
+    }
+    void openTradeChild() {
+        // 56254 saves the left-team selector argument before child entry.
+        // A later Sign menu re-entry therefore normalizes29 to Chicago too,
+        // even when the parent is subsequently cancelled without adoption.
+        if(isSign()) {
+            sign_team_=nba97_reorder_normalize_team(trade_screen_.team[0],trade_screen_.mode,trade_screen_.eligible[0]);
+            for(unsigned p=0;p<2;++p){sign_cursors_[p]=trade_screen_.cursor[p];sign_tops_[p]=trade_screen_.top[p];}
+        }
+        const auto result=nba97_trade_result(&trade_screen_);
+        const uint8_t child=result==2?0x24:result==3?0x23:0;
+        if(!child || child!=trade_screen_.child)throw std::runtime_error("Trade selector child contract mismatch");
+        trace_.log("TRADE-ROUTE","56CD0 signed result="+std::to_string(result)+" -> frontend child="+std::to_string(child));
+        reorder_child_={};reorder_child_.state=child;
+        reorder_child_.parent_page=trade_screen_.phase==NBA97_TRADE_SECOND;
+        reorder_child_.team=trade_screen_.team[reorder_child_.parent_page];
+        for(unsigned p=0;p<2;++p){reorder_child_.cursor[p]=trade_screen_.cursor[p];reorder_child_.top[p]=trade_screen_.top[p];reorder_child_.player_id[p]=trade_screen_.selected[p];}
+        reorder_child_.waiting_input_change=1;reorder_child_.held_mask=trade_screen_.child==0x24?0x10:0x40;
+        if(trade_screen_.child==0x24){reorder_child_.player_id[0]=trade_screen_.selected[reorder_child_.parent_page];openReorderView();}
+        else openReorderCompare();
+        logTrade("child opened from isolated draft");
+    }
+    void requestTradeChildReturn(uint16_t mask) {
+        trade_child_exit_=mask;
+        for(unsigned p=0;p<2;++p){trade_child_teams_[p]=trade_screen_.team[p];trade_child_slots_[p]=trade_screen_.cursor[p];}
+        if(reorder_child_.state==0x24) {
+            auto p=reorder_child_.parent_page;
+            trade_child_teams_[p]=static_cast<int16_t>(roster_viewer_.selectedTeam(viewerDatabase())->id);
+            trade_child_slots_[p]=static_cast<uint8_t>(roster_viewer_.playerIndex());
+        }else for(unsigned p=0;p<2;++p){trade_child_teams_[p]=reorder_compare_.team[p];trade_child_slots_[p]=reorder_compare_.slot[p];}
+        playBottomMenuSound(mask==0x80?9:10,"trade-child-return");
+        if(nba97_trade_child_proposal(&trade_screen_,mask,trade_child_teams_.data(),trade_child_slots_.data()))
+            openTradeChoice(reorder_child_.state==0x24?0x800AEE88:0x800AEEF6,mask);
+        else completeTradeChild(false);
+    }
+    void completeTradeChild(bool adopt) {
+        if(!nba97_trade_return_child(&trade_screen_,trade_child_exit_,trade_child_teams_.data(),trade_child_slots_.data(),adopt))
+            throw std::runtime_error("invalid Trade child return");
+        if(reorder_saved_viewer_){roster_viewer_=*reorder_saved_viewer_;reorder_saved_viewer_.reset();}
+        reorder_child_={};reorder_child_database_.reset();compare_assets_.reset();compare_portraits_={};
+        reorder_compare_={};compare_refresh_={};compare_palette_={};nba97_compare_repeat_idle(&compare_repeat_);
+        cool_fact_audio_.stop();player_photo_loader_.reset();roster_portrait_loaded_=false;
+        syncTrade();logTrade(adopt?"child selection adopted after confirmation; no roster mutation":"child return; parent selection retained");
+        trace_.log("TRADE-UNDO-CHECKPOINT","original quirk preserved: 56494 rebases undo on child re-entry; pre-child trades retained; save not written");
+    }
+
     void openReorder() {
         // Assets remain private; missing records are errors, never substitutes
         // from Z1PORT or rendered screenshots of the original game.
@@ -374,7 +1166,13 @@ private:
         if (!std::filesystem::exists(options_.asset_root / "reorder/discard.n97ui"))
             throw std::runtime_error("run tools/extract_reorder_dialogs.py for Re-order confirmation");
         reorder_labels_ = std::make_unique<nba97::ReorderLabelPreview>(options_.asset_root);
-        for (const char* tag : {"ba22", "frmr", "110p", "111p"}) {
+        reorder_help_pack_ = std::make_unique<nba97::FrontendHelpPack>(options_.asset_root / "reorder/help.n97ui");
+        reorder_help_ = {};
+        reorder_notice_.reset(); reorder_exit_after_notice_=false;
+        reorder_child_ = {};
+        reorder_child_database_.reset();
+        reorder_saved_viewer_.reset();
+        for (const char* tag : {"ba22", "ba02", "frmr", "110p", "111p", "hel1", "hel2"}) {
             auto image = load_png_image(root / "ZSET4-decoded" / (std::string(tag)+".png"));
             for (std::size_t i = 0; i < image.rgba.size(); i += 4)
                 if (!image.rgba[i] && !image.rgba[i+1] && !image.rgba[i+2]) image.rgba[i+3] = 0;
@@ -392,9 +1190,67 @@ private:
             "snapshot=535 slots; kinds=1/2; objects=30; visible=6; frame pump=native");
         trace_.log("REORDER-LAYOUT", "ZSET4 graphics=0x0C ba22=(156,10); Z2PORT 87x51 portraits=(54/386,22); "
             "frml/frmr=(30/368,15); heading=(256,70); rows=(60/270,112+16*n); arrows=6/10");
+        trace_.log("REORDER-FOOTER", "3D5F0/3D65C -> 3186C object4 at (235,217); "
+            "8009B230 tags=hel1/hel2; selected Help descriptor drives original ZSET4 graphic; not controller number");
         trace_.log("REORDER-KEYS", "arrows=rows/teams; C/Space=pick; X/Esc=cancel; Enter=accept; "
-            "edits published in memory only, original assets never overwritten; child View/Compare/help pending");
+            "D=View; S=Compare; F/H/F1=original Help; Accept saves a local override; original assets never overwritten");
         logReorder("constructed");
+        if(!roster_load_error_.empty())
+            showReorderSaveNotice("save unavailable","file needs attention","see CLI for details",false,0x800);
+        else if(roster_store_ && roster_store_->needsRepair())
+            showReorderSaveNotice("backup recovered","Accept repairs the save","Cancel leaves files alone",false,0x800);
+    }
+
+    void loadRosterSave() {
+        // Existing deterministic capture/self-test modes must never read/write
+        // the active save. The dedicated save harness requires explicit paths.
+        if(options_.verify_reorder_save.empty() && (options_.self_test ||
+           !options_.rosters_menu_capture_dir.empty() || !options_.view_rosters_capture_dir.empty() ||
+           !options_.reorder_capture_dir.empty() || !options_.trade_capture_dir.empty() || !options_.sign_capture_dir.empty())) {
+            trace_.log("ROSTER-SAVE","disabled for deterministic self-test/capture; active save untouched");
+            return;
+        }
+        try {
+            auto store=std::make_unique<nba97::RosterSaveStore>(options_.roster_save_path);
+            const auto origin=store->load(roster_database_);
+            const char* source=origin==nba97::RosterLoadOrigin::Defaults ? "defaults" :
+                origin==nba97::RosterLoadOrigin::Primary ? "primary" :
+                origin==nba97::RosterLoadOrigin::RecoveredMissing ? "backup (primary missing)" : "backup (primary invalid)";
+            roster_store_=std::move(store);
+            trace_.log("ROSTER-LOAD",std::string(source)+"; generation="+std::to_string(roster_store_->accepted().generation)+
+                "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
+                "; repair-needed="+std::to_string(roster_store_->needsRepair())+"; "+roster_store_->path().string());
+        } catch(const std::exception& e) {
+            roster_store_.reset(); roster_load_error_=e.what();
+            trace_.log("ROSTER-SAVE-BLOCKED",roster_load_error_+
+                "; using immutable defaults read-only; no fallback overwrite; fix save or choose --roster-save then restart");
+        }
+    }
+
+    void showReorderSaveNotice(const char* title,const char* line1,const char* line2,bool committed,std::uint16_t held=0x80) {
+        // Native-port message, not a recovered memory-card string. Reuse the
+        // original style-zero geometry/lifecycle and local ZFONT1.
+        reorder_notice_=nba97::FrontendHelpDescriptor{12,0,0,{116, 70,280,100},
+            {{true,0,title},{true,0,line1},{true,0,line2},{true,0,"press a button to continue"}}};
+        reorder_exit_after_notice_=committed;
+        const auto before=reorder_help_;
+        const auto event=nba97_help_open(&reorder_help_,reorder_notice_->rect,held);
+        recordNativeHelp(1,held,event,before);
+        reorderHelpEvent(event);
+        trace_.log("ROSTER-SAVE-NOTICE",std::string(title)+"; native message; original green modal/ZFONT1; "+
+            (committed ? "committed state; continue exits without replay" : "draft retained; notice input cannot accept/cancel editor"));
+    }
+
+    void finishReorderExit() {
+        if(reorder_screen_.selection.accepted) {
+            std::uint8_t active=0;
+            nba97_reorder_screen_save(&reorder_screen_,reorder_saved_cursor_.data(),reorder_saved_top_.data(),&active);
+            reorder_team_=reorder_screen_.team;
+        }
+        beginFrontendTransition(nba97::FrontendPage::Rosters,"Re-order result="+
+            std::to_string(nba97_reorder_screen_result(&reorder_screen_))+"; release screen-owned resources");
+        reorder_labels_.reset(); reorder_help_pack_.reset(); reorder_help_={}; reorder_portraits_={};
+        reorder_notice_.reset(); reorder_exit_after_notice_=false;
     }
 
     void loadReorderPortraits() {
@@ -415,22 +1271,450 @@ private:
 
     void logReorder(const char* event) {
         const auto& s = reorder_screen_.selection;
+        Nba97ReorderMarker markers[4]{};
+        nba97_reorder_screen_markers(&reorder_screen_, markers);
+        const char* help_tag=nba97_reorder_screen_help_tag(&reorder_screen_);
         trace_.log("REORDER", std::string(event) + " team=" + std::to_string(reorder_screen_.team) +
             " phase=" + nba97_reorder_phase_name(s.phase) + " cursor=" + std::to_string(s.cursor[0]) +
             "/" + std::to_string(s.cursor[1]) + " top=" + std::to_string(s.top[0]) + "/" +
-            std::to_string(s.top[1]) + " selected=" + std::to_string(s.selected_ids[0]) + "/" +
+            std::to_string(s.top[1]) + " markers=L(up/down):" +
+            std::to_string(markers[0].visible) + "/" + std::to_string(markers[2].visible) +
+            ",R(up/down):" + std::to_string(markers[1].visible) + "/" +
+            std::to_string(markers[3].visible) + " footer=" + (help_tag?help_tag:"invalid") +
+            " selected=" + std::to_string(s.selected_ids[0]) + "/" +
             std::to_string(s.selected_ids[1]) + " changes=" + std::to_string(s.changes) +
             " row-revision=" + std::to_string(s.row_revision) +
             " visible-redraws=" + std::to_string(s.visible_redraws) +
             " present-requests=" + std::to_string(s.presentation_requests) +
-            " helpers=556B0/558E0/55AF8 (native; no disk save)");
+            " generation="+std::to_string(roster_store_ ? roster_store_->accepted().generation : 0)+
+            " default-different="+std::to_string(roster_database_.differsFromOriginal())+
+            " helpers=556B0/558E0/55AF8 (draft changes are not saved until Accept)");
+    }
+
+    void prepareFrontendTitle() {
+        const char* tag=nullptr; int x=0,y=0;
+        const nba97::MenuSpritePack* pack=&roster_sprites_;
+        if(frontend_page_==nba97::FrontendPage::ReorderRosters || isRosterEditor()) {
+            if(reorder_child_.state==0x24) {tag="ba41";x=40;y=18;pack=&player_sprites_;}
+            else if(reorder_child_.state==0x23) {tag="ba02";x=170;y=15;}
+            else {const bool trade=isRosterEditor();tag=isSign()?"ba30":trade?"ba38":"ba22";x=trade&&!isSign()?155:156;y=10;}
+        } else if(frontend_page_==nba97::FrontendPage::ViewRosters) {
+            if(roster_viewer_.mode()==nba97::RosterViewMode::PlayerCard) {tag="ba41";x=40;y=18;pack=&player_sprites_;}
+            else {tag="ba35";x=142;y=10;}
+        }
+        if(!tag) {frontend_title_.leave();return;}
+        const auto found=pack->find(tag);
+        if(found==pack->end()) throw std::runtime_error("missing original frontend title sprite");
+        if(frontend_title_.select(tag,x,y,found->second.width,found->second.height)) {
+            frontend_title_tick_=std::uint64_t(menu_elapsed_ms_)*30/1000;
+            frontend_title_painted_=false;
+            trace_.log("TITLE-MOTION",std::string("layout tag=")+tag+" source=31F48/32BF0 single textured quad; "
+                "phase="+std::to_string(frontend_title_.state().next)+" rng="+std::to_string(frontend_rng_)+
+                "; native nominal30Hz presentation policy; original cadence/stream not measured; no128-pixel split");
+        }
+    }
+
+    void presentFrontendTitle() {
+        const auto seed=frontend_rng_;
+        const auto phase=frontend_title_.state().next;
+        const auto changed=frontend_title_.present(frontend_rng_);
+        frontend_rng_draws_+=phase==0 ? 9 : 1;
+        ++frontend_title_presents_;
+        if(frontend_title_presents_<=8 || frontend_title_presents_%30==0 || native_record_) {
+            std::string vertices;
+            for(int i=0;i<8;++i) {if(i) vertices+=",";vertices+=std::to_string(frontend_title_.corners()[i]);}
+            trace_.log("TITLE-PRESENT","n="+std::to_string(frontend_title_presents_)+" changed="+
+                std::to_string(changed)+" phase="+std::to_string(phase)+" rng="+std::to_string(seed)+"->"+
+                std::to_string(frontend_rng_)+" shared-draws="+std::to_string(frontend_rng_draws_)+" xy="+vertices+
+                "; original RNG algorithm shared with Cool Facts; original runtime seed/history unverified");
+        }
+    }
+
+    void updateFrontendTitle() {
+        prepareFrontendTitle();
+        const auto tick=std::uint64_t(menu_elapsed_ms_)*30/1000;
+        if(frontend_title_.active() && frontend_title_painted_ && tick>frontend_title_tick_) {
+            presentFrontendTitle();
+            frontend_title_painted_=false; // No skipping unpainted motion after a stall.
+        }
+        frontend_title_tick_=tick;
     }
 
     PshImage renderReorder() {
-        return nba97::renderReorderScreen(reorder_screen_, roster_sprites_, menu_font_,
+        prepareFrontendTitle();
+        auto image = reorder_child_.state == 0x24 ?
+            nba97::renderRosterViewer(roster_viewer_, viewerDatabase(), menu_font_, player_sprites_,
+                menu_elapsed_ms_, roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
+                roster_cool_facts_available_, &control_font_,
+                menu_elapsed_ms_ < stat_flash_until_ms_ ? stat_flash_direction_ : 0, nba97_fact_flash_visible(&cool_fact_flash_),
+                player_photo_loader_.state().city_enabled != 0, frontend_title_.corners()) :
+            reorder_child_.state == 0x23 ?
+            nba97::renderCompareScreen(compare_refresh_,viewerDatabase(),*compare_assets_,roster_sprites_,
+                reorder_labels_->smallFont(),compare_portraits_,menu_elapsed_ms_,*compare_backgrounds_,compare_palette_,compare_arrows_,frontend_title_.corners()) :
+            nba97::renderReorderScreen(reorder_screen_, roster_sprites_, menu_font_,
             reorder_portraits_, reorder_labels_->renderFeedback(reorder_screen_.selection,
                 roster_database_, static_cast<std::uint16_t>(reorder_screen_.team),
-                reorder_modal_frame_, reorder_discard_yes_), menu_elapsed_ms_);
+                reorder_modal_frame_, reorder_discard_yes_), menu_elapsed_ms_,frontend_title_.corners());
+        if (nba97_help_visible(&reorder_help_))
+            reorder_help_pack_->draw(image, reorder_labels_->smallFont(),
+                reorder_notice_ ? *reorder_notice_ : reorder_help_pack_->descriptor(reorder_help_state_, reorder_help_index_), reorder_help_);
+        drawPlayerNotice(image);
+        return image;
+    }
+
+    const nba97::RosterDatabase& viewerDatabase() const {
+        return reorder_child_database_ ? *reorder_child_database_ : roster_database_;
+    }
+
+    void openReorderView() {
+        const bool trade=isRosterEditor();
+        const auto event = trade?NBA97_REORDER_REQUEST_VIEW:nba97_reorder_child_begin(&reorder_screen_, &reorder_child_, 0x10);
+        if (event == NBA97_REORDER_REJECTED_EMPTY) {
+            reorder_modal_frame_ = 0;
+            playBottomMenuSound(5, "reorder-view-empty");
+            logReorder("view-empty");
+            return;
+        }
+        if (event != NBA97_REORDER_REQUEST_VIEW) return;
+        auto draft = trade?tradeDraft():std::make_unique<const nba97::RosterDatabase>(roster_database_.draftView(reorder_screen_));
+        nba97::RosterViewer child;
+        const auto p = reorder_child_.parent_page;
+        if (!child.openPlayerFromRoster(*draft, {reorder_child_.cursor[p], reorder_child_.top[p], reorder_child_.team},
+                {0, false, static_cast<std::int16_t>(isSign()?14:trade?0x0d:0x0c), p},
+                isSign()?trade_assets_->freeAgentName():std::string{}))
+            throw std::runtime_error("Re-order child identity could not be resolved from draft");
+        if (child.selectedPlayer(*draft)->id != reorder_child_.player_id[0])
+            throw std::runtime_error("Re-order draft/child selected identity mismatch");
+        reorder_saved_viewer_ = roster_viewer_;
+        reorder_child_database_ = std::move(draft);
+        roster_viewer_ = child;
+        cool_fact_selection_={};cool_fact_selection_.selected=-1;
+        cool_fact_audio_.stop();
+        stat_flash_until_ms_ = 0;
+        loadSelectedPlayerCardAssets();
+        trace_.log(trade?"TRADE-CHILD":"REORDER-CHILD", std::string(trade?"push state=0x24 from=0x0D via 8005A074/8005A538; page=":"push state=0x24 from=0x0C via 8005A074/8005A538; page=") +
+            std::to_string(p) + " player=" + std::to_string(reorder_child_.player_id[0]) +
+            " slot=" + std::to_string(reorder_child_.cursor[p]) + "; immutable player catalogue=shared; "
+            "roster slots=1070 bytes; parent context=" + std::to_string(sizeof(reorder_child_)) +
+            " bytes; draft publication=no; D/S=stop fact, C/Space=play, Enter/X/Esc=return, F=Help");
+        if(trade)logTrade("view-parent-suspended");else logReorder("view-parent-suspended");
+        logRosterViewFocus("draft child entry");
+    }
+
+    void returnReorderView(std::uint16_t mask) {
+        // FUN_8003D930 exit: accepted Start=9, cancelled Circle=10.
+        playBottomMenuSound(mask == 0x80 ? 9 : 10, "view-return");
+        cool_fact_audio_.stop();
+        roster_viewer_.returnToRoster();
+        if (!nba97_reorder_child_return(&reorder_screen_, &reorder_child_, mask) || !reorder_saved_viewer_)
+            throw std::runtime_error("invalid Re-order child return");
+        roster_viewer_ = *reorder_saved_viewer_;
+        reorder_saved_viewer_.reset();
+        reorder_child_database_.reset();
+        player_photo_loader_.reset();
+        roster_portrait_loaded_ = false;
+        stat_flash_until_ms_ = 0;
+        trace_.log("REORDER-CHILD", "pop 0x24 -> 0x0C; browsed child selection discarded (writeback only for Trade parent13); "
+            "speech stopped; parent draft/cursor/top retained; exit mask=" + std::to_string(mask) + "; saved=no");
+        logReorder("view-parent-resumed");
+    }
+
+    void logCompare(const char* event) {
+        const auto& s=reorder_compare_;
+        trace_.log("COMPARE",std::string(event)+" active="+std::to_string(s.active_side)+
+            " teams="+std::to_string(s.team[0])+"/"+std::to_string(s.team[1])+
+            " slots="+std::to_string(s.slot[0])+"/"+std::to_string(s.slot[1])+
+            " players="+std::to_string(s.player[0])+"/"+std::to_string(s.player[1])+
+            " layer="+std::to_string(s.layer)+" top="+std::to_string(s.top)+
+            "; draft read-only; visible=5; label-object=27 (not audio)");
+    }
+
+    void loadComparePortraits() {
+        for(unsigned side=0;side<2;++side) {
+            const auto id=reorder_compare_.player[side];
+            if(compare_portrait_ids_[side]==id && !compare_portraits_[side].rgba.empty()) continue;
+            char name[32]{}; sprintf_s(name,"player_%03u.png",static_cast<unsigned>(id)+1u);
+            auto portrait=load_png_image(options_.asset_root/"menu/Z2PORT-decoded"/name);
+            if(portrait.width!=87 || portrait.height!=51) throw std::runtime_error("wrong Compare portrait archive");
+            compare_portraits_[side]=std::move(portrait); compare_portrait_ids_[side]=id;
+            trace_.log("COMPARE-ASSET","side="+std::to_string(side)+" player="+std::to_string(id)+
+                " Z2PORT record="+std::to_string(static_cast<unsigned>(id)+1)+" 87x51; no Z1PORT/cool-fact substitution");
+        }
+    }
+
+    void openReorderCompare() {
+        const bool trade=isRosterEditor();
+        const auto event=trade?NBA97_REORDER_REQUEST_COMPARE:nba97_reorder_child_begin(&reorder_screen_,&reorder_child_,0x40);
+        if(event==NBA97_REORDER_REJECTED_EMPTY) {
+            reorder_modal_frame_=0; playBottomMenuSound(5,"reorder-compare-empty"); logReorder("compare-empty"); return;
+        }
+        if(event!=NBA97_REORDER_REQUEST_COMPARE) return;
+        auto draft=trade?tradeDraft():std::make_unique<const nba97::RosterDatabase>(roster_database_.draftView(reorder_screen_));
+        const auto table=draft->slotTable();
+        if(!(trade?nba97_compare_begin_teams(&reorder_compare_,trade_screen_.team,trade_screen_.cursor,table.data()):
+             nba97_compare_begin(&reorder_compare_,&reorder_child_,table.data()))) throw std::runtime_error("Compare draft identity mismatch");
+        if(!nba97_compare_refresh_begin(&compare_refresh_,&reorder_compare_)) throw std::runtime_error("Compare refresh entry failed");
+        compare_refresh_painted_=false;
+        nba97_compare_repeat_idle(&compare_repeat_);
+        compare_arrows_={};
+        // The reduced scroll continuation is valid only for fully collapsed
+        // incoming glyphs; fail explicitly instead of silently truncating a
+        // future replacement font that requires the general clipping kernel.
+        for(unsigned code=0;code<256;++code) {
+            const auto* glyph=reorder_labels_->smallFont().glyph(static_cast<char>(code));
+            if(glyph && glyph->height>14) throw std::runtime_error("Compare scroll requires original glyph height <=14");
+        }
+        for(auto& arrow:compare_arrows_) {
+            std::fill_n(arrow.start,3,std::uint8_t{128});std::fill_n(arrow.rgb,3,std::uint8_t{128});
+        }
+        compare_assets_=std::make_unique<nba97::CompareAssets>(options_.asset_root/"reorder/compare.n97ui");
+        if(!compare_backgrounds_) compare_backgrounds_=std::make_unique<nba97::FrontendPaletteAssets>(
+            options_.asset_root/"menu/ZSET4-team-backgrounds/indexed.n97pal");
+        if(!nba97_frontend_palette_begin(&compare_palette_,compare_backgrounds_->bank(),33,
+            reorder_compare_.team[0],reorder_compare_.team[1])) throw std::runtime_error("Compare palette entry failed");
+        reorder_child_database_=std::move(draft);
+        cool_fact_audio_.stop(); compare_portrait_ids_.fill(UINT16_MAX); loadComparePortraits();
+        trace_.log(trade?"TRADE-CHILD":"REORDER-CHILD",std::string(trade?"push state=0x23 from=0x0D via 8005A074/8005A880; parent-page=":"push state=0x23 from=0x0C via 8005A074/8005A880; parent-page=")+
+            std::to_string(reorder_child_.parent_page)+"; state=12 bytes; shared player catalogue; no draft publication");
+        trace_.log("COMPARE-LAYOUT","graphics 800978C4: ba02=(170,15), Z2PORT=(54/386,22); ZFONT1 selector1; "
+            "labels x256, values x128/384; y82/92/102; layer116; five rows135+14*n; team names212; independent team palette halves");
+        trace_.log("COMPARE-KEYS","C/Space=active side; Left/Right=player; Up/Down=both stat lists; J/K=team; Q/E=layer; F=Help; Enter/X/Esc=return; no cool facts");
+        logCompare("entered");
+        trace_.log("COMPARE-PALETTE","source=8002FE58/8002FF40/8002FF80; raw indexed pack=134356 bytes; "
+            "state="+std::to_string(sizeof(compare_palette_))+" bytes; two independent halves; 160 dynamic/96 fixed colors; factors=0..16");
+    }
+
+    void advanceComparePalette() {
+        if(reorder_child_.state!=0x23) return;
+        for(unsigned i=0;i<compare_arrows_.size();++i) {
+            auto& arrow=compare_arrows_[i];const auto before=arrow.flags;
+            nba97_reorder_tint_tick(&arrow);
+            if((before & 0xc0)!=(arrow.flags & 0xc0))
+                trace_.log("COMPARE-ARROW","index="+std::to_string(i)+" phase="+std::to_string(arrow.flags & 0xc0)+
+                    " rgb="+std::to_string(arrow.rgb[0])+","+std::to_string(arrow.rgb[1])+","+std::to_string(arrow.rgb[2])+
+                    "; source=2AE5C; update while hidden/Help too");
+        }
+        const int changed=nba97_frontend_palette_tick(&compare_palette_,compare_backgrounds_->bank(),33);
+        if(changed<0) throw std::runtime_error("invalid Compare palette update");
+        for(unsigned side=0;side<2;++side) if(changed&(1<<side)) {
+            const auto& half=compare_palette_.half[side];
+            if(half.next_factor==1 || half.next_factor==9 || half.next_factor==17)
+                trace_.log("COMPARE-PALETTE","side="+std::to_string(side)+" target="+std::to_string(half.target)+
+                    " applied-factor="+std::to_string(half.next_factor-1)+
+                    (half.next_factor==17 ? " settled" : " fading")+"; logical tick, original wall-clock parity unverified");
+        }
+    }
+
+    void advanceCompareRefresh() {
+        const bool scrolling=compare_refresh_.cue>=3;
+        const auto scroll_cue=compare_refresh_.cue;
+        const int cue=nba97_compare_refresh_presented(&compare_refresh_,&reorder_compare_);
+        if(cue<0) throw std::runtime_error("Compare refresh continuation invalid");
+        if(scrolling) {
+            if(compare_refresh_.remaining==1) {
+                //3A224 rebuilds the primary marker pair after group0's pump.
+                for(unsigned index=4;index<6;++index) {
+                    compare_arrows_[index]={};
+                    std::fill_n(compare_arrows_[index].start,3,std::uint8_t{128});
+                    std::fill_n(compare_arrows_[index].rgb,3,std::uint8_t{128});
+                }
+                const bool visible=scroll_cue==3 ? reorder_compare_.top!=0 :
+                    reorder_compare_.top+5u<nba97_compare_stat_count(&reorder_compare_);
+                if(visible) nba97_reorder_tint_flash(&compare_arrows_[scroll_cue+1]);
+            }
+            // Build the next presentation: group0 moves before group1.
+            advanceComparePalette();
+            trace_.log("COMPARE-SCROLL","completed-present="+std::to_string(2-compare_refresh_.remaining)+
+                " visible-top="+std::to_string(nba97_compare_refresh_top(&compare_refresh_,0))+"/"+
+                std::to_string(nba97_compare_refresh_top(&compare_refresh_,1))+" cue="+std::to_string(cue)+
+                "; 3AB64 group0 then1; clip14/translate14 duration1; outgoing lifetime0");
+            if(cue) playBottomMenuSound(cue,"compare-input");
+            return;
+        }
+        if(compare_refresh_.remaining==1) {
+            // 39574 builds the first frame BEFORE 310D8 notices the new ID.
+            // Native local I/O is ready here; original CD completion is separate.
+            loadComparePortraits();
+            advanceComparePalette();
+        }
+        trace_.log("COMPARE-REFRESH","completed-present="+std::to_string(2-compare_refresh_.remaining)+
+            " text="+std::to_string(compare_refresh_.text.player[0])+"/"+std::to_string(compare_refresh_.text.player[1])+
+            " requested="+std::to_string(reorder_compare_.player[0])+"/"+std::to_string(reorder_compare_.player[1])+
+            " cue="+std::to_string(cue)+(cue ? "; 59808 text refreshed, callback returns" : "; text retained, local portrait ready"));
+        if(cue) {
+            playBottomMenuSound(cue,"compare-input"); // Selector dispatch follows callback return.
+            const unsigned index=reorder_compare_.active_side*2+(cue==1);
+            const auto before=compare_arrows_[index];
+            nba97_reorder_tint_flash(&compare_arrows_[index]);
+            trace_.log("COMPARE-ARROW","trigger index="+std::to_string(index)+" cue="+std::to_string(cue)+
+                " prior-phase="+std::to_string(before.flags & 0xc0)+" elapsed="+std::to_string(compare_arrows_[index].elapsed)+
+                "; 3D534 ->2ADEC after callback/sound; colors from original ZFONT1 glyph");
+        }
+    }
+
+    static std::uint16_t compareKeyMask(WPARAM key) {
+        switch(key) {
+        case VK_UP:return 1; case VK_DOWN:return 2;
+        case VK_LEFT:return 8; case VK_RIGHT:return 4;
+        case 'J':return 0x200; case 'K':return 0x400;
+        case 'Q':return 0x1000; case 'E':return 0x2000;
+        case 'C':case VK_SPACE:return 0x800;
+        case 'F':case 'H':case VK_F1:return 0x20;
+        case VK_RETURN:return 0x80;
+        case VK_ESCAPE:case VK_BACK:case 'X':return 0x100;
+        case 'D':return 0x10; case 'S':return 0x40;
+        default:return 0;
+        }
+    }
+
+    std::uint16_t sampleCompareInput() const {
+        // Host controller0 only. Do not navigate a background/minimized app.
+        if(GetForegroundWindow()!=window_ || IsIconic(window_)) return 0;
+        std::uint16_t mask=0;
+        for(unsigned key=0;key<256;++key)
+            if(compareKeyMask(key) && (GetAsyncKeyState(key)&0x8000)) mask|=compareKeyMask(key);
+        return mask; // Preserve chords; never prioritize Right over another button.
+    }
+
+    void advanceComparePostCycle(std::uint16_t held) {
+        advanceComparePalette();
+        const bool completed_cycle=compare_repeat_.previous_mask!=0;
+        const auto ready=nba97_compare_repeat_presented(&compare_repeat_);
+        if(ready<0) throw std::runtime_error("invalid Compare post-cycle pacing");
+        if(!ready) return;
+        if(completed_cycle && nba97_compare_callback_mask(compare_repeat_.previous_mask))
+            trace_.log("COMPARE-CALLBACK","delay/poll complete; held="+std::to_string(held)+
+                " mask="+std::to_string(compare_repeat_.previous_mask)+" counter="+std::to_string(compare_repeat_.counter));
+        else if(completed_cycle && (compare_repeat_.previous_mask==1 || compare_repeat_.previous_mask==2))
+            trace_.log("COMPARE-SCROLL","delay/poll complete; held="+std::to_string(held)+
+                "; source=5A1EC/3D930; null top-Up callback polls only; dispatched geometry completes within delay3");
+        else if(completed_cycle) trace_.log("COMPARE-PACING","post-delay and input-poll frame complete; held="+std::to_string(held)+
+            " counter="+std::to_string(compare_repeat_.counter)+"; source=3AE4C/3E38C; selected-text wait=0 (2C244 mask=C7); held-repeat=enabled");
+        if(held==1 || held==2 || held==4 || held==8 || nba97_compare_callback_mask(held)) { handleCompareInput(held); return; }
+        nba97_compare_repeat_idle(&compare_repeat_);
+        if(held) {
+            // A direction chord is not a directional action. Keep polling if
+            // either direction stays down, so releasing its partner resumes it.
+            if(held!=1 && held!=2 && held!=0x20 && held!=0x80 && held!=0x100) { compare_repeat_.post_frames=1; return; }
+            handleCompareInput(held);
+        }
+    }
+
+    void handleCompareKey(WPARAM key) {
+        handleCompareInput(compareKeyMask(key));
+    }
+
+    void handleCompareInput(std::uint16_t mask) {
+        if(reorder_child_.waiting_input_change || compare_refresh_.remaining || compare_repeat_.post_frames) return;
+        if(mask==0x20) { openReorderHelp(); return; }
+        if(mask==0x80 || mask==0x100) {
+            if(isRosterEditor()){requestTradeChildReturn(mask);return;}
+            playBottomMenuSound(mask==0x80 ? 9 : 10,"compare-return");
+            if(!nba97_reorder_child_return(&reorder_screen_,&reorder_child_,mask))
+                throw std::runtime_error("Compare return context invalid");
+            reorder_child_database_.reset(); compare_assets_.reset(); compare_portraits_={}; reorder_compare_={}; compare_palette_={}; compare_refresh_={};
+            nba97_compare_repeat_idle(&compare_repeat_);
+            trace_.log("REORDER-CHILD","pop 0x23 -> 0x0C; browsed identities discarded; parent draft/cursors/top retained; saved=no");
+            logReorder("compare-parent-resumed"); return;
+        }
+        const auto table=viewerDatabase().slotTable();
+        const auto before=reorder_compare_;
+        const auto event=nba97_compare_refresh_input(&reorder_compare_,&compare_refresh_,table.data(),mask);
+        if(event==NBA97_COMPARE_INVALID) throw std::runtime_error("Compare navigation rejected stale state");
+        if(mask==4 || mask==8) {
+            const int delay=nba97_compare_repeat_request(&compare_repeat_,mask);
+            if(!delay) throw std::runtime_error("Compare repeat request rejected");
+            compare_refresh_painted_=false; compare_refresh_tick_=menu_elapsed_ms_/17;
+            trace_.log("COMPARE-PACING","mask="+std::to_string(mask)+" counter="+std::to_string(compare_repeat_.counter)+
+                " post-delay="+std::to_string(delay)+" poll=1; normal counter-record-passes=2; counted after player callback, not Windows autorepeat");
+        } else if(mask==1 || mask==2) {
+            const int post=nba97_compare_scroll_request(&compare_repeat_,&before,mask);
+            if(!post)
+                throw std::runtime_error("Compare scroll wait rejected");
+            compare_refresh_painted_=false;compare_refresh_tick_=menu_elapsed_ms_/17;
+            trace_.log("COMPARE-SCROLL","mask="+std::to_string(mask)+" top="+std::to_string(reorder_compare_.top)+
+                " callback-presents="+std::to_string(compare_refresh_.remaining)+
+                " delay="+std::to_string(post-1)+" poll=1; dispatch="+(post==1?"null-up-5A1EC":"3AB64")+
+                "; endpoint silent; normal two-pass input history");
+        } else if(nba97_compare_callback_mask(mask)) {
+            if(nba97_compare_callback_request(&compare_repeat_,mask)!=5)
+                throw std::runtime_error("Compare callback wait rejected");
+            compare_refresh_painted_=false;compare_refresh_tick_=menu_elapsed_ms_/17;
+            trace_.log("COMPARE-CALLBACK","mask="+std::to_string(mask)+" event="+std::to_string(event)+
+                " delay=5 poll=1; 3E388 after59F20; callback no-op still waits; input blocked until completed presents");
+        } else if(mask) nba97_compare_repeat_idle(&compare_repeat_);
+        for(unsigned side=0;side<2;++side) if(compare_palette_.half[side].target!=reorder_compare_.team[side]) {
+            const auto prior=compare_palette_.half[side];
+            if(!nba97_frontend_palette_request(&compare_palette_,side,reorder_compare_.team[side],33))
+                throw std::runtime_error("Compare palette request failed");
+            trace_.log("COMPARE-PALETTE","request side="+std::to_string(side)+" from-target="+
+                std::to_string(prior.target)+" to="+std::to_string(reorder_compare_.team[side])+
+                " snapshot=current; interrupted="+std::to_string(prior.next_factor<17));
+        }
+        if(event==NBA97_COMPARE_PLAYER) {
+            compare_refresh_painted_=false; compare_refresh_tick_=menu_elapsed_ms_/17;
+            advanceComparePalette(); // First 39574 iteration precedes the first pending frame.
+            trace_.log("COMPARE-REFRESH","59928 requested player="+std::to_string(reorder_compare_.player[reorder_compare_.active_side])+
+                " side="+std::to_string(reorder_compare_.active_side)+
+                "; two completed presentations before 59808 text refresh and selector sound; input blocked; CD latency not emulated");
+        } else if(event==NBA97_COMPARE_SCROLL) advanceComparePalette();
+        else if(event!=NBA97_COMPARE_NO_CHANGE) loadComparePortraits();
+        // Generic selector 3D930: up/down=3/4, left/right=2/1, callback=6.
+        // Top-Up has no callback; bottom-Down clears the latch: neither sounds.
+        if(event!=NBA97_COMPARE_NO_CHANGE && event!=NBA97_COMPARE_PLAYER && event!=NBA97_COMPARE_SCROLL)
+            playBottomMenuSound(mask==1 ? 3 : mask==2 ? 4 : mask==8 ? 2 : mask==4 ? 1 : 6,"compare-input");
+        logCompare(event==NBA97_COMPARE_NO_CHANGE ? "input-no-change" : "navigation");
+    }
+
+    void reorderHelpEvent(Nba97HelpEvent event) {
+        if (event == NBA97_HELP_OPEN_SOUND) playBottomMenuSound(7, "reorder-help-open");
+        else if (event == NBA97_HELP_CLOSE_SOUND) {
+            playBottomMenuSound(8, "reorder-help-close");
+            trace_.log("REORDER-HELP", "text removed; shrinking via 800309DC; sound=8; parent input blocked");
+        } else if (event == NBA97_HELP_RETURNED) {
+            if(reorder_notice_) {
+                const bool finish=reorder_exit_after_notice_;
+                reorder_notice_.reset(); reorder_exit_after_notice_=false;
+                trace_.log("ROSTER-SAVE-NOTICE",finish ? "committed notice closed; returning to Rosters" : "notice closed; draft retained; retry/discard available");
+                if(isRosterEditor()) {
+                    nba97_trade_dismiss_notice(&trade_screen_,reorder_help_.held);
+                    if(finish){
+                        const bool accepted=nba97_trade_result(&trade_screen_)==1;
+                        playBottomMenuSound(accepted?9:10,"trade-committed-notice-exit");finishTrade(accepted);
+                    }
+                } else if(finish) finishReorderExit();
+                return;
+            }
+            if(isRosterEditor()){trade_screen_.latch=0;logTrade("Help returned");return;}
+            reorder_screen_.selection.input_latch = 0;
+            trace_.log("REORDER-HELP", "returned after input-change barrier; draft/cursors/scroll preserved; saved=no");
+            logReorder("help-return");
+        }
+    }
+
+    void stepReorderHelp(std::uint16_t raw,bool tick) {
+        const auto before=reorder_help_;
+        const auto event=tick?nba97_help_tick(&reorder_help_,raw):nba97_help_input(&reorder_help_,raw);
+        recordNativeHelp(tick?3:2,raw,event,before);
+        reorderHelpEvent(event);
+    }
+
+    void openReorderHelp() {
+        const bool trade=isRosterEditor();
+        reorder_help_state_ = reorder_child_.state ? reorder_child_.state : isSign()?14:trade?13:12;
+        reorder_help_index_ = reorder_child_.state ? 0 : trade?(trade_screen_.phase==NBA97_TRADE_SECOND):reorder_screen_.selection.descriptor_page;
+        const auto& d = reorder_help_pack_->descriptor(reorder_help_state_, reorder_help_index_);
+        const auto before=reorder_help_;
+        const auto event = nba97_help_open(&reorder_help_, d.rect, 0x20);
+        recordNativeHelp(1,0x20,event,before);
+        reorderHelpEvent(event);
+        char route[64]{};
+        sprintf_s(route, "state=0x%02X descriptor=0x%08X", unsigned(reorder_help_state_), unsigned(d.address));
+        trace_.log(trade?"TRADE-HELP":"REORDER-HELP", "40FCC -> 40A1C index=" + std::to_string(reorder_help_index_) +
+            " " + route + " rect=" + std::to_string(d.rect.x) + "," +
+            std::to_string(d.rect.y) + "," + std::to_string(d.rect.width) + "," + std::to_string(d.rect.height) +
+            " lines=" + std::to_string(d.lines.size()) + " sound=7; private Help/font pack; input barrier active");
+        if(trade)logTrade("help-open");else logReorder("help-open");
     }
 
     void updateReorder() {
@@ -447,16 +1731,47 @@ private:
                 (GetAsyncKeyState(VK_UP) & 0x8000) ? 1 :
                 (GetAsyncKeyState(VK_DOWN) & 0x8000) ? 2 :
                 (GetAsyncKeyState(VK_LEFT) & 0x8000) ? 8 :
-                (GetAsyncKeyState(VK_RIGHT) & 0x8000) ? 4 : 0;
-            nba97_reorder_frame(&reorder_screen_.selection, raw);
+                (GetAsyncKeyState(VK_RIGHT) & 0x8000) ? 4 :
+                ((GetAsyncKeyState('F') | GetAsyncKeyState('H') | GetAsyncKeyState(VK_F1)) & 0x8000) ? 0x20 :
+                (GetAsyncKeyState('D') & 0x8000) ? 0x10 : (GetAsyncKeyState('S') & 0x8000) ? 0x40 : 0;
+            if(reorder_notice_) { /* Freeze editor byte-for-byte behind save notice. */ }
+            else if (reorder_child_.state) nba97_reorder_child_input_ready(&reorder_child_, raw);
+            else nba97_reorder_frame(&reorder_screen_.selection, raw);
+            advanceComparePalette(); // Original frame pump also runs beneath Help.
+            stepReorderHelp(raw,true);
+            if(frontend_page_!=nba97::FrontendPage::ReorderRosters) break;
             if (reorder_modal_frame_ < 32) ++reorder_modal_frame_;
         }
         reorder_tick_ = tick;
     }
 
     void handleReorderKey(WPARAM key) {
+        if(cool_fact_flash_.remaining) return; // 59E14 has not returned to the selector.
+        if(player_notice_.phase!=NBA97_HELP_CLOSED) {
+            playerNoticeEvent(nba97_help_input(&player_notice_,playerNoticeKeyMask(key)));
+            return; // The dismissing key never reaches the child/parent.
+        }
         auto& s = reorder_screen_.selection;
+        if (reorder_help_.phase != NBA97_HELP_CLOSED) {
+            const std::uint16_t raw = key == VK_ESCAPE || key == 'X' ? 0x100 :
+                key == VK_RETURN ? 0x80 : key == VK_UP ? 1 : key == VK_DOWN ? 2 :
+                key == VK_LEFT ? 8 : key == VK_RIGHT ? 4 :
+                key == 'F' || key == 'H' || key == VK_F1 ? 0x20 :
+                key == 'D' ? 0x10 : key == 'S' ? 0x40 : 0x800;
+            stepReorderHelp(raw,false);
+            return; // The dismissing key must never reach the editor.
+        }
         if (s.waiting_input_change) return;
+        if(reorder_child_.state==0x23) { handleCompareKey(key); rebuildMenuFrame(); return; }
+        if (reorder_child_.state == 0x24) {
+            if (reorder_child_.waiting_input_change) return;
+            if (key == 'F' || key == 'H' || key == VK_F1) openReorderHelp();
+            else if (key == VK_RETURN || key == VK_ESCAPE || key == VK_BACK || key == 'X')
+                returnReorderView(key == VK_RETURN ? 0x80 : 0x100);
+            else handleRosterViewKey(key == 'C' ? VK_SPACE : key == 'D' ? 'S' : key);
+            rebuildMenuFrame();
+            return;
+        }
         if (s.modal) {
             if (reorder_modal_frame_ < 24) return;
             nba97_reorder_dismiss_modal(&s);
@@ -467,6 +1782,7 @@ private:
             playBottomMenuSound(8, "reorder-message-close");
             return;
         }
+        const auto before_input=reorder_screen_;
         Nba97ReorderEvent event = NBA97_REORDER_NO_CHANGE;
         std::uint32_t sound = 0;
         if (s.phase == NBA97_REORDER_DISCARD_PROMPT) {
@@ -491,53 +1807,838 @@ private:
             event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_CANCEL); sound = 8;
         } else if (key == VK_RETURN) {
             event = nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_ACCEPT); sound = 6;
-        } else if (key == 'D' || key == 'S' || key == 'F') {
-            trace_.log("REORDER-BOUNDARY", "View/Compare/help child integration is not part of construction; no fake child screen");
+        } else if (key == 'F' || key == 'H' || key == VK_F1) {
+            openReorderHelp();
+            rebuildMenuFrame();
+            return;
+        } else if (key == 'D') {
+            openReorderView();
+            rebuildMenuFrame();
+            return;
+        } else if (key == 'S') {
+            openReorderCompare();
+            rebuildMenuFrame();
             return;
         }
         if (event == NBA97_REORDER_ASK_DISCARD || s.modal) {
             reorder_modal_frame_ = 0; reorder_discard_yes_ = false; sound = 5;
         }
         if (sound) playBottomMenuSound(sound, "reorder-input");
-        logReorder(nba97_reorder_event_name(event));
+        logReorder(event==NBA97_REORDER_EXIT_ACCEPTED ? "accept-request (not yet saved)" : nba97_reorder_event_name(event));
         if (s.phase == NBA97_REORDER_CLOSED) {
             if (s.accepted) {
-                if (!roster_database_.applyReorderScreen(reorder_screen_))
-                    throw std::runtime_error("Re-order baseline changed; refused publication");
-                std::uint8_t active = 0;
-                nba97_reorder_screen_save(&reorder_screen_, reorder_saved_cursor_.data(), reorder_saved_top_.data(), &active);
-                reorder_team_ = reorder_screen_.team;
-                trace_.log("REORDER-COMMIT", "accepted across 535-slot snapshot; database indexes refreshed; disk saves=none");
+                nba97::RosterCommitResult saved;
+                try {
+                    if(!roster_store_) throw std::runtime_error("save store unavailable; inspect ROSTER-SAVE-BLOCKED and restart");
+                    auto candidate=roster_database_;
+                    if(!candidate.applyReorderScreen(reorder_screen_))
+                        throw std::runtime_error("Re-order baseline/membership changed; refused publication");
+                    saved=roster_store_->commit(roster_database_,candidate.slotTable(),reorder_save_hooks_);
+                } catch(const std::exception& e) {
+                    reorder_screen_=before_input;
+                    trace_.log("REORDER-SAVE-FAILED",std::string(e.what())+"; editor phase/cursors/top/draft restored; accepted memory unchanged");
+                    showReorderSaveNotice("save failed","draft kept - not accepted","see CLI then retry or cancel",false);
+                    rebuildMenuFrame(); return;
+                }
+                trace_.log("REORDER-COMMIT",std::string(saved.changed ? "saved" : "no-op; no file rewritten")+
+                    "; generation="+std::to_string(saved.generation)+"; bytes="+std::to_string(saved.bytes)+
+                    "; sync-completed="+std::to_string(saved.sync_completed)+
+                    "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
+                    "; "+roster_store_->path().string());
+                if(!saved.sync_completed) {
+                    showReorderSaveNotice("saved - sync uncertain","do not retry this edit","see CLI for details",true);
+                    rebuildMenuFrame(); return;
+                }
             } else trace_.log("REORDER-DISCARD", "entire entry snapshot preserved; no live database writes");
-            beginFrontendTransition(nba97::FrontendPage::Rosters, "Re-order result=" +
-                std::to_string(nba97_reorder_screen_result(&reorder_screen_)) + "; release screen-owned resources");
-            reorder_labels_.reset(); reorder_portraits_ = {};
+            finishReorderExit();
             return;
         }
         loadReorderPortraits();
         rebuildMenuFrame();
     }
 
+    int verifyReorderSave() {
+        const auto& scenario=options_.verify_reorder_save;
+        if(scenario.rfind("reset-",0)==0) return verifyRosterReset();
+        if(scenario!="save" && scenario!="reload" && scenario!="cancel" && scenario!="failure" &&
+           scenario!="blocked" && scenario!="repair" && scenario!="noop" && scenario!="postcommit" &&
+           scenario!="replacement" && scenario!="failure-cancel" && scenario!="children")
+            throw std::runtime_error("unknown Re-order save verification case");
+        frontend_page_=nba97::FrontendPage::ReorderRosters; openReorder();
+        const auto original_live=roster_database_.slotTable();
+        const auto generation=roster_store_ ? roster_store_->accepted().generation : 0;
+        const auto capture=[&](const char* name) {
+            writePpm(renderReorder(),options_.reorder_save_capture_dir/(std::string(name)+".ppm"));
+        };
+        const auto tickNotice=[&] {
+            for(int i=0;i<40 && reorder_help_.phase!=NBA97_HELP_CLOSED;++i)
+                reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+        };
+        const auto dismiss=[&] {
+            tickNotice(); handleReorderKey(VK_RETURN); tickNotice();
+            if(reorder_help_.phase!=NBA97_HELP_CLOSED) throw std::runtime_error("save notice did not close");
+        };
+        if(reorder_notice_) {tickNotice();capture("load-notice");dismiss();}
+        capture("entry");
+        if(scenario=="replacement") {
+            handleReorderKey('C');
+            const auto selected=reorder_screen_;
+            handleReorderKey(VK_RETURN);
+            if(std::memcmp(&selected,&reorder_screen_,sizeof(selected)) || roster_store_->accepted().generation!=generation)
+                throw std::runtime_error("Accept did not respect replacement-stage gate");
+            handleReorderKey('X');nba97_reorder_frame(&reorder_screen_.selection,0);handleReorderKey('X');
+        } else if(scenario=="reload") {
+            if(!roster_store_ || roster_database_.slotTable()!=roster_store_->accepted().slots)
+                throw std::runtime_error("reload failed to apply saved roster");
+        } else {
+            if(scenario!="noop" && scenario!="repair") {
+                handleReorderKey('C'); handleReorderKey(VK_DOWN); handleReorderKey('C');
+                if(reorder_screen_.selection.changes!=1) throw std::runtime_error("host keys did not stage swap");
+            }
+            capture("draft");
+            if(scenario=="children") {
+                for(auto key:{'D','S'}) {
+                    handleReorderKey(key);nba97_reorder_child_input_ready(&reorder_child_,0);
+                    handleReorderKey('F');tickNotice();capture(key=='D' ? "view-help" : "compare-help");
+                    handleReorderKey(VK_RETURN);tickNotice();handleReorderKey(VK_RETURN);
+                    if(reorder_child_.state) throw std::runtime_error("child did not return before Accept");
+                    nba97_reorder_frame(&reorder_screen_.selection,0);
+                }
+                if(roster_database_.slotTable()!=original_live) throw std::runtime_error("child published draft");
+            }
+            const auto before=reorder_screen_;
+            bool injected=false;
+            struct Fault {bool* fired;nba97::RosterSaveStage at;};
+            Fault fault{&injected,scenario=="postcommit" ? nba97::RosterSaveStage::PrimaryReplaced : nba97::RosterSaveStage::PartialWrite};
+            if(scenario=="failure" || scenario=="failure-cancel" || scenario=="postcommit")
+                reorder_save_hooks_={[](nba97::RosterSaveStage s,void* p) {
+                    auto& f=*static_cast<Fault*>(p);if(s==f.at) {*f.fired=true;throw std::runtime_error("injected host save failure");}
+                },&fault};
+            if(scenario=="cancel") {
+                handleReorderKey('X');
+                if(reorder_screen_.selection.phase!=NBA97_REORDER_DISCARD_PROMPT) throw std::runtime_error("missing discard prompt");
+                handleReorderKey(VK_UP);handleReorderKey(VK_RETURN);
+                if(roster_database_.slotTable()!=original_live) throw std::runtime_error("discard published roster");
+            } else {
+                handleReorderKey(VK_RETURN);
+                if(scenario=="failure" || scenario=="failure-cancel" || scenario=="blocked") {
+                    if(!reorder_notice_ || std::memcmp(&before,&reorder_screen_,sizeof(before)) ||
+                       roster_database_.slotTable()!=original_live)
+                        throw std::runtime_error("failed Accept lost editor state or published roster");
+                    if(scenario!="blocked" && !injected) throw std::runtime_error("host failure injection not reached");
+                    tickNotice();capture("failure-notice");dismiss();capture("after-notice");
+                    if(std::memcmp(&before,&reorder_screen_,sizeof(before))) throw std::runtime_error("notice dismissal changed draft");
+                    reorder_save_hooks_={};
+                    if(scenario=="failure") handleReorderKey(VK_RETURN);
+                    if(scenario=="failure-cancel") {
+                        handleReorderKey('X');handleReorderKey(VK_UP);handleReorderKey(VK_RETURN);
+                        if(roster_database_.slotTable()!=original_live) throw std::runtime_error("failed save followed by cancel published draft");
+                    }
+                } else if(scenario=="postcommit") {
+                    if(!injected || !reorder_notice_ || roster_store_->accepted().generation!=generation+1 ||
+                       roster_database_.slotTable()==original_live)
+                        throw std::runtime_error("postcommit warning retained old accepted state");
+                    tickNotice();capture("committed-notice");dismiss();
+                    if(roster_store_->accepted().generation!=generation+1) throw std::runtime_error("warning dismissal replayed commit");
+                }
+            }
+            if(scenario!="blocked" && frontend_page_!=nba97::FrontendPage::Rosters)
+                throw std::runtime_error("successful Accept/Discard failed to leave editor");
+            if(frontend_page_==nba97::FrontendPage::Rosters) {
+                frontend_transition_active_=false;
+                writePpm(nba97::renderRecoveredBottomMenu(bottom_menu_,menu_font_,menu_sprites_,roster_sprites_,users_sprites_,roster_menu_cards_,menu_elapsed_ms_),
+                    options_.reorder_save_capture_dir/"returned.ppm");
+            }
+        }
+        const auto final=roster_database_.slotTable();
+        trace_.log("REORDER-SAVE-VERIFY",scenario+" PASS; generation="+
+            std::to_string(roster_store_ ? roster_store_->accepted().generation : 0)+
+            "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
+            "; team="+std::to_string(reorder_screen_.team)+
+            "; first="+std::to_string(final[reorder_screen_.team*15])+
+            "; second="+std::to_string(final[reorder_screen_.team*15+1])+
+            "; actual host key handlers; no original fidelity score");
+        return 0;
+    }
+
+    int verifyRosterReset() {
+        const auto& scenario=options_.verify_reorder_save;
+        if(scenario!="reset-cancel" && scenario!="reset-confirm" && scenario!="reset-failure" &&
+           scenario!="reset-postcommit" && scenario!="reset-locked")
+            throw std::runtime_error("unknown Reset verification case");
+        beginFrontendTransition(nba97::FrontendPage::Rosters,"isolated Reset host verification");
+        frontend_transition_active_=false;
+        const auto before=roster_database_.slotTable();
+        const auto generation=roster_store_ ? roster_store_->accepted().generation:0;
+        const auto capture=[&](const char* name) {
+            writePpm(renderBottomMenu(),options_.reorder_save_capture_dir/(std::string(name)+".ppm"));
+        };
+        capture("entry");
+        if(scenario=="reset-locked") {
+            if(bottom_menu_.enabled(3)) throw std::runtime_error("default Reset is enabled");
+            bottom_menu_.setSelected(3);
+            if(bottom_menu_.selected()==3 || rosterResetEligible()) throw std::runtime_error("locked Reset focus accepted");
+        } else {
+            if(!bottom_menu_.enabled(3)) throw std::runtime_error("changed roster Reset remains locked");
+            bottom_menu_.setSelected(3);
+            capture("focused");
+            const auto sound=cursor_audio_.exportCursorSound(options_.asset_root/"menu/ZCURSOR.VH",
+                options_.asset_root/"menu/ZCURSOR.VB",12,options_.reorder_save_capture_dir/"reset-confirm.wav");
+            trace_.log("RESET-AUDIO-EXPORT","BNKl id12; "+std::to_string(sound.sample_rate)+"Hz; "+
+                std::to_string(sound.rendered_sample_count)+" samples; private WAV; no original capture parity claimed");
+            for(auto invalid_id:{0u,13u,128u,0xffffffffu}) {
+                bool rejected=false;
+                try {cursor_audio_.exportCursorSound(options_.asset_root/"menu/ZCURSOR.VH",
+                    options_.asset_root/"menu/ZCURSOR.VB",invalid_id,options_.reorder_save_capture_dir/"invalid.wav");}
+                catch(const std::exception&) {rejected=true;}
+                if(!rejected) throw std::runtime_error("unpopulated/out-of-range BNKl ID accepted");
+            }
+            activateRecoveredBottomSelection();
+            if(bottom_select_pending_) throw std::runtime_error("Reset flashed before confirmation");
+            capture("opening");
+            for(int i=0;i<32;++i) tickReset(0x800);
+            if(reset_prompt_.modal.phase!=NBA97_HELP_WAIT_CHANGE || reset_prompt_.choice!=1)
+                throw std::runtime_error("held opener bypassed default Cancel");
+            capture("held-cancel");
+            tickReset(0);
+            if(scenario!="reset-cancel") {
+                handleMenuKey(VK_UP);
+                for(int i=0;i<8;++i) tickReset(0);
+                capture("restore-selected");
+            }
+            bool injected=false;
+            struct Fault {bool* fired;nba97::RosterSaveStage at;};
+            Fault fault{&injected,scenario=="reset-postcommit" ? nba97::RosterSaveStage::PrimaryReplaced:nba97::RosterSaveStage::PartialWrite};
+            if(scenario=="reset-failure" || scenario=="reset-postcommit")
+                reorder_save_hooks_={[](nba97::RosterSaveStage stage,void* context) {
+                    auto& f=*static_cast<Fault*>(context);
+                    if(stage==f.at) {*f.fired=true;throw std::runtime_error("injected Reset save failure");}
+                },&fault};
+            handleMenuKey('C');
+            capture("closing");
+            for(int i=0;i<32;++i) tickReset(0x800);
+            if(bottom_select_pending_ || roster_database_.slotTable()!=before)
+                throw std::runtime_error("held confirm published Reset");
+            tickReset(0);
+            if(scenario=="reset-cancel") {
+                if(bottom_select_pending_ || roster_database_.slotTable()!=before ||
+                   roster_store_->accepted().generation!=generation) throw std::runtime_error("Cancel mutated accepted roster");
+            } else {
+                if(!bottom_select_pending_) throw std::runtime_error("confirmed Reset missing card flash");
+                capture("flash");
+                bottom_select_pending_=false;completeRecoveredBottomSelection();
+                if(scenario=="reset-failure") {
+                    if(!injected || !reset_notice_ || roster_database_.slotTable()!=before ||
+                       roster_store_->accepted().generation!=generation || !bottom_menu_.enabled(3))
+                        throw std::runtime_error("failed Reset lost accepted roster or eligibility");
+                } else if(roster_database_.differsFromOriginal() || bottom_menu_.enabled(3) ||
+                          roster_store_->accepted().generation!=generation+1)
+                    throw std::runtime_error("Reset failed to persist defaults/relock");
+                if(scenario=="reset-postcommit" && (!injected || !reset_notice_))
+                    throw std::runtime_error("Reset committed-warning not shown");
+                if(reset_notice_) {
+                    for(int i=0;i<32;++i) tickReset(0);
+                    capture("save-notice");handleMenuKey('C');
+                    for(int i=0;i<32;++i) tickReset(0);
+                    if(reset_notice_) throw std::runtime_error("Reset notice did not close");
+                }
+            }
+            reorder_save_hooks_={};
+            capture("returned");
+        }
+        const auto final=roster_database_.slotTable();
+        trace_.log("REORDER-SAVE-VERIFY",scenario+" PASS; generation="+
+            std::to_string(roster_store_ ? roster_store_->accepted().generation:0)+
+            "; default-different="+std::to_string(roster_database_.differsFromOriginal())+
+            "; team=3; first="+std::to_string(final[45])+"; second="+std::to_string(final[46])+
+            "; actual Reset host handlers; no original fidelity score");
+        return 0;
+    }
+
     int captureReorder() {
+        frontend_page_ = nba97::FrontendPage::ReorderRosters;
         openReorder();
         auto capture = [&](const char* name) {
+            // Offline settled checkpoints wait for actual I/O, never a fake CD
+            // duration. Interactive frames only use the non-blocking poll.
+            if (reorder_child_.state == 0x24) updatePlayerPhoto(true);
             loadReorderPortraits();
-            writePpm(renderReorder(), options_.reorder_capture_dir / name);
+            const auto frame = renderReorder();
+            if (std::string(name)=="entry.ppm" || std::string(name)=="replacement-scrolled.ppm" ||
+                std::string(name)=="swapped.ppm") {
+                // Check actual composed pixels against source-font glyphs,
+                // not just the marker helper's returned flags/coordinates.
+                unsigned visible=0;
+                for(int page=0;page<2;++page) for(int down=0;down<2;++down) {
+                    const auto* glyph=menu_font_.glyph(static_cast<char>(down?0x8c:0x8b));
+                    if(!glyph) throw std::runtime_error("missing original Re-order marker glyph");
+                    const int x=page?256:46, y=(down?196:116)-glyph->center_y;
+                    bool all_equal=true; unsigned checked=0;
+                    for(int gy=0;gy<glyph->height;++gy) for(int gx=0;gx<glyph->width;++gx) {
+                        const auto source=(gy*glyph->width+gx)*4;
+                        if(!glyph->rgba[source+3]) continue;
+                        const auto target=((y+gy)*frame.width+x+gx)*4;
+                        if(x+gx<0 || x+gx>=frame.width || y+gy<0 || y+gy>=frame.height)
+                            throw std::runtime_error("Re-order marker fixture outside frame");
+                        all_equal &= std::equal(glyph->rgba.begin()+source,glyph->rgba.begin()+source+3,
+                                               frame.rgba.begin()+target);
+                        ++checked;
+                    }
+                    const auto top=reorder_screen_.selection.top[page];
+                    const bool expected=down?top<9:top>0;
+                    if(!checked || all_equal!=expected)
+                        throw std::runtime_error("Re-order composed marker visibility/pixels differ from source");
+                    visible+=expected?1u:0u;
+                }
+                trace_.log("REORDER-MARKER-VERIFY",std::string(name)+" four glyph footprints checked; visible="+
+                    std::to_string(visible)+" source=3DD38/3A224 both pages persist");
+            }
+            writePpm(frame, options_.reorder_capture_dir / name);
             logReorder(name);
+        };
+        auto capture_help = [&](const char* prefix) {
+            // Same modal/controller/compositor as the interactive host. Logical
+            // ticks are deterministic here; no original timing parity claimed.
+            openReorderHelp();
+            const auto name = [&](const char* suffix) { return std::string(prefix) + suffix + ".ppm"; };
+            capture(name("-start").c_str());
+            for (int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_, 0));
+            capture(name("-open").c_str());
+            reorderHelpEvent(nba97_help_input(&reorder_help_, 0x800));
+            for (int i=0;i<5;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_, 0x800));
+            capture(name("-closing").c_str());
+            for (int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_, 0));
+            capture(name("-returned").c_str());
+        };
+        auto capture_view = [&](const char* prefix) {
+            const auto name = [&](const char* suffix) { return std::string(prefix)+suffix+".ppm"; };
+            handleReorderKey('D'); // Real window handler, not a substitute test renderer.
+            if (reorder_child_.state != 0x24) throw std::runtime_error("capture did not enter View child");
+            writePpm(renderReorder(), options_.reorder_capture_dir / name("-photo-wait"));
+            logReorder(name("-photo-wait").c_str());
+            capture(name("-entered").c_str());
+            nba97_reorder_child_input_ready(&reorder_child_,0);
+            handleReorderKey(VK_UP); // Top endpoint: no sound/flash.
+            handleReorderKey(VK_DOWN); // Team/layer must preserve this scroll.
+            handleReorderKey(VK_RIGHT);
+            writePpm(renderReorder(), options_.reorder_capture_dir / name("-photo-cycle-wait"));
+            logReorder(name("-photo-cycle-wait").c_str());
+            handleReorderKey('K');
+            handleReorderKey('E');
+            if(roster_viewer_.firstVisiblePlayerStat()!=1)
+                throw std::runtime_error("View child team/layer lost stat scroll");
+            capture(name("-browsed").c_str());
+            handleReorderKey('F');
+            for(int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+            capture(name("-help").c_str());
+            handleReorderKey(VK_SPACE);
+            for(int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+            if(std::string(prefix)=="view-first") {
+                // Extent reset is NOT an Up press: no extra scroll sound/flash.
+                const auto previous_flash=stat_flash_until_ms_;
+                handleReorderKey('Q'); handleReorderKey('Q'); handleReorderKey('Q');
+                if(roster_viewer_.firstVisiblePlayerStat()!=0 || stat_flash_until_ms_!=previous_flash)
+                    throw std::runtime_error("View layer reset generated scroll feedback");
+                handleReorderKey(VK_UP); // Endpoint remains silent.
+                handleReorderKey(VK_DOWN); handleReorderKey(VK_UP);
+                handleReorderKey(VK_LEFT); handleReorderKey(VK_RIGHT); handleReorderKey('J');
+            }
+            handleReorderKey(std::string(prefix)=="view-replacement" ? VK_ESCAPE : VK_RETURN);
+            if(reorder_child_.state) throw std::runtime_error("capture did not return to editor");
+            capture(name("-returned").c_str());
+            nba97_reorder_frame(&reorder_screen_.selection,0); // Release Start; no extra action.
+        };
+        auto capture_compare = [&](const char* prefix) {
+            const auto name=[&](const char* suffix) { return std::string(prefix)+suffix+".ppm"; };
+            auto finish_callback=[&](const char* label,bool palette_frames=false) {
+                if(compare_repeat_.post_frames!=6 || compare_refresh_.remaining)
+                    throw std::runtime_error("Compare generic callback must wait5 plus poll1");
+                const auto retained=reorder_compare_;const auto parent=reorder_screen_;
+                const auto audio=cursor_audio_.info();
+                for(unsigned phase=0;phase<6;++phase) {
+                    const auto before=renderReorder();
+                    for(auto key:{WPARAM(VK_LEFT),WPARAM(VK_RIGHT),WPARAM(VK_UP),WPARAM(VK_DOWN),
+                        WPARAM('K'),WPARAM('J'),WPARAM('Q'),WPARAM('E'),WPARAM('F'),WPARAM(VK_SPACE),WPARAM(VK_RETURN),WPARAM('X')})
+                        handleReorderKey(key);
+                    if(std::memcmp(&retained,&reorder_compare_,sizeof(retained)) ||
+                        std::memcmp(&parent,&reorder_screen_,sizeof(parent)) || renderReorder().rgba!=before.rgba ||
+                        reorder_child_.state!=0x23 || cursor_audio_.info().record!=audio.record)
+                        throw std::runtime_error("input/audio escaped generic Compare callback wait");
+                    advanceComparePostCycle(0);
+                    if(palette_frames && std::string(prefix)=="compare-first")
+                        capture(("compare-palette-"+std::to_string(phase)+".ppm").c_str());
+                }
+                if(compare_repeat_.post_frames) throw std::runtime_error("Compare callback did not release after poll");
+                trace_.log("COMPARE-CALLBACK-VERIFY",std::string(prefix)+" "+label+
+                    " presents=6; injected keys blocked; draft unchanged");
+            };
+            // Previous child return releases its input through a real C frame,
+            // which advances parent tint once. Compare against THIS entry
+            // frame, not the earlier pre-View frame's animation phase.
+            capture(name("-parent").c_str());
+            handleReorderKey('S');
+            if(reorder_child_.state!=0x23) throw std::runtime_error("capture did not enter Compare");
+            capture(name("-entered").c_str());
+            nba97_reorder_child_input_ready(&reorder_child_,0);
+            handleReorderKey(VK_SPACE);
+            capture(name("-side").c_str());
+            finish_callback("side");
+            handleReorderKey(VK_RIGHT);
+            const auto pending=reorder_compare_;
+            const auto frozen_parent=reorder_screen_;
+            const auto before_audio=cursor_audio_.info();
+            for(unsigned phase=0;phase<2;++phase) {
+                const auto frozen=renderReorder();
+                for(auto key:{WPARAM(VK_LEFT),WPARAM(VK_RIGHT),WPARAM(VK_UP),WPARAM(VK_DOWN),
+                    WPARAM('K'),WPARAM('J'),WPARAM('Q'),WPARAM('E'),WPARAM('F'),WPARAM(VK_SPACE),WPARAM(VK_RETURN),WPARAM('X')})
+                    handleReorderKey(key);
+                if(std::memcmp(&pending,&reorder_compare_,sizeof(pending)) ||
+                    std::memcmp(&frozen_parent,&reorder_screen_,sizeof(frozen_parent)) ||
+                    renderReorder().rgba!=frozen.rgba || cursor_audio_.info().record!=before_audio.record ||
+                    compare_refresh_.remaining!=2-phase || reorder_child_.state!=0x23)
+                    throw std::runtime_error("Compare input/audio escaped two-present callback");
+                if(std::string(prefix)=="compare-first") capture(("compare-refresh-"+std::to_string(phase)+".ppm").c_str());
+                advanceCompareRefresh(); // The same continuation used after an interactive paint.
+            }
+            if(compare_refresh_.remaining || std::memcmp(&compare_refresh_.text,&pending,sizeof(pending)))
+                throw std::runtime_error("Compare text did not commit after two presents");
+            if(std::string(prefix)=="compare-first") capture("compare-refresh-2.ppm");
+            unsigned post_frames=0;
+            while(compare_repeat_.post_frames) {
+                const auto frozen_post=renderReorder();
+                for(auto key:{WPARAM('K'),WPARAM('F'),WPARAM(VK_RETURN),WPARAM(VK_LEFT),WPARAM(VK_SPACE)})
+                    handleReorderKey(key);
+                if(renderReorder().rgba!=frozen_post.rgba || reorder_child_.state!=0x23)
+                    throw std::runtime_error("Compare post-delay accepted menu input");
+                advanceComparePostCycle(0); ++post_frames;
+            }
+            if(post_frames!=8) throw std::runtime_error("initial Compare post-delay must be7 plus poll1");
+            trace_.log("COMPARE-PACING-VERIFY",std::string(prefix)+" post-presents=8; extra input blocked; parent retained");
+            handleReorderKey('K');
+            finish_callback("team",true);
+            for(unsigned factor=6;factor<=16;++factor) {
+                advanceComparePalette();
+                if(std::string(prefix)=="compare-first")
+                    capture(("compare-palette-"+std::to_string(factor)+".ppm").c_str());
+            }
+            advanceComparePalette(); // Settled update must preserve the full frame.
+            if(std::string(prefix)=="compare-first") capture("compare-palette-settled.ppm");
+            auto finish_scroll=[&]() {
+                while(compare_refresh_.remaining) { (void)renderReorder();advanceCompareRefresh(); }
+                while(compare_repeat_.post_frames) { (void)renderReorder();advanceComparePostCycle(0); }
+            };
+            handleReorderKey('E');finish_callback("layer");handleReorderKey(VK_DOWN);finish_scroll();
+            capture(name("-browsed").c_str());
+            logCompare(name("-browsed").c_str());
+            handleReorderKey('F');
+            for(int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+            capture(name("-help").c_str());
+            handleReorderKey(VK_SPACE);
+            for(int i=0;i<40;++i) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+            if(std::string(prefix)=="compare-first") {
+                handleReorderKey('Q');finish_callback("layer-back-stats");
+                handleReorderKey('Q');finish_callback("layer-back-ratings");
+                capture("compare-ratings.ppm"); logCompare("compare-ratings.ppm");
+                handleReorderKey('Q');
+                finish_callback("layer-back-attributes");
+                capture("compare-attributes.ppm"); logCompare("compare-attributes.ppm");
+                for(int i=0;i<12;++i) { handleReorderKey(VK_DOWN);finish_scroll(); }
+                capture("compare-attributes-bottom.ppm"); logCompare("compare-attributes-bottom.ppm");
+                for(int i=0;i<30 && reorder_compare_.team[1]!=29;++i) {
+                    handleReorderKey('J');finish_callback("team-back");
+                }
+                if(reorder_compare_.team[1]!=29) throw std::runtime_error("private Compare free-agent capture unavailable");
+                for(unsigned factor=0;factor<=16;++factor) advanceComparePalette();
+                capture("compare-free-agents.ppm"); logCompare("compare-free-agents.ppm");
+            }
+            handleReorderKey(VK_RETURN);
+            if(reorder_child_.state) throw std::runtime_error("Compare capture failed to return");
+            capture(name("-returned").c_str());
+            nba97_reorder_frame(&reorder_screen_.selection,0);
         };
         for (int i=0;i<12;++i) nba97_reorder_frame(&reorder_screen_.selection,0);
         capture("entry.ppm");
+        capture_help("help-first");
+        capture_view("view-first");
+        capture_compare("compare-first");
         nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_SELECT);
         for (int i=0;i<7;++i) nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_DOWN);
         for (int i=0;i<12;++i) nba97_reorder_frame(&reorder_screen_.selection,0);
         capture("replacement-scrolled.ppm");
+        capture_help("help-replacement");
+        capture_view("view-replacement");
+        capture_compare("compare-replacement");
         nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_SELECT);
         capture("swapped.ppm");
+        capture_view("view-swapped");
+        capture_compare("compare-swapped");
         nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_CANCEL);
         reorder_modal_frame_ = 32;
         capture("discard-prompt.ppm");
         nba97_reorder_screen_input(&reorder_screen_, NBA97_REORDER_DISCARD_YES);
-        trace_.log("REORDER-CAPTURE", "four real compositor frames; live database unchanged; screenshot parity not asserted");
+        // Find a real roster player whose five original IDX entries are empty.
+        // Do not force the availability flag or invent an absent speech asset.
+        std::ifstream fact_index_file(options_.asset_root/"menu/Z1COOL.IDX",std::ios::binary);
+        const std::vector<std::uint8_t> fact_index((std::istreambuf_iterator<char>(fact_index_file)),{});
+        const auto base_slots=roster_database_.slotTable();
+        std::size_t missing_slot=435;
+        for(std::size_t i=0;i<435;++i)
+            if(base_slots[i]!=UINT16_MAX && !nba97::playerHasCoolFacts(fact_index,base_slots[i])) {missing_slot=i;break;}
+        if(missing_slot==435) throw std::runtime_error("no original no-facts roster case found");
+        reorder_team_=static_cast<std::int16_t>(missing_slot/15);
+        for(unsigned page=0;page<2;++page) {
+            reorder_saved_cursor_[page]=static_cast<std::int16_t>(missing_slot%15+page*15);
+            reorder_saved_top_[page]=static_cast<std::int16_t>((missing_slot%15>5 ? missing_slot%15-5 : 0)+page*15);
+        }
+        openReorder();capture("no-facts-parent.ppm");
+        handleReorderKey('D');nba97_reorder_child_input_ready(&reorder_child_,0);
+        if(roster_cool_facts_available_) throw std::runtime_error("original absent fact incorrectly enabled");
+        const auto frozen_parent=reorder_screen_;
+        const auto frozen_player=roster_viewer_.selectedPlayer(viewerDatabase())->id;
+        const auto frozen_stat=roster_viewer_.firstVisiblePlayerStat();
+        capture("no-facts-player.ppm");
+        handleReorderKey('C');capture("no-facts-opening.ppm");
+        for(int i=0;i<13;++i) playerNoticeEvent(nba97_help_tick(&player_notice_,0x800));
+        handleReorderKey('C'); // Held opener cannot close.
+        if(player_notice_.phase!=NBA97_HELP_WAIT_CHANGE) throw std::runtime_error("notice consumed held opener");
+        capture("no-facts-open.ppm");
+        handleReorderKey(VK_DOWN); // Changed input dismisses, never scrolls player.
+        for(int i=0;i<5;++i) playerNoticeEvent(nba97_help_tick(&player_notice_,2));
+        capture("no-facts-closing.ppm");
+        for(int i=0;i<8;++i) playerNoticeEvent(nba97_help_tick(&player_notice_,2));
+        if(player_notice_.phase!=NBA97_HELP_RETURN_BARRIER) throw std::runtime_error("notice close barrier missing");
+        handleReorderKey(VK_RETURN); // Changes closing mask; must not exit View.
+        if(player_notice_.phase!=NBA97_HELP_CLOSED || reorder_child_.state!=0x24 ||
+           roster_viewer_.selectedPlayer(viewerDatabase())->id!=frozen_player ||
+           roster_viewer_.firstVisiblePlayerStat()!=frozen_stat ||
+           std::memcmp(&frozen_parent,&reorder_screen_,sizeof(frozen_parent)))
+            throw std::runtime_error("no-facts round trip changed child/parent state");
+        capture("no-facts-returned.ppm");
+        handleReorderKey(VK_RETURN);capture("no-facts-editor-return.ppm");
+        if(reorder_child_.state || roster_database_.slotTable()!=base_slots)
+            throw std::runtime_error("no-facts View return published state");
+        trace_.log("PLAYER-NOTICE-VERIFY","original IDX absence; player="+std::to_string(frozen_player)+
+            "; 13 grow/13 shrink ticks; source footer; key barriers; child/parent unchanged; no save");
+        // Isolated runtime wiring check; never persist test volume settings.
+        const auto saved_settings = settings_;
+        settings_ = nba97::FrontendSettings{};
+        settings_.adjustOption(3,-1); // 9 -> 8
+        playBottomMenuSound(2,"sfx-setting-check");
+        if(cursor_audio_.info().playback_volume!=96)
+            throw std::runtime_error("host ignored live SFX setting");
+        const auto audible = cursor_audio_.info();
+        while(settings_.option(3)) settings_.adjustOption(3,-1);
+        playBottomMenuSound(1,"sfx-setting-check");
+        playRosterCursorSound(-1);
+        if(cursor_audio_.info().record!=audible.record || cursor_audio_.info().playback_volume!=96 ||
+           stat_flash_direction_!=-1 || stat_flash_until_ms_!=menu_elapsed_ms_+340)
+            throw std::runtime_error("mute replaced audio or suppressed visual stat flash");
+        settings_=saved_settings;
+        trace_.log("SFX-SETTING-VERIFY", "setting8->96; setting0 skips playback; visual flash retained; settings restored without save");
+        for(unsigned logical=0;logical<6;++logical) {
+            const auto player_id=static_cast<std::uint16_t>(logical/5);
+            const auto variant=logical%5;
+            const auto filename="cool-fact-p"+std::to_string(player_id)+"-v"+std::to_string(variant)+".wav";
+            const auto info=cool_fact_audio_.exportCoolFact(options_.asset_root/"menu/Z1COOL.IDX",
+                options_.asset_root/"menu/Z1COOL.BIG",player_id,variant,options_.reorder_capture_dir/filename);
+            if(info.record!=logical+1) throw std::runtime_error("Cool Fact reserved record regression");
+            trace_.log("COOL-FACT-EXPORT", "player="+std::to_string(player_id)+" variant="+std::to_string(variant)+
+                " logical="+std::to_string(logical)+" physical="+std::to_string(info.record)+
+                " rate="+std::to_string(info.sample_rate)+" samples="+std::to_string(info.sample_count)+
+                " -> "+filename+"; "+roster_database_.player(player_id)->displayName()+"; local decoded PCM, not original mixer capture");
+        }
+        const auto first_fact_slot=std::find(base_slots.begin(),base_slots.begin()+435,0);
+        if(first_fact_slot==base_slots.begin()+435) throw std::runtime_error("five-fact roster fixture absent");
+        const auto fact_slot=static_cast<unsigned>(first_fact_slot-base_slots.begin());
+        reorder_team_=static_cast<std::int16_t>(fact_slot/15);
+        for(unsigned page=0;page<2;++page) {
+            reorder_saved_cursor_[page]=static_cast<std::int16_t>(fact_slot%15+page*15);
+            reorder_saved_top_[page]=static_cast<std::int16_t>((fact_slot%15>5 ? fact_slot%15-5 : 0)+page*15);
+        }
+        openReorder();capture("fact-cycle-parent.ppm");
+        handleReorderKey('D');nba97_reorder_child_input_ready(&reorder_child_,0);
+        capture("fact-cycle-player.ppm");
+        if(cool_fact_selection_.available_mask!=31) throw std::runtime_error("five-fact source fixture changed");
+        const auto fact_parent=reorder_screen_;
+        int previous=-1;
+        for(unsigned cycle=0;cycle<2;++cycle) {
+            unsigned played=0;
+            for(unsigned i=0;i<5;++i) {
+                constexpr unsigned speech_levels[]{9,8,4,0,9};
+                while(settings_.option(2)!=speech_levels[i]) settings_.adjustOption(2,1);
+                handleReorderKey('C');
+                const int variant=cool_fact_selection_.selected;
+                if(variant<0 || variant>=5 || (played&(1u<<variant)) ||
+                   (i==0 && previous==variant) || cool_fact_selection_.flags[variant]!=1 ||
+                   cool_fact_audio_.info().record!=static_cast<unsigned>(variant+1))
+                    throw std::runtime_error("host Cool Fact cycle repeated or decoded wrong variant");
+                if(cool_fact_audio_.info().playback_volume!=(std::min)(speech_levels[i]*15u,127u) ||
+                   cool_fact_audio_.info().playback_suppressed || !cool_fact_audio_.isPlaying())
+                    throw std::runtime_error("host ignored speech setting or suppressed zero-gain voice");
+                for(unsigned frame=0;frame<8;++frame) {
+                    const auto before=renderReorder();
+                    const auto choice=cool_fact_selection_;
+                    constexpr WPARAM blocked[]{VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,'Q','E','J','K','F','C','D',VK_RETURN,'X'};
+                    for(auto key:blocked) handleReorderKey(key);
+                    if(before.rgba!=renderReorder().rgba ||
+                       std::memcmp(&choice,&cool_fact_selection_,sizeof(choice)) ||
+                       cool_fact_flash_.remaining!=8-frame || reorder_child_.state!=0x24)
+                        throw std::runtime_error("input escaped the Cool Fact callback/flash");
+                    if(!cycle && !i) capture(("fact-flash-"+std::to_string(frame)+".ppm").c_str());
+                    advanceCoolFactFlash();
+                    if(cool_fact_selection_.flags[variant]!=(frame==7 ? 0 : 1))
+                        throw std::runtime_error("Cool Fact consumed before eight completed presents");
+                }
+                played|=1u<<variant;previous=variant;
+                handleReorderKey('D');
+                if(cool_fact_audio_.isPlaying()) throw std::runtime_error("Square did not stop speech");
+                const auto stop_cue=cursor_audio_.info();
+                handleReorderKey('D'); // Already stopped: no second cue.
+                if(cursor_audio_.info().record!=stop_cue.record)
+                    throw std::runtime_error("idle Square generated a cue");
+                if(std::memcmp(&fact_parent,&reorder_screen_,sizeof(fact_parent)))
+                    throw std::runtime_error("Cool Fact mutated parent roster");
+                trace_.log("COOL-FACT-CYCLE-VERIFY","cycle="+std::to_string(cycle)+" step="+std::to_string(i)+
+                    " variant="+std::to_string(variant)+" played-mask="+std::to_string(played));
+            }
+            if(played!=31) throw std::runtime_error("host Cool Fact cycle missed a variant");
+        }
+        settings_=saved_settings; // No test settings are persisted.
+        capture("fact-cycle-returned.ppm");
+        handleReorderKey(VK_RETURN);capture("fact-cycle-editor-return.ppm");
+        // Separate semantic block: original85 stills remain unchanged. These
+        // exercise the actual host continuations, not only the pure C policy.
+        trace_.log("COMPARE-HELD-VERIFY","begin");
+        nba97_reorder_frame(&reorder_screen_.selection,0);
+        handleReorderKey('S');
+        if(reorder_child_.state!=0x23) throw std::runtime_error("held test failed to open Compare");
+        nba97_reorder_child_input_ready(&reorder_child_,0);
+        const auto held_parent=reorder_screen_;
+        const auto held_table=viewerDatabase().slotTable();
+        handleReorderKey(VK_RIGHT);
+        while(compare_refresh_.remaining) advanceCompareRefresh();
+        const auto arrow_base=renderReorder();
+        const auto* arrow_glyph=reorder_labels_->smallFont().glyph(static_cast<char>(0x8a));
+        if(!arrow_glyph) throw std::runtime_error("missing original arrow for private flash proof");
+        const int arrow_x=135-reorder_labels_->smallFont().textWidth(std::string(1,static_cast<char>(0x8a)))/2;
+        const int arrow_y=116-arrow_glyph->center_y;
+        unsigned arrow_pixels=0;
+        for(unsigned phase=0;phase<=21;++phase) {
+            if(phase) {
+                if(compare_repeat_.post_frames) advanceComparePostCycle(0);
+                else advanceComparePalette();
+            }
+            const int gold[3]={120,102,0};
+            const auto shown=renderReorder();
+            auto expected=arrow_base;
+            for(unsigned y=0;y<arrow_glyph->height;++y) for(unsigned x=0;x<arrow_glyph->width;++x) {
+                const auto src=(y*arrow_glyph->width+x)*4;
+                if(!arrow_glyph->rgba[src+3]) continue;
+                const auto dst=((arrow_y+y)*512+arrow_x+x)*4;
+                for(unsigned c=0;c<3;++c) {
+                    const int modulation=phase<=4 ? 128+(gold[c]-128)*int(phase)/4 :
+                        phase<=16 ? gold[c] : phase<=20 ? gold[c]+(128-gold[c])*int(phase-16)/4 : 128;
+                    expected.rgba[dst+c]=static_cast<std::uint8_t>((std::min)(255,int(arrow_glyph->rgba[src+c])*modulation/128));
+                }
+                ++arrow_pixels;
+            }
+            if(shown.rgba!=expected.rgba || std::memcmp(&held_parent,&reorder_screen_,sizeof(held_parent)))
+                throw std::runtime_error("Compare arrow flash changed wrong pixels/parent");
+            capture(("compare-arrow-"+std::to_string(phase)+".ppm").c_str());
+        }
+        trace_.log("COMPARE-ARROW-VERIFY","phases=22 original-glyph-pixels="+std::to_string(arrow_pixels)+
+            " outside-unchanged=yes; native-neutral-start=128; original allocator start not captured");
+        const unsigned team=reorder_compare_.team[0], initial_slot=reorder_compare_.slot[0];
+        unsigned team_count=0;
+        while(team_count<15 && held_table[team*15+team_count]!=UINT16_MAX) ++team_count;
+        if(!team_count) throw std::runtime_error("held test empty team");
+        handleReorderKey(VK_RIGHT);
+        unsigned held_presents=0;
+        for(unsigned action=0;action<40;++action) {
+            const unsigned expected_slot=(initial_slot+action+1)%team_count;
+            if(reorder_compare_.slot[0]!=expected_slot || reorder_compare_.player[0]!=held_table[team*15+expected_slot] ||
+               compare_repeat_.counter!=(std::min)(2+action*4,48u) || compare_refresh_.remaining!=2)
+                throw std::runtime_error("held cycle identity/counter/callback mismatch");
+            for(unsigned phase=0;phase<2;++phase) {
+                (void)renderReorder(); advanceCompareRefresh(); ++held_presents;
+            }
+            const unsigned post=compare_repeat_.post_frames;
+            for(unsigned frame=0;frame<post;++frame) {
+                (void)renderReorder(); advanceComparePostCycle(action==39 ? 0 : 4); ++held_presents;
+                if(frame+1<post && reorder_compare_.slot[0]!=expected_slot)
+                    throw std::runtime_error("held action bypassed post/poll wait");
+            }
+            if(std::memcmp(&held_parent,&reorder_screen_,sizeof(held_parent)) || viewerDatabase().slotTable()!=held_table)
+                throw std::runtime_error("held cycle modified editor/draft");
+        }
+        if(held_presents!=200 || compare_repeat_.post_frames || compare_refresh_.remaining)
+            throw std::runtime_error("held cycle did not stop at release poll");
+        auto finish_callback=[&](std::uint16_t held) {
+            while(compare_refresh_.remaining) { (void)renderReorder();advanceCompareRefresh(); }
+            const unsigned post=compare_repeat_.post_frames;
+            for(unsigned frame=0;frame<post;++frame) { (void)renderReorder();advanceComparePostCycle(held); }
+        };
+        const auto reversal_slot=reorder_compare_.slot[0];
+        handleReorderKey(VK_RIGHT); finish_callback(8);
+        if(compare_repeat_.counter!=2 || reorder_compare_.slot[0]!=reversal_slot || compare_refresh_.remaining!=2)
+            throw std::runtime_error("held reversal failed to reset acceleration");
+        finish_callback(12); // Neither direction wins a contradictory chord.
+        const auto chord_state=reorder_compare_;
+        for(unsigned poll=0;poll<3;++poll) { (void)renderReorder();advanceComparePostCycle(12); }
+        if(std::memcmp(&chord_state,&reorder_compare_,sizeof(chord_state)) || compare_refresh_.remaining)
+            throw std::runtime_error("opposing direction chord cycled a player");
+        advanceComparePostCycle(4); // Releasing Left resumes the still-held Right.
+        if(compare_refresh_.remaining!=2 || compare_repeat_.counter!=2)
+            throw std::runtime_error("chord release did not resume fresh held direction");
+        finish_callback(0x20); // Help held at the poll is processed after callback.
+        if(reorder_help_.phase==NBA97_HELP_CLOSED || reorder_child_.state!=0x23)
+            throw std::runtime_error("post-cycle held Help was lost");
+        for(unsigned frame=0;frame<40;++frame) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+        handleReorderKey(VK_SPACE);
+        for(unsigned frame=0;frame<40;++frame) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+        if(reorder_help_.phase!=NBA97_HELP_CLOSED) throw std::runtime_error("held Help did not return");
+        handleReorderKey(VK_LEFT); finish_callback(0x100);
+        if(reorder_child_.state || viewerDatabase().slotTable()!=held_table)
+            throw std::runtime_error("held Cancel failed to return without mutation");
+        trace_.log("COMPARE-HELD-VERIFY","end actions=40 presentations=200; wrap/release/reversal/chord/help/cancel passed; draft unchanged; original timing comparison pending");
+        trace_.log("COMPARE-GENERIC-VERIFY","begin");
+        nba97_reorder_frame(&reorder_screen_.selection,0);
+        handleReorderKey('S');nba97_reorder_child_input_ready(&reorder_child_,0);
+        if(reorder_child_.state!=0x23) throw std::runtime_error("generic test failed to open Compare");
+        auto generic_parent=reorder_screen_;
+        const auto generic_table=viewerDatabase().slotTable();
+        unsigned generic_waits=0;
+        auto finish_generic=[&](std::uint16_t held) {
+            const auto mask=compare_repeat_.previous_mask;
+            if(compare_repeat_.post_frames!=6 || compare_refresh_.remaining)
+                throw std::runtime_error("generic callback wrong presentation count");
+            const auto retained=reorder_compare_;
+            for(unsigned phase=0;phase<6;++phase) {
+                const auto before=renderReorder();const auto audio=cursor_audio_.info();
+                for(auto key:{WPARAM(VK_LEFT),WPARAM(VK_RIGHT),WPARAM(VK_UP),WPARAM(VK_DOWN),WPARAM('K'),WPARAM('J'),
+                    WPARAM('Q'),WPARAM('E'),WPARAM('F'),WPARAM(VK_SPACE),WPARAM(VK_RETURN),WPARAM('X')})
+                    handleReorderKey(key);
+                if(std::memcmp(&retained,&reorder_compare_,sizeof(retained)) ||
+                    std::memcmp(&generic_parent,&reorder_screen_,sizeof(generic_parent)) ||
+                    cursor_audio_.info().record!=audio.record || renderReorder().rgba!=before.rgba || reorder_child_.state!=0x23)
+                    throw std::runtime_error("generic callback accepted input before poll");
+                advanceComparePostCycle(held);
+                if(phase<5 && std::memcmp(&retained,&reorder_compare_,sizeof(retained)))
+                    throw std::runtime_error("held callback repeated before sixth presentation");
+            }
+            ++generic_waits;
+            trace_.log("COMPARE-GENERIC-VERIFY","wait mask="+std::to_string(mask)+" held="+std::to_string(held)+
+                " presents=6; blocked-input checked each present");
+        };
+        for(auto mask:std::array<std::uint16_t,5>{0x200,0x400,0x1000,0x2000,0x800}) {
+            handleCompareInput(mask);
+            const auto once=reorder_compare_;
+            finish_generic(mask);
+            if(compare_repeat_.counter!=6 || compare_repeat_.post_frames!=6 ||
+                !std::memcmp(&once,&reorder_compare_,sizeof(once)))
+                throw std::runtime_error("held generic callback did not repeat at fixed delay");
+            finish_generic(0);
+        }
+        for(auto mask:std::array<std::uint16_t,4>{0x10,0x40,0x404,0x600}) {
+            const auto before=reorder_compare_;const auto audio=cursor_audio_.info();
+            handleCompareInput(mask);
+            if(std::memcmp(&before,&reorder_compare_,sizeof(before)) || cursor_audio_.info().record!=audio.record)
+                throw std::runtime_error("unsupported generic callback changed state or sound");
+            finish_generic(0);
+        }
+        handleCompareInput(0x400);finish_generic(0x20);
+        if(reorder_help_.phase==NBA97_HELP_CLOSED) throw std::runtime_error("held Help lost after generic callback");
+        for(unsigned frame=0;frame<40;++frame) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+        handleReorderKey(VK_SPACE);
+        for(unsigned frame=0;frame<40;++frame) reorderHelpEvent(nba97_help_tick(&reorder_help_,0));
+        if(reorder_help_.phase!=NBA97_HELP_CLOSED) throw std::runtime_error("generic callback Help did not return");
+        generic_parent.selection.input_latch=0; // Help consumes its return input, not roster data.
+        handleCompareInput(0x2000);finish_generic(0x100);
+        auto expected_return=generic_parent;
+        expected_return.selection.screen_result=0;
+        expected_return.selection.child_ids[0]=expected_return.selection.child_ids[1]=UINT16_MAX;
+        expected_return.selection.input_latch=0;
+        expected_return.selection.waiting_input_change=1;
+        expected_return.selection.held_mask=0x100;
+        if(reorder_child_.state || std::memcmp(&expected_return,&reorder_screen_,sizeof(expected_return)) ||
+            viewerDatabase().slotTable()!=generic_table || generic_waits!=16)
+            throw std::runtime_error("generic callback round trips changed parent draft");
+        trace_.log("COMPARE-GENERIC-VERIFY","end waits=16 presentations=96; five held routes, four silent noops, Help/Cancel; draft unchanged");
+        trace_.log("COMPARE-SCROLL-VERIFY","begin");
+        nba97_reorder_frame(&reorder_screen_.selection,0);
+        handleReorderKey('S');nba97_reorder_child_input_ready(&reorder_child_,0);
+        if(reorder_child_.state!=0x23) throw std::runtime_error("scroll test failed to open Compare");
+        const auto scroll_table=viewerDatabase().slotTable();
+        for(unsigned i=0;i<18;++i) advanceComparePalette();
+        unsigned scroll_actions=0,scroll_presents=0,scroll_cues=0;
+        auto scroll_step=[&](std::uint16_t mask,std::uint16_t held,const char* prefix) {
+            if(!compare_repeat_.post_frames) handleCompareInput(mask);
+            const auto requested=reorder_compare_;
+            const auto callback_presents=compare_refresh_.remaining;
+            const auto old_top=callback_presents ? int(requested.top)+(mask==1?1:-1) : requested.top;
+            const unsigned post=mask==1 && !callback_presents && !requested.top ? 1 : 4;
+            if(compare_repeat_.previous_mask!=mask || compare_repeat_.post_frames!=post)
+                throw std::runtime_error("scroll host fixed wait missing");
+            for(unsigned phase=0;phase<callback_presents;++phase) {
+                if(prefix) capture((std::string(prefix)+"-"+std::to_string(phase)+".ppm").c_str());
+                const auto image=renderReorder();const auto audio=cursor_audio_.info();
+                for(auto key:std::array<WPARAM,12>{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,'J','K','Q','E',VK_SPACE,'F',VK_RETURN,VK_ESCAPE})
+                    handleCompareKey(key);
+                if(std::memcmp(&requested,&reorder_compare_,sizeof(requested)) || renderReorder().rgba!=image.rgba ||
+                    cursor_audio_.info().record!=audio.record || viewerDatabase().slotTable()!=scroll_table)
+                    throw std::runtime_error("input escaped scroll presentation barrier");
+                if(nba97_compare_refresh_top(&compare_refresh_,0)!=unsigned(phase?requested.top:old_top) ||
+                    nba97_compare_refresh_top(&compare_refresh_,1)!=unsigned(old_top))
+                    throw std::runtime_error("Compare group0/group1 scroll order differs");
+                advanceCompareRefresh();++scroll_presents;
+            }
+            if(prefix) capture((std::string(prefix)+"-2.ppm").c_str());
+            for(unsigned phase=0;phase<post;++phase) {
+                const auto image=renderReorder();const auto audio=cursor_audio_.info();
+                for(auto key:std::array<WPARAM,4>{VK_DOWN,'F','K',VK_RETURN}) handleCompareKey(key);
+                if(std::memcmp(&requested,&reorder_compare_,sizeof(requested)) || renderReorder().rgba!=image.rgba ||
+                    cursor_audio_.info().record!=audio.record)
+                    throw std::runtime_error("input escaped scroll post-delay barrier");
+                advanceComparePostCycle(phase+1==post?held:0);++scroll_presents;
+            }
+            ++scroll_actions;if(callback_presents) ++scroll_cues;
+            trace_.log("COMPARE-SCROLL-VERIFY","action mask="+std::to_string(mask)+" top="+std::to_string(requested.top)+
+                " callback="+std::to_string(callback_presents)+" post="+std::to_string(post)+" held="+std::to_string(held));
+        };
+        scroll_step(1,0,nullptr); // Top endpoint, no cue or callback frames.
+        scroll_step(2,0,"compare-scroll-down");
+        scroll_step(1,0,"compare-scroll-up");
+        // Hold through the full normal-stat extent, beyond bottom, then reverse
+        // through the full list and beyond top. Each accepted poll is bounded.
+        for(unsigned i=0;i<21;++i) scroll_step(2,i==20?0:2,nullptr);
+        for(unsigned i=0;i<21;++i) scroll_step(1,i==20?0:1,nullptr);
+        if(scroll_actions!=45 || scroll_cues!=40 || scroll_presents!=251 || reorder_compare_.top ||
+            compare_repeat_.post_frames || compare_refresh_.remaining || viewerDatabase().slotTable()!=scroll_table)
+            throw std::runtime_error("Compare held scroll did not stop/reverse at endpoints");
+        handleCompareInput(0x80);nba97_reorder_frame(&reorder_screen_.selection,0);
+        trace_.log("COMPARE-SCROLL-VERIFY","end actions=45 cues=40 presentations=251; held/reversal/endpoints; draft unchanged");
+        // Separate deterministic presentation sequence: no timer, input, audio,
+        // palette or selection updates. Repainting alone must not consume RNG.
+        prepareFrontendTitle();
+        const auto title_parent=reorder_screen_;
+        const auto title_table=viewerDatabase().slotTable();
+        for(unsigned frame=0;frame<=8;++frame) {
+            if(frame) presentFrontendTitle();
+            const auto title_state=frontend_title_.state();
+            const auto seed=frontend_rng_;
+            const auto image=renderReorder();
+            if(renderReorder().rgba!=image.rgba || seed!=frontend_rng_ ||
+                std::memcmp(&title_state,&frontend_title_.state(),sizeof(title_state)) ||
+                std::memcmp(&title_parent,&reorder_screen_,sizeof(title_parent)) ||
+                title_table!=viewerDatabase().slotTable())
+                throw std::runtime_error("title repaint mutated motion, parent or draft");
+            writePpm(image,options_.reorder_capture_dir/("title-reorder-"+std::to_string(frame)+".ppm"));
+            std::string vertices;
+            for(int i=0;i<8;++i) {if(i) vertices+=",";vertices+=std::to_string(frontend_title_.corners()[i]);}
+            trace_.log("TITLE-VERIFY","frame="+std::to_string(frame)+" rng="+std::to_string(seed)+
+                " phase="+std::to_string(title_state.next)+" draws="+std::to_string(frontend_rng_draws_)+" xy="+vertices);
+        }
+        trace_.log("REORDER-CAPTURE", "129 screen/Help/View/Compare/notice/speech/palette/refresh/arrow/scroll/photo-wait/title frames; real key handlers; live database unchanged; original parity not asserted");
         return 0;
     }
 
@@ -657,7 +2758,7 @@ private:
             "ba41","o18a","o18b","cros","shot","wait",
             "atlZ","bosZ","chaZ","chiZ","cleZ","dalZ","denZ","detZ","golZ","houZ",
             "indZ","lacZ","lalZ","miaZ","milZ","minZ","nwjZ","nwyZ","orlZ","phiZ",
-            "phoZ","porZ","sacZ","sanZ","seaZ","torZ","utaZ","vanZ","wasZ"
+            "phoZ","porZ","sacZ","sanZ","seaZ","torZ","utaZ","vanZ","wasZ","xfrZ"
         };
         for (const char* tag : tags) {
             const auto path = root / (std::string(tag) + ".png");
@@ -686,9 +2787,32 @@ private:
         trace_.log("MENU-ASSET", path.string() + " bytes=" + std::to_string(expected_size));
     }
 
-    void loadSelectedPlayerCardAssets() {
-        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
-        roster_portrait_loaded_ = false;
+    void updatePlayerPhoto(bool wait_for_capture = false) {
+        do {
+            auto result = player_photo_loader_.poll(wait_for_capture);
+            if (result.event == nba97::PlayerPhotoLoader::Event::None) break;
+            if (result.event == nba97::PlayerPhotoLoader::Event::Stale) {
+                trace_.log("PLAYER-PHOTO", "discard stale completion record=" + std::to_string(result.record) +
+                    "; newer selection or closed card; no stale photo publication");
+            } else if (result.event == nba97::PlayerPhotoLoader::Event::Ready) {
+                roster_portrait_ = std::move(result.image);
+                roster_portrait_loaded_ = true;
+                trace_.log("PLAYER-PHOTO", "ready record=" + std::to_string(result.record) +
+                    " 180x156; 80030E78 photo=on city=on wait=covered; actual native decode, no simulated CD delay");
+            } else {
+                roster_portrait_loaded_ = false;
+                trace_.log("PLAYER-PHOTO-ERROR", "record=" + std::to_string(result.record) + " " + result.error +
+                    "; photo stays hidden; wait retained; navigation remains available");
+            }
+        } while (wait_for_capture && player_photo_loader_.state().pending);
+    }
+
+    void loadSelectedPlayerCardAssets(bool new_card = true) {
+        const auto* player = roster_viewer_.selectedPlayer(viewerDatabase());
+        if (new_card) {
+            player_photo_loader_.reset();
+            roster_portrait_loaded_ = false;
+        }
         roster_cool_facts_available_ = false;
         if (!player) return;
         const auto root = options_.asset_root / "menu";
@@ -702,29 +2826,24 @@ private:
         };
         auto portrait_path = portrait_path_for(static_cast<std::uint32_t>(player->id) + 1);
         if (!std::filesystem::exists(portrait_path)) portrait_path = portrait_path_for(0);
-        roster_portrait_ = load_png_image(portrait_path);
-        if (roster_portrait_.width != 180 || roster_portrait_.height != 156)
-            throw std::runtime_error("invalid Z1PORT View Player portrait dimensions: " +
-                                     portrait_path.string());
-        roster_portrait_loaded_ = true;
+        const auto record = portrait_path == portrait_path_for(0) ? 0 : static_cast<int>(player->id) + 1;
+        if (player_photo_loader_.request(record, portrait_path)) {
+            roster_portrait_loaded_ = false;
+            trace_.log("PLAYER-PHOTO", "request player=" + std::to_string(player->id) + " record=" +
+                std::to_string(record) + " source=" + portrait_path.string() +
+                "; 800310D8 photo=off wait=visible city=" +
+                (player_photo_loader_.state().city_enabled ? "retained" : "hidden") + "; latest-request bounded queue");
+        }
 
         std::ifstream input(root / "Z1COOL.IDX", std::ios::binary);
         std::vector<std::uint8_t> index((std::istreambuf_iterator<char>(input)), {});
-        const auto read_u32 = [&index](std::size_t at) -> std::uint32_t {
-            if (at + 4 > index.size()) return 0;
-            return static_cast<std::uint32_t>(index[at]) |
-                   (static_cast<std::uint32_t>(index[at + 1]) << 8) |
-                   (static_cast<std::uint32_t>(index[at + 2]) << 16) |
-                   (static_cast<std::uint32_t>(index[at + 3]) << 24);
-        };
-        const std::uint32_t count = read_u32(0);
-        for (std::uint32_t variant = 0; variant < 5; ++variant) {
-            const std::uint32_t record = static_cast<std::uint32_t>(player->id) * 5 + variant;
-            if (record < count && read_u32(4 + static_cast<std::size_t>(record) * 8) != 0) {
-                roster_cool_facts_available_ = true;
-                break;
-            }
-        }
+        const nba97::CoolFactIndexView facts(index);
+        std::uint8_t fact_mask=0;
+        for(unsigned variant=0;variant<5;++variant)
+            if(facts.lookup(player->id,variant).bytes) fact_mask|=static_cast<std::uint8_t>(1u<<variant);
+        roster_cool_facts_available_=fact_mask!=0;
+        nba97_fact_refresh(&cool_fact_selection_,fact_mask);
+        resolveCoolFactChoice("refresh-593F0");
         trace_.log("PLAYER-CARD", "state=0x24 player=" + player->displayName() +
             " id=" + std::to_string(player->id) + " portrait-record=" +
             std::to_string(static_cast<unsigned>(player->id) + 1) + " 180x156 cool-facts=" +
@@ -736,7 +2855,7 @@ private:
         static constexpr const char* teams[] = {
             "atl","bos","cha","chi","cle","dal","den","det","gol","hou",
             "ind","lac","lal","mia","mil","min","nwj","nwy","orl","phi",
-            "pho","por","sac","san","sea","tor","uta","van","was"};
+            "pho","por","sac","san","sea","tor","uta","van","was","xea"};
         static constexpr const char* strips[] = {
             "Bkga", "Bkgb", "Bkgc", "Bkgd", "Bkge", "Bkgf", "Bkgg", "Bkgh"};
         for (const char* team : teams) {
@@ -769,7 +2888,7 @@ private:
             }
         }
         trace_.log("ROSTER-PALETTE",
-            "29 runtime-patched ZSET4 team backgrounds Bkga-h loaded from local-only ZTMPAL output");
+            "29 team palettes plus original record29 xeaP for Compare free agents; Bkga-h loaded from local-only ZTMPAL output");
     }
 
     void loadMenuCards(const std::filesystem::path& root) {
@@ -980,6 +3099,7 @@ private:
         }
         roster_viewer_.activate(roster_database_);
         loadSelectedPlayerCardAssets();
+        updatePlayerPhoto(true);
         writePpm(nba97::renderRosterViewer(
             roster_viewer_, roster_database_, menu_font_, player_sprites_, 340,
             roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
@@ -1030,6 +3150,27 @@ private:
                 roster_cool_facts_available_, &control_font_), output / name);
         }
 
+        // Same identity/layer/top as the manually captured original Rodman
+        // card. This is a compositor checkpoint, not a Re-order runtime trace.
+        roster_viewer_ = nba97::RosterViewer{};
+        roster_viewer_.open(roster_database_);
+        for (int team=0; team<3; ++team)
+            roster_viewer_.scanTeam(1, roster_database_, 100 + team*340);
+        roster_viewer_.activate(roster_database_);
+        roster_viewer_.move(1, 0, roster_database_, 1200);
+        const auto* rodman = roster_viewer_.selectedPlayer(roster_database_);
+        if (!rodman || rodman->last_name != "Rodman" || roster_viewer_.firstVisiblePlayerStat()!=0)
+            throw std::runtime_error("Rodman photo checkpoint identity/top mismatch");
+        loadSelectedPlayerCardAssets();
+        writePpm(nba97::renderRosterViewer(roster_viewer_, roster_database_, menu_font_,
+            player_sprites_, 0, nullptr, roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_rodman_wait.ppm");
+        updatePlayerPhoto(true);
+        if (!roster_portrait_loaded_) throw std::runtime_error("Rodman photo checkpoint failed to load");
+        writePpm(nba97::renderRosterViewer(roster_viewer_, roster_database_, menu_font_,
+            player_sprites_, 0, &roster_portrait_, roster_cool_facts_available_, &control_font_),
+            output / "player_chicago_rodman_ready.ppm");
+
         std::ofstream metadata(output / "capture.json", std::ios::trunc);
         if (!metadata) throw std::runtime_error("cannot write View Rosters capture metadata");
         metadata << "{\n"
@@ -1043,7 +3184,8 @@ private:
                     "\"team_chicago_scrolled.ppm\", \"team_dallas_initial.ppm\", "
                     "\"player_chicago_initial.ppm\", "
                     "\"player_chicago_help.ppm\", \"player_chicago_layer_1.ppm\", "
-                    "\"player_chicago_scrolled.ppm\"]\n"
+                    "\"player_chicago_scrolled.ppm\", \"player_chicago_rodman_wait.ppm\", "
+                    "\"player_chicago_rodman_ready.ppm\"]\n"
                  << "}\n";
         trace_.log("VERIFY-CAPTURE", "deterministic View Rosters frames -> " + output.string());
         return 0;
@@ -1261,7 +3403,7 @@ private:
             throw std::runtime_error("Player_ChangeStatLayer forward setup failed");
         }
         const auto same_extent = stat_layer_test.lastStatLayerChange();
-        if (same_extent.input_mask != 0x2000 || same_extent.sound_slot != 0x1b ||
+        if (same_extent.input_mask != 0x2000 || same_extent.layer_label_object != 0x1b ||
             same_extent.descriptor_table != 2 || same_extent.descriptor_last_index != 23 ||
             same_extent.descriptor_extent_changed || same_extent.primary_animation_reset ||
             same_extent.primary_refresh_count != 6 || !same_extent.secondary_layout ||
@@ -1295,7 +3437,7 @@ private:
             stat_layer_test.lastStatLayerChange().skipped_layer_four) {
             throw std::runtime_error("Player_ChangeStatLayer available layer-4 branch failed");
         }
-        trace_.log("SELF-TEST", "Player_ChangeStatLayer PASS: inclusive constructor limit wrap, restricted layer-4 skip, sound slot 0x1B, 14/17/24 descriptor extents, conditional dual-group animation, row refresh, page-zero rebuild, and stat-scroll reset");
+        trace_.log("SELF-TEST", "Player_ChangeStatLayer PASS: inclusive constructor limit wrap, restricted layer-4 skip, label object 0x1B (not audio), 14/17/24 descriptor extents, conditional dual-group animation, row refresh, page-zero rebuild, and extent-dependent stat-scroll reset");
         nba97::RosterViewer roster_viewer_test;
         roster_viewer_test.open(roster_database_);
         const auto view_a = nba97::renderRosterViewer(
@@ -1488,13 +3630,13 @@ private:
         nba97::RecoveredAudioPlayer cool_fact_test;
         const auto cool_fact_info = cool_fact_test.inspectCoolFact(
             options_.asset_root / "menu" / "Z1COOL.IDX",
-            options_.asset_root / "menu" / "Z1COOL.BIG", 0, 1);
+            options_.asset_root / "menu" / "Z1COOL.BIG", 0, 0);
         if (cool_fact_info.record != 1 || cool_fact_info.sample_rate != 16000 ||
             cool_fact_info.sample_count != 286001 || cool_fact_info.compressed_bytes != 163440 ||
             cool_fact_test.isPlaying())
             throw std::runtime_error("View Player Cool Fact archive/decode regression failed");
         trace_.log("COOL-FACT-TEST",
-            "player=0 record=1 decoded PSX-ADPCM samples=286001 rate=16000 without playback");
+            "player=0 variant=0 logical=0 physical-record=1 decoded PSX-ADPCM samples=286001 rate=16000 without playback");
         roster_viewer_test.returnToRoster();
         if (roster_viewer_test.mode() != nba97::RosterViewMode::TeamRoster ||
             roster_viewer_test.playerIndex() != 6 ||
@@ -1954,12 +4096,38 @@ private:
     }
 
     LRESULT handleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
+        if(native_record_ && (message==WM_KEYDOWN || message==WM_KEYUP ||
+           message==WM_MOUSEMOVE || message==WM_LBUTTONDOWN || message==WM_LBUTTONUP || message==WM_KILLFOCUS)) {
+            try { native_record_->input(nativeRecordTime(),message,wparam,lparam); }
+            catch(const std::exception& e) { native_record_->invalidate(e.what());trace_.log("RECORD-ERROR",e.what());stopNativeRecording(); }
+        }
         switch (message) {
         case WM_KEYDOWN:
-            // WM_KEYDOWN repeats while a physical/D-pad key is held. The PS1
-            // frontend advances once per press, so ignore repeat messages
-            // (bit 30 reports that the key was already down).
+            if(wparam==VK_F9 && !options_.native_record_dir.empty()) {
+                if((static_cast<std::uintptr_t>(lparam)&(1u<<30))==0) toggleNativeRecording();
+                return 0;
+            }
+            if(cool_fact_flash_.remaining) return 0;
+            // Ignore Windows autorepeat. Recovered screens that repeat input
+            // drive it from their own presentation/poll cadence instead.
             if ((static_cast<std::uintptr_t>(lparam) & (1u << 30)) != 0) return 0;
+            if(!trade_choice_address_ && reorder_child_.state==0x23 && reorder_help_.phase==NBA97_HELP_CLOSED &&
+               compareKeyMask(wparam) && sampleCompareInput()!=compareKeyMask(wparam)) {
+                // Preserve the whole sampled mask. A chord containing a
+                // generic callback bit calls59F20 (usually a silent no-op),
+                // rather than giving the newest key-down priority.
+                if(!compare_refresh_.remaining && !compare_repeat_.post_frames) {
+                    const auto held=sampleCompareInput();
+                    if(nba97_compare_callback_mask(held)) handleCompareInput(held);
+                    else { nba97_compare_repeat_idle(&compare_repeat_);compare_repeat_.post_frames=1; }
+                    compare_refresh_painted_=false;compare_refresh_tick_=menu_elapsed_ms_/17;
+                }
+                return 0;
+            }
+            if(bottom_select_pending_) return 0; // includes Escape during confirmed Reset flash
+            if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) {
+                handleResetKey(wparam); return 0;
+            }
             if (flow_.screen() == nba97::BootScreen::MainMenu &&
                 frontend_page_ == nba97::FrontendPage::ViewRosters &&
                 (wparam == VK_UP || wparam == VK_DOWN)) {
@@ -1971,14 +4139,15 @@ private:
                 frontend_page_ != nba97::FrontendPage::GameSetup &&
                 frontend_page_ != nba97::FrontendPage::ProfileSetup &&
                 frontend_page_ != nba97::FrontendPage::ViewRosters &&
-                frontend_page_ != nba97::FrontendPage::ReorderRosters)
+                frontend_page_ != nba97::FrontendPage::ReorderRosters &&
+                !isRosterEditor())
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      frontend_page_ == nba97::FrontendPage::ProfileSetup)
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      (frontend_page_ == nba97::FrontendPage::ViewRosters ||
-                      frontend_page_ == nba97::FrontendPage::ReorderRosters))
+                      frontend_page_ == nba97::FrontendPage::ReorderRosters || isRosterEditor()))
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE) DestroyWindow(window_);
             else if (wparam == VK_SPACE && intro_player_.isPlaying())
@@ -2013,6 +4182,11 @@ private:
                 handleMenuHover(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
             return 0;
         case WM_LBUTTONDOWN:
+            if(cool_fact_flash_.remaining) return 0;
+            if(player_notice_.phase!=NBA97_HELP_CLOSED) {
+                playerNoticeEvent(nba97_help_input(&player_notice_,0x800));
+                return 0;
+            }
             if (flow_.screen() == nba97::BootScreen::MainMenu) {
                 if (frontend_page_ == nba97::FrontendPage::GameSetup)
                     activateMenuSelection();
@@ -2040,6 +4214,7 @@ private:
                     } else if (roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster &&
                                roster_viewer_.selectedPlayer(roster_database_)) {
                         roster_viewer_.activate(roster_database_);
+                        cool_fact_selection_={};cool_fact_selection_.selected=-1;
                         loadSelectedPlayerCardAssets();
                         trace_.log("ROSTER-VIEW", "mouse/internal 0x10 -> result=2 -> nested state 0x24");
                         rebuildMenuFrame();
@@ -2073,6 +4248,7 @@ private:
             handleMovieEvent();
             return 0;
         case WM_DESTROY:
+            stopNativeRecording();
             KillTimer(window_, kFrameTimer);
             intro_player_.stop();
             frontend_music_.stop();
@@ -2089,9 +4265,44 @@ private:
     void update() {
         const DWORD now = GetTickCount();
         if (flow_.screen() == nba97::BootScreen::MainMenu) {
+            const auto music_error=frontend_music_.error();
+            if(!music_error.empty()) {
+                trace_.log("MUSIC-ERROR",music_error+"; stopped only the music stream");
+                frontend_music_.stop();
+            }
+            const auto underruns=frontend_music_.underruns();
+            if(underruns>music_underruns_logged_) {
+                trace_.log("MUSIC-UNDERRUN","queued PCM starved count="+std::to_string(underruns)+"; timing reference requires review");
+                music_underruns_logged_=underruns;
+            }
             menu_elapsed_ms_ += now - previous_tick_;
-            updateRosterHeldInput();
-            updateReorder();
+            updatePlayerPhoto();
+            if(cool_fact_flash_.remaining) {
+                const auto tick=menu_elapsed_ms_/17;
+                if(cool_fact_flash_painted_ && cool_fact_flash_tick_<tick) {
+                    advanceCoolFactFlash();
+                    cool_fact_flash_painted_=false;
+                }
+                cool_fact_flash_tick_=tick; // Never skip unseen phases after a stall.
+                reorder_tick_=tick; // No queued editor input after the callback.
+            } else if(reorder_child_.state==0x23 && (compare_refresh_.remaining || compare_repeat_.post_frames)) {
+                const auto tick=menu_elapsed_ms_/17;
+                if(compare_refresh_painted_ && compare_refresh_tick_<tick) {
+                    if(compare_refresh_.remaining) advanceCompareRefresh();
+                    else advanceComparePostCycle(sampleCompareInput());
+                    compare_refresh_painted_=false;
+                }
+                compare_refresh_tick_=tick; // Never skip an unseen pending frame after a stall.
+                reorder_tick_=tick; // Suspended selector: no accumulated input/frame catch-up.
+            } else if(player_notice_.phase!=NBA97_HELP_CLOSED) {
+                updatePlayerNotice();
+                reorder_tick_=menu_elapsed_ms_/17; // No delayed editor input catch-up.
+            } else {
+                updateRosterHeldInput();
+                updateReorder();
+                updateTrade();
+            }
+            updateReset();
             if (bottom_select_pending_ &&
                 menu_elapsed_ms_ - bottom_select_flash_start_ms_ >= kBottomSelectFlashMs) {
                 bottom_select_pending_ = false;
@@ -2099,6 +4310,7 @@ private:
                     "dispatch=" + std::string(bottom_menu_.selectedLabel()));
                 completeRecoveredBottomSelection();
             }
+            updateFrontendTitle();
             rebuildMenuFrame();
             if (frontend_transition_active_) {
                 // Entry may load assets inside this update. Do not subtract a
@@ -2207,6 +4419,118 @@ private:
             if (back_dc) DeleteDC(back_dc);
         }
         EndPaint(window_, &paint);
+        if(flow_.screen()==nba97::BootScreen::MainMenu && frontend_title_.active()) frontend_title_painted_=true;
+        if(native_record_) {
+            try {
+                if(flow_.screen()!=nba97::BootScreen::MainMenu) {
+                    trace_.log("RECORD-STOP","left frontend; this recorder does not capture the video renderer");
+                    stopNativeRecording();
+                } else {
+                    const auto& frame=currentFrame();
+                    const auto state=nativeRecordState();
+                    if(frame.width!=512 || frame.height!=240) throw std::runtime_error("recorded presentation is not 512x240");
+                    native_record_->submit(frame.bgra,nativeRecordTime(),state);
+                    if(!native_record_->accepting()) stopNativeRecording();
+                }
+            } catch(const std::exception& e) { native_record_->invalidate(e.what());trace_.log("RECORD-ERROR",e.what());stopNativeRecording(); }
+        }
+        if(cool_fact_flash_.remaining) cool_fact_flash_painted_=true;
+        if(reorder_child_.state==0x23 && (compare_refresh_.remaining || compare_repeat_.post_frames)) compare_refresh_painted_=true;
+    }
+
+    std::uint64_t nativeRecordTime() const {
+        const auto now=nba97::ProcessAudioCapture::qpc100ns();
+        if(now<native_record_origin_) throw std::runtime_error("native capture QPC moved backwards");
+        return (now-native_record_origin_)*100;
+    }
+    nba97::NativeFrameCapture::State nativeRecordState() const {
+        if(isRosterEditor()) {
+            const auto& s=trade_screen_;
+            // The v1 timeline has one team field: Trade records the LEFT team.
+            // Right team and both counts remain in TRADE CLI events. Child fields
+            // here describe the suspended parent, not the child's browsed pair.
+            return {{static_cast<int>(flow_.screen()),static_cast<int>(frontend_page_),menu_elapsed_ms_,
+                s.team[0],s.phase,reorder_child_.state,reorder_help_.phase,
+                s.cursor[0],s.cursor[1],s.top[0],s.top[1],s.selected[0],s.selected[1],
+                cool_fact_selection_.selected,cool_fact_flash_.remaining,frontend_transition_active_}};
+        }
+        const auto& s=reorder_screen_.selection;
+        return {{static_cast<int>(flow_.screen()),static_cast<int>(frontend_page_),menu_elapsed_ms_,
+            reorder_screen_.team,s.phase,reorder_child_.state,reorder_help_.phase,
+            s.cursor[0],s.cursor[1],s.top[0],s.top[1],s.selected_ids[0],s.selected_ids[1],
+            cool_fact_selection_.selected,cool_fact_flash_.remaining,frontend_transition_active_}};
+    }
+    std::array<std::uint8_t,32> nativeRecordSlotsHash() const {
+        // Hash the displayed editor's effective draft, never object padding.
+        nba97::Sha256 hash;
+        for(int i=0;i<NBA97_ROSTER_TABLE_SLOTS;++i) {
+            const auto local=i-reorder_screen_.team*15;
+            const auto id=isRosterEditor() ? trade_screen_.working[i] :
+                local>=0 && local<15 ? reorder_screen_.selection.slots[local]:reorder_screen_.working[i];
+            const std::uint8_t bytes[]{static_cast<std::uint8_t>(id),static_cast<std::uint8_t>(id>>8)};
+            hash.update(bytes,2);
+        }
+        return hash.digest();
+    }
+    void recordNativeHelp(unsigned operation,std::uint16_t raw,Nba97HelpEvent result,const Nba97HelpModal& before) {
+        if(!native_record_)return;
+        try {
+            const auto pack=[](const Nba97HelpModal& m)->nba97::NativeFrameCapture::HelpModal {
+                return {{m.phase,m.rect.x,m.rect.y,m.rect.width,m.rect.height,
+                    m.target.x,m.target.y,m.target.width,m.target.height,m.held}};
+            };
+            const auto previous=pack(before),current=pack(reorder_help_);
+            if(operation && previous==current && result==NBA97_HELP_NO_EVENT)return;
+            native_record_->helpEvent(nativeRecordTime(),operation,raw,result,reorder_notice_.has_value(),
+                previous,current,nativeRecordState(),nativeRecordSlotsHash());
+            if(previous[0]!=current[0])trace_.log("RECORD-HELP","phase="+std::to_string(previous[0])+"->"+std::to_string(current[0])+
+                "; operation="+std::to_string(operation)+"; raw="+std::to_string(raw)+"; real QPC event; no added frame");
+            if(!native_record_->accepting())stopNativeRecording();
+        } catch(const std::exception& e) {
+            if(native_record_){native_record_->invalidate(e.what());trace_.log("RECORD-ERROR",e.what());stopNativeRecording();}
+        }
+    }
+    void toggleNativeRecording() {
+        if(native_record_) {stopNativeRecording();return;}
+        if(flow_.screen()!=nba97::BootScreen::MainMenu) {
+            trace_.log("RECORD-WAIT","navigate to the frontend first, then press F9");return;
+        }
+        try {
+            const auto private_root=std::filesystem::absolute(options_.asset_root).parent_path();
+            if(private_root.filename()!=".local") throw std::runtime_error("recording requires asset packs under .local");
+            native_record_origin_=nba97::ProcessAudioCapture::qpc100ns();
+            native_record_=std::make_unique<nba97::NativeFrameCapture>(private_root,options_.native_record_dir,native_record_origin_,options_.native_record_limit);
+            native_record_->audioResult(options_.native_record_audio,false,false);
+            if(options_.native_record_audio) {
+                native_audio_record_=std::make_unique<nba97::ProcessAudioCapture>(
+                    native_record_->directory()/"audio",native_record_origin_);
+                trace_.log("RECORD-AUDIO","started Windows process-tree mix; PCM16 stereo48000Hz; packet QPC/flags retained; OS conversion=yes; no mic/system fallback");
+            }
+            trace_.log("RECORD-START",native_record_->directory().string()+
+                "; raw 512x240 RGB; every native presentation; shared QPC clock; eight queued frames; reference-ready=no");
+            recordNativeHelp(0,0,NBA97_HELP_NO_EVENT,reorder_help_);
+            InvalidateRect(window_,nullptr,FALSE);
+        } catch(const std::exception& e) {
+            trace_.log("RECORD-ERROR",e.what());
+            if(native_record_) {native_record_->invalidate("requested capture startup failed");stopNativeRecording();}
+        }
+    }
+    void stopNativeRecording() {
+        if(!native_record_) return;
+        try {
+            if(native_audio_record_) {
+                native_audio_record_->finish();
+                native_record_->audioResult(true,true,native_audio_record_->complete());
+                trace_.log("RECORD-AUDIO",native_audio_record_->complete()?"process mix written; original parity unverified":native_audio_record_->error());
+            }
+            native_record_->finish();
+            trace_.log("RECORD-STOP","submitted="+std::to_string(native_record_->submitted())+
+                "; video="+(native_record_->error().empty()?std::string("written"):native_record_->error())+
+                "; audio="+(native_audio_record_?std::string("process-mix; inspect separate audio status"):std::string("absent"))+
+                "; reference-ready=no");
+        } catch(const std::exception& e) {trace_.log("RECORD-ERROR",e.what());}
+        native_record_.reset();
+        native_audio_record_.reset();
     }
 
     void startIntro() {
@@ -2247,7 +4571,7 @@ private:
         trace_.log("MOVIE-END", std::string(reason) + "; graph-event=" +
                                 std::to_string(event_code));
         trace_.log("TRANSITION", "0x80035984 -> title 0x8002EEF4 -> ZCPYRT97.PSH");
-        InvalidateRect(window_, nullptr, FALSE);
+        if(window_) InvalidateRect(window_, nullptr, FALSE);
     }
 
     void enterMainMenu(const char* reason) {
@@ -2270,13 +4594,14 @@ private:
             const auto recovered_volume =
                 nba97_frontend_music_volume(settings_.option(1));
             frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", recovered_volume);
+            music_underruns_logged_=0;
             const auto& audio = frontend_music_.info();
             trace_.log("MUSIC-DECODER", frontend_music_.decoderName());
             trace_.log("MUSIC-STREAM", "ZTMENU1.CNK blocks=" + std::to_string(audio.data_blocks) +
                 " rate=" + std::to_string(audio.sample_rate) + "Hz channels=" +
                 std::to_string(audio.channels) + " samples=" + std::to_string(audio.sample_count));
             trace_.log("MUSIC-PLAY", "FUN_8002F258 recovered volume=" +
-                std::to_string(recovered_volume) + "/127; looped in-process");
+                std::to_string(recovered_volume) + "/127; music-only PCM gain; four 1024-frame buffers; no Windows session-volume writes");
         } catch (const std::exception& error) {
             trace_.log("MUSIC-ERROR", error.what());
         }
@@ -2284,8 +4609,11 @@ private:
     }
 
     void handleMenuKey(WPARAM key) {
+        if(cool_fact_flash_.remaining) return;
+        if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) {handleResetKey(key);return;}
         if (frontend_transition_active_) return;
         if (bottom_select_pending_) return;
+        if(isRosterEditor()){handleTradeKey(key);return;}
         if (frontend_page_ == nba97::FrontendPage::ReorderRosters) {
             handleReorderKey(key);
             return;
@@ -2374,15 +4702,24 @@ private:
     }
 
     void activateRecoveredBottomSelection() {
+        if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) return;
         if (bottom_select_pending_) return;
         if (!bottom_menu_.enabled(bottom_menu_.selected())) {
             const int selected = bottom_menu_.selected();
             trace_.log("ROSTER-CARD-LOCK", std::string(bottom_menu_.selectedLabel()) +
                 (selected == 3
-                    ? " disabled: FUN_80057C48 requires roster != saved snapshot"
+                    ? " disabled: FUN_80057C48 requires roster != original defaults"
                     : selected == 7
                         ? " disabled: FUN_80057A98 requires at least one non-zero injury record"
                         : " disabled by recovered object predicate"));
+            return;
+        }
+        if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==3 &&
+           !reset_commit_pending_) {
+            if(!reset_assets_) reset_assets_=std::make_unique<nba97::RosterResetAssets>(options_.asset_root);
+            reset_tick_=menu_elapsed_ms_/17;
+            resetEvent(nba97_reset_open(&reset_prompt_,reset_assets_->rect(),0x800,0));
+            trace_.log("ROSTER-RESET","80057960 -> 80040A1C descriptor=800AEDD2; default=cancel; C/Space choose, Up/Down focus; no save before confirmation");
             return;
         }
         bottom_select_pending_ = true;
@@ -2393,10 +4730,21 @@ private:
             std::to_string(bottom_select_index_) + " label=" + bottom_menu_.selectedLabel() +
             "; FUN_8002F124 sound=6; selected overlay toggles 12 vblanks (~204 ms)");
         rebuildMenuFrame();
-        InvalidateRect(window_, nullptr, FALSE);
+        if(window_) InvalidateRect(window_, nullptr, FALSE);
     }
 
     void completeRecoveredBottomSelection() {
+        if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==1) {
+            beginFrontendTransition(nba97::FrontendPage::SignFreeAgent,"Sign selected; 80057CE4 -> state14 -> 80056F9C");return;
+        }
+        if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==0) {
+            beginFrontendTransition(nba97::FrontendPage::TradePlayers,"Trade selected; 80057CE4 -> state13 -> 80056CD0");return;
+        }
+        if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==3 && reset_commit_pending_) {
+            reset_commit_pending_=false;
+            commitRosterReset();
+            return;
+        }
         if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 5) {
             beginFrontendTransition(nba97::FrontendPage::ReorderRosters,
                 "Re-order selected; 80057CE4 -> state 0x0C -> 80056AEC");
@@ -2411,11 +4759,109 @@ private:
                                  " child flow not yet decompiled");
     }
 
+    bool rosterResetEligible() const {
+        const auto slots=roster_database_.slotTable();
+        // Only normal frontend context exists in the port. Future season/
+        // special contexts must supply their real +2FC4/+2FC3 bytes here.
+        return nba97_reset_enabled(slots.data(),roster_database_.originalSlots().data(),0,0)!=0;
+    }
+
+    void showResetNotice(const char* title,const char* detail) {
+        reset_notice_=nba97::FrontendHelpDescriptor{9,0,0,{116,70,280,100},
+            {{true,0,title},{true,0,detail},{true,0,"see CLI for details"},{true,0,"press a button to continue"}}};
+        resetNoticeEvent(nba97_help_open(&reset_notice_modal_,reset_notice_->rect,0x800));
+    }
+
+    void resetNoticeEvent(Nba97HelpEvent event) {
+        if(event==NBA97_HELP_OPEN_SOUND) playBottomMenuSound(7,"reset-notice-open");
+        else if(event==NBA97_HELP_CLOSE_SOUND) playBottomMenuSound(8,"reset-notice-close");
+        else if(event==NBA97_HELP_RETURNED) {
+            reset_notice_.reset();
+            trace_.log("ROSTER-RESET-NOTICE","closed after input-change barrier; no automatic retry");
+        }
+    }
+
+    void commitRosterReset() {
+        nba97::RosterCommitResult result{};
+        try {
+            if(!roster_store_) throw std::runtime_error("roster save unavailable: "+roster_load_error_);
+            if(!rosterResetEligible()) throw std::runtime_error("Reset eligibility changed before commit");
+            result=roster_store_->commit(roster_database_,roster_database_.originalSlots(),reorder_save_hooks_);
+        } catch(const std::exception& e) {
+            trace_.log("ROSTER-RESET-FAILED",std::string(e.what())+"; accepted roster retained; no success claim; reopen Reset to retry");
+            showResetNotice("reset not saved","accepted rosters retained");
+            rebuildMenuFrame();
+            return;
+        }
+        // After this commit boundary, a later UI/reporting failure must never
+        // be described as an uncommitted Reset or trigger a retry.
+        bottom_menu_.setRosterCapabilities(rosterResetEligible(),false);
+        trace_.log("ROSTER-RESET-COMMIT","80057864 normal roster intent; 29x15+100 original slots; derived owners/counts rebuilt; generation="+
+            std::to_string(roster_store_->accepted().generation)+"; bytes="+std::to_string(result.bytes)+
+            "; sync="+std::to_string(result.sync_completed)+"; private base/profiles/settings unchanged; Reset locked again");
+        if(!result.sync_completed) showResetNotice("reset saved - sync uncertain","do not retry this reset");
+        rebuildMenuFrame();
+    }
+
+    void resetEvent(int event) {
+        if(event&NBA97_RESET_OPEN) playBottomMenuSound(12,"reset-confirm-open");
+        if(event&NBA97_RESET_UP) playBottomMenuSound(3,"reset-confirm-up");
+        if(event&NBA97_RESET_DOWN) playBottomMenuSound(4,"reset-confirm-down");
+        if(event&(NBA97_RESET_UP|NBA97_RESET_DOWN))
+            trace_.log("ROSTER-RESET-FOCUS",reset_prompt_.choice ? "cancel" : "restore defaults");
+        if(event&NBA97_RESET_CHOSEN) {
+            playBottomMenuSound(6,"reset-confirm-choice");
+            playBottomMenuSound(8,"reset-confirm-close");
+            trace_.log("ROSTER-RESET-CHOICE",reset_prompt_.choice ? "cancel; no mutation" : "restore requested; wait for close/flash before durable commit");
+        }
+        if(event&NBA97_RESET_RETURN) {
+            if(reset_prompt_.choice==0) {
+                reset_commit_pending_=true;
+                activateRecoveredBottomSelection(); // original 3F324 flash is AFTER confirmation
+            } else trace_.log("ROSTER-RESET","cancelled; accepted roster/save generation untouched");
+        }
+    }
+
+    static std::uint16_t resetKeyMask(WPARAM key) {
+        return key==VK_UP ? 1:key==VK_DOWN ? 2:key=='C' || key==VK_SPACE || key==VK_RETURN ? 0x800:
+            key=='X' || key==VK_ESCAPE || key==VK_BACK ? 0x100:key==VK_LEFT ? 8:key==VK_RIGHT ? 4:0;
+    }
+    void handleResetKey(WPARAM key) {
+        const auto mask=resetKeyMask(key);
+        if(reset_notice_) resetNoticeEvent(nba97_help_input(&reset_notice_modal_,mask));
+        else resetEvent(nba97_reset_input(&reset_prompt_,mask));
+    }
+    void tickReset(std::uint16_t raw) {
+        if(reset_notice_) resetNoticeEvent(nba97_help_tick(&reset_notice_modal_,raw));
+        else resetEvent(nba97_reset_tick(&reset_prompt_,raw));
+    }
+    void updateReset() {
+        if(frontend_page_!=nba97::FrontendPage::Rosters) return;
+        const auto tick=menu_elapsed_ms_/17;
+        const auto first=tick>120 ? (std::max)(reset_tick_,tick-120):reset_tick_;
+        std::uint16_t raw=0;
+        for(auto key:{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,VK_RETURN,VK_SPACE,VK_ESCAPE,VK_BACK,int('C'),int('X')})
+            if(GetAsyncKeyState(key)&0x8000) raw|=resetKeyMask(key);
+        for(auto i=first;i<tick;++i) tickReset(raw);
+        reset_tick_=tick;
+    }
+    PshImage renderBottomMenu() {
+        const bool visible=!bottom_select_pending_ ||
+            (((menu_elapsed_ms_-bottom_select_flash_start_ms_)/kPsxVblankMs)&1u)!=0u;
+        auto im=nba97::renderRecoveredBottomMenu(bottom_menu_,menu_font_,menu_sprites_,roster_sprites_,users_sprites_,
+            roster_menu_cards_,menu_elapsed_ms_,visible);
+        if(frontend_page_==nba97::FrontendPage::Rosters && reset_assets_) {
+            reset_assets_->draw(im,reset_prompt_,menu_elapsed_ms_/17);
+            if(reset_notice_) nba97::FrontendHelpPack::draw(im,reset_assets_->font(),*reset_notice_,reset_notice_modal_);
+        }
+        return im;
+    }
+
     void playBottomMenuSound(std::uint32_t sound_id, const char* role) {
         try {
             const auto root = options_.asset_root / "menu";
             const auto info = cursor_audio_.playCursorSound(
-                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id);
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3));
             const auto effective_percent =
                 (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
                 (127u * 127u * 127u);
@@ -2427,7 +4873,9 @@ private:
                 std::to_string(info.root_note) + "/" +
                 std::to_string(info.requested_note) + " pitch=" +
                 std::to_string(info.pitch_cents) + "c effective-gain=" +
-                std::to_string(effective_percent) + "%");
+                std::to_string(effective_percent) + "% setting=" +
+                std::to_string(settings_.option(3)) + " playback=" +
+                (info.playback_suppressed ? "suppressed" : "submitted"));
         } catch (const std::exception& error) {
             trace_.log("AUDIO-ERROR", std::string("rosters ZCURSOR decode/play failed: ") +
                 error.what());
@@ -2435,12 +4883,12 @@ private:
     }
 
     void logRosterViewFocus(const char* reason) {
-        const auto* team = roster_viewer_.selectedTeam(roster_database_);
-        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
+        const auto* team = roster_viewer_.selectedTeam(viewerDatabase());
+        const auto* player = roster_viewer_.selectedPlayer(viewerDatabase());
         trace_.log(roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster
                        ? "ROSTER-FOCUS" : "PLAYER-CARD",
             std::string(reason) + "; team=" +
-            (team ? team->city + " " + team->nickname : "<none>") +
+            (team ? team->displayName() : "<none>") +
             " player=" + (player ? player->displayName() : "<none>") +
             " category=" + std::to_string(roster_viewer_.category()) +
             " display=" + std::to_string(roster_viewer_.displayIndex()) +
@@ -2461,7 +4909,7 @@ private:
             " layer=" + std::to_string(change.previous_layer) + "->" +
             std::to_string(change.current_layer) +
             (change.skipped_layer_four ? " (restricted layer 4 skipped)" : "") +
-            " sound-slot=0x1B descriptors=" +
+            " layer-label-object=0x1B descriptors=" +
             std::to_string(change.descriptor_last_index + 1) +
             " table=" + std::to_string(change.descriptor_table) +
             " extent-change=" + (change.descriptor_extent_changed ? "yes" : "no") +
@@ -2479,7 +4927,7 @@ private:
             const auto root = options_.asset_root / "menu";
             const std::uint32_t sound_id = direction < 0 ? 3u : 4u;
             const auto info = cursor_audio_.playCursorSound(
-                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id);
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3));
             const auto effective_percent =
                 (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
                 (127u * 127u * 127u);
@@ -2496,22 +4944,124 @@ private:
                 " gain=" + std::to_string(info.program_volume) + "/127*" +
                 std::to_string(info.tone_volume) + "/127*" +
                 std::to_string(info.playback_volume) + "/127 (" +
-                std::to_string(effective_percent) + "%)");
+                std::to_string(effective_percent) + "%) setting=" +
+                std::to_string(settings_.option(3)) + " playback=" +
+                (info.playback_suppressed ? "suppressed" : "submitted"));
         } catch (const std::exception& error) {
             trace_.log("AUDIO-ERROR", std::string("ZCURSOR decode/play failed: ") + error.what());
         }
     }
 
-    void playSelectedCoolFact() {
-        const auto* player = roster_viewer_.selectedPlayer(roster_database_);
-        if (!player || !roster_cool_facts_available_) {
-            trace_.log("COOL-FACT", "input 0x800 -> original no-cool-facts modal DAT_800AFE06");
-            return;
+    static std::uint16_t playerNoticeKeyMask(WPARAM key) {
+        switch(key) {
+        case VK_UP: return 1; case VK_DOWN: return 2;
+        case VK_LEFT: return 8; case VK_RIGHT: return 4;
+        case 'C': case VK_SPACE: case VK_LBUTTON: return 0x800;
+        case VK_RETURN: return 0x80;
+        case 'X': case VK_ESCAPE: case VK_BACK: return 0x100;
+        case 'F': case 'H': case VK_F1: return 0x20;
+        case 'D': return 0x10; case 'S': return 0x40;
+        case 'J': case VK_OEM_4: return 0x200;
+        case 'K': case VK_OEM_6: return 0x400;
+        case 'Q': return 0x1000; case 'E': return 0x2000;
+        default: return 0;
         }
+    }
+    void playerNoticeEvent(Nba97HelpEvent event) {
+        if(event==NBA97_HELP_OPEN_SOUND) playBottomMenuSound(5,"player-no-facts-open");
+        else if(event==NBA97_HELP_CLOSE_SOUND) {
+            playBottomMenuSound(8,"player-no-facts-close");
+            trace_.log("PLAYER-NOTICE","text removed; shrink; child input blocked");
+        } else if(event==NBA97_HELP_RETURNED) {
+            held_roster_direction_=0;
+            trace_.log("PLAYER-NOTICE","returned after input-change barrier; player/team/stat and parent draft retained");
+        }
+    }
+    void updatePlayerNotice() {
+        std::uint16_t raw=0;
+        constexpr int keys[]{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,'C',VK_SPACE,VK_RETURN,'X',VK_ESCAPE,VK_BACK,
+                            'F','H',VK_F1,'D','S','J',VK_OEM_4,'K',VK_OEM_6,'Q','E',VK_LBUTTON};
+        for(int key:keys)
+            if(GetAsyncKeyState(key)&0x8000) raw|=playerNoticeKeyMask(key);
+        const auto tick=menu_elapsed_ms_/17;
+        const auto first=tick>120 ? (std::max)(player_notice_tick_,tick-120) : player_notice_tick_;
+        for(auto frame=first;frame<tick && player_notice_.phase!=NBA97_HELP_CLOSED;++frame)
+            playerNoticeEvent(nba97_help_tick(&player_notice_,raw));
+        player_notice_tick_=tick;
+    }
+    void drawPlayerNotice(PshImage& image) {
+        if(nba97_help_visible(&player_notice_))
+            nba97::FrontendHelpPack::draw(image,control_font_,*player_notice_descriptor_,player_notice_);
+    }
+    void resolveCoolFactChoice(const char* reason) {
+        unsigned draws=0;
+        while(cool_fact_selection_.draw_mode && draws<1024) {
+            nba97_fact_offer_random(&cool_fact_selection_,nba97_frontend_random(&frontend_rng_));
+            ++draws; ++frontend_rng_draws_;
+        }
+        if(cool_fact_selection_.draw_mode) throw std::runtime_error("native Cool Fact RNG draw guard exhausted");
+        std::string flags;
+        for(auto value:cool_fact_selection_.flags) {if(!flags.empty())flags+=",";flags+=std::to_string(value);}
+        trace_.log("COOL-FACT-CHOICE",std::string(reason)+" selected="+std::to_string(cool_fact_selection_.selected)+
+            " flags=["+flags+"] draws="+std::to_string(draws)+
+            "; original selection predicates/generator; shared native title/Cool Fact RNG (original history not matched)");
+    }
+    void startCoolFactFlash() {
+        if(nba97_fact_flash_begin(&cool_fact_flash_)!=NBA97_FACT_READY)
+            throw std::runtime_error("Cool Fact flash already active");
+        held_roster_direction_=0;
+        cool_fact_flash_tick_=menu_elapsed_ms_/17;
+        cool_fact_flash_painted_=false;
+        trace_.log("COOL-FACT-FLASH","59EBC object21/o18b on; o18a retained; eight presents; input callback held; native17ms cadence, original timing unverified");
+    }
+    void advanceCoolFactFlash() {
+        const auto event=nba97_fact_flash_presented(&cool_fact_flash_,&cool_fact_selection_);
+        if(event==NBA97_FACT_INVALID) throw std::runtime_error("invalid Cool Fact flash context");
+        trace_.log("COOL-FACT-FLASH","completed-present="+std::to_string(8-cool_fact_flash_.remaining)+
+            " overlay="+std::to_string(nba97_fact_flash_visible(&cool_fact_flash_))+
+            " consumed="+std::to_string(event==NBA97_FACT_READY));
+        if(event==NBA97_FACT_READY) resolveCoolFactChoice("consumed-after-eight-presents-59E14");
+    }
+    void playSelectedCoolFact(std::uint16_t invoking_mask=0x800) {
+        if(cool_fact_flash_.remaining) return;
+        const auto* player = roster_viewer_.selectedPlayer(viewerDatabase());
+        if (!player) return;
         try {
+            const auto preparation=nba97_fact_prepare(&cool_fact_selection_);
+            if(preparation==NBA97_FACT_INVALID) throw std::runtime_error("invalid Cool Fact selection context");
+            if(preparation==NBA97_FACT_DRAW) resolveCoolFactChoice("prepare-59D18");
+            if(cool_fact_selection_.selected==-1) {
+                if(!player_notice_descriptor_)
+                    player_notice_descriptor_=nba97::loadPlayerNotice(options_.asset_root/"player/no-facts.n97ui");
+                player_notice_tick_=menu_elapsed_ms_/17;
+                playerNoticeEvent(nba97_help_open(&player_notice_,player_notice_descriptor_->rect,invoking_mask));
+                trace_.log("PLAYER-NOTICE","59E14 -> 40A1C descriptor=0x800AFE06; player="+
+                    std::to_string(player->id)+"; rect=136,90,240,64 style=1; original pack/ZFONT1; no speech request");
+                return;
+            }
+            const auto variant=static_cast<std::uint32_t>(cool_fact_selection_.selected);
+            if(cool_fact_selection_.flags[variant]==-1) {
+                // 593F0's count-based refresh may choose a hole in sparse data.
+                // 31630 then returns without a clip; 59E14 still gives feedback.
+                playBottomMenuSound(6,"cool-fact-select");
+                startCoolFactFlash();
+                trace_.log("COOL-FACT-EMPTY","original sparse refresh selected absent variant="+std::to_string(variant)+
+                    "; no substituted clip; normal eight-present overlay/consumption lifecycle");
+                return;
+            }
             const auto root = options_.asset_root / "menu";
-            const auto info = cool_fact_audio_.playCoolFact(
-                root / "Z1COOL.IDX", root / "Z1COOL.BIG", player->id);
+            auto prepared = cool_fact_audio_.prepareCoolFact(
+                root / "Z1COOL.IDX", root / "Z1COOL.BIG", player->id,variant);
+            trace_.log("COOL-FACT-PREPARE","31630/314A0 record="+std::to_string(prepared.info.record)+
+                " decoded-bytes="+std::to_string(prepared.pcm.size()*sizeof(std::int16_t))+"; no device submission");
+            cool_fact_audio_.stop(); // 314A0 stops the previous voice before cue6/start.
+            playBottomMenuSound(6,"cool-fact-select");
+            const auto info=cool_fact_audio_.startCoolFact(std::move(prepared),settings_.option(2));
+            trace_.log("COOL-FACT-START","31770 record="+std::to_string(info.record)+
+                " speech-setting="+std::to_string(settings_.option(2))+
+                " gain="+std::to_string(info.playback_volume)+"/127 playback=submitted"+
+                (info.playback_volume ? std::string{} : "; silent voice retains duration/stop lifecycle"));
+            startCoolFactFlash();
             trace_.log("COOL-FACT-AUDIO", "FUN_80059E14 -> FUN_80031630 -> FUN_80031770; "
                 "player=" + player->displayName() + " record=" +
                 std::to_string(info.record) + " " + info.source +
@@ -2519,11 +5069,18 @@ private:
                 " samples=" + std::to_string(info.sample_count) + " duration-ms=" +
                 std::to_string(info.sample_count * 1000u / info.sample_rate));
         } catch (const std::exception& error) {
-            trace_.log("AUDIO-ERROR", std::string("Cool Fact decode/play failed: ") + error.what());
+            trace_.log("AUDIO-ERROR", std::string("Cool Fact decode/play/notice failed: ") + error.what());
         }
     }
 
     void handleRosterViewKey(WPARAM key) {
+        if(cool_fact_flash_.remaining) return;
+        if(player_notice_.phase!=NBA97_HELP_CLOSED) {
+            playerNoticeEvent(nba97_help_input(&player_notice_,playerNoticeKeyMask(key)));
+            rebuildMenuFrame();
+            return;
+        }
+        const auto& database = viewerDatabase();
         if (roster_viewer_.helpVisible()) {
             if (key == 'H' || key == VK_F1 || key == VK_ESCAPE || key == VK_BACK ||
                 key == VK_RETURN || key == VK_SPACE) {
@@ -2546,6 +5103,8 @@ private:
         if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
             (key == VK_ESCAPE || key == VK_BACK)) {
             roster_viewer_.returnToRoster();
+            player_photo_loader_.reset();
+            roster_portrait_loaded_ = false;
             trace_.log("PLAYER-CARD", "state 0x24 popped -> state 0x10; team/row/top preserved");
             rebuildMenuFrame();
             InvalidateRect(window_, nullptr, FALSE);
@@ -2555,22 +5114,30 @@ private:
         const std::size_t previous_team = roster_viewer_.teamIndex();
         const std::size_t previous_player = roster_viewer_.playerIndex();
         const std::size_t previous_stat = roster_viewer_.firstVisiblePlayerStat();
+        const auto scan_player_team = [&](int direction, const char* control) {
+            const bool moved = roster_viewer_.scanTeam(direction, database, menu_elapsed_ms_);
+            trace_.log("PLAYER-TEAM-SCAN", std::string(control) + " FUN_80059ABC team=" +
+                std::to_string(previous_team) + "->" + std::to_string(roster_viewer_.teamIndex()) +
+                " slot=" + std::to_string(previous_player) + "->" + std::to_string(roster_viewer_.playerIndex()) +
+                " stat-top=" + std::to_string(previous_stat) + "->" +
+                std::to_string(roster_viewer_.firstVisiblePlayerStat()) +
+                (moved ? " retained/backtracked; original runtime comparison pending" : " unchanged/guarded"));
+            return moved;
+        };
         if (key == VK_LEFT)
-            changed = roster_viewer_.move(-1, 0, roster_database_, menu_elapsed_ms_);
+            changed = roster_viewer_.move(-1, 0, database, menu_elapsed_ms_);
         else if (key == VK_RIGHT)
-            changed = roster_viewer_.move(1, 0, roster_database_, menu_elapsed_ms_);
+            changed = roster_viewer_.move(1, 0, database, menu_elapsed_ms_);
         else if (key == VK_UP)
-            changed = roster_viewer_.move(0, -1, roster_database_, menu_elapsed_ms_);
+            changed = roster_viewer_.move(0, -1, database, menu_elapsed_ms_);
         else if (key == VK_DOWN)
-            changed = roster_viewer_.move(0, 1, roster_database_, menu_elapsed_ms_);
+            changed = roster_viewer_.move(0, 1, database, menu_elapsed_ms_);
         else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
                  (key == VK_OEM_4 || key == 'J')) {
-            changed = roster_viewer_.scanTeam(-1, roster_database_, menu_elapsed_ms_);
-            trace_.log("PLAYER-TEAM-SCAN", "L1: previous team");
+            changed = scan_player_team(-1, "L1");
         } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
                    (key == VK_OEM_6 || key == 'K')) {
-            changed = roster_viewer_.scanTeam(1, roster_database_, menu_elapsed_ms_);
-            trace_.log("PLAYER-TEAM-SCAN", "R1: next team");
+            changed = scan_player_team(1, "R1");
         }
         else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard && key == 'Q') {
             changed = roster_viewer_.cycleCategory(-1);
@@ -2587,13 +5154,14 @@ private:
         }
         else if (key == VK_RETURN || key == VK_SPACE) {
             if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard) {
-                playSelectedCoolFact();
+                playSelectedCoolFact(playerNoticeKeyMask(key));
                 rebuildMenuFrame();
                 InvalidateRect(window_, nullptr, FALSE);
                 return;
             }
-            if (roster_viewer_.selectedPlayer(roster_database_)) {
-                roster_viewer_.activate(roster_database_);
+            if (roster_viewer_.selectedPlayer(database)) {
+                roster_viewer_.activate(database);
+                cool_fact_selection_={};cool_fact_selection_.selected=-1;
                 loadSelectedPlayerCardAssets();
                 const auto& run = roster_viewer_.playerCardRunState();
                 trace_.log("ROSTER-VIEW",
@@ -2618,8 +5186,12 @@ private:
                 key == VK_RETURN ? "view player: blank roster slot" :
                                    "compare players: blank roster slot");
         } else if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard && key == 'S') {
+            const bool stopped=cool_fact_audio_.isPlaying();
             cool_fact_audio_.stop();
-            trace_.log("COOL-FACT-STOP", "Square/internal 0x10 -> FUN_80059DB8(1); speech stopped");
+            const auto cue=nba97_frontend_fact_stop_sound(stopped,1);
+            if(cue) playBottomMenuSound(cue,"cool-fact-stop");
+            trace_.log("COOL-FACT-STOP","Square/internal 0x10 -> 59DB8(1); stopped="+
+                std::to_string(stopped)+" cue="+std::to_string(cue)+"; idle stop is silent");
             rebuildMenuFrame();
             InvalidateRect(window_, nullptr, FALSE);
             return;
@@ -2639,11 +5211,21 @@ private:
                 (player_cycle_input || roster_viewer_.playerIndex() != previous_player ||
                  roster_viewer_.teamIndex() != previous_team)) {
                 cool_fact_audio_.stop();
-                loadSelectedPlayerCardAssets();
+                loadSelectedPlayerCardAssets(false);
             }
-            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard &&
-                roster_viewer_.firstVisiblePlayerStat() != previous_stat)
-                playRosterCursorSound(roster_viewer_.firstVisiblePlayerStat() > previous_stat ? 1 : -1);
+            if (roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard) {
+                // 3D930 selects the sound by the INPUT route, not by any
+                // incidental index reset inside the callback. In particular
+                // 59610 extent changes must not sound/flash like scrolling up.
+                if ((key == VK_UP || key == VK_DOWN) &&
+                    roster_viewer_.firstVisiblePlayerStat() != previous_stat)
+                    playRosterCursorSound(key == VK_DOWN ? 1 : -1);
+                else if (player_cycle_input)
+                    playBottomMenuSound(key == VK_LEFT ? 2 : 1, "view-input");
+                else if (key == 'J' || key == 'K' || key == VK_OEM_4 || key == VK_OEM_6 ||
+                         key == 'Q' || key == 'E')
+                    playBottomMenuSound(6, "view-input");
+            }
             if (player_cycle_input) {
                 const auto& cycle = roster_viewer_.lastPlayerCycle();
                 trace_.log("PLAYER-CYCLE", "FUN_80059928 mask=" +
@@ -2661,13 +5243,14 @@ private:
                     " cool-fact=stop/rebuild stat-scroll=preserved@" +
                     std::to_string(roster_viewer_.firstVisiblePlayerStat()));
             }
-            if (roster_viewer_.teamIndex() != previous_team) {
-                const auto* from = previous_team < roster_database_.teams().size()
-                    ? &roster_database_.teams()[previous_team] : nullptr;
-                const auto* to = roster_viewer_.selectedTeam(roster_database_);
+            if (roster_viewer_.mode() == nba97::RosterViewMode::TeamRoster &&
+                roster_viewer_.teamIndex() != previous_team) {
+                const auto* from = previous_team < database.teams().size()
+                    ? &database.teams()[previous_team] : nullptr;
+                const auto* to = roster_viewer_.selectedTeam(database);
                 trace_.log("ROSTER-PALETTE", "FUN_8003F7B0 target " +
-                    (from ? from->city + " " + from->nickname : "<none>") + " -> " +
-                    (to ? to->city + " " + to->nickname : "<none>") +
+                    (from ? from->displayName() : "<none>") + " -> " +
+                    (to ? to->displayName() : "<none>") +
                     "; FUN_8002FF80 transition ticks=0..16");
             }
             logRosterViewFocus(key == VK_RETURN || key == VK_SPACE ? "player view" : "navigation");
@@ -2723,7 +5306,10 @@ private:
     }
 
     void handleMenuHover(int client_x, int client_y) {
-        if (frontend_page_ == nba97::FrontendPage::ReorderRosters) return;
+        if(cool_fact_flash_.remaining) return;
+        if(player_notice_.phase!=NBA97_HELP_CLOSED) return;
+        if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) return;
+        if (frontend_page_ == nba97::FrontendPage::ReorderRosters || isRosterEditor()) return;
         if (bottom_select_pending_) return;
         const bool genuinely_moved = last_mouse_x_ < 0 ||
             std::abs(client_x - last_mouse_x_) > 1 ||
@@ -2780,7 +5366,8 @@ private:
     }
 
     void rebuildMenuFrame() {
-        if (frontend_page_ == nba97::FrontendPage::ReorderRosters)
+        if(isRosterEditor())menu_frame_=makeFrame(renderTrade());
+        else if (frontend_page_ == nba97::FrontendPage::ReorderRosters)
             menu_frame_ = makeFrame(renderReorder());
         else if (frontend_page_ == nba97::FrontendPage::GameSetup)
             menu_frame_ = makeFrame(nba97::renderGameSetupMenu(
@@ -2788,8 +5375,9 @@ private:
         else if (frontend_page_ == nba97::FrontendPage::ProfileSetup)
             menu_frame_ = makeFrame(nba97::renderUserProfileSetup(
                 profile_menu_, profile_store_, menu_font_, menu_sprites_, menu_elapsed_ms_));
-        else if (frontend_page_ == nba97::FrontendPage::ViewRosters)
-            menu_frame_ = makeFrame(nba97::renderRosterViewer(
+        else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
+            prepareFrontendTitle();
+            auto image = nba97::renderRosterViewer(
                 roster_viewer_, roster_database_, menu_font_,
                 roster_viewer_.mode() == nba97::RosterViewMode::PlayerCard
                     ? player_sprites_ : roster_sprites_,
@@ -2797,18 +5385,18 @@ private:
                 roster_portrait_loaded_ ? &roster_portrait_ : nullptr,
                 roster_cool_facts_available_, &control_font_,
                 menu_elapsed_ms_ < stat_flash_until_ms_ ? stat_flash_direction_ : 0,
-                cool_fact_audio_.isPlaying()));
+                nba97_fact_flash_visible(&cool_fact_flash_),
+                player_photo_loader_.state().city_enabled != 0, frontend_title_.corners());
+            drawPlayerNotice(image);
+            menu_frame_=makeFrame(image);
+        }
         else if (frontend_page_ == nba97::FrontendPage::Rules ||
                  frontend_page_ == nba97::FrontendPage::Options)
             menu_frame_ = makeFrame(nba97::renderSettingsMenu(
                 settings_menu_, settings_, menu_font_, menu_sprites_, menu_elapsed_ms_));
         else
         {
-            const bool selected_overlay_visible = !bottom_select_pending_ ||
-                (((menu_elapsed_ms_ - bottom_select_flash_start_ms_) / kPsxVblankMs) & 1u) != 0u;
-            menu_frame_ = makeFrame(nba97::renderRecoveredBottomMenu(
-                bottom_menu_, menu_font_, menu_sprites_, roster_sprites_, users_sprites_,
-                roster_menu_cards_, menu_elapsed_ms_, selected_overlay_visible));
+            menu_frame_ = makeFrame(renderBottomMenu());
         }
     }
 
@@ -2819,6 +5407,8 @@ private:
         if (page == nba97::FrontendPage::Rosters) return "Rosters";
         if (page == nba97::FrontendPage::ViewRosters) return "View Rosters";
         if (page == nba97::FrontendPage::ReorderRosters) return "Re-order Rosters";
+        if (page == nba97::FrontendPage::TradePlayers) return "Trade Players";
+        if (page == nba97::FrontendPage::SignFreeAgent) return "Sign Free Agent";
         if (page == nba97::FrontendPage::Users) return "Users";
         if (page == nba97::FrontendPage::Card) return "Memory Card";
         return "Game Setup";
@@ -2848,7 +5438,8 @@ private:
         transition_source_ = menu_frame_;
         const auto previous_page = frontend_page_;
         frontend_page_ = target;
-        if (target == nba97::FrontendPage::ReorderRosters) openReorder();
+        if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent)openTrade();
+        else if (target == nba97::FrontendPage::ReorderRosters) openReorder();
         else if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
         else if (target == nba97::FrontendPage::ViewRosters) {
@@ -2860,8 +5451,12 @@ private:
         else if (target != nba97::FrontendPage::GameSetup) {
             bottom_menu_.open(target);
             if (target == nba97::FrontendPage::Rosters) {
-                bottom_menu_.setRosterCapabilities(false, false);
-                trace_.log("ROSTER-CARD-STATE", "Reset locked until roster snapshot changes "
+                bottom_menu_.setRosterCapabilities(rosterResetEligible(), false);
+                const int vacancies=nba97_sign_available(roster_database_.slotTable().data(),0,0,nullptr);
+                bottom_menu_.setSignAvailable(vacancies!=0);
+                trace_.log("SIGN-AVAILABILITY","80057B00 vacancies="+std::to_string(vacancies)+" free="+std::to_string(roster_database_.freeAgentCount())+" mode0 restriction0");
+                trace_.log("ROSTER-CARD-STATE", "Reset eligible="+
+                    std::to_string(rosterResetEligible())+"; 535-slot default comparison; normal frontend context "
                     "without the special-state override; Injuries locked until an active context "
                     "has a non-zero entry among 536 injury bytes; authored red plates remain visible");
             }
@@ -2879,13 +5474,17 @@ private:
             std::to_string(target == nba97::FrontendPage::ProfileSetup ? 0x37010 :
                            target == nba97::FrontendPage::ViewRosters ? 0x10 :
                            target == nba97::FrontendPage::ReorderRosters ? 0x0C :
+                           target == nba97::FrontendPage::TradePlayers ? 0x0D :
+                           target == nba97::FrontendPage::SignFreeAgent ? 0x0E :
                            target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
                            target == nba97::FrontendPage::Users ? 19 :
                            target == nba97::FrontendPage::Card ? 11 : 0) +
             " -> " + frontendPageName(target) + " (original recovered pack/layout)");
-        InvalidateRect(window_, nullptr, FALSE);
+        // Headless host regressions use this same transition handler. NULL
+        // would invalidate every desktop window, not merely skip repaint.
+        if(window_) InvalidateRect(window_, nullptr, FALSE);
     }
 
     void adjustSetting(int direction) {
@@ -2904,7 +5503,7 @@ private:
                 nba97_frontend_music_volume(settings_.option(1));
             frontend_music_.setRecoveredVolume(recovered_volume);
             trace_.log("MUSIC-VOLUME", "FUN_8002F258 value=" +
-                std::to_string(recovered_volume) + "/127 applied live");
+                std::to_string(recovered_volume) + "/127 applied to future music PCM only; queued audio <=4096 sample-frames; SFX/speech unaffected");
         }
         rebuildMenuFrame();
         InvalidateRect(window_, nullptr, FALSE);
@@ -2912,20 +5511,74 @@ private:
 
     Options options_;
     Trace trace_;
+    std::unique_ptr<nba97::NativeFrameCapture> native_record_;
+    std::unique_ptr<nba97::ProcessAudioCapture> native_audio_record_;
+    std::uint64_t native_record_origin_=0;
     ComApartment com_apartment_;
     nba97::BootFlow flow_;
     nba97::IntroPlayer intro_player_;
     nba97::FrontendMusicPlayer frontend_music_;
+    unsigned music_underruns_logged_=0;
     nba97::RecoveredAudioPlayer cursor_audio_;
     nba97::RecoveredAudioPlayer cool_fact_audio_;
+    Nba97CoolFacts cool_fact_selection_{{0,0,0,0,0},-1,0,0,-1};
+    // Port stream only. Rejection predicates match source, but global original
+    // RNG consumption across other menus/gameplay is not yet reconstructed.
+    std::uint16_t frontend_rng_=0; // Recovered zero-seed fallback; original startup history is not claimed.
+    std::uint64_t frontend_rng_draws_=0;
+    nba97::FrontendTitlePresentation frontend_title_;
+    std::uint64_t frontend_title_tick_=0, frontend_title_presents_=0;
+    bool frontend_title_painted_=false;
+    Nba97FactFlash cool_fact_flash_{};
+    std::uint32_t cool_fact_flash_tick_=0;
+    bool cool_fact_flash_painted_=false;
+    std::optional<nba97::FrontendHelpDescriptor> player_notice_descriptor_;
+    Nba97HelpModal player_notice_{};
+    std::uint32_t player_notice_tick_=0;
     nba97::MainMenu menu_;
     nba97::FrontendSettings settings_;
     nba97::SettingsMenu settings_menu_;
     nba97::RecoveredBottomMenu bottom_menu_;
     nba97::RosterViewer roster_viewer_;
     nba97::RosterDatabase roster_database_;
+    std::unique_ptr<nba97::RosterSaveStore> roster_store_;
+    std::string roster_load_error_;
+    nba97::RosterSaveHooks reorder_save_hooks_{};
+    std::optional<nba97::FrontendHelpDescriptor> reorder_notice_;
+    bool reorder_exit_after_notice_=false;
     Nba97ReorderScreen reorder_screen_{};
     std::unique_ptr<nba97::ReorderLabelPreview> reorder_labels_;
+    std::unique_ptr<nba97::FrontendHelpPack> reorder_help_pack_;
+    Nba97HelpModal reorder_help_{};
+    std::uint8_t reorder_help_index_ = 0;
+    std::uint8_t reorder_help_state_ = 12;
+    Nba97TradeScreen trade_screen_{};
+    std::unique_ptr<nba97::TradeAssets> trade_assets_;
+    std::array<int16_t,2> trade_teams_{2,24},trade_child_teams_{};
+    std::array<uint8_t,2> trade_cursors_{},trade_tops_{},trade_child_slots_{};
+    int16_t sign_team_=2;
+    std::array<uint8_t,2> sign_cursors_{},sign_tops_{};
+    std::vector<uint8_t> trade_positions_,trade_injuries_;
+    std::array<PshImage,2> trade_portraits_{};
+    std::array<uint16_t,2> trade_portrait_ids_{};
+    Nba97FrontendPalette trade_palette_{};
+    Nba97ResetPrompt trade_choice_{};
+    uint32_t trade_choice_address_=0,trade_tick_=0;
+    uint16_t trade_child_exit_=0;
+    Nba97ReorderChild reorder_child_{};
+    std::unique_ptr<const nba97::RosterDatabase> reorder_child_database_;
+    std::optional<nba97::RosterViewer> reorder_saved_viewer_;
+    Nba97Compare reorder_compare_{};
+    std::unique_ptr<nba97::CompareAssets> compare_assets_;
+    std::unique_ptr<nba97::FrontendPaletteAssets> compare_backgrounds_;
+    Nba97FrontendPalette compare_palette_{};
+    Nba97CompareRefresh compare_refresh_{};
+    Nba97CompareRepeat compare_repeat_{};
+    std::array<Nba97ReorderTint,6> compare_arrows_{};
+    bool compare_refresh_painted_=false;
+    std::uint32_t compare_refresh_tick_=0;
+    std::array<PshImage,2> compare_portraits_;
+    std::array<std::uint16_t,2> compare_portrait_ids_{UINT16_MAX,UINT16_MAX};
     std::array<PshImage, 2> reorder_portraits_;
     std::array<std::uint16_t, 2> reorder_portrait_ids_{UINT16_MAX, UINT16_MAX};
     std::array<std::int16_t, 2> reorder_saved_cursor_{-1,-1}, reorder_saved_top_{-1,-1};
@@ -2946,6 +5599,7 @@ private:
     nba97::RosterCardPack roster_menu_cards_;
     PshImage roster_portrait_;
     bool roster_portrait_loaded_ = false;
+    nba97::PlayerPhotoLoader player_photo_loader_{decodePlayerPhotoOnWorker};
     bool roster_cool_facts_available_ = false;
     std::uint32_t stat_flash_until_ms_ = 0;
     int stat_flash_direction_ = 0;
@@ -2964,6 +5618,12 @@ private:
     int last_mouse_y_ = -1;
     bool menu_mouse_armed_ = false;
     bool bottom_select_pending_ = false;
+    std::unique_ptr<nba97::RosterResetAssets> reset_assets_;
+    Nba97ResetPrompt reset_prompt_{};
+    std::uint32_t reset_tick_=0;
+    bool reset_commit_pending_=false;
+    std::optional<nba97::FrontendHelpDescriptor> reset_notice_;
+    Nba97HelpModal reset_notice_modal_{};
     std::uint32_t bottom_select_flash_start_ms_ = 0;
     int bottom_select_index_ = -1;
     static constexpr std::uint32_t kPsxVblankMs = 17;

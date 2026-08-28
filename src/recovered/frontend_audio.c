@@ -17,3 +17,13 @@ uint8_t nba97_frontend_music_volume(uint8_t setting)
     /* FEONLY 0x8002F258: min(frontend music setting * 15, 127). */
     return scaled_volume(setting, 15u);
 }
+
+uint8_t nba97_frontend_speech_volume(uint8_t setting)
+{
+    return scaled_volume(setting, 15u);
+}
+
+uint8_t nba97_frontend_fact_stop_sound(int stopped_voice, uint16_t feedback)
+{
+    return (uint8_t)(stopped_voice && feedback ? 5 : 0);
+}

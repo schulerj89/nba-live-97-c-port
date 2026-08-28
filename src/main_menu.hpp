@@ -5,11 +5,15 @@
 #include "frontend_settings.hpp"
 #include "roster_database.hpp"
 #include "user_profiles.hpp"
+#include "compare_assets.hpp"
+#include "frontend_palette_assets.hpp"
+#include "recovered/roster_compare.h"
 
 #include <cstdint>
 #include <array>
 #include <string>
 #include <unordered_map>
+#include "recovered/roster_trade.h"
 
 namespace nba97 {
 
@@ -40,6 +44,7 @@ public:
     void open(FrontendPage page) noexcept;
     void setSelected(int selected) noexcept;
     void setRosterCapabilities(bool roster_modified, bool injuries_present) noexcept;
+    void setSignAvailable(bool available) noexcept { sign_available_=available; if(!enabled(selected_)) selected_=4; }
     bool move(int horizontal, int vertical) noexcept;
     bool hover(int psx_x, int psx_y) noexcept;
 
@@ -54,6 +59,7 @@ private:
     int selected_ = 0;
     bool roster_modified_ = false;
     bool injuries_present_ = false;
+    bool sign_available_ = true;
 };
 
 enum class RosterViewMode : std::uint8_t { TeamRoster, PlayerCard };
@@ -74,7 +80,7 @@ struct RosterStatLayerChangeState {
     int previous_layer = 2;
     int current_layer = 2;
     bool skipped_layer_four = false;
-    int sound_slot = 0;
+    int layer_label_object = 0;
     int descriptor_table = 2;
     int descriptor_last_index = 23;
     bool descriptor_extent_changed = false;
@@ -93,7 +99,7 @@ struct RosterPlayerCycleContext {
     // active. Page zero uses header objects 0x18..0x1A; all others 0x1E..0x20.
     std::uint8_t active_page = 0;
     bool special_roster_descriptor = false;
-    // Frontend word +0x708 == 1 blocks cycling descriptor 29.
+    // Frontend word +0x708 is count[29]; one free agent blocks cycling.
     bool special_cycle_locked = false;
     int visible_row_start = 0;
     int visible_row_count = 6;
@@ -208,6 +214,11 @@ public:
                      RosterPlayerCycleContext context = {}) noexcept;
     bool runPlayerCard(const RosterDatabase& database,
                        PlayerCardRunContext context = {}) noexcept;
+    // Direct nested View entry from a two-list parent (8005A074), without
+    // pretending that a standalone View Rosters screen was constructed first.
+    bool openPlayerFromRoster(const RosterDatabase& database,
+        RosterViewerPersistentState selection, PlayerCardRunContext context,
+        const std::string& free_agent_name = {});
     bool cycleCategory(int direction) noexcept;
     bool cycleDisplay(int direction) noexcept;
     bool scanTeam(int direction, const RosterDatabase& database,
@@ -319,8 +330,9 @@ private:
     int construction_controller_phase_ = 0;
     bool layer_four_restricted_ = false;
     int stat_descriptor_last_index_ = 23;
-    // View Player uses layout 0x23 and six visible descriptor rows. These
-    // replace the raw DAT_80022088 byte fields consumed by FUN_80059610.
+    // Legacy shared-descriptor default; runPlayerCard explicitly binds layout
+    // 0x24/six rows. Only Compare's 0x23 has a secondary descriptor group.
+    // These replace the raw manager fields consumed by FUN_80059610.
     int stat_layout_id_ = 0x23;
     int stat_visible_row_count_ = 6;
     int stat_controller_page_ = 0;
@@ -337,17 +349,26 @@ private:
     bool run_draw_callback_bound_ = false;
     int last_run_result_ = 0;
     int last_run_exit_status_ = 0;
+    // Original special roster descriptor29, not a fabricated NBA team or
+    // copied player catalogue. Populated from the isolated transaction draft.
+    TeamRecord free_agent_descriptor_;
 };
 
 using MenuSpritePack = std::unordered_map<std::string, PshImage>;
 using MenuCardPack = std::array<PshImage, 4>;
 using RosterCardPack = std::array<PshImage, 8>;
 
+PshImage renderCompareScreen(const Nba97CompareRefresh&, const RosterDatabase&,
+    const CompareAssets&, const MenuSpritePack&, const PshFont&,
+    const std::array<PshImage,2>& portraits, std::uint32_t elapsed_ms,
+    const FrontendPaletteAssets&, const Nba97FrontendPalette&,
+    const std::array<Nba97ReorderTint,6>& arrows, const int16_t* title_corners = nullptr);
+
 // Graphics state 0x0C, input layout 0x0D: original Re-order construction.
 PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
     const MenuSpritePack& sprites, const PshFont& font,
     const std::array<PshImage, 2>& portraits, const PshImage& text_layer,
-    std::uint32_t elapsed_ms);
+    std::uint32_t elapsed_ms, const int16_t* title_corners = nullptr);
 
 PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
                              const PshFont& font, const MenuSpritePack& sprites,
@@ -384,6 +405,11 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                             bool cool_facts_available = false,
                             const PshFont* control_font = nullptr,
                             int stat_flash_direction = 0,
-                            bool cool_fact_playing = false);
+                            bool cool_fact_overlay_visible = false,
+                            bool player_city_strip_visible = false,
+                            const int16_t* title_corners = nullptr);
 
+PshImage renderTradeScreen(const Nba97TradeScreen&, const MenuSpritePack&,
+    const PshFont&, const std::array<PshImage,2>&, const PshImage&,
+    const FrontendPaletteAssets&, const Nba97FrontendPalette&, std::uint32_t, const int16_t*);
 } // namespace nba97

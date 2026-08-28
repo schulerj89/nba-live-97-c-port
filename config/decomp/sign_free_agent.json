@@ -1,0 +1,485 @@
+{
+  "schema_version": 1,
+  "scope": "Sign-specific owners only; excludes shared callee bodies and runtime fidelity.",
+  "instruction_total": 189,
+  "source": "src/recovered/roster_sign.c",
+  "test_source": "tests/roster_sign_test.cpp",
+  "core_tests": [
+    "entry_bindings_signed_results",
+    "source_100_row_scroll",
+    "scan_receiver_both_phases",
+    "empty_source_notice_barrier",
+    "source_injury_delegate",
+    "destination_refusal_precedence",
+    "transfer_compaction_counts_cue",
+    "selector_action_two_preserved",
+    "children_and_unknown_inputs",
+    "cancel_accept_discard",
+    "child_reentry_undo_quirk",
+    "availability_normal_special",
+    "special_entry_and_guards",
+    "matrix_43500_slot_pairs"
+  ],
+  "functions": [
+    {
+      "address": "0x80056D6C",
+      "name": "Sign_SelectFreeAgent",
+      "symbol": "nba97_sign_first",
+      "instruction_count": 53,
+      "size_bytes": 212,
+      "blocks": [
+        {
+          "end": "0x80056D8F",
+          "instruction_count": 9,
+          "start": "0x80056D6C",
+          "accounted": true,
+          "behavior": "Input loads/native ABI; exact View/Compare masks invoke shared child request.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056D9B",
+          "instruction_count": 3,
+          "start": "0x80056D90",
+          "accounted": true,
+          "behavior": "Input loads/native ABI; exact View/Compare masks invoke shared child request.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DA3",
+          "instruction_count": 2,
+          "start": "0x80056D9C",
+          "accounted": true,
+          "behavior": "Input loads/native ABI; exact View/Compare masks invoke shared child request.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DB7",
+          "instruction_count": 5,
+          "start": "0x80056DA4",
+          "accounted": true,
+          "behavior": "Confirm dispatch and other-input latch suppression; child calls preserve their result.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DBF",
+          "instruction_count": 2,
+          "start": "0x80056DB8",
+          "accounted": true,
+          "behavior": "Confirm dispatch and other-input latch suppression; child calls preserve their result.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DC7",
+          "instruction_count": 2,
+          "start": "0x80056DC0",
+          "accounted": true,
+          "behavior": "Confirm dispatch and other-input latch suppression; child calls preserve their result.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DD7",
+          "instruction_count": 4,
+          "start": "0x80056DC8",
+          "accounted": true,
+          "behavior": "Confirm dispatch and other-input latch suppression; child calls preserve their result.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056DFB",
+          "instruction_count": 9,
+          "start": "0x80056DD8",
+          "accounted": true,
+          "behavior": "Resolve selected source; -1 takes receiver-name empty-source notice; no mutation.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056E23",
+          "instruction_count": 10,
+          "start": "0x80056DFC",
+          "accounted": true,
+          "behavior": "Resolve selected source; -1 takes receiver-name empty-source notice; no mutation.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056E2B",
+          "instruction_count": 2,
+          "start": "0x80056E24",
+          "accounted": true,
+          "behavior": "Delegate shared first-selection/injury behavior.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        },
+        {
+          "end": "0x80056E3F",
+          "instruction_count": 5,
+          "start": "0x80056E2C",
+          "accounted": true,
+          "behavior": "Native ABI return.",
+          "tests": [
+            "empty_source_notice_barrier",
+            "source_injury_delegate",
+            "children_and_unknown_inputs"
+          ]
+        }
+      ]
+    },
+    {
+      "address": "0x80056E40",
+      "name": "Sign_SelectDestination",
+      "symbol": "nba97_sign_second",
+      "instruction_count": 87,
+      "size_bytes": 348,
+      "blocks": [
+        {
+          "end": "0x80056E6B",
+          "instruction_count": 11,
+          "start": "0x80056E40",
+          "accounted": true,
+          "behavior": "Input/native ABI; exact child masks delegate shared request.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056E77",
+          "instruction_count": 3,
+          "start": "0x80056E6C",
+          "accounted": true,
+          "behavior": "Input/native ABI; exact child masks delegate shared request.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056E7F",
+          "instruction_count": 2,
+          "start": "0x80056E78",
+          "accounted": true,
+          "behavior": "Input/native ABI; exact child masks delegate shared request.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056E93",
+          "instruction_count": 5,
+          "start": "0x80056E80",
+          "accounted": true,
+          "behavior": "Confirm/child dispatch and unknown-input latch suppression.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056E9B",
+          "instruction_count": 2,
+          "start": "0x80056E94",
+          "accounted": true,
+          "behavior": "Confirm/child dispatch and unknown-input latch suppression.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056EA3",
+          "instruction_count": 2,
+          "start": "0x80056E9C",
+          "accounted": true,
+          "behavior": "Confirm/child dispatch and unknown-input latch suppression.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056EB3",
+          "instruction_count": 4,
+          "start": "0x80056EA4",
+          "accounted": true,
+          "behavior": "Confirm/child dispatch and unknown-input latch suppression.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056EE7",
+          "instruction_count": 13,
+          "start": "0x80056EB4",
+          "accounted": true,
+          "behavior": "Deferred typed team-name provider; selector action2 bypasses mutation.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F03",
+          "instruction_count": 7,
+          "start": "0x80056EE8",
+          "accounted": true,
+          "behavior": "Shared validation: distinguish signed -1/full from 0 and1.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F1B",
+          "instruction_count": 6,
+          "start": "0x80056F04",
+          "accounted": true,
+          "behavior": "Full receiver notice with team subject, return without mutation.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F3B",
+          "instruction_count": 8,
+          "start": "0x80056F1C",
+          "accounted": true,
+          "behavior": "Absolute destination object base100 becomes bounded native relative slot; reject occupied receiver.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F53",
+          "instruction_count": 6,
+          "start": "0x80056F3C",
+          "accounted": true,
+          "behavior": "Occupied-destination notice, return without mutation.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F77",
+          "instruction_count": 9,
+          "start": "0x80056F54",
+          "accounted": true,
+          "behavior": "Mutate/compact counts; one sound6 contract, clear latch, refresh both lists.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F7F",
+          "instruction_count": 2,
+          "start": "0x80056F78",
+          "accounted": true,
+          "behavior": "Return to first-selection phase through shared55314 contract.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        },
+        {
+          "end": "0x80056F9B",
+          "instruction_count": 7,
+          "start": "0x80056F80",
+          "accounted": true,
+          "behavior": "Native ABI return.",
+          "tests": [
+            "destination_refusal_precedence",
+            "selector_action_two_preserved",
+            "transfer_compaction_counts_cue",
+            "children_and_unknown_inputs",
+            "cancel_accept_discard"
+          ]
+        }
+      ]
+    },
+    {
+      "address": "0x80056F9C",
+      "name": "Sign_Enter",
+      "symbol": "nba97_sign_begin",
+      "instruction_count": 22,
+      "size_bytes": 88,
+      "blocks": [
+        {
+          "end": "0x80056FF3",
+          "instruction_count": 22,
+          "start": "0x80056F9C",
+          "accounted": true,
+          "behavior": "Signed destination normalization; constructor team29/kind0 and destination/kind1; exact callback pointers; native owned frame pump retains signed selector result.",
+          "tests": [
+            "entry_bindings_signed_results",
+            "special_entry_and_guards"
+          ]
+        }
+      ]
+    },
+    {
+      "address": "0x80057B00",
+      "name": "Sign_Availability",
+      "symbol": "nba97_sign_available",
+      "instruction_count": 27,
+      "size_bytes": 108,
+      "blocks": [
+        {
+          "end": "0x80057B17",
+          "instruction_count": 6,
+          "start": "0x80057B00",
+          "accounted": true,
+          "behavior": "Native context/ABI and mode2 restriction test.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B2B",
+          "instruction_count": 5,
+          "start": "0x80057B18",
+          "accounted": true,
+          "behavior": "Native context/ABI and mode2 restriction test.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B43",
+          "instruction_count": 6,
+          "start": "0x80057B2C",
+          "accounted": true,
+          "behavior": "First free-agent sentinel gates availability.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B57",
+          "instruction_count": 5,
+          "start": "0x80057B44",
+          "accounted": true,
+          "behavior": "Shared4BA78(0) vacancy-count contract, no free-pool vacancies counted.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B5B",
+          "instruction_count": 1,
+          "start": "0x80057B58",
+          "accounted": true,
+          "behavior": "Disabled result0.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        },
+        {
+          "end": "0x80057B6B",
+          "instruction_count": 4,
+          "start": "0x80057B5C",
+          "accounted": true,
+          "behavior": "Signed count/native ABI return.",
+          "tests": [
+            "availability_normal_special",
+            "special_entry_and_guards"
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Not binary or CFG matching; ABI, input and modal/audio calls represented by explicit native contracts.",
+    "Shared dependencies are not credited again; all supported original mode branches tested synthetically, no season frontend claimed.",
+    "Original signing and first-phase View/Cancel retention were observed; exact audio/video timing, last-source boundary and second-phase/Compare return variants remain independent-reference gaps."
+  ]
+}

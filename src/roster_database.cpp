@@ -1,5 +1,6 @@
 #include "roster_database.hpp"
 #include "recovered/semantic_trace.h"
+#include "sha256.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -88,6 +89,60 @@ const char* ordinalSuffix(unsigned value) noexcept {
     case 3: return "rd";
     default: return "th";
     }
+}
+
+RosterBaseIdentity catalogueIdentity(const RosterDatabase& db,
+        const std::array<std::uint16_t,25>& fallback,const RosterDatabase::SlotTable& original) {
+    // Canonical v1: explicit logical fields, sorted stable IDs, no addresses,
+    // pack offsets, path, packing version, STL padding or derived cache values.
+    // Field order is a durable schema: see docs/roster_save_format.md.
+    Sha256 hash;
+    constexpr char domain[]="NBA97.ROSTER.BASE.V1";
+    hash.update(domain,sizeof(domain));
+    const auto scalar=[&](std::uint32_t v,unsigned n) {
+        std::uint8_t bytes[4]{};
+        for(unsigned i=0;i<n;++i) { bytes[i]=static_cast<std::uint8_t>(v); v>>=8; }
+        hash.update(bytes,n);
+    };
+    const auto text=[&](std::string_view s) {
+        if(s.size()>UINT32_MAX) throw std::runtime_error("catalogue string too large");
+        scalar(static_cast<std::uint32_t>(s.size()),4); hash.update(s.data(),s.size());
+    };
+    const auto stats=[&](const StatLine& s) {
+        scalar(s.valid ? 1 : 0,1);
+        for(auto v : {s.field_goal_attempts,s.field_goals_made,s.three_point_attempts,s.three_pointers_made,
+            s.free_throw_attempts,s.free_throws_made,s.minutes,s.offensive_rebounds,s.defensive_rebounds,
+            s.assists,s.fouls,s.blocks}) scalar(v,2);
+        for(auto v : {s.steals,s.games_played,s.games_started,s.ejections}) scalar(v,1);
+    };
+    std::vector<const PlayerRecord*> ordered;
+    ordered.reserve(db.players().size());
+    for(const auto& p:db.players()) ordered.push_back(&p);
+    std::sort(ordered.begin(),ordered.end(),[](auto a,auto b){return a->id<b->id;});
+    scalar(static_cast<std::uint32_t>(ordered.size()),4);
+    for(const auto* p:ordered) {
+        for(auto v : {p->id,p->school_index,p->regular_stats_index}) scalar(v,2);
+        for(auto v : {p->postseason_stats_index,p->jersey_number,p->position,p->height_inches,
+            p->weight_minus_100,p->source_byte_11}) scalar(v,1);
+        scalar(p->source_word_12,2);
+        hash.update(p->ratings.data(),p->ratings.size());
+        hash.update(p->source_metadata.data(),p->source_metadata.size());
+        scalar(p->games_played_1995_96,1); scalar(p->games_started_1995_96,1);
+        stats(p->season_1995_96); stats(p->playoffs_1995_96);
+        for(const auto* s : {&p->last_name,&p->first_name,&p->nickname,&p->birthdate,&p->birthplace,
+            &p->school_name,&p->acquisition_method}) text(*s);
+    }
+    scalar(29,4);
+    for(unsigned id=0;id<29;++id) {
+        const auto* t=db.team(static_cast<std::uint16_t>(id));
+        if(!t) throw std::runtime_error("canonical catalogue requires all 29 teams");
+        scalar(t->id,2);
+        for(auto s : {t->nickname,t->city,t->alternate_name,t->location,t->abbreviation}) text(s);
+        hash.update(t->source_metadata.data(),t->source_metadata.size());
+    }
+    for(auto id:original) scalar(id,2);
+    for(auto id:fallback) scalar(id,2);
+    return hash.digest();
 }
 }
 
@@ -212,7 +267,8 @@ void RosterDatabase::load(const std::filesystem::path& path) {
     const Section& strings = require("STRS");
     const std::size_t expected_player_stride = version == 1 ? kPlayerStrideV1 :
         (version == 2 ? kPlayerStrideV2 : kPlayerStrideV3);
-    if (play.stride != expected_player_stride || play.size != play.count * play.stride ||
+    if (play.count==0 || play.count>0x8000 || team_section.count!=29 ||
+        play.stride != expected_player_stride || play.size != play.count * play.stride ||
         team_section.stride != kTeamStride || team_section.size != team_section.count * team_section.stride)
         throw std::runtime_error("roster record stride/count mismatch");
 
@@ -224,6 +280,7 @@ void RosterDatabase::load(const std::filesystem::path& path) {
         const std::size_t at = play.offset + i * play.stride;
         PlayerRecord value;
         value.id = u16(data, at); value.school_index = u16(data, at + 2);
+        if(value.id>=0x8000) throw std::runtime_error("unsupported base player ID");
         value.regular_stats_index = u16(data, at + 4);
         value.postseason_stats_index = data[at + 6];
         value.jersey_number = data[at + 7]; value.position = data[at + 8];
@@ -267,15 +324,15 @@ void RosterDatabase::load(const std::filesystem::path& path) {
     std::unordered_set<std::uint16_t> assigned;
     for (std::size_t i = 0; i < team_section.count; ++i) {
         const std::size_t at = team_section.offset + i * team_section.stride;
-        TeamRecord value;
+        TeamRecord value({poolString(data, strings, u32(data, at + 4)),
+            poolString(data, strings, u32(data, at + 8)),
+            poolString(data, strings, u32(data, at + 12)),
+            poolString(data, strings, u32(data, at + 16)),
+            poolString(data, strings, u32(data, at + 20))});
         value.id = u16(data, at);
+        if(value.id>=29) throw std::runtime_error("unsupported base team ID");
         const std::size_t roster_count = u16(data, at + 2);
         if (roster_count > 15) throw std::runtime_error("team roster exceeds 15 slots");
-        value.nickname = poolString(data, strings, u32(data, at + 4));
-        value.city = poolString(data, strings, u32(data, at + 8));
-        value.alternate_name = poolString(data, strings, u32(data, at + 12));
-        value.location = poolString(data, strings, u32(data, at + 16));
-        value.abbreviation = poolString(data, strings, u32(data, at + 20));
         for (std::size_t slot = 0; slot < roster_count; ++slot) {
             const auto id = static_cast<std::int16_t>(u16(data, at + 24 + slot * 2));
             if (id < 0 || !new_player_index.count(static_cast<std::uint16_t>(id)))
@@ -340,12 +397,22 @@ void RosterDatabase::load(const std::filesystem::path& path) {
                 new_free_agent_slots[slot++] = value.id;
         }
     }
-    source_path_ = path; version_ = version;
-    players_ = std::move(new_players); teams_ = std::move(new_teams);
-    player_index_ = std::move(new_player_index); team_index_ = std::move(new_team_index);
-    special_fallback_player_ids_ = new_special_fallback_ids;
-    free_agent_slots_ = new_free_agent_slots;
-    copySlotTable();
+    auto catalogue = std::make_shared<PlayerCatalogue>();
+    catalogue->players = std::move(new_players);
+    catalogue->index = std::move(new_player_index);
+    // Parse, canonicalize and allocate every derived cache off to the side.
+    // Failed reloads must retain both accepted data and the old immutable base.
+    RosterDatabase candidate;
+    candidate.source_path_ = path; candidate.version_ = version;
+    candidate.catalogue_ = catalogue; candidate.teams_ = std::move(new_teams);
+    candidate.team_index_ = std::move(new_team_index);
+    candidate.special_fallback_player_ids_ = new_special_fallback_ids;
+    candidate.free_agent_slots_ = new_free_agent_slots;
+    catalogue->original_slots=candidate.slotTable();
+    catalogue->identity=catalogueIdentity(candidate,new_special_fallback_ids,catalogue->original_slots);
+    catalogue->base_ready=true;
+    candidate.copySlotTable();
+    swap(candidate);
 }
 
 Nba97ReorderResult RosterDatabase::reorderSlots(
@@ -378,7 +445,7 @@ bool RosterDatabase::applyReorderSession(std::int16_t team_id, const Nba97Reorde
     auto candidate = *this;
     candidate.teams_[found->second].roster.assign(std::begin(session.slots), std::end(session.slots));
     candidate.copySlotTable();
-    *this = std::move(candidate);
+    swap(candidate);
     return true;
 }
 
@@ -391,6 +458,47 @@ RosterDatabase::SlotTable RosterDatabase::slotTable() const {
     }
     std::copy(free_agent_slots_.begin(), free_agent_slots_.end(), result.begin() + 435);
     return result;
+}
+
+const RosterDatabase::SlotTable& RosterDatabase::originalSlots() const {
+    if(!catalogue_->base_ready) throw std::runtime_error("roster base is not loaded");
+    return catalogue_->original_slots;
+}
+const RosterBaseIdentity& RosterDatabase::baseIdentity() const {
+    if(!catalogue_->base_ready) throw std::runtime_error("roster base is not loaded");
+    return catalogue_->identity;
+}
+bool RosterDatabase::differsFromOriginal() const { return slotTable()!=originalSlots(); }
+
+RosterDatabase RosterDatabase::prepareSlotTable(const SlotTable& proposed) const {
+    auto before=originalSlots(),after=proposed;
+    std::sort(before.begin(),before.end()); std::sort(after.begin(),after.end());
+    if(before!=after) throw std::runtime_error("prepared roster changes the supported base population");
+    for(unsigned list=0;list<30;++list) {
+        bool hole=false;
+        const unsigned count=list==29 ? 100 : 15;
+        for(unsigned i=0;i<count;++i) {
+            const auto id=proposed[list*15+i];
+            if(id==UINT16_MAX) hole=true;
+            else if(hole) throw std::runtime_error("prepared roster has noncontiguous occupied slots");
+        }
+    }
+    auto candidate=*this;
+    for(auto& t:candidate.teams_)
+        t.roster.assign(proposed.begin()+t.id*15,proposed.begin()+(t.id+1)*15);
+    std::copy(proposed.begin()+435,proposed.end(),candidate.free_agent_slots_.begin());
+    candidate.copySlotTable();
+    return candidate;
+}
+
+void RosterDatabase::swap(RosterDatabase& other) noexcept {
+    using std::swap;
+    swap(version_,other.version_); source_path_.swap(other.source_path_);
+    catalogue_.swap(other.catalogue_); teams_.swap(other.teams_); team_index_.swap(other.team_index_);
+    special_fallback_player_ids_.swap(other.special_fallback_player_ids_);
+    free_agent_slots_.swap(other.free_agent_slots_); resolved_team_slots_.swap(other.resolved_team_slots_);
+    player_roster_membership_.swap(other.player_roster_membership_); roster_counts_.swap(other.roster_counts_);
+    swap(derived_team_ratings_dirty_,other.derived_team_ratings_dirty_);
 }
 
 bool RosterDatabase::applyReorderScreen(const Nba97ReorderScreen& s) {
@@ -409,15 +517,41 @@ bool RosterDatabase::applyReorderScreen(const Nba97ReorderScreen& s) {
     auto candidate = *this;
     for (auto& t : candidate.teams_)
         t.roster.assign(s.working + t.id * 15, s.working + (t.id+1) * 15);
-    candidate.copySlotTable(); // Rebuild copied pointers against candidate-owned records.
-    *this = std::move(candidate);
+    candidate.copySlotTable(); // Rebuild roster projections against the shared immutable catalogue.
+    swap(candidate);
     return true;
+}
+
+RosterDatabase RosterDatabase::draftView(const Nba97ReorderScreen& s) const {
+    if ((s.selection.phase != NBA97_REORDER_FIRST && s.selection.phase != NBA97_REORDER_REPLACEMENT) ||
+        s.team < 0 || s.team >= 29 || s.selection.accepted)
+        throw std::runtime_error("invalid Re-order draft lifecycle");
+    const auto baseline = slotTable();
+    if (!std::equal(baseline.begin(), baseline.end(), s.snapshot))
+        throw std::runtime_error("stale Re-order draft baseline");
+    SlotTable proposed{};
+    std::copy_n(s.working, proposed.size(), proposed.begin());
+    std::copy_n(s.selection.slots, 15, proposed.begin() + s.team * 15);
+    if (!std::equal(baseline.begin()+435, baseline.end(), proposed.begin()+435))
+        throw std::runtime_error("Re-order draft changed free-agent membership");
+    for (int team_id=0;team_id<29;++team_id) {
+        std::array<std::uint16_t,15> before{}, after{};
+        std::copy_n(baseline.begin()+team_id*15,15,before.begin());
+        std::copy_n(proposed.begin()+team_id*15,15,after.begin());
+        std::sort(before.begin(),before.end()); std::sort(after.begin(),after.end());
+        if(before!=after) throw std::runtime_error("Re-order draft changed team membership");
+    }
+    auto view = *this; // Only roster/derived state copied; player catalogue shared.
+    for (auto& team : view.teams_)
+        team.roster.assign(proposed.begin()+team.id*15,proposed.begin()+(team.id+1)*15);
+    view.copySlotTable();
+    return view;
 }
 
 void RosterDatabase::copySlotTable() {
     nba97_semantic_trace_record(0x80057864u);
     roster_counts_.fill(0);
-    player_roster_membership_.assign(players_.size(), -1);
+    player_roster_membership_.assign(catalogue_->players.size(), -1);
 
     // FUN_80057864 copies fifteen signed IDs and immediately resolves each
     // of the 29 team lists before advancing to the next team.
@@ -428,8 +562,8 @@ void RosterDatabase::copySlotTable() {
         if (!selected_team) continue;
         for (const auto id : selected_team->roster) {
             if (id == UINT16_MAX) continue;
-            const auto found = player_index_.find(id);
-            if (found != player_index_.end()) {
+            const auto found = catalogue_->index.find(id);
+            if (found != catalogue_->index.end()) {
                 player_roster_membership_[found->second] = team_id;
                 ++roster_counts_[static_cast<std::size_t>(team_id)];
             }
@@ -441,8 +575,8 @@ void RosterDatabase::copySlotTable() {
     // the non--1 entries; hidden players remain deliberately unlisted.
     for (const auto id : free_agent_slots_) {
         if (id == UINT16_MAX) continue;
-        const auto found = player_index_.find(id);
-        if (found != player_index_.end()) {
+        const auto found = catalogue_->index.find(id);
+        if (found != catalogue_->index.end()) {
             player_roster_membership_[found->second] = 29;
             ++roster_counts_[29];
         }
@@ -456,8 +590,8 @@ void RosterDatabase::copySlotTable() {
 
 const PlayerRecord* RosterDatabase::player(std::uint16_t id) const noexcept {
     nba97_semantic_trace_record(0x8005FE14u);
-    const auto found = player_index_.find(id);
-    return found == player_index_.end() ? nullptr : &players_[found->second];
+    const auto found = catalogue_->index.find(id);
+    return found == catalogue_->index.end() ? nullptr : &catalogue_->players[found->second];
 }
 const TeamRecord* RosterDatabase::team(std::uint16_t id) const noexcept {
     const auto found = team_index_.find(id);
@@ -499,7 +633,7 @@ std::string RosterDatabase::playerAttribute(const PlayerRecord& player,
                                             std::size_t descriptor) const {
     const auto teamCity = [this](std::uint8_t id) -> std::string {
         const TeamRecord* value = team(id);
-        return value ? value->city : "n/a";
+        return value ? std::string(value->city) : "n/a";
     };
     switch (descriptor) {
     case 0: return player.first_name;
@@ -538,12 +672,12 @@ std::size_t RosterDatabase::freeAgentCount() const noexcept {
     return roster_counts_[29];
 }
 std::size_t RosterDatabase::unlistedPlayerCount() const noexcept {
-    return players_.size() - (std::min)(players_.size(),
+    return catalogue_->players.size() - (std::min)(catalogue_->players.size(),
         assignedPlayerCount() + freeAgentCount());
 }
 std::int16_t RosterDatabase::rosterOwner(std::uint16_t player_id) const noexcept {
-    const auto found = player_index_.find(player_id);
-    if (found == player_index_.end() || found->second >= player_roster_membership_.size())
+    const auto found = catalogue_->index.find(player_id);
+    if (found == catalogue_->index.end() || found->second >= player_roster_membership_.size())
         return -1;
     return player_roster_membership_[found->second];
 }

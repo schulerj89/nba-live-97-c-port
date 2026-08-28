@@ -1,0 +1,42 @@
+{
+  "scope": "Sign-specific owners only; excludes shared callee bodies and runtime fidelity.",
+  "total": 189,
+  "accounted": 189,
+  "pending": 0,
+  "functions": [
+    {
+      "name": "Sign_SelectFreeAgent",
+      "address": "0x80056D6C",
+      "total": 53,
+      "accounted": 53,
+      "pending": 0
+    },
+    {
+      "name": "Sign_SelectDestination",
+      "address": "0x80056E40",
+      "total": 87,
+      "accounted": 87,
+      "pending": 0
+    },
+    {
+      "name": "Sign_Enter",
+      "address": "0x80056F9C",
+      "total": 22,
+      "accounted": 22,
+      "pending": 0
+    },
+    {
+      "name": "Sign_Availability",
+      "address": "0x80057B00",
+      "total": 27,
+      "accounted": 27,
+      "pending": 0
+    }
+  ],
+  "static_report_executes_tests": false,
+  "limitations": [
+    "Not binary or CFG matching; ABI, input and modal/audio calls represented by explicit native contracts.",
+    "Shared dependencies are not credited again; all supported original mode branches tested synthetically, no season frontend claimed.",
+    "Original signing and first-phase View/Cancel retention were observed; exact audio/video timing, last-source boundary and second-phase/Compare return variants remain independent-reference gaps."
+  ]
+}

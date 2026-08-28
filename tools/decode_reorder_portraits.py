@@ -12,6 +12,22 @@ import sys
 from pathlib import Path
 
 
+def restore_texture_alpha(rgba, indices, palette):
+    """Restore PS1 CLUT transparency lost by the generic RGB palette decoder.
+
+    A zero 16-bit texel is transparent. 0x8000 is visible black for the
+    opaque portrait draw, so testing decoded RGB or assuming index zero is
+    transparent would punch holes in the player. Keep padding until cropping.
+    """
+    if len(palette) != 512 or len(rgba) != len(indices) * 4:
+        raise ValueError('invalid PAL8 palette or decoded extent')
+    colors = struct.unpack('<256H', palette)
+    result = bytearray(rgba)
+    for at, index in enumerate(indices):
+        result[at * 4 + 3] = 0 if colors[index] == 0 else 255
+    return bytes(result)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('index', type=Path)
@@ -36,6 +52,7 @@ def main():
         raise ValueError('unexpected Z2PORT index')
     args.output.mkdir(parents=True, exist_ok=True)
     decoded = 0
+    transparent = 0
     for record in range(count):
         size, offset = struct.unpack_from('<II', idx, 4 + record * 8)
         if not size:
@@ -57,12 +74,17 @@ def main():
         if len(raw) != 88 * 51:
             raise ValueError(f'portrait {record} padded stride mismatch: {len(raw)}')
         palette = get_palette_info_dto_from_dir_entry(entry, archive)
+        if palette.entry_id != 35:
+            raise ValueError('unexpected small portrait CLUT format')
         entry.h_width = 88
         rgba = decode_image_data_by_entry_type(0x41, raw, palette, entry)
+        rgba = restore_texture_alpha(rgba, raw, palette.data)
         image = Image.frombytes('RGBA', (88, 51), bytes(rgba)).crop((0, 0, 87, 51))
+        transparent += image.getchannel('A').histogram()[0]
         image.save(args.output / f'player_{record:03d}.png')
         decoded += 1
-    print(f'Z2PORT: {decoded}/{count} original 87x51 portraits decoded locally')
+    print(f'Z2PORT: {decoded}/{count} original 87x51 portraits decoded locally; '
+          f'transparent-texels={transparent}; CLUT0000 transparent, CLUT8000 black preserved')
 
 
 if __name__ == '__main__':

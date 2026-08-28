@@ -8,6 +8,28 @@ static int eligible(const Nba97ReorderScreen *s, int team) {
     return 0;
 }
 
+const char *nba97_reorder_screen_help_tag(const Nba97ReorderScreen *s) {
+    if (!s || s->selection.descriptor_page > 1) return NULL;
+    return s->selection.descriptor_page ? "hel2" : "hel1";
+}
+
+void nba97_reorder_screen_markers(const Nba97ReorderScreen *s,
+        Nba97ReorderMarker markers[4]) {
+    int page, down;
+    if (!markers) return;
+    memset(markers, 0, sizeof(*markers) * 4);
+    if (!s || s->visible_rows != 6) return;
+    for (page = 0; page < 2; ++page) for (down = 0; down < 2; ++down) {
+        const int index = page + down * 2;
+        const int top = s->selection.top[page];
+        Nba97ReorderMarker *m = &markers[index];
+        m->x = (int16_t)((page ? 270 : 60) - 20 + s->arrow_x[index]);
+        m->y = (int16_t)(106 + down * (s->visible_rows - 1) * 16 + s->arrow_y[index]);
+        m->glyph = (uint8_t)(down ? 0x8c : 0x8b);
+        m->visible = (uint8_t)(top <= 9 && (down ? top + s->visible_rows - 1 < 14 : top != 0));
+    }
+}
+
 void nba97_reorder_screen_rebind(Nba97ReorderScreen *s) {
     int page, row;
     if (!s) return;
@@ -71,7 +93,7 @@ int nba97_reorder_screen_enter(Nba97ReorderScreen *s,
 
 Nba97ReorderEvent nba97_reorder_screen_input(Nba97ReorderScreen *s, Nba97ReorderAction a) {
     Nba97ReorderEvent event;
-    if (!s) return NBA97_REORDER_NO_CHANGE;
+    if (!s || s->selection.screen_result) return NBA97_REORDER_NO_CHANGE; /* Child owns input. */
     event = nba97_reorder_input(&s->selection, a);
     memcpy(&s->working[s->team * 15], s->selection.slots, sizeof(s->selection.slots));
     if (event == NBA97_REORDER_EXIT_DISCARDED) {
@@ -87,7 +109,7 @@ int nba97_reorder_screen_scan(Nba97ReorderScreen *s, int direction) {
     uint16_t changes;
     uint8_t cursor[2], top[2];
     if (!s || !direction || s->selection.phase != NBA97_REORDER_FIRST ||
-        s->selection.modal || s->selection.waiting_input_change) return 0;
+        s->selection.modal || s->selection.waiting_input_change || s->selection.screen_result) return 0;
     team = s->team;
     for (attempts = 0; attempts < 29; ++attempts) {
         team = (team + (direction < 0 ? 28 : 1)) % 29;

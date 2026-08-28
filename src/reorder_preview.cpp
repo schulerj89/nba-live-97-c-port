@@ -97,7 +97,7 @@ PshImage ReorderLabelPreview::renderFeedback(const Nba97ReorderSession& s,
     if (!team) throw std::runtime_error("invalid Re-order feedback team");
     // FUN_80055068 redraws 0x73: type 0x0F, team city + nickname, not an
     // invented 'choose replacement' caption. FUN_80056494 places it at 256,70.
-    draw_psh_text_centered(image, font_, team->city + " " + team->nickname, 256, 70);
+    draw_psh_text_centered(image, font_, team->displayName(), 256, 70);
     static const char* positions[] = {"c", "pf", "sf", "sg", "pg", "ir"};
     for (int column = 0; column < 2; ++column) {
         if (s.top[column] > 9 || s.cursor[column] >= 15) throw std::runtime_error("invalid Re-order viewport");

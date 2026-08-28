@@ -2,11 +2,14 @@
 
 #include "recovered/roster_reorder.h"
 #include "recovered/reorder_screen.h"
+#include "roster_save_codec.hpp"
 
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -92,10 +95,21 @@ struct PlayerRecord {
 };
 
 struct TeamRecord {
+private:
+    // Each copied roster view retains ownership; even a standalone copied team
+    // keeps these immutable strings alive after the source database reloads.
+    std::shared_ptr<const std::array<std::string,5>> names_;
+public:
+    TeamRecord() = default;
+    explicit TeamRecord(std::array<std::string,5> names)
+        : names_(std::make_shared<const std::array<std::string,5>>(std::move(names))),
+          nickname((*names_)[0]), city((*names_)[1]), alternate_name((*names_)[2]),
+          location((*names_)[3]), abbreviation((*names_)[4]) {}
     std::uint16_t id = 0;
-    std::string nickname, city, alternate_name, location, abbreviation;
+    std::string_view nickname, city, alternate_name, location, abbreviation;
     std::vector<std::uint16_t> roster;
     std::array<std::uint8_t, 20> source_metadata{};
+    [[nodiscard]] std::string displayName() const { return std::string(city)+" "+std::string(nickname); }
 };
 
 class RosterDatabase final {
@@ -111,9 +125,24 @@ public:
     bool applyReorderSession(std::int16_t team_id, const Nba97ReorderSession& session);
     using SlotTable = std::array<std::uint16_t, NBA97_ROSTER_TABLE_SLOTS>;
     [[nodiscard]] SlotTable slotTable() const;
+    // Original load-time baseline is shared/immutable, never replaced by an
+    // accepted override or screen-entry draft. These require a loaded pack.
+    [[nodiscard]] const SlotTable& originalSlots() const;
+    [[nodiscard]] const RosterBaseIdentity& baseIdentity() const;
+    [[nodiscard]] bool differsFromOriginal() const;
+    // Prepare validated roster state AND all derived indexes before a disk
+    // transaction. No mutation/publication here. Does not impose UI/Trade rules.
+    [[nodiscard]] RosterDatabase prepareSlotTable(const SlotTable& proposed) const;
+    // No allocation or validation after the durable commit point. Caller must
+    // recheck its generation/base before committing; swap itself is no-fail.
+    void swap(RosterDatabase& other) noexcept;
     // Atomic multi-team publication. Baseline conflicts/membership edits fail
     // before changing live data. Never writes the original database asset.
     bool applyReorderScreen(const Nba97ReorderScreen& screen);
+    // Isolated roster projection for child screens. Shares immutable player
+    // names/stats/attributes, never publishes or copies their payload. Throws
+    // on a stale baseline or non-reorder mutation. Caller exposes it read-only.
+    [[nodiscard]] RosterDatabase draftView(const Nba97ReorderScreen& screen) const;
     [[nodiscard]] const PlayerRecord* player(std::uint16_t id) const noexcept;
     [[nodiscard]] const TeamRecord* team(std::uint16_t id) const noexcept;
     // Native representation of FEONLY FUN_8005770C. Empty signed roster
@@ -123,7 +152,7 @@ public:
         std::int16_t team_id, bool special_roster_mode = false) const noexcept;
     [[nodiscard]] std::string playerAttribute(const PlayerRecord& player,
                                               std::size_t descriptor) const;
-    [[nodiscard]] const std::vector<PlayerRecord>& players() const noexcept { return players_; }
+    [[nodiscard]] const std::vector<PlayerRecord>& players() const noexcept { return catalogue_->players; }
     [[nodiscard]] const std::vector<TeamRecord>& teams() const noexcept { return teams_; }
     [[nodiscard]] std::size_t assignedPlayerCount() const noexcept;
     [[nodiscard]] std::size_t freeAgentCount() const noexcept;
@@ -144,9 +173,15 @@ private:
 
     std::uint32_t version_ = 0;
     std::filesystem::path source_path_;
-    std::vector<PlayerRecord> players_;
+    struct PlayerCatalogue {
+        std::vector<PlayerRecord> players;
+        std::unordered_map<std::uint16_t, std::size_t> index;
+        SlotTable original_slots{};
+        RosterBaseIdentity identity{};
+        bool base_ready=false;
+    };
+    std::shared_ptr<const PlayerCatalogue> catalogue_ = std::make_shared<PlayerCatalogue>();
     std::vector<TeamRecord> teams_;
-    std::unordered_map<std::uint16_t, std::size_t> player_index_;
     std::unordered_map<std::uint16_t, std::size_t> team_index_;
     std::array<std::uint16_t, 25> special_fallback_player_ids_{};
     std::array<std::uint16_t, 100> free_agent_slots_{};

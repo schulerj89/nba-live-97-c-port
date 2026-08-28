@@ -45,6 +45,43 @@ void screenConstruction() {
     }
     check(s.heading_x==256 && s.heading_y==70 && s.image_object[0]==18 && s.image_object[1]==19, "header objects");
     for(int i=0;i<4;++i) check(s.arrow_x[i]==6 && s.arrow_y[i]==10,"arrow offsets");
+    // 8003DD38 constructs both pairs; changing focus must not erase the
+    // inactive list's scroll cues. Exercise every pair of valid scroll tops.
+    const auto before_markers = s;
+    for (int active_page=0;active_page<2;++active_page)
+        for (int left=0;left<=9;++left) for (int right=0;right<=9;++right) {
+            s.selection.active_page=static_cast<std::uint8_t>(active_page);
+            s.selection.top[0]=static_cast<std::uint8_t>(left);
+            s.selection.top[1]=static_cast<std::uint8_t>(right);
+            Nba97ReorderMarker markers[4]{};
+            nba97_reorder_screen_markers(&s,markers);
+            for(int p=0;p<2;++p) for(int down=0;down<2;++down) {
+                const auto& m=markers[p+2*down];
+                const int top=p?right:left;
+                check((m.visible != 0)==(down?top<9:top>0),"independent list marker visibility");
+                check(m.glyph==(down?0x8c:0x8b) && m.x==(p?256:46) &&
+                    m.y==(down?196:116),"original marker glyph/geometry");
+            }
+        }
+    for(int i=0;i<4;++i) { s.arrow_x[i]=static_cast<std::uint8_t>(i+1); s.arrow_y[i]=static_cast<std::uint8_t>(i+5); }
+    Nba97ReorderMarker custom_markers[4]{};
+    nba97_reorder_screen_markers(&s,custom_markers);
+    for(int i=0;i<4;++i) check(custom_markers[i].x==((i%2)?250:40)+i+1 &&
+        custom_markers[i].y==(i<2?106:186)+i+5,"each marker owns its authored offsets");
+    nba97_reorder_screen_markers(nullptr,custom_markers);
+    for(const auto& m:custom_markers) check(!m.visible,"null marker source");
+    s=before_markers;
+    check(std::strcmp(nba97_reorder_screen_help_tag(&s),"hel1")==0,"first Help graphic");
+    nba97_reorder_begin_second(&s.selection);
+    check(std::strcmp(nba97_reorder_screen_help_tag(&s),"hel2")==0,"replacement Help graphic");
+    nba97_reorder_finish_second(&s.selection,0);
+    check(std::strcmp(nba97_reorder_screen_help_tag(&s),"hel1")==0,"returned Help graphic");
+    for(int invalid=2;invalid<=255;++invalid) {
+        s.selection.descriptor_page=static_cast<std::uint8_t>(invalid);
+        check(nba97_reorder_screen_help_tag(&s)==nullptr,"invalid Help descriptor guard");
+    }
+    check(nba97_reorder_screen_help_tag(nullptr)==nullptr,"null Help footer guard");
+    s=before_markers;
     check(s.first_callback==0x800568e4 && s.second_callback==0x800569bc &&
           s.entry_callback==0x800560bc && s.exit_callback==0x80056254, "lifecycle hooks");
     pass("screen_object_construction", "30 typed rows, 60/270 x, 112+16n y, endpoint callbacks, portrait/header/arrow metadata");
@@ -101,6 +138,44 @@ void screenConstruction() {
     nba97_reorder_screen_input(&s,NBA97_REORDER_DISCARD_YES);
     check(s.result==1 && !s.selection.accepted && std::equal(table.begin(),table.end(),s.working),"whole table discard");
     pass("screen_multi_team_discard", "staged swaps on two teams, resume/no, confirmed discard restores all 535 slots");
+}
+void arrowFlash() {
+    for(unsigned initial=0;initial<256;++initial) {
+        Nba97ReorderTint t{};
+        std::fill_n(t.start,3,static_cast<uint8_t>(initial));
+        std::fill_n(t.rgb,3,static_cast<uint8_t>(initial));
+        nba97_reorder_tint_flash(&t);
+        const int gold[3]={120,102,0};
+        for(unsigned frame=1;frame<=21;++frame) {
+            nba97_reorder_tint_tick(&t);
+            for(unsigned c=0;c<3;++c) {
+                const int expected=frame<=4 ? int(initial)+(gold[c]-int(initial))*int(frame)/4 :
+                    frame<=16 ? gold[c] : frame<=20 ? gold[c]+(128-gold[c])*int(frame-16)/4 : 128;
+                check(t.rgb[c]==expected,"arrow flash interpolation/hold/return");
+            }
+            const unsigned phase=frame<5 ? 0x40 : frame<16 ? 0xc0 : frame<21 ? 0x80 : 0;
+            check((t.flags&0xc0)==phase,"arrow flash boundary must use > duration");
+        }
+        check(!t.flags,"arrow flash did not settle");
+        const auto settled=t;nba97_reorder_tint_tick(&t);
+        check(!std::memcmp(&settled,&t,sizeof(t)),"idle flash tick mutated state");
+    }
+    Nba97ReorderTint t{};std::fill_n(t.start,3,uint8_t{128});std::fill_n(t.rgb,3,uint8_t{128});
+    nba97_reorder_tint_flash(&t);nba97_reorder_tint_tick(&t);
+    auto before=t;nba97_reorder_tint_flash(&t);
+    check(!std::memcmp(&before,&t,sizeof(t)),"retrigger restarted fade-in");
+    for(unsigned i=0;i<4;++i) nba97_reorder_tint_tick(&t);
+    for(unsigned i=0;i<9;++i) nba97_reorder_tint_tick(&t);
+    before=t;nba97_reorder_tint_flash(&t);
+    check(t.elapsed==0 && t.flags==before.flags && !std::memcmp(t.rgb,before.rgb,3),"hold retrigger changed color/phase");
+    for(unsigned i=0;i<11;++i) nba97_reorder_tint_tick(&t);
+    nba97_reorder_tint_tick(&t); // First return color122/108/32.
+    nba97_reorder_tint_flash(&t);
+    check(t.start[0]==120 && t.start[1]==128 && t.start[2]==128 && t.duration==4 && t.elapsed==0,
+        "flash retarget lost the source red-channel quirk");
+    nba97_reorder_tint_tick(&t);
+    check(t.rgb[0]==120 && t.rgb[1]==122 && t.rgb[2]==96,"return-phase retrigger wrong RGB");
+    pass("arrow_flash_256_starts_21_updates_retrigger", "2ADEC/2AE5C; four-update fade, hold, return; red-channel quirk");
 }
 
 void screenPublication(const std::filesystem::path& path) {
@@ -622,7 +697,7 @@ void fontAssets(const std::string& path) {
     check(unavailable_view.rgba != unavailable_compare.rgba, "original format placeholder substitutes requested child name");
     writeLabels(unavailable_view, "modal_view.ppm"); writeLabels(unavailable_compare, "modal_compare.ppm");
     std::cout << "REORDER ASSET reorder/dialogs.n97ui=155 bytes; origins=800AFFFA,800AFC22; "
-                 "warning colors=20/10/10,100/0/0; open-step=9/4/18/8; sound calls=5(open),8(close),audio-integration-pending\n";
+                 "warning colors=20/10/10,100/0/0; open-step=9/4/18/8; sound calls=5(open),8(close); host-audio-tested-separately\n";
     pass("selection_modal_assets", "two original private descriptors/text; ZFONT1; bounds, growth/shrink and child-specific formatting");
 }
 
@@ -790,11 +865,12 @@ int main(int argc, char** argv) {
         callbackMasks();
         secondCallbackMasks();
         selectionDependencies();
+        arrowFlash();
         screenConstruction();
         rosterListsTests();
         if (argc == 3) { database(argv[2]); fontAssets(argv[2]); screenPublication(argv[2]); }
         else std::cout << "REORDER SKIP database_invariants | local database not supplied\n";
-        std::cout << "REORDER CORE PASS | UI/audio/persistence/original-trace comparison still pending\n";
+        std::cout << "REORDER CORE PASS | UI/audio/persistence have separate suites; original-reference parity not established by this test\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "REORDER FAIL " << error.what() << '\n';

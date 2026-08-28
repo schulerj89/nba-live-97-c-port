@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace nba97 {
 
@@ -18,7 +19,7 @@ struct EaSchlInfo {
 
 class FrontendMusicPlayer final {
 public:
-    FrontendMusicPlayer() = default;
+    FrontendMusicPlayer();
     ~FrontendMusicPlayer();
     FrontendMusicPlayer(const FrontendMusicPlayer&) = delete;
     FrontendMusicPlayer& operator=(const FrontendMusicPlayer&) = delete;
@@ -26,16 +27,15 @@ public:
     void start(const std::filesystem::path& cnk_path, std::uint8_t recovered_volume);
     void stop() noexcept;
     void setRecoveredVolume(std::uint8_t volume) noexcept;
-    [[nodiscard]] bool isPlaying() const noexcept { return wave_out_ != nullptr; }
+    [[nodiscard]] bool isPlaying() const noexcept;
+    [[nodiscard]] std::string error() const;
+    [[nodiscard]] unsigned underruns() const noexcept;
     [[nodiscard]] const EaSchlInfo& info() const noexcept { return info_; }
     [[nodiscard]] const std::string& decoderName() const noexcept { return decoder_name_; }
 
 private:
-    HWAVEOUT wave_out_ = nullptr;
-    WAVEHDR header_{};
-    DWORD previous_wave_volume_ = 0;
-    bool restore_wave_volume_ = false;
-    std::vector<std::int16_t> pcm_;
+    struct Stream;
+    std::unique_ptr<Stream> stream_;
     EaSchlInfo info_{};
     std::string decoder_name_;
 };

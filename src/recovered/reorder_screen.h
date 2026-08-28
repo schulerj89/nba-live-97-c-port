@@ -25,6 +25,22 @@ typedef struct Nba97ReorderScreen {
     int16_t result;
 } Nba97ReorderScreen;
 
+typedef struct Nba97ReorderMarker {
+    int16_t x, y;
+    uint8_t glyph, visible;
+} Nba97ReorderMarker;
+
+/* Original 8003DD38 initializes both pages' persistent marker objects;
+ * 8003A224 refreshes only the current page, without deleting the other pair.
+ * Return their composed steady-state poses: left/right up, left/right down.
+ * This renderer adapter does not claim original allocation/timing behavior. */
+void nba97_reorder_screen_markers(const Nba97ReorderScreen *screen,
+    Nba97ReorderMarker markers[4]);
+
+/* 8003D5F0/8003D65C -> 8003186C(object4, 8009B230 + descriptor*4).
+ * Re-order has two descriptor contexts. Return NULL for malformed state. */
+const char *nba97_reorder_screen_help_tag(const Nba97ReorderScreen *screen);
+
 /* Re-order specialization of 80056AEC/80056494. Caller owns immutable asset
  * loading and the frame pump, replacing the original blocking screen engine.
  * Saved second-list cursor/top use absolute object indices 15..29, as on PSX.

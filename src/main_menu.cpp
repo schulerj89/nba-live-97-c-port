@@ -1,4 +1,5 @@
 #include "main_menu.hpp"
+#include "frontend_title.hpp"
 #include "recovered/semantic_trace.h"
 
 #include <algorithm>
@@ -365,16 +366,20 @@ void blitJumbledChunk(PshImage& destination, const PshImage& item,
 void blitJumbledTitleSprite(PshImage& destination,
                             const MenuSpritePack& sprites,
                             const char* tag, int x, int y,
-                            std::uint32_t elapsed_ms) {
+                            std::uint32_t elapsed_ms, const int16_t* title_corners = nullptr) {
     const PshImage* item = sprite(sprites, tag);
     if (!item) return;
 
-    // FUN_8003186C walks the GPU primitives that make up the frontend title
-    // objects (including ba35 and ba41), and
-    // FUN_80034A5C applies an eight-byte (four-corner) deformation record.
-    // ZSET8's 221-pixel title crosses the PS1's 128-pixel texture-page edge,
-    // so preserve that original two-piece construction.  The recovered menu
-    // moves in small, discrete corner steps; it is not a scanline sine wave.
+    if(title_corners) {
+        drawFrontendTitle(destination,*item,title_corners);
+        return;
+    }
+
+    // Native approximation, NOT recovered title animation. 3186C replaces
+    // sprites and34A5C updates UVs; neither proves this eight-frame pattern
+    // or128-pixel split. Actual32BF0/32BF8 motion uses per-corner RNG and
+    // alternating objects (see recovered/frontend_title.c). Its presentation
+    // clock/shared RNG/quad integration is pending; keep this limitation explicit.
     static constexpr std::array<CornerJumble, 8> frames{{
         { 0,  0,  1, -1, -1,  1,  0,  0},
         {-1,  1,  2,  0,  0, -1, -1,  1},
@@ -867,10 +872,11 @@ bool RecoveredBottomMenu::enabled(int index) const noexcept {
     if (index < 0 || index >= count()) return false;
     if (page_ != FrontendPage::Rosters) return true;
     // FUN_80057C48 enables Reset only after FUN_80058104 detects roster data
-    // differing from its entry snapshot (unless a special FE state forces it
+    // differing from the original defaults (unless a special FE state forces it
     // off). FUN_80057A98 also requires an active context before counting the
     // 536 recovered injury bytes; at least one must be non-zero.
     if (index == 3) return roster_modified_;
+    if (index == 1) return sign_available_;
     if (index == 7) return injuries_present_;
     return true;
 }
@@ -919,6 +925,12 @@ bool RecoveredBottomMenu::hover(int psx_x, int psx_y) noexcept {
 }
 
 void RosterViewer::clamp(const RosterDatabase& database) noexcept {
+    if(team_index_==29 && !free_agent_descriptor_.roster.empty()) {
+        player_index_=(std::min)(player_index_,free_agent_descriptor_.roster.size()-1);
+        if(player_index_<first_visible_player_)first_visible_player_=player_index_;
+        if(player_index_>=first_visible_player_+6)first_visible_player_=player_index_-5;
+        return;
+    }
     if (database.teams().empty()) {
         team_index_ = player_index_ = first_visible_player_ = 0;
         return;
@@ -1047,10 +1059,10 @@ bool RosterViewer::cycleCategory(int direction) noexcept {
             change.skipped_layer_four = true;
     } while (category_ == 4 && layer_four_restricted_);
 
-    // FUN_8003B26C(0x1B) is the original registered frontend sound slot. It
-    // is deliberately retained as a slot rather than misidentified as
-    // ZCURSOR program 27 (that local bank contains only programs 0..11).
-    change.sound_slot = 0x1b;
+    // FUN_8003B26C formats/redraws a typed text object. Object 0x1B is the
+    // shared stat-layer label, NOT an audio slot (confirmed by Compare's
+    // descriptor table and the callee itself).
+    change.layer_label_object = 0x1b;
     change.current_layer = category_;
     change.descriptor_table = category_ < 2 ? category_
         : category_ < 4 ? 2 : 3;
@@ -1078,7 +1090,7 @@ bool RosterViewer::cycleCategory(int direction) noexcept {
     change.layout_rebuilt = true;
     stat_controller_page_ = change.saved_controller_page;
     last_stat_layer_change_ = change;
-    first_visible_player_stat_ = 0;
+    if (change.descriptor_extent_changed) first_visible_player_stat_ = 0;
     return true;
 }
 
@@ -1105,19 +1117,38 @@ bool RosterViewer::cycleDisplay(int direction) noexcept {
 bool RosterViewer::scanTeam(int direction, const RosterDatabase& database,
                             std::uint32_t elapsed_ms) noexcept {
     if (!direction || database.teams().empty()) return false;
+    // A Sign child carries descriptor29 as well as ordinary teams. 59ABC
+    // wraps against the descriptor's bound, not a hard-coded team count.
+    const std::size_t last=free_agent_descriptor_.roster.empty()?database.teams().size()-1:29;
+    const std::size_t next_team = direction < 0
+        ? (team_index_ == 0 ? last : team_index_ - 1)
+        : (team_index_ >= last ? 0 : team_index_ + 1);
+    const auto& roster = next_team==29?free_agent_descriptor_.roster:database.teams()[next_team].roster;
+    // FUN_80059ABC / fragment 80059ACC keeps slots 0..14, resets larger
+    // free-agent indices to zero, then walks BACK over signed -1 entries.
+    // Do not reset the stat-list scroll: neither this callback nor 59808 does.
+    // This path currently covers normal teams; free-agent/special eligibility
+    // needs its own View asset/context integration, not a claim of full parity.
+    std::size_t next_player = player_index_ > 14 ? 0 : player_index_;
+    const auto occupied = [&](std::size_t slot) {
+        // Catalogue loading/preparation already validates every live ID.
+        // The original checks the -1 sentinel, not a second player lookup.
+        return slot < roster.size() && roster[slot] != UINT16_MAX;
+    };
+    while (next_player && !occupied(next_player)) --next_player;
+    // The original assumes a nonempty validated list. Refuse an empty native
+    // list atomically instead of underflowing into the previous team's memory.
+    if (!occupied(next_player)) return false;
     palette_from_team_index_ = team_index_;
-    team_index_ = direction < 0
-        ? (team_index_ == 0 ? database.teams().size() - 1 : team_index_ - 1)
-        : (team_index_ + 1) % database.teams().size();
+    team_index_ = next_team;
     palette_transition_start_ms_ = elapsed_ms;
-    player_index_ = 0;
-    first_visible_player_ = 0;
-    first_visible_player_stat_ = 0;
+    player_index_ = next_player;
     clamp(database);
     return true;
 }
 
 const TeamRecord* RosterViewer::selectedTeam(const RosterDatabase& database) const noexcept {
+    if(team_index_==29 && !free_agent_descriptor_.roster.empty()) return &free_agent_descriptor_;
     return team_index_ < database.teams().size() ? &database.teams()[team_index_] : nullptr;
 }
 
@@ -1138,9 +1169,11 @@ bool RosterViewer::cyclePlayer(int direction, const RosterDatabase& database,
     change.current_slot = player_index_;
     change.descriptor_page = context.active_page;
 
-    // Descriptor 29 is a special frontend roster. In mode 1 the original
-    // clears the input latch at +0x1B and deliberately performs no mutation.
-    if (context.special_roster_descriptor && context.special_cycle_locked) {
+    // Descriptor29 is the free-agent list. Context+0x708 is derived count[29]
+    // (0x6CE+29*2): when it is one, the original clears +0x1B and does not cycle.
+    // The legacy adapter exposes that predicate as special_cycle_locked.
+    if ((context.special_roster_descriptor && context.special_cycle_locked) ||
+        (team_index_==29 && database.freeAgentCount()==1)) {
         change.blocked_special_roster = true;
         change.input_latch_cleared = true;
         last_player_cycle_ = change;
@@ -1252,6 +1285,32 @@ bool RosterViewer::hover(int psx_x, int psx_y, const RosterDatabase& database) n
     return false;
 }
 
+bool RosterViewer::openPlayerFromRoster(const RosterDatabase& database,
+        RosterViewerPersistentState selection, PlayerCardRunContext context,const std::string& free_agent_name) {
+    const bool free=selection.team_index==29;
+    if (selection.team_index < 0 || selection.team_index>29 || (free && free_agent_name.empty()) ||
+        selection.player_index < 0 || selection.player_index >= (free?100:15) || selection.first_visible_player < 0 ||
+        selection.first_visible_player > (free?94:9) || selection.player_index < selection.first_visible_player ||
+        selection.player_index >= selection.first_visible_player+6 || context.parent_active_page > 1 ||
+        context.special_stat_layer < 0 || context.special_stat_layer > 2)
+        return false;
+    RosterViewer child;
+    if(free || context.parent_frontend_state==14) {
+        child.free_agent_descriptor_=TeamRecord({"",free_agent_name,"","",""});
+        child.free_agent_descriptor_.id=29;
+        for(auto id:database.freeAgentSlots()) {if(id==UINT16_MAX)break;child.free_agent_descriptor_.roster.push_back(id);}
+    }
+    child.team_index_=static_cast<std::size_t>(selection.team_index);
+    child.player_index_=static_cast<std::size_t>(selection.player_index);
+    child.first_visible_player_=static_cast<std::size_t>(selection.first_visible_player);
+    child.palette_from_team_index_=child.entry_team_index_=child.team_index_;
+    child.entry_player_index_=child.player_index_;
+    child.scroll_from_first_player_=child.entry_first_visible_player_=child.first_visible_player_;
+    if (!child.runPlayerCard(database,context)) return false;
+    *this=child;
+    return true;
+}
+
 bool RosterViewer::runPlayerCard(const RosterDatabase& database,
                                  PlayerCardRunContext context) noexcept {
     const PlayerRecord* player = selectedPlayer(database);
@@ -1279,6 +1338,8 @@ bool RosterViewer::runPlayerCard(const RosterDatabase& database,
     run.number_descriptor_bound = true;
     run.position_descriptor_bound = true;
     run.layout_id = 0x24;
+    stat_layout_id_ = run.layout_id;
+    stat_visible_row_count_ = run.visible_row_count;
 
     // FUN_8005A1EC chooses the normal layer 2/limit 3 pair or a special
     // layer+3 pair. Byte +0x2FC4 forces both to layer 5 only while special
@@ -1540,7 +1601,8 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                             bool cool_facts_available,
                             const PshFont* control_font,
                             int stat_flash_direction,
-                            bool cool_fact_playing) {
+                            bool cool_fact_overlay_visible,
+                            bool player_city_strip_visible, const int16_t* title_corners) {
     if (viewer.mode() == RosterViewMode::TeamRoster)
         nba97_semantic_trace_record(0x80059034u);
     else
@@ -1613,7 +1675,7 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
         blitAt(image, sprites, "XXR2", 404, 16);
         // State 0x10 uses the same discrete four-corner frontend deformation
         // path as state 0x24. It shakes/jumbles; it is not a scanline wave.
-        blitJumbledTitleSprite(image, sprites, "ba35", 142, 10, elapsed_ms);
+        blitJumbledTitleSprite(image, sprites, "ba35", 142, 10, elapsed_ms, title_corners);
     }
 
     if (!team) return image;
@@ -1632,7 +1694,7 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
         blitAt(image, sprites, "frml", 30, 15);
 
         // FUN_80059034 builds the centered team selector and both headings.
-        const std::string team_name = team->city + " " + team->nickname;
+        const std::string team_name = team->displayName();
         drawCenteredText(image, font, team_name, 269, 66, 1, 245, 245, 245,
                          false, 0, 100);
         // FUN_8003D434 builds the selector from ZFONT control glyphs.  These
@@ -1744,16 +1806,20 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
         constexpr int player_text_width = 90;
         // Nested state 0x24 / graphics state 0x11. The photograph comes from
         // Z1PORT physical record playerId+1; record zero is the fallback.
-        blitJumbledTitleSprite(image, sprites, "ba41", 40, 18, elapsed_ms);
+        blitJumbledTitleSprite(image, sprites, "ba41", 40, 18, elapsed_ms, title_corners);
+        // Layout36 slot18 remains behind the dynamic photo (depth13 vs3).
+        // 800310D8 hides shot during a request; 80030E78 enables it on success.
+        blitAt(image, sprites, "wait", 334, 35);
         if (player_portrait && player_portrait->width == 180 && player_portrait->height == 156)
             blitScaled(image, *player_portrait, 0, 0, 180, 156, 297, 35, 180, 156);
-        else
-            blitAt(image, sprites, "shot", 297, 35);
         // State 0x24's ZSET8 pack contains the exact 39x156 city wordmark and
         // crest composite for every team (atlZ, chiZ, ...). It overlays the
         // reserved left strip of the Z1PORT photograph at the recovered slot.
-        if (team->id < team_codes.size()) {
-            const std::string team_strip = std::string(team_codes[team->id]) + "Z";
+        if ((player_portrait || player_city_strip_visible) && team->id <= 29) {
+            // Team29 is the original free-agent xfrZ wordmark, not xeaZ.
+            // The xeaP palette mapping is separate from this graphic identity.
+            // Confirmed by the original Sign -> View Alston reference.
+            const std::string team_strip = team->id==29?"xfrZ":std::string(team_codes[team->id]) + "Z";
             blitAt(image, sprites, team_strip.c_str(), 296, 35);
         }
         drawText(image, font, selected->displayName(), 54, 63, 1, 255, 255, 255,
@@ -1766,7 +1832,7 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                  false, 0, player_text_width);
         static constexpr std::array<const char*, 5> starting_positions{
             "starting C", "starting PF", "starting SF", "starting SG", "starting PG"};
-        const std::string displayed_position = viewer.playerIndex() < starting_positions.size()
+        const std::string displayed_position = team->id!=29 && viewer.playerIndex() < starting_positions.size()
             ? starting_positions[viewer.playerIndex()]
             : positionName(selected->position);
         drawText(image, font, displayed_position, 108, 86, 1,
@@ -1845,15 +1911,17 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
                              stat_flash_direction > 0 ? 255 : 255,
                              stat_flash_direction > 0 ? 218 : 255,
                              stat_flash_direction > 0 ? 35 : 255);
-        drawCenteredText(image, font, team->city + " " + team->nickname,
+        drawCenteredText(image, font, team->displayName(),
                          177, 202, 1, 245, 245, 245, false, 0,
                          player_text_width);
         // ZSET8 provides both the exact controller marker and the original
-        // Cool Facts plaque. o18a is the resting state; o18b is its gold
-        // selected variant used by the controller transition.
+        // Cool Facts plaque. State36 object20/o18a stays enabled beneath
+        // object21/o18b, which 59EBC toggles for eight presents. Speech
+        // duration does not determine the overlay's visibility.
         if (cool_facts_available) {
             blitAt(image, sprites, "cros", 336, 204);
-            blitAt(image, sprites, cool_fact_playing ? "o18b" : "o18a", 356, 198);
+            blitAt(image, sprites, "o18a", 356, 198);
+            if(cool_fact_overlay_visible) blitAt(image, sprites, "o18b", 356, 198);
         }
         blitAt(image, sprites, "help", 235, 217);
     }
@@ -1909,10 +1977,83 @@ PshImage renderRosterViewer(const RosterViewer& viewer,
     return image;
 }
 
+PshImage renderCompareScreen(const Nba97CompareRefresh& refresh, const RosterDatabase& db,
+        const CompareAssets& assets, const MenuSpritePack& sprites, const PshFont& font,
+        const std::array<PshImage,2>& portraits, std::uint32_t elapsed_ms,
+        const FrontendPaletteAssets& backgrounds, const Nba97FrontendPalette& palette,
+        const std::array<Nba97ReorderTint,6>& arrows, const int16_t* title_corners) {
+    const auto& s=refresh.text;
+    if(!s.initialized || s.layer>3 || s.active_side>1 || s.team[0]>29 || s.team[1]>29 ||
+       s.top+5u>nba97_compare_stat_count(&s)) throw std::runtime_error("invalid Compare render state");
+    PshImage image; image.width=512; image.height=240; image.tag="COMPARE";
+    image.rgba.assign(512*240*4,255);
+    // 2FF80 changes raw dynamic CLUT words independently for each half.
+    // Team29 is palette xeaP; the name helper's remap29->31 is unrelated.
+    backgrounds.draw(image,palette);
+    const std::array<std::tuple<const char*,int,int>,10> borders{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}};
+    for(const auto& b:borders) blitAt(image,sprites,std::get<0>(b),std::get<1>(b),std::get<2>(b));
+    blitJumbledTitleSprite(image,sprites,"ba02",170,15,elapsed_ms,title_corners);
+    for(unsigned side=0;side<2;++side) {
+        const auto* frame=sprite(sprites,side ? "frmr" : "frml");
+        const auto* plate=sprite(sprites,side ? "111p" : "110p");
+        const auto* player=db.player(s.player[side]);
+        if(!frame || !plate || !player || portraits[side].width!=87 || portraits[side].height!=51)
+            throw std::runtime_error("missing original Compare portrait/frame/player");
+        blitReorderPlate(image,*plate,side ? 370 : 40,16,side);
+        blitInsideFrame(image,portraits[side],*frame,side ? 386 : 54,22,side ? 368 : 30,15);
+        blitAt(image,sprites,side ? "frmr" : "frml",side ? 368 : 30,15);
+        // 5A280 stores object x256/512; 3B26C adds manager x-offset -128
+        // for VALUES, while 3CF70 keeps the shared LABELS at x256.
+        const int x=side ? 384 : 128;
+        drawCenteredText(image,font,player->displayName(),x,82,1);
+        drawCenteredText(image,font,player->jerseyNumberText(),x,92,1);
+        const auto position=s.team[side]!=29 && s.slot[side]<5 ? assets.text(7+s.slot[side]) : positionName(player->position);
+        drawCenteredText(image,font,position,x,102,1);
+        const auto* team=db.team(s.team[side]);
+        drawCenteredText(image,font,team ? team->displayName() : assets.text(12),x,212,1);
+        for(unsigned row=0;row<5;++row)
+            drawCenteredText(image,font,assets.value(db,*player,s.layer,nba97_compare_refresh_top(&refresh,side)+row),x,135+14*row,1);
+    }
+    for(unsigned i=0;i<3;++i) drawCenteredText(image,font,assets.text(i),256,82+10*i,1);
+    drawCenteredText(image,font,assets.text(3+s.layer),256,116,1);
+    for(unsigned row=0;row<5;++row)
+        drawCenteredText(image,font,assets.label(s.layer,s.top+row),256,135+14*row,1);
+    // 3D434 builds four arrows at118/135 and874/891. 39BA8 translates
+    // their shared object +/-500 so only the active side's pair is on-screen.
+    for(unsigned direction=0;direction<4;++direction) {
+        if(direction==2 && !s.top) continue;
+        if(direction==3 && s.top+5u>=nba97_compare_stat_count(&s)) continue;
+        const unsigned char code=direction==0 ? 0x8d : direction==1 ? 0x8a : direction==2 ? 0x8b : 0x8c;
+        const auto* glyph=font.glyph(static_cast<char>(code));
+        if(!glyph) throw std::runtime_error("missing original Compare arrow glyph");
+        const int center=(s.active_side ? 374 : 118)+17*direction;
+        const int x=direction>=2 ? 246 : center-font.textWidth(std::string(1,static_cast<char>(code)))/2;
+        const int y=(direction==2 ? 127 : direction==3 ? 203 : 116)-glyph->center_y;
+        const auto& tint=arrows[direction>=2 ? direction+2 : s.active_side*2+direction];
+        for(unsigned gy=0;gy<glyph->height;++gy) for(unsigned gx=0;gx<glyph->width;++gx) {
+            const auto at=(gy*glyph->width+gx)*4;
+            if(!glyph->rgba[at+3]) continue;
+            // Original glyph pixels, per-channel neutral128 modulation. Do
+            // not recolor through drawText's max-channel luminance shortcut.
+            putPixel(image,x+gx,y+gy,
+                static_cast<std::uint8_t>((std::min)(255u,unsigned(glyph->rgba[at])*tint.rgb[0]/128)),
+                static_cast<std::uint8_t>((std::min)(255u,unsigned(glyph->rgba[at+1])*tint.rgb[1]/128)),
+                static_cast<std::uint8_t>((std::min)(255u,unsigned(glyph->rgba[at+2])*tint.rgb[2]/128)));
+        }
+    }
+    // 3A224 primary markers: x256-20+10, y135-8 /135+4*14+12.
+    // 3AB64 synchronizes both lists; secondary markers are intentionally offscreen.
+    blitAt(image,sprites,"help",235,217);
+    return image;
+}
+
 PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
         const MenuSpritePack& sprites, const PshFont& font,
         const std::array<PshImage, 2>& portraits, const PshImage& text_layer,
-        std::uint32_t elapsed_ms) {
+        std::uint32_t elapsed_ms, const int16_t* title_corners) {
     PshImage image;
     image.width = 512; image.height = 240; image.tag = "REORDER";
     image.rgba.assign(512 * 240 * 4, 255);
@@ -1932,7 +2073,7 @@ PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
         {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
         {"brbg",256,185},{"brbh",384,185}}};
     for (const auto& b : borders) blitAt(image, sprites, std::get<0>(b), std::get<1>(b), std::get<2>(b));
-    blitJumbledTitleSprite(image, sprites, "ba22", 156, 10, elapsed_ms);
+    blitJumbledTitleSprite(image, sprites, "ba22", 156, 10, elapsed_ms,title_corners);
     for (int p = 0; p < 2; ++p) {
         const char* frame_tag = p ? "frmr" : "frml";
         const auto* frame = sprite(sprites, frame_tag);
@@ -1946,20 +2087,56 @@ PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
         blitInsideFrame(image, portraits[p], *frame, p ? 386 : 54, 22, frame_x, 15);
         blitAt(image, sprites, frame_tag, frame_x, 15);
     }
-    // Generic list markers use original ZFONT0 control glyphs, never Unicode.
-    const auto& s = screen.selection;
-    const int p = s.active_page;
-    // 8003A224: row-x minus20 plus6; controller top106 plus10; row spacing16.
-    const int x = (p ? 270 : 60) - 20 + screen.arrow_x[p];
-    const auto arrow = [&](unsigned char code, int y) {
-        const std::string text(1, static_cast<char>(code));
-        draw_psh_text_centered(image, font, text, x + font.textWidth(text)/2, y);
-    };
-    if (s.top[p]) arrow(0x8b, 106 + screen.arrow_y[p]);
-    if (s.top[p] < 9) arrow(0x8c, 186 + screen.arrow_y[p+2]);
-    blitAt(image, sprites, "help", 235, 217);
+    // Both pairs persist. 8003A224 updates the active pair; it does not hide
+    // the inactive page's arrows created by the 8003DD38 constructor loop.
+    Nba97ReorderMarker markers[4]{};
+    nba97_reorder_screen_markers(&screen, markers);
+    for (const auto& marker : markers) if (marker.visible) {
+        const std::string text(1, static_cast<char>(marker.glyph));
+        draw_psh_text_centered(image, font, text,
+            marker.x + font.textWidth(text)/2, marker.y);
+    }
+    const char* help_tag = nba97_reorder_screen_help_tag(&screen);
+    if (!help_tag || !sprite(sprites, help_tag))
+        throw std::runtime_error("missing source-selected Re-order Help footer");
+    blitAt(image, sprites, help_tag, 235, 217);
     blitScaled(image, text_layer, 0, 0, 512, 240, 0, 0, 512, 240);
     return image;
 }
 
+PshImage renderTradeScreen(const Nba97TradeScreen& s,const MenuSpritePack& sprites,
+        const PshFont& font,const std::array<PshImage,2>& portraits,const PshImage& labels,
+        const FrontendPaletteAssets& backgrounds,const Nba97FrontendPalette& palette,
+        std::uint32_t elapsed,const int16_t* corners) {
+    PshImage im;im.width=512;im.height=240;im.tag="TRADE";im.rgba.assign(512*240*4,255);
+    backgrounds.draw(im,palette);
+    // 80096D24: original Trade layout, independently coloured background halves.
+    for(const auto& b:std::array<std::tuple<const char*,int,int>,10>{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}}) {
+        if(!sprite(sprites,std::get<0>(b))) throw std::runtime_error("missing original Trade border");
+        blitAt(im,sprites,std::get<0>(b),std::get<1>(b),std::get<2>(b));
+    }
+    const bool sign=s.frontend_state==14;
+    const char* title=sign?"ba30":"ba38"; // state14 layout80096E84
+    if(!sprite(sprites,title)) throw std::runtime_error("missing editor title");
+    blitJumbledTitleSprite(im,sprites,title,sign?156:155,10,elapsed,corners);
+    for(int p=0;p<2;++p) {
+        const auto* frame=sprite(sprites,p?"frmr":"frml");
+        const auto* plate=sprite(sprites,p?"111p":"110p");
+        if(!frame || !plate) throw std::runtime_error("missing Trade portrait aperture");
+        blitReorderPlate(im,*plate,p?370:40,16,p);
+        blitInsideFrame(im,portraits[p],*frame,p?386:54,22,p?368:30,15);
+        blitAt(im,sprites,p?"frmr":"frml",p?368:30,15);
+        for(int down=0;down<2;++down) if(down?s.top[p]<(s.team[p]==29?94:9):s.top[p]>0) {
+            const std::string glyph(1,char(down?0x8c:0x8b));
+            draw_psh_text_centered(im,font,glyph,(p?270:60)-14+font.textWidth(glyph)/2,116+down*80);
+        }
+    }
+    const char* help=s.phase==NBA97_TRADE_SECOND?"hel2":"hel1";
+    if(!sprite(sprites,help)) throw std::runtime_error("missing Trade footer");
+    blitAt(im,sprites,help,235,217);
+    blitScaled(im,labels,0,0,512,240,0,0,512,240);return im;
+}
 } // namespace nba97

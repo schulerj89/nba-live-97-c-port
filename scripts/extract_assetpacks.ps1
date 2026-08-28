@@ -78,4 +78,18 @@ if ($LASTEXITCODE -ne 0) { throw 'Private Re-order portrait decoding failed.' }
 python (Join-Path $repo 'tools\extract_reorder_dialogs.py') $feonly --output `
     (Join-Path $repo '.local\assetpacks\reorder\dialogs.n97ui')
 if ($LASTEXITCODE -ne 0) { throw 'Private Re-order dialog extraction failed.' }
+python (Join-Path $repo 'tools\extract_roster_reset.py') $feonly --output (Join-Path $repo '.local\assetpacks\reorder\reset.n97ui')
+if ($LASTEXITCODE -ne 0) { throw 'Private Reset descriptor extraction failed.' }
+python (Join-Path $repo 'tools\extract_frontend_help.py') $feonly --output `
+    (Join-Path $repo '.local\assetpacks\reorder\help.n97ui')
+if ($LASTEXITCODE -ne 0) { throw 'Private frontend Help extraction failed.' }
+python (Join-Path $repo 'tools\extract_trade_assets.py') $feonly
+if ($LASTEXITCODE -ne 0) { throw 'Private Trade text/Help extraction failed.' }
+python (Join-Path $repo 'tools\extract_trade_assets.py') $feonly --sign
+if ($LASTEXITCODE -ne 0) { throw 'Sign UI/Help extraction failed.' }
+python (Join-Path $repo 'tools\extract_compare_assets.py') $feonly --output `
+    (Join-Path $repo '.local\assetpacks\reorder\compare.n97ui')
+if ($LASTEXITCODE -ne 0) { throw 'Private Compare extraction failed.' }
+python (Join-Path $repo 'tools\extract_player_notice.py') $feonly
+if ($LASTEXITCODE -ne 0) { throw 'Private View Player notice extraction failed.' }
 Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'

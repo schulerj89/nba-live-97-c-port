@@ -309,12 +309,12 @@
         "0x80059720", "0x80059750", "0x80059760", "0x80059768",
         "0x8005978C", "0x800597A8", "0x800597D8"
       ],
-      "accounting_basis": "All 19 blocks are semantically represented from a fresh private Ghidra decompile. cycleCategory implements the 0x1000 previous/forward branch, inclusive constructor layer limit, wrap, and conditional layer-4 exclusion. RosterStatLayerChangeState retains the original sound slot 0x1B, FUN_800594F0 descriptor table family and 14/17/24 extents, extent-change result, conditional primary and layout-0x23 secondary animation resets, both visible-row refresh loops, controller-page save/zero/rebuild/restore, and stat-scroll reset. Focused native tests cover same-extent and changed-extent transitions, both directions, normal wrap, restricted and available layer-4 branches, sound identity, descriptor extents, animation conditions, refresh counts, and rebuild state. Raw PS1 object lists and renderer calls are typed native state, so no structural CFG equivalence is claimed.",
+      "accounting_basis": "All 19 blocks are semantically represented from private recomp/Ghidra evidence. cycleCategory implements the 0x1000 previous/forward branch, inclusive constructor layer limit, wrap, and conditional layer-4 exclusion. RosterStatLayerChangeState retains layer-label object 0x1B, FUN_800594F0 descriptor table family and 14/17/24 extents, extent-change result, conditional primary and layout-0x23 secondary animation resets, both visible-row refresh loops, controller-page save/zero/rebuild/restore, and extent-dependent stat-scroll reset. The earlier sound-slot interpretation was incorrect: FUN_8003B26C formats text, not audio. Focused native tests cover same-extent and changed-extent transitions, both directions, normal wrap, restricted and available layer-4 branches, label identity, descriptor extents, animation conditions, refresh counts, and rebuild state. Raw PS1 object lists and renderer calls are typed native state, so no structural CFG equivalence is claimed.",
       "block_classifications": [
         {
           "category": "native_semantic_replacement",
           "blocks": ["0x80059610", "0x8005963C", "0x80059650", "0x80059658", "0x80059664", "0x80059674", "0x80059678", "0x8005967C", "0x8005968C"],
-          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and sound slot 0x1B are explicit native state transitions."
+          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and redraw of layer-label object 0x1B are explicit native state transitions; the label call is not audio."
         },
         {
           "category": "native_semantic_replacement",

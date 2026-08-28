@@ -466,7 +466,7 @@
           "instruction_count": 40,
           "basic_block_count": 9,
           "accounted": true,
-          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and sound slot 0x1B are explicit native state transitions."
+          "summary": "The L2/forward direction branch, inclusive active-layer wrap loop, conditional layer-4 skip, selected-layer writeback, and redraw of layer-label object 0x1B are explicit native state transitions; the label call is not audio."
         },
         {
           "category": "native_semantic_replacement",

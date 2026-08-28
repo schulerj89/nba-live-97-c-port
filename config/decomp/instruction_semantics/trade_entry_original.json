@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "binary": "feonly",
+  "processor": "MIPS:LE:32:default",
+  "provenance": "Selected count/block/call metadata from read-only ExportFunctionSemanticsHeadless.py, 2026-08-28; no game instructions or bytes.",
+  "functions": [
+    {
+      "address": "0x80056CD0",
+      "size_bytes": 156,
+      "instruction_count": 39,
+      "blocks": [
+        {"start": "0x80056CD0", "end": "0x80056D17", "instruction_count": 18},
+        {"start": "0x80056D18", "end": "0x80056D27", "instruction_count": 4},
+        {"start": "0x80056D28", "end": "0x80056D6B", "instruction_count": 17}
+      ],
+      "direct_calls": ["0x80056494", "0x80056A94"]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 #include "recovered_audio.hpp"
 
 #include "psx_adpcm.hpp"
+#include "cool_fact_index.hpp"
 #include "recovered/frontend_audio.h"
 
 #include <algorithm>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <utility>
 
 namespace nba97 {
 namespace {
@@ -144,24 +146,37 @@ void RecoveredAudioPlayer::playPcm(std::vector<std::int16_t> pcm,
 RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
-        std::uint32_t sound_id) {
-    return loadCursorSound(header_path, body_path, sound_id, true, nullptr, true);
+        std::uint32_t sound_id,
+        std::uint8_t sfx_setting) {
+    // 2F12C branches directly to return when 21D7E is zero: no bank read,
+    // voice allocation or interruption of a cue already playing.
+    if (!sfx_setting) {
+        RecoveredClipInfo skipped;
+        skipped.record = sound_id;
+        skipped.playback_volume = 0;
+        skipped.playback_suppressed = true;
+        skipped.source = "FUN_8002F124 muted; bank/player not called";
+        return skipped;
+    }
+    return loadCursorSound(header_path, body_path, sound_id, true, nullptr, true, sfx_setting);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::exportCursorSound(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
         std::uint32_t sound_id,
-        const std::filesystem::path& output) {
-    return loadCursorSound(header_path, body_path, sound_id, false, &output, true);
+        const std::filesystem::path& output,
+        std::uint8_t sfx_setting) {
+    return loadCursorSound(header_path, body_path, sound_id, false, &output, true, sfx_setting);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::exportCursorSoundRaw(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
         std::uint32_t sound_id,
-        const std::filesystem::path& output) {
-    return loadCursorSound(header_path, body_path, sound_id, false, &output, false);
+        const std::filesystem::path& output,
+        std::uint8_t sfx_setting) {
+    return loadCursorSound(header_path, body_path, sound_id, false, &output, false, sfx_setting);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
@@ -170,16 +185,24 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
         std::uint32_t sound_id,
         bool play,
         const std::filesystem::path* output,
-        bool apply_authored_pitch) {
+        bool apply_authored_pitch,
+        std::uint8_t sfx_setting) {
     const auto header = readFile(header_path);
     const auto body = readFile(body_path);
-    if (!tag(header, 0, "BNKl") || sound_id >= 12)
+    if (header.size()<8 || !tag(header, 0, "BNKl"))
+        throw std::runtime_error("invalid ZCURSOR BNKl header");
+    // 91814: legacy bank version0 has128 slots; otherwise u16 at+6.
+    // ZCURSOR has128 table slots and populated IDs1..12, not IDs0..11.
+    const std::uint32_t program_count=header[4] ? u16(header,6):128;
+    if (sound_id>=program_count || program_count>(header.size()-8)/4)
         throw std::runtime_error("unsupported ZCURSOR BNKl sound id");
     // FUN_80091814 indexes the BNKl table at bank + 8 + sound_id * 4. BNKl's
     // two-word header is therefore followed by the self-relative PATl pointer
     // for sound ID 0. Each PATl points to a 92-byte tone whose TMxl is at +40.
     const std::size_t program_pointer = 8 + static_cast<std::size_t>(sound_id) * 4;
-    const std::size_t patl = program_pointer + u32(header, program_pointer);
+    const auto relative_program=u32(header,program_pointer);
+    if(!relative_program) throw std::runtime_error("unpopulated ZCURSOR BNKl sound id");
+    const std::size_t patl = program_pointer + relative_program;
     if (patl + 16 > header.size() || !tag(header, patl, "PATl") ||
         header[patl + 7] != 1)
         throw std::runtime_error("invalid ZCURSOR PATl program");
@@ -192,7 +215,7 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     const std::uint32_t sample_count = u32(header, tmxl + 16);
     const std::uint32_t offset = u32(header, tmxl + 28);
     const std::uint32_t bytes = u32(header, tmxl + 36);
-    if (!sample_rate || !sample_count || bytes % 16 || offset + bytes > body.size())
+    if (!sample_rate || !sample_count || bytes % 16 || offset > body.size() || bytes > body.size()-offset)
         throw std::runtime_error("invalid ZCURSOR TMxl range");
     const std::uint32_t program_volume = header[patl + 11];
     const std::uint32_t tone_volume = header[tone + 18];
@@ -206,8 +229,9 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
         100 * (static_cast<std::int32_t>(root_note) -
                static_cast<std::int32_t>(requested_note));
     // FUN_8002F124 passes min(frontend SFX setting * 12, 127) to the bank
-    // player. The recovered frontend initializes that setting to 9.
-    const std::uint32_t playback_volume = nba97_frontend_sfx_volume(9);
+    // player. Runtime callers supply current Options SF/X volume; exports
+    // default to the original first-boot setting (9) for stable comparisons.
+    const std::uint32_t playback_volume = nba97_frontend_sfx_volume(sfx_setting);
     auto pcm = decodePsxAdpcmMono(body.data() + offset, bytes, sample_count);
     applyPsxGain(pcm, program_volume, tone_volume, playback_volume);
     if (apply_authored_pitch) pcm = applyPitchCents(pcm, pitch_cents);
@@ -226,12 +250,25 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     return info_;
 }
 
-RecoveredClipInfo RecoveredAudioPlayer::playCoolFact(
-        const std::filesystem::path& index_path,
-        const std::filesystem::path& archive_path,
-        std::uint16_t player_id,
-        std::uint32_t preferred_variant) {
-    return loadCoolFact(index_path, archive_path, player_id, preferred_variant, true);
+void RecoveredAudioPlayer::applyCoolFactPlayback(PreparedCoolFact& prepared,
+                                                std::uint8_t speech_setting) {
+    if(prepared.pcm.empty() || !prepared.info.sample_rate ||
+       prepared.pcm.size()!=prepared.info.sample_count)
+        throw std::runtime_error("invalid prepared Cool Fact");
+    auto& info=prepared.info;
+    info.playback_volume=nba97_frontend_speech_volume(speech_setting);
+    applyPsxGain(prepared.pcm,info.program_volume,info.tone_volume,info.playback_volume);
+    if(info.pitch_cents) prepared.pcm=applyPitchCents(prepared.pcm,info.pitch_cents);
+    info.rendered_sample_count=static_cast<std::uint32_t>(prepared.pcm.size());
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::startCoolFact(PreparedCoolFact prepared,
+                                                      std::uint8_t speech_setting) {
+    applyCoolFactPlayback(prepared,speech_setting);
+    // Unlike 2F124's SFX mute branch, 31770 submits speech even at gain0.
+    playPcm(std::move(prepared.pcm),prepared.info.sample_rate);
+    info_=std::move(prepared.info);
+    return info_;
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::inspectCoolFact(
@@ -239,37 +276,42 @@ RecoveredClipInfo RecoveredAudioPlayer::inspectCoolFact(
         const std::filesystem::path& archive_path,
         std::uint16_t player_id,
         std::uint32_t preferred_variant) {
-    return loadCoolFact(index_path, archive_path, player_id, preferred_variant, false);
+    info_=prepareCoolFact(index_path,archive_path,player_id,preferred_variant).info;
+    return info_;
 }
 
-RecoveredClipInfo RecoveredAudioPlayer::loadCoolFact(
+RecoveredClipInfo RecoveredAudioPlayer::exportCoolFact(
+        const std::filesystem::path& index_path, const std::filesystem::path& archive_path,
+        std::uint16_t player_id, std::uint32_t variant, const std::filesystem::path& output) {
+    auto prepared=prepareCoolFact(index_path,archive_path,player_id,variant);
+    writePcmWav(output,prepared.pcm,prepared.info.sample_rate);
+    info_=std::move(prepared.info);
+    return info_;
+}
+
+RecoveredClipInfo RecoveredAudioPlayer::exportCoolFactPlayback(
+        const std::filesystem::path& index_path, const std::filesystem::path& archive_path,
+        std::uint16_t player_id, std::uint32_t variant, const std::filesystem::path& output,
+        std::uint8_t speech_setting) {
+    auto prepared=prepareCoolFact(index_path,archive_path,player_id,variant);
+    applyCoolFactPlayback(prepared,speech_setting);
+    writePcmWav(output,prepared.pcm,prepared.info.sample_rate);
+    info_=std::move(prepared.info);
+    return info_;
+}
+
+PreparedCoolFact RecoveredAudioPlayer::prepareCoolFact(
         const std::filesystem::path& index_path,
         const std::filesystem::path& archive_path,
         std::uint16_t player_id,
-        std::uint32_t preferred_variant,
-        bool play) {
+        std::uint32_t preferred_variant) const {
     const auto index = readFile(index_path);
-    const std::uint32_t count = u32(index, 0);
-    std::uint32_t variant = preferred_variant;
-    if (variant >= 5) {
-        bool found = false;
-        for (std::uint32_t attempt = 0; attempt < 5; ++attempt) {
-            const std::uint32_t candidate = (next_variant_ + attempt) % 5;
-            const std::uint32_t record = static_cast<std::uint32_t>(player_id) * 5 + candidate;
-            if (record < count && u32(index, 4 + static_cast<std::size_t>(record) * 8) != 0) {
-                variant = candidate;
-                next_variant_ = (candidate + 1) % 5;
-                found = true;
-                break;
-            }
-        }
-        if (!found) throw std::runtime_error("player has no Cool Fact records");
-    }
-    const std::uint32_t record = static_cast<std::uint32_t>(player_id) * 5 + variant;
-    if (record >= count) throw std::runtime_error("Cool Fact record is outside IDX");
-    const std::size_t entry = 4 + static_cast<std::size_t>(record) * 8;
-    const std::uint32_t bytes = u32(index, entry);
-    const std::uint32_t offset = u32(index, entry + 4);
+    const CoolFactIndexView records(index);
+    // Selection belongs to the recovered View context, never a global counter
+    // inside the decoder. Inspection/export cannot consume gameplay variants.
+    const std::uint32_t variant = preferred_variant;
+    const auto entry=records.lookup(player_id,variant);
+    const auto record=entry.physical_record, bytes=entry.bytes, offset=entry.offset;
     if (!bytes) throw std::runtime_error("Cool Fact record absent");
     std::ifstream archive(archive_path, std::ios::binary);
     if (!archive) throw std::runtime_error("missing private audio asset: " + archive_path.string());
@@ -283,7 +325,8 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCoolFact(
     archive.read(reinterpret_cast<char*>(clip.data()), bytes);
     if (archive.gcount() != static_cast<std::streamsize>(bytes))
         throw std::runtime_error("Cool Fact record read was truncated");
-    if (!tag(clip, 0, "PATl") || !tag(clip, 0x38, "TMxl") ||
+    if (clip.size()<0x76 || !tag(clip, 0, "PATl") || clip[7]!=1 || u32(clip,12)!=4 ||
+        !tag(clip, 0x38, "TMxl") ||
         clip[0x3d] != 16 || clip[0x3e] != 1 || clip[0x3f] != 6)
         throw std::runtime_error("unsupported Cool Fact PATl/TMxl record");
     const std::uint32_t sample_rate = u16(clip, 0x42);
@@ -298,10 +341,18 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCoolFact(
         clip.size() - (payload + compressed) != 2)
         throw std::runtime_error("invalid Cool Fact PSX ADPCM payload");
     auto pcm = decodePsxAdpcmMono(clip.data() + payload, compressed, sample_count);
-    if (play) playPcm(std::move(pcm), sample_rate);
-    info_ = {record, sample_rate, sample_count, static_cast<std::uint32_t>(compressed),
-             archive_path.filename().string() + " variant=" + std::to_string(variant)};
-    return info_;
+    RecoveredClipInfo info{record, sample_rate, sample_count, static_cast<std::uint32_t>(compressed),
+             archive_path.filename().string() + " player=" + std::to_string(player_id) +
+             " variant=" + std::to_string(variant) + " logical=" + std::to_string(entry.logical_record) +
+             " offset=" + std::to_string(offset)};
+    info.program_volume=clip[11];
+    info.tone_volume=clip[16+18];
+    info.root_note=clip[16+9];
+    info.pitch_cents=s16(clip,8)+s16(clip,16+20)-100*(static_cast<int>(info.root_note)-60);
+    if(info.program_volume>127 || info.tone_volume>127)
+        throw std::runtime_error("Cool Fact gain exceeds 7-bit range");
+    info.rendered_sample_count=sample_count;
+    return {std::move(info),std::move(pcm)};
 }
 
 void RecoveredAudioPlayer::stop() noexcept {

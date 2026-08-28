@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "scope": "Trade Players: entry wrapper only (39 instructions), not the screen, feature, or transitive call graph",
+  "measurement": "reviewed source accounting, not runtime execution or binary equivalence",
+  "instructions": {
+    "accounted": 39,
+    "total": 39,
+    "pending": 0,
+    "percent": 100.0
+  },
+  "functions": [
+    {
+      "address": "0x80056CD0",
+      "name": "Trade entry wrapper",
+      "slice": "entry",
+      "accounted": 39,
+      "total": 39,
+      "pending": 0,
+      "pending_blocks": [],
+      "note": "39 wrapper instructions source-accounted: right-then-left normalization and LEFT collision repair; two kind1 constructor arguments; actual native first/second callback bindings; signed halfword selector return used by host child/exit routing. Native ABI and owned async state replace the original stack/blocking selector. Explicitly scoped callee contracts do not credit callee bodies, transaction-boundary parity, or original timing.",
+      "block_evidence": {
+        "0x80056CD0": {
+          "behavior": "18 instructions: typed arguments/local state replace entry ABI; normalize right then left through shared80056A94, compare signed normalized results; prepare signed left handoff.",
+          "tests": [
+            "distinct_teams",
+            "team_pairs_modes_signed_contexts",
+            "signed_halfword_boundaries_no_clamping",
+            "sentinel_normalization_precedes_collision"
+          ]
+        },
+        "0x80056D18": {
+          "behavior": "4 instructions: collision changes LEFT to3 when right0, otherwise0; signed typed result enters constructor.",
+          "tests": [
+            "collision_changes_left_only",
+            "constructor_handoff_kinds_and_callbacks"
+          ]
+        },
+        "0x80056D28": {
+          "behavior": "17 instructions: signed left argument; first56B44 and second56C50 callback address materialization/stack arguments become actual native callback pointers; kinds1/1 are consumed by second-stage validation; constructor/frame pump owns selector lifecycle; signed halfword result getter feeds host routes2/3 or exits1/-1; native function ABI replaces register/stack restoration and return delay NOP.",
+          "tests": [
+            "constructor_handoff_kinds_and_callbacks",
+            "selection_callback_roles",
+            "selector_routes_and_child_reentry",
+            "signed_halfword_selector_result"
+          ]
+        }
+      }
+    }
+  ],
+  "slices": [
+    {
+      "id": "entry",
+      "name": "Team preparation and constructor handoff",
+      "status": "native_tested",
+      "gate": "Ten native entry/constructor/callback/signed-result scenarios plus actual host routing checks. Entry wrapper only; not full Trade acceptance."
+    }
+  ],
+  "tests_executed_by_static_report": false,
+  "dependency_policy": "Only the39-instruction wrapper is the denominator. Native Trade integration is tested separately by verify_trade_screen.py. Read-only Ghidra now resolves callback80056C50 as32 instructions; constructor276, first-input67, scan115, View-return79 and Compare-return100 remain outside the counted scope until per-block review. Existing Re-order credit is not duplicated. Original runtime timing/audio/video fidelity remains unverified.",
+  "shared_contracts": [
+    {
+      "address": "0x80056A94",
+      "status": "native_contract_tested",
+      "scope": "Signed sentinel-team normalization called right then left, mode/context retained.",
+      "integration_pending": "Existing shared helper body receives no additional Trade instruction credit.",
+      "tests": [
+        "team_pairs_modes_signed_contexts",
+        "signed_halfword_boundaries_no_clamping",
+        "sentinel_normalization_precedes_collision"
+      ],
+      "sources": [
+        {
+          "path": "src/recovered/roster_reorder.c",
+          "symbol": "nba97_reorder_normalize_team"
+        }
+      ]
+    }
+  ],
+  "screen_contracts": [
+    {
+      "address": "0x80056494",
+      "status": "native_contract_tested",
+      "scope": "Normalized distinct teams, two kind1 lists, selected callback pair,535-slot entry snapshot, saved viewports and signed selector-result transport through the async host.",
+      "integration_pending": "Not the full276-instruction constructor: allocation/draw ordering, original reentry snapshot boundary, special-mode eligibility contexts and exact presentation timing remain separate.",
+      "tests": [
+        "constructor_handoff_kinds_and_callbacks",
+        "selection_callback_roles",
+        "selector_routes_and_child_reentry",
+        "signed_halfword_selector_result"
+      ],
+      "sources": [
+        {
+          "path": "src/recovered/roster_trade.c",
+          "symbol": "nba97_trade_begin"
+        },
+        {
+          "path": "src/recovered/roster_trade.c",
+          "symbol": "nba97_trade_result"
+        },
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "openTradeChild"
+        },
+        {
+          "path": "src/win32_main.cpp",
+          "symbol": "finishTrade"
+        }
+      ]
+    }
+  ],
+  "selection_contracts": [
+    {
+      "address": "0x80056B44",
+      "status": "native_contract_tested",
+      "scope": "Actual first-list callback: View/Compare requests, injury guard then first selection; empty receiver allowed.",
+      "integration_pending": "Not the full67-instruction body or exact callback/poll/sound timing; native sentinel safety avoids invalid injury reads.",
+      "tests": [
+        "selection_callback_roles",
+        "selector_routes_and_child_reentry"
+      ],
+      "sources": [
+        {
+          "path": "src/recovered/roster_trade.c",
+          "symbol": "trade_first_callback"
+        }
+      ]
+    },
+    {
+      "address": "0x80056C50",
+      "status": "native_contract_tested",
+      "scope": "Actual second-list callback: View/Compare requests, shared validation/mutation with kinds1/1, and return to first selection.",
+      "integration_pending": "Not the full32-instruction callback body or transitive helper coverage; exact timing/audio remains open.",
+      "tests": [
+        "selection_callback_roles",
+        "selector_routes_and_child_reentry"
+      ],
+      "sources": [
+        {
+          "path": "src/recovered/roster_trade.c",
+          "symbol": "trade_second_callback"
+        }
+      ]
+    }
+  ]
+}

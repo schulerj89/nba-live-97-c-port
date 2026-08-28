@@ -3,6 +3,10 @@
 Use the [generated ledger](reorder_rosters_progress.md). Its percentage is
 reviewed source accounting, **not feature completion or binary equivalence**.
 
+The next goal and proposed persistence architecture are in the
+[Re-order completion plan](reorder_completion_plan.md). That plan is not a claim
+that child routes, disk saves/Reset or exact reference fidelity already work.
+
 ## Current boundary
 
 The four selection/cancellation owners are now **166/166 source-accounted**:
@@ -28,8 +32,8 @@ including the separately reviewed shared refresh owner.
 30 typed rows, saved cursor/top restoration, both selected IDs and original
 entry/exit callback contracts. The native host supplies the frame pump and
 local asset loading. Team scanning preserves both scroll/cursor positions;
-it is disabled during replacement selection. Accept atomically publishes all
-edited teams in memory; discard restores the entire snapshot. The100 free-agent
+it is disabled during replacement selection. Windows Accept durably saves then
+publishes all edited teams; discard restores the entire snapshot. The100 free-agent
 slots must remain unchanged. Original database assets are never overwritten.
 
 Important distinction recovered from the outer dispatcher:
@@ -45,7 +49,12 @@ Important distinction recovered from the outer dispatcher:
 
 Keyboard: arrows navigate rows/teams; C or Space picks; X or Esc cancels;
 Enter accepts from the first-selection phase. The confirmation uses Up/Down
-and C/Enter. Help/View/Compare are explicitly logged as pending child routes.
+and C/Enter. F/H/F1 opens the original Help for the active stage; D opens View
+from the isolated draft. In that child, arrows browse players/stats, J/K scan
+teams, Q/E change stat layer, C/Space plays a fact, D/S stops it, and Enter/X/Esc
+returns to the unchanged parent selection. S opens Compare from the draft;
+its C/Space changes the active side, J/K scan teams and Q/E change stat layer.
+See [child verification](reorder_child_verification.md) for evidence and limits.
 The existing desktop shortcut launches the rebuilt executable.
 
 ## Recovered behavior and native representation
@@ -161,7 +170,8 @@ Local captures: `.local/verification/reorder/feedback_*.ppm`,
 `modal_*.ppm`, and legacy `labels_*.ppm`. They have been visually inspected as
 diagnostic layers, not compared against an original Re-order screen.
 
-Full-screen captures (entry, replacement scroll, swap and confirmation):
+Full-screen captures (entry, replacement scroll, swap, confirmation, both Help
+pages, and View/Help/browse/return before and after a swap):
 
 ```powershell
 python tools/verify_reorder_screen.py
@@ -217,10 +227,29 @@ No disk save is written.
    Regenerate with `python tools/verify_reorder_rosters.py`; fresh native tests
    and local captures are required before promoting runtime integration.
 
-Next: wire help/child screens, held-key repeat and modal timing into the real game loop,
-implement versioned local roster persistence/Reset, and compare matching original
+Next: verify original held-key repeat and modal timing, and compare matching original
 screenshots/traces. Current presentation still uses the existing title-jumble
 approximation and a native180ms crossfade; the fixed plate vertices are recovered
 but native triangle sampling is not asserted to match PSX rasterization exactly;
 these are known fidelity limits, not source instruction matches. These gates
 remain pending; 875/875 reviewed owner instructions does not close them.
+
+## Windows save/Reset regression gate
+
+`python tools/verify_reorder_save_host.py` exercises startup/Accept, save failure
+and retry/discard, backup recovery, unsupported saves, and normal-roster Reset.
+It also runs edit -> View/Help -> Compare/Help -> Accept -> fresh load -> Reset ->
+fresh load on one isolated roster set. Captures and the JSON report remain under
+`.local`. Save, profile, settings and private source hashes are checked unchanged
+outside the unique fixture directory.
+
+The private Reset confirmation comes from800AEDD2, not hand-authored text.
+Up/Down choose, C/Space/Enter confirm; Cancel is initially selected. Reset is
+enabled by differences from original defaults, not by save-file existence.
+A successful Reset persists an empty override and disables the Reset card.
+The red warning modal, original font and source-linked sound IDs are tested;
+matched original frame/timing/audio evidence is still a separate open gate.
+
+See [completion plan](reorder_completion_plan.md) and
+[save format](roster_save_format.md) for transaction boundaries, compatibility,
+created-player limits and the distinction between source accounting and fidelity.

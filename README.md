@@ -27,12 +27,16 @@ The native Windows build currently covers:
 - local user-profile creation, editing, deletion, and versioned saves;
 - the Rosters frontend, team browsing, player statistics, portraits, and Cool
   Fact playback;
-- Re-order screen entry, two-list selection and in-memory accept/discard
+- Re-order selection, Help/View/Compare, durable saves/discard and Reset
   ([scoped instruction ledger](docs/reorder_rosters_progress.md));
+- Trade Players: two-team lists, swaps/transfers, Help/View/Compare and local
+  saves/discard/Reset ([verification and remaining work](docs/trade_rosters_workflow.md));
+- Sign Free Agent: 100-slot source list, destination validation, signing and
+  local saves ([bounded accounting and tests](docs/sign_free_agent_progress.md));
 - original frontend music and recovered menu sounds; and
 - a CLI trace describing recovered states, assets, audio, and transitions.
 
-This is not yet a complete game. Gameplay, roster transactions, and several
+This is not yet a complete game. Gameplay, remaining roster transactions, and several
 deeper frontend paths remain unfinished. See the generated
 [progress report](docs/progress.md) for the measured breakdown.
 
@@ -79,6 +83,9 @@ Linux testing; the main reconstruction targets native Win32.
 
 ## Keyboard controls
 
+These are native-port controls. For original-game testing, use the separately
+verified [no$psx keyboard mappings](docs/nopsx_controls.md).
+
 | Context | Controls |
 |---|---|
 | Intro/title | `Space` skips the movie; `Space` or `Enter` starts |
@@ -87,10 +94,12 @@ Linux testing; the main reconstruction targets native Win32.
 | View Rosters | `Left/Right` changes team; `Up/Down` changes player; `Q/E` changes category; `Z/C` changes field |
 | View Player | `Left/Right` changes player; `J/K` changes team; `Q/E` changes stat layer; `Up/Down` scrolls |
 | Re-order | Arrows browse rows/teams; `C`/`Space` picks; `X`/`Escape` cancels; `Enter` accepts from first selection |
+| Trade Players | Arrows browse the active list; `C`/`Space` picks/trades; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
+| Sign Free Agent | `Up/Down` browses the active list; `Left/Right` changes receiver; `C` picks/signs into an empty slot; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
 | Cool Facts | `Enter` plays; `S` stops |
 | Help | `H` or `F1` |
 
-Mouse hover and selection are supported in the reconstructed frontend screens.
+Mouse hover and selection are supported in menu cards; the two-list roster editors use keyboard controls.
 
 ## Progress and reverse-engineering workflow
 
