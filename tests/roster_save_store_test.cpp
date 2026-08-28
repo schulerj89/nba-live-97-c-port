@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <cstdint>
 #include <iostream>
 #ifdef _WIN32
 #define NOMINMAX

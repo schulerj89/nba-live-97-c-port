@@ -6,6 +6,7 @@
 #include "frontend_music.hpp"
 #include <cmath>
 #include <fstream>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 #include <vector>

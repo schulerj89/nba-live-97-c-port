@@ -2,6 +2,7 @@
 #include "recovered/reorder_screen.h"
 #include <array>
 #include <cstring>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 

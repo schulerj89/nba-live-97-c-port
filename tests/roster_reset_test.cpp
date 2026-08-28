@@ -1,5 +1,6 @@
 #include "roster_reset_assets.hpp"
 #include <array>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 static void check(bool good,const char* why) {if(!good) throw std::runtime_error(why);}

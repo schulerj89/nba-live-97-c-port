@@ -1,6 +1,7 @@
 #include "recovered/frontend_title.h"
 #include "frontend_title.hpp"
 #include <cstring>
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 namespace {

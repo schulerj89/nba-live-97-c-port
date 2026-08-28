@@ -1,4 +1,5 @@
 #include "frontend_palette_assets.hpp"
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 

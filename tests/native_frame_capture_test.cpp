@@ -1,5 +1,6 @@
 #include "native_frame_capture.hpp"
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <stdexcept>

@@ -1,5 +1,6 @@
 #include "music_pcm.hpp"
 #include <array>
+#include <cstdint>
 #include <iostream>
 
 void require(bool value,const char* text){if(!value)throw std::runtime_error(text);}

@@ -1,4 +1,5 @@
 #include "player_notice.hpp"
+#include <cstdint>
 #include <iostream>
 #include <stdexcept>
 
