@@ -18,8 +18,20 @@ typedef struct Nba97CreatedPlayerRecord {
     uint8_t raw[NBA97_CREATED_PLAYER_RECORD_SIZE];
 } Nba97CreatedPlayerRecord;
 
+typedef struct Nba97CreatedPlayerMetadata {
+    char first_name[12];
+    char last_name[16];
+    uint8_t team;
+    /* Port-side membership needed to preserve the retail Delete branches:
+       0..4 starter, 5..99 bench/free-list position, FF unassigned. */
+    uint8_t roster_slot;
+} Nba97CreatedPlayerMetadata;
+
 typedef struct Nba97CreatedPlayerCatalog {
     Nba97CreatedPlayerRecord records[NBA97_CREATED_PLAYER_CAPACITY];
+    /* Port-side decoded fields live outside the original 68-byte record until
+       their exact retail offsets/encoding are proven. */
+    Nba97CreatedPlayerMetadata metadata[NBA97_CREATED_PLAYER_CAPACITY];
 } Nba97CreatedPlayerCatalog;
 
 typedef struct Nba97CreateMenuContext {
@@ -99,6 +111,15 @@ typedef struct Nba97CreateEditor {
     char last_name[16];
 } Nba97CreateEditor;
 
+typedef struct Nba97CreatedPlayerPicker {
+    int16_t slots[NBA97_CREATED_PLAYER_CAPACITY];
+    uint8_t count;
+    uint8_t visible_count;
+    uint8_t cursor;
+    uint8_t top;
+    uint8_t frontend_state; /* recovered 0x20 Edit, 0x21 Delete */
+} Nba97CreatedPlayerPicker;
+
 void nba97_created_catalog_init(Nba97CreatedPlayerCatalog* catalog);
 uint16_t nba97_created_player_id(const Nba97CreatedPlayerRecord* record);
 int nba97_created_player_occupied(const Nba97CreatedPlayerRecord* record);
@@ -130,6 +151,9 @@ int nba97_created_delete(Nba97CreatedPlayerCatalog* catalog, int16_t slot);
 
 int nba97_create_editor_open_new(Nba97CreateEditor* editor,
                                  const Nba97CreatedPlayerCatalog* catalog);
+int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
+                                  const Nba97CreatedPlayerCatalog* catalog,
+                                  int16_t slot);
 int nba97_create_editor_move(Nba97CreateEditor* editor, int direction);
 int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction);
 int nba97_create_editor_append_letter(Nba97CreateEditor* editor, char letter);
@@ -140,6 +164,11 @@ int nba97_create_editor_save(Nba97CreateEditor* editor,
 const char* nba97_create_field_name(uint8_t field);
 int nba97_create_editor_value(const Nba97CreateEditor* editor,
                               char* output, size_t output_size);
+int nba97_created_picker_open(Nba97CreatedPlayerPicker* picker,
+                              const Nba97CreatedPlayerCatalog* catalog,
+                              uint8_t frontend_state);
+int nba97_created_picker_move(Nba97CreatedPlayerPicker* picker, int direction);
+int16_t nba97_created_picker_slot(const Nba97CreatedPlayerPicker* picker);
 
 #ifdef __cplusplus
 }

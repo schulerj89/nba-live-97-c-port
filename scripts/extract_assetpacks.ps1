@@ -100,4 +100,7 @@ python (Join-Path $repo 'tools\extract_compare_assets.py') $feonly --output `
 if ($LASTEXITCODE -ne 0) { throw 'Private Compare extraction failed.' }
 python (Join-Path $repo 'tools\extract_player_notice.py') $feonly
 if ($LASTEXITCODE -ne 0) { throw 'Private View Player notice extraction failed.' }
+python (Join-Path $repo 'tools\extract_create_player_dialogs.py') $feonly --output `
+    (Join-Path $repo '.local\assetpacks\create_player\delete.n97ui')
+if ($LASTEXITCODE -ne 0) { throw 'Private Create Player dialog extraction failed.' }
 Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'

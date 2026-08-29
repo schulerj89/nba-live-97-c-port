@@ -19,8 +19,10 @@ void nba97_created_catalog_init(Nba97CreatedPlayerCatalog* catalog) {
     int index;
     if (catalog == NULL) return;
     memset(catalog, 0, sizeof(*catalog));
-    for (index = 0; index < NBA97_CREATED_PLAYER_CAPACITY; ++index)
+    for (index = 0; index < NBA97_CREATED_PLAYER_CAPACITY; ++index) {
         write_u16le(catalog->records[index].raw, UINT16_MAX);
+        catalog->metadata[index].roster_slot = UINT8_MAX;
+    }
 }
 
 uint16_t nba97_created_player_id(const Nba97CreatedPlayerRecord* record) {
@@ -183,6 +185,8 @@ int nba97_created_delete(Nba97CreatedPlayerCatalog* catalog, int16_t slot) {
         !nba97_created_player_occupied(&catalog->records[slot])) return 0;
     memset(&catalog->records[slot], 0, sizeof(catalog->records[slot]));
     write_u16le(catalog->records[slot].raw, UINT16_MAX);
+    memset(&catalog->metadata[slot], 0, sizeof(catalog->metadata[slot]));
+    catalog->metadata[slot].roster_slot = UINT8_MAX;
     return 1;
 }
 
@@ -202,6 +206,36 @@ int nba97_create_editor_open_new(Nba97CreateEditor* editor,
     editor->weight_pounds = 200;
     editor->shooting_range_feet = 8;
     for (rating = 0; rating < 17; ++rating) editor->ratings[rating] = 50;
+    return 1;
+}
+
+int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
+                                  const Nba97CreatedPlayerCatalog* catalog,
+                                  int16_t slot) {
+    int index;
+    const uint8_t* raw;
+    if (editor == NULL || catalog == NULL) return 0;
+    memset(editor, 0, sizeof(*editor));
+    if (!nba97_create_editor_begin_edit(&editor->txn, catalog, slot)) return 0;
+    raw = editor->txn.working.raw;
+    editor->college = read_u16le(raw + 2);
+    editor->jersey_number = raw[7];
+    editor->position = raw[8];
+    editor->height_inches = raw[9];
+    editor->weight_pounds = (uint16_t)(raw[10] + 100u);
+    editor->hand = raw[13];
+    for (index = 0; index < 17; ++index) editor->ratings[index] = raw[14 + index];
+    editor->years_pro = raw[31];
+    editor->shooting_range_feet = raw[32];
+    editor->skin_tone = raw[33];
+    editor->hair_style = raw[34];
+    editor->hair_color = raw[35];
+    editor->facial_hair = raw[36];
+    editor->team = catalog->metadata[slot].team;
+    snprintf(editor->first_name, sizeof(editor->first_name), "%s",
+             catalog->metadata[slot].first_name);
+    snprintf(editor->last_name, sizeof(editor->last_name), "%s",
+             catalog->metadata[slot].last_name);
     return 1;
 }
 
@@ -307,7 +341,9 @@ int nba97_create_editor_valid(const Nba97CreateEditor* editor) {
 int nba97_create_editor_save(Nba97CreateEditor* editor,
                              Nba97CreatedPlayerCatalog* catalog) {
     int index;
+    int16_t slot;
     if (!nba97_create_editor_valid(editor)) return 0;
+    slot = editor->txn.slot;
     write_u16le(editor->txn.working.raw + 2, editor->college);
     editor->txn.working.raw[7] = editor->jersey_number;
     editor->txn.working.raw[8] = editor->position;
@@ -322,7 +358,19 @@ int nba97_create_editor_save(Nba97CreateEditor* editor,
     editor->txn.working.raw[34] = editor->hair_style;
     editor->txn.working.raw[35] = editor->hair_color;
     editor->txn.working.raw[36] = editor->facial_hair;
-    return nba97_create_editor_accept(&editor->txn, catalog);
+    {
+        const uint8_t was_new = editor->txn.is_new;
+        if (!nba97_create_editor_accept(&editor->txn, catalog)) return 0;
+        /* New team-assigned players enter the bench. The precise roster
+           insertion slot is updated by the owning roster subsystem later. */
+        if (was_new) catalog->metadata[slot].roster_slot = 5;
+    }
+    snprintf(catalog->metadata[slot].first_name,
+             sizeof(catalog->metadata[slot].first_name), "%s", editor->first_name);
+    snprintf(catalog->metadata[slot].last_name,
+             sizeof(catalog->metadata[slot].last_name), "%s", editor->last_name);
+    catalog->metadata[slot].team = editor->team;
+    return 1;
 }
 
 const char* nba97_create_field_name(uint8_t field) {
@@ -371,4 +419,37 @@ int nba97_create_editor_value(const Nba97CreateEditor* editor,
         break;
     }
     return 1;
+}
+
+int nba97_created_picker_open(Nba97CreatedPlayerPicker* picker,
+                              const Nba97CreatedPlayerCatalog* catalog,
+                              uint8_t frontend_state) {
+    int slot;
+    if (picker == NULL || catalog == NULL ||
+        (frontend_state != 0x20 && frontend_state != 0x21)) return 0;
+    nba97_semantic_trace_record(0x8004E184u);
+    memset(picker, 0, sizeof(*picker));
+    picker->frontend_state = frontend_state;
+    for (slot = 0; slot < NBA97_CREATED_PLAYER_CAPACITY; ++slot)
+        if (nba97_created_player_occupied(&catalog->records[slot]))
+            picker->slots[picker->count++] = (int16_t)slot;
+    picker->visible_count = picker->count < 8 ? picker->count : 7;
+    return picker->count != 0;
+}
+
+int nba97_created_picker_move(Nba97CreatedPlayerPicker* picker, int direction) {
+    int next;
+    if (picker == NULL || direction == 0 || picker->count == 0) return 0;
+    next = (int)picker->cursor + (direction < 0 ? -1 : 1);
+    if (next < 0 || next >= picker->count) return 0;
+    picker->cursor = (uint8_t)next;
+    if (picker->cursor < picker->top) picker->top = picker->cursor;
+    if (picker->cursor >= picker->top + picker->visible_count)
+        picker->top = (uint8_t)(picker->cursor - picker->visible_count + 1);
+    return 1;
+}
+
+int16_t nba97_created_picker_slot(const Nba97CreatedPlayerPicker* picker) {
+    if (picker == NULL || picker->count == 0 || picker->cursor >= picker->count) return -1;
+    return picker->slots[picker->cursor];
 }

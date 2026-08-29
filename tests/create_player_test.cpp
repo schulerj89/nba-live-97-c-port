@@ -36,6 +36,27 @@ int main() {
     txn.working.raw[10] = 77;
     assert(nba97_create_editor_accept(&txn, &catalog));
     assert(nba97_created_count(&catalog) == 1);
+
+    Nba97CreatedPlayerPicker picker{};
+    assert(nba97_created_picker_open(&picker, &catalog, 0x20));
+    assert(picker.count == 1 && picker.visible_count == 1 &&
+           nba97_created_picker_slot(&picker) == 0);
+    assert(!nba97_created_picker_move(&picker, -1) &&
+           !nba97_created_picker_move(&picker, 1));
+
+    Nba97CreatedPlayerCatalog sparse{};
+    nba97_created_catalog_init(&sparse);
+    for (int slot : {1, 3, 5, 7, 9, 11, 13, 15, 17}) {
+        Nba97CreateEditorTxn sparse_txn{};
+        assert(nba97_create_editor_begin_edit(&sparse_txn, &catalog, 0));
+        sparse_txn.slot = static_cast<int16_t>(slot);
+        assert(nba97_create_editor_accept(&sparse_txn, &sparse));
+    }
+    assert(nba97_created_picker_open(&picker, &sparse, 0x21));
+    assert(picker.count == 9 && picker.visible_count == 7 && picker.top == 0);
+    for (int move = 0; move < 8; ++move) assert(nba97_created_picker_move(&picker, 1));
+    assert(picker.cursor == 8 && picker.top == 2 && nba97_created_picker_slot(&picker) == 17);
+    assert(!nba97_created_picker_move(&picker, 1));
     assert(nba97_created_player_id(&catalog.records[0]) == 493);
     assert(catalog.records[0].raw[10] == 77);
 
@@ -127,6 +148,15 @@ int main() {
     assert(saved[9] == 64 && saved[10] == 101);
     assert(saved[14] == 51 && saved[18] == 51);
     assert(saved[32] == 9);
+    assert(std::string(catalog.metadata[0].first_name) == "A");
+    assert(std::string(catalog.metadata[0].last_name) == "B");
+    assert(catalog.metadata[0].team == 1);
+
+    Nba97CreateEditor edited{};
+    assert(nba97_create_editor_open_edit(&edited, &catalog, 0));
+    assert(std::string(edited.first_name) == "A" && std::string(edited.last_name) == "B");
+    assert(edited.team == 1 && edited.height_inches == 64 && edited.weight_pounds == 201);
+    assert(edited.ratings[0] == 51 && edited.ratings[4] == 51);
 
     assert(nba97_create_editor_open_new(&editor, &catalog));
     assert(nba97_create_editor_append_letter(&editor, 'x'));

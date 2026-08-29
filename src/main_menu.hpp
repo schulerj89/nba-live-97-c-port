@@ -407,6 +407,13 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const MenuSpritePack& sprites,
                                   std::uint32_t elapsed_ms);
 
+PshImage renderCreatedPlayerPicker(const Nba97CreatedPlayerPicker& picker,
+                                   const Nba97CreatedPlayerCatalog& catalog,
+                                   const RosterDatabase& database,
+                                   const PshFont& font,
+                                   const MenuSpritePack& sprites,
+                                   std::uint32_t elapsed_ms);
+
 PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const UserProfileStore& store,
                                 const PshFont& font,

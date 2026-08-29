@@ -16,7 +16,7 @@
   },
   "verified_slice": {
     "name": "manager availability and New-player editor behavior",
-    "scenarios": 8,
+    "scenarios": 11,
     "deterministic_runs": 2,
     "assets": "private ZSET5.PSP decode; assets are not tracked",
     "functions": ["0x8004AEBC", "0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DA74", "0x8004DAE8"]
@@ -27,15 +27,20 @@
     "new-player defaults and single-step adjustments are deterministic",
     "Down on the final Dribbling field is a no-op",
     "cancel leaves the 40-slot catalogue unchanged",
-    "START/accept saves immediately into a free slot and reduces capacity"
+    "START/accept saves immediately into a free slot and reduces capacity",
+    "versioned local save reloads decoded fields and recovers a corrupt primary from backup",
+    "Edit/Delete picker scans sparse occupied slots, shows at most seven, scrolls, and hard-stops",
+    "Delete selects the exact free-agent, team non-starter, or team starter FEONLY descriptor",
+    "Delete/cancel uses the recovered FUN_80040A1C grow, pulse, choice, shrink, and return barrier",
+    "confirmed deletion persists atomically before publishing and loops the picker while records remain"
   ],
   "partial_functions": ["0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DAE8"],
   "pending": [
-    "recover exact per-field bounds, text-entry viewport behavior, and Edit/Delete child screens",
+    "recover exact per-field bounds and text-entry viewport behavior",
     "decode and render the original ZFEMODEL/ZFEMOCAP player",
     "rebuild team uniform, palette, skin, and head on field changes",
-    "recover exact animation, sound, prompts, and transitions",
-    "versioned created-player persistence and roster integration",
+    "recover exact editor/model animation, sound, and transitions",
+    "insert created players into the selected team/free-agent roster exactly like FUN_8004D514",
     "original-reference visual and interaction acceptance"
   ],
   "warning": "Instruction inventory is an audit denominator, not a completion percentage. Deterministic native rendering does not prove visual equivalence to the original."

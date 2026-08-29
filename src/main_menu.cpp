@@ -1682,6 +1682,44 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
     return image;
 }
 
+PshImage renderCreatedPlayerPicker(const Nba97CreatedPlayerPicker& picker,
+                                   const Nba97CreatedPlayerCatalog& catalog,
+                                   const RosterDatabase& database,
+                                   const PshFont& font,
+                                   const MenuSpritePack& sprites,
+                                   std::uint32_t elapsed_ms) {
+    PshImage image;
+    image.width=kWidth; image.height=kHeight; image.tag="CPPK";
+    image.rgba.assign(static_cast<std::size_t>(kWidth)*kHeight*4,0);
+    blitAt(image,sprites,"Bkga",0,0); blitAt(image,sprites,"Bkgb",128,0);
+    blitAt(image,sprites,"Bkgc",256,0); blitAt(image,sprites,"Bkgd",384,0);
+    for(const auto& border:std::array<std::tuple<const char*,int,int>,10>{{
+        {"brta",0,5},{"brtb",128,5},{"brtc",256,5},{"brtd",384,5},
+        {"brle",0,65},{"brri",476,65},{"brba",0,185},{"brbb",128,185},
+        {"brbc",256,185},{"brbd",384,185}}})
+        blitBlueBorder(image,sprites,std::get<0>(border),std::get<1>(border),std::get<2>(border));
+    blitAt(image,sprites,"XXL1",30,16); blitAt(image,sprites,"XXR2",404,16);
+    blitJumbledTitleSprite(image,sprites,picker.frontend_state==0x21?"ba06":"ba07",143,10,elapsed_ms);
+    blitAt(image,sprites,"help",235,217);
+    const bool flash=((elapsed_ms/136u)&1u)==0;
+    for(unsigned row=0;row<picker.visible_count;++row) {
+        const unsigned item=picker.top+row;
+        if(item>=picker.count)break;
+        const int slot=picker.slots[item]; const auto& meta=catalog.metadata[slot];
+        std::string line=std::to_string(slot+1)+"  "+meta.first_name+" "+meta.last_name;
+        if(const auto* team=database.team(meta.team)) {
+            line+="  "; line+=team->abbreviation;
+        }
+        const bool selected=item==picker.cursor;
+        if(selected&&flash)drawText(image,font,">",63,78+static_cast<int>(row)*16,1,255,220,30);
+        drawText(image,font,line,82,78+static_cast<int>(row)*16,1,
+                 selected&&flash?255:225,selected&&flash?220:225,selected&&flash?30:225);
+    }
+    if(picker.top>0)drawText(image,font,"^",256,68,1,255,220,30);
+    if(picker.top+picker.visible_count<picker.count)drawText(image,font,"v",256,194,1,255,220,30);
+    return image;
+}
+
 PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const UserProfileStore& store,
                                 const PshFont& font,
