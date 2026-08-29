@@ -67,8 +67,8 @@ SinCos lookup(const std::vector<std::uint8_t>& trig, std::int16_t angle) {
     return {sine, cosine};
 }
 
-ZdomfTransform make_rotation(const std::vector<std::uint8_t>& trig,
-                             const ZdomfEulerAngles& angles) {
+ZdomfTransform make_rotation_impl(const std::vector<std::uint8_t>& trig,
+                                  const ZdomfEulerAngles& angles) {
     // Direct native transcription of FUN_80067100. Intermediate results are
     // shifted at the same points as the original MIPS multiplication chain.
     const auto x = lookup(trig, angles.x);
@@ -104,6 +104,16 @@ ZdomfTransform make_rotation(const std::vector<std::uint8_t>& trig,
 
 } // namespace
 
+ZdomfTransform make_zdomf_rotation(
+    const std::vector<std::uint8_t>& packed_trig,
+    const ZdomfEulerAngles& angles) {
+    if (packed_trig.size() != kTrigEntries * 4 ||
+        read_u32(packed_trig, 0, "ZDOM packed trig table") != 0x10000000) {
+        throw std::runtime_error("invalid ZDOM packed trig table");
+    }
+    return make_rotation_impl(packed_trig, angles);
+}
+
 ZdomfTransformSet decode_zdomf_base_transforms(
     const std::vector<std::uint8_t>& deflist,
     const std::vector<std::uint8_t>& packed_trig,
@@ -124,7 +134,7 @@ ZdomfTransformSet decode_zdomf_base_transforms(
         set.angles[part] = {read_s16(deflist, at, "ZDEFLIST angle"),
                             read_s16(deflist, at + 2, "ZDEFLIST angle"),
                             read_s16(deflist, at + 4, "ZDEFLIST angle")};
-        set.parts[part] = make_rotation(packed_trig, set.angles[part]);
+        set.parts[part] = make_rotation_impl(packed_trig, set.angles[part]);
     }
     return set;
 }

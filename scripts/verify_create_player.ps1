@@ -7,6 +7,7 @@ $coreTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_tests.exe'
 $storeTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_store_tests.exe'
 $modelTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_model_tests.exe'
 $transformTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_transform_tests.exe'
+$projectionTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_projection_tests.exe'
 
 Push-Location $repo
 try {
@@ -19,6 +20,7 @@ try {
     if (-not (Test-Path -LiteralPath $storeTest)) { throw "Missing Create Player store test: $storeTest" }
     if (-not (Test-Path -LiteralPath $modelTest)) { throw "Missing ZDOMF model decoder test: $modelTest" }
     if (-not (Test-Path -LiteralPath $transformTest)) { throw "Missing ZDOMF transform test: $transformTest" }
+    if (-not (Test-Path -LiteralPath $projectionTest)) { throw "Missing ZDOMF projection test: $projectionTest" }
     if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'menu\ZSET5-decoded'))) {
         throw 'Missing private ZSET5 assets. Run scripts/extract_assetpacks.ps1 locally first.'
     }
@@ -35,6 +37,9 @@ try {
     & $transformTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF fixed-point transform checks failed.' }
     Write-Host 'CREATE PLAYER TRANSFORM: PASS - FUN_80067100 matrix construction and FUN_80067378 fixed-point application.'
+    & $projectionTest
+    if ($LASTEXITCODE -ne 0) { throw 'ZDOMF GTE projection checks failed.' }
+    Write-Host 'CREATE PLAYER PROJECTION: PASS - recovered camera state and FUN_8006734C RTPS fixed-point boundary.'
 
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $root = Join-Path $repo ".local\verification\create_player\run-$stamp"
@@ -92,7 +97,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
     Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM/mocap preview frames. Textured PS1 polygon equivalence, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM/mocap preview frames, and numeric RTPS/camera coverage. Exact hierarchy/world assembly, textured PS1 polygon equivalence, roster insertion, and original visual scoring remain pending.'
 } finally {
     Pop-Location
 }

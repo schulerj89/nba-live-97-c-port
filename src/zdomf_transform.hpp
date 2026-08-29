@@ -30,6 +30,12 @@ struct ZdomfTransformSet {
     std::size_t available_sets = 0;
 };
 
+// Direct FUN_80067100 matrix construction for callers outside the base-pose
+// decoder (notably the recovered frontend camera path).
+ZdomfTransform make_zdomf_rotation(
+    const std::vector<std::uint8_t>& packed_trig,
+    const ZdomfEulerAngles& angles);
+
 ZdomfTransformSet decode_zdomf_base_transforms(
     const std::vector<std::uint8_t>& deflist,
     const std::vector<std::uint8_t>& packed_trig,

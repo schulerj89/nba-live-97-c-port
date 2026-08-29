@@ -134,6 +134,7 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         throw std::runtime_error("unexpected ZDOMF geometry header");
     base_transforms_=load_zdomf_base_transforms(
         model_root/"ZDEFLIST.BIN",model_root/"ZDOMTRIG.BIN");
+    projection_=load_create_player_projection(model_root/"ZDOMTRIG.BIN");
     // Isolated native transcription of the one-set frontend path through
     // FUN_80062F4C and FUN_800631B0. Preserve all later motion/projection and
     // material approximations so this stage can be evaluated independently.
@@ -141,6 +142,17 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         model_.pivots[part]=apply_zdomf_transform(base_transforms_.parts[part],model_.pivots[part]);
     for(auto& face:model_.primary_faces)for(auto& corner:face.corners)
         corner.position=apply_zdomf_transform(base_transforms_.parts[corner.part],corner.position);
+    projection_bounds_={{32767,32767,65535,-32768,-32768,0}};
+    for(const auto& face:model_.primary_faces)for(const auto& corner:face.corners) {
+        const auto projected=project_zdomf_vertex(projection_,corner.position);
+        projection_bounds_[0]=std::min<std::int32_t>(projection_bounds_[0],projected.x);
+        projection_bounds_[1]=std::min<std::int32_t>(projection_bounds_[1],projected.y);
+        projection_bounds_[2]=std::min<std::int32_t>(projection_bounds_[2],projected.depth);
+        projection_bounds_[3]=std::max<std::int32_t>(projection_bounds_[3],projected.x);
+        projection_bounds_[4]=std::max<std::int32_t>(projection_bounds_[4],projected.y);
+        projection_bounds_[5]=std::max<std::int32_t>(projection_bounds_[5],projected.depth);
+        if(projected.flags!=ZdomfProjectionNone)++projection_saturated_vertices_;
+    }
 
     const auto mocap=bytes(asset_root/"menu"/"ZFEMOCAP.BIN");
     if(mocap.size()!=22188 || u32(mocap,0)!=0x5670 || u32(mocap,4)!=0x5688 ||
@@ -219,6 +231,11 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
             local=rotate_z(local,angle);
             out.world[corner]={local.x+bone.x,local.y+bone.y,local.z+bone.z};
             out.uv[corner]={double(face.uv[corner][0]),double(face.uv[corner][1])};
+            // The recovered RTPS path is numerically audited in projection_,
+            // but cannot replace this visible compatibility projection until
+            // the original hierarchy has assembled local parts into world
+            // space. Applying RTPS before that stage shrinks the body to a
+            // 7x11-pixel cluster; keep the last known-visible output here.
             const double yaw_x=(out.world[corner].x*0.94+out.world[corner].z*0.34)*width_scale;
             const double yaw_z=-out.world[corner].x*0.34+out.world[corner].z*0.94;
             out.screen[corner]={390.0+yaw_x*scale,camera_y+bob-out.world[corner].y*scale};
@@ -249,6 +266,12 @@ std::string CreatePlayerPreview::description() const {
         std::to_string(team_family_count_)+" uniforms="+
         std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-idle=116 frames samples="+
         std::to_string(motion_samples_.size())+" base-transform-sets="+
-        std::to_string(base_transforms_.available_sets);
+        std::to_string(base_transforms_.available_sets)+
+        " projection=RTPS(H="+std::to_string(projection_.projection_distance)+
+        ",OF=256/120,draw=128/0,bounds="+
+        std::to_string(projection_bounds_[0])+"/"+std::to_string(projection_bounds_[1])+"/"+
+        std::to_string(projection_bounds_[2])+".."+std::to_string(projection_bounds_[3])+"/"+
+        std::to_string(projection_bounds_[4])+"/"+std::to_string(projection_bounds_[5])+
+        ",saturated="+std::to_string(projection_saturated_vertices_)+")";
 }
 } // namespace nba97
