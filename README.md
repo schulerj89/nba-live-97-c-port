@@ -77,12 +77,16 @@ From PowerShell:
 pwsh -File scripts/extract_assetpacks.ps1
 pwsh -File scripts/prepare_intro_movie.ps1
 pwsh -File scripts/build.ps1
+pwsh -File scripts/create_desktop_shortcut.ps1
 pwsh -File scripts/run.ps1
 ```
 
 Asset extraction and movie preparation write only beneath `.local/`. The
-executable is created at `build-windows/Debug/nba97_boot_decomp.exe`, and its
-runtime trace is mirrored to `.local/logs/boot_decomp_trace.log`.
+normal build and desktop shortcut use the optimized
+`build-windows/RelWithDebInfo/nba97_boot_decomp.exe`; its runtime trace is
+mirrored to `.local/logs/boot_decomp_trace.log`. Verification scripts explicitly
+build the complete Debug target set. For a manual Debug build, run
+`scripts/build.ps1 -Configuration Debug -AllTargets`.
 
 `scripts/build_wsl.ps1` provides the SDL2 compatibility build used for WSL and
 Linux testing; the main reconstruction targets native Win32.

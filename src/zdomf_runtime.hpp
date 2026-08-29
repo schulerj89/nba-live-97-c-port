@@ -20,6 +20,10 @@ struct ZdomfRuntimeConfig {
     // row-0 scale and FUN_80066FF4 composition. The startup value is 1500/0/0;
     // Create Player updates this context while the preview is active.
     ZdomfEulerAngles frontend_angles{1500, 0, 0};
+    // FUN_80031F48's Create Player state installs DAT_800ED55C/55E/560 as
+    // {0x1C0,0xC0,0x500}. This translation is applied after the frontend
+    // rotation and carries the mocap root lift into screen-camera space.
+    ZdomfWorldVec3 frontend_translation{};
     bool use_record_root_translation = false;
     ZdomfWorldVec3 record_root_translation{};
 };

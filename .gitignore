@@ -1,6 +1,9 @@
 # Local copyrighted inputs and all files derived directly from them.
 .local/
 
+# Local implementation breakthrough writeups.
+/breakthroughs/
+
 # Local tool installations and build products.
 build/
 build-*/

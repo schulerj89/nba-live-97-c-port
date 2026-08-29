@@ -1,6 +1,5 @@
 #include "ps1_vram_texture.hpp"
 
-#include <iterator>
 #include <utility>
 
 namespace nba97 {
@@ -39,10 +38,12 @@ std::uint16_t indexed_upload_word(const Ps1VramTextureUpload& upload,
 
 void Ps1VramTextureAtlas::upload8(PshImage image, int x_words, int y) {
     uploads_.push_back({x_words, y, 8, std::move(image), {}, 0xffff});
+    upload_candidates_.clear();
 }
 
 void Ps1VramTextureAtlas::upload4(PshImage image, int x_words, int y) {
     uploads_.push_back({x_words, y, 4, std::move(image), {}, 0xffff});
+    upload_candidates_.clear();
 }
 
 void Ps1VramTextureAtlas::upload8Indexed(
@@ -51,6 +52,7 @@ void Ps1VramTextureAtlas::upload8Indexed(
     PshImage image{}; image.width = static_cast<std::uint16_t>(width);
     image.height = static_cast<std::uint16_t>(height);
     uploads_.push_back({x_words, y, 8, std::move(image), std::move(indices), variant});
+    upload_candidates_.clear();
 }
 
 void Ps1VramTextureAtlas::upload4Indexed(
@@ -59,11 +61,43 @@ void Ps1VramTextureAtlas::upload4Indexed(
     PshImage image{}; image.width = static_cast<std::uint16_t>(width);
     image.height = static_cast<std::uint16_t>(height);
     uploads_.push_back({x_words, y, 4, std::move(image), std::move(indices), 0xffff});
+    upload_candidates_.clear();
 }
 
 void Ps1VramTextureAtlas::uploadClut(
     std::vector<std::uint16_t> colors, int x, int y, std::uint16_t variant) {
     cluts_.push_back({x, y, variant, std::move(colors)});
+    clut_candidates_.clear();
+}
+
+const std::vector<std::size_t>& Ps1VramTextureAtlas::uploadCandidates(
+    std::uint16_t texture_variant) const {
+    const auto found = upload_candidates_.find(texture_variant);
+    if (found != upload_candidates_.end()) return found->second;
+    std::vector<std::size_t> candidates;
+    candidates.reserve(16);
+    for (std::size_t index = uploads_.size(); index-- > 0;) {
+        const auto variant = uploads_[index].variant;
+        if (variant == 0xffff || variant == texture_variant)
+            candidates.push_back(index);
+    }
+    return upload_candidates_.emplace(texture_variant, std::move(candidates))
+        .first->second;
+}
+
+const std::vector<std::size_t>& Ps1VramTextureAtlas::clutCandidates(
+    std::uint16_t palette_variant) const {
+    const auto found = clut_candidates_.find(palette_variant);
+    if (found != clut_candidates_.end()) return found->second;
+    std::vector<std::size_t> candidates;
+    candidates.reserve(8);
+    for (std::size_t index = cluts_.size(); index-- > 0;) {
+        const auto variant = cluts_[index].variant;
+        if (variant == 0xffff || variant == palette_variant)
+            candidates.push_back(index);
+    }
+    return clut_candidates_.emplace(palette_variant, std::move(candidates))
+        .first->second;
 }
 
 bool Ps1VramTextureAtlas::sample(std::uint16_t clut, std::uint16_t tpage,
@@ -100,9 +134,8 @@ Ps1TextureSample Ps1VramTextureAtlas::sampleDetailed(
     // interpret that raw word using the packet TPAGE depth. Retaining an
     // upload's 4/8-bpp identity while sampling is observably wrong when later
     // uploads overlap a word through a differently typed TPAGE.
-    for (auto upload_it = uploads_.rbegin(); upload_it != uploads_.rend(); ++upload_it) {
-        const auto& upload = *upload_it;
-        if (upload.variant != 0xffff && upload.variant != texture_variant) continue;
+    for (const auto upload_index : uploadCandidates(texture_variant)) {
+        const auto& upload = uploads_[upload_index];
         const int ty = global_y - upload.y;
         const int upload_word = word_x - upload.x_words;
         if (upload_word < 0 || ty < 0 ||
@@ -110,8 +143,7 @@ Ps1TextureSample Ps1VramTextureAtlas::sampleDetailed(
             ty >= upload.image.height) continue;
         const int tx = upload_word * packet_texels_per_word + texel_in_word;
         if (trace) {
-            trace->upload_index = static_cast<std::size_t>(
-                std::distance(uploads_.begin(), upload_it.base()) - 1);
+            trace->upload_index = upload_index;
             trace->upload_bits_per_pixel = upload.bits_per_pixel;
             trace->upload_x = tx;
             trace->upload_y = ty;
@@ -125,19 +157,16 @@ Ps1TextureSample Ps1VramTextureAtlas::sampleDetailed(
             if (trace) trace->palette_index = index;
             const int clut_x = (clut & 0x3fu) * 16;
             const int clut_y = clut >> 6;
-            for (auto palette_it = cluts_.rbegin(); palette_it != cluts_.rend();
-                 ++palette_it) {
-                const auto& palette = *palette_it;
-                if ((palette.variant != 0xffff && palette.variant != palette_variant) ||
-                    palette.y != clut_y ||
+            for (const auto clut_index : clutCandidates(palette_variant)) {
+                const auto& palette = cluts_[clut_index];
+                if (palette.y != clut_y ||
                     clut_x + index < palette.x ||
                     clut_x + index >= palette.x + int(palette.colors.size()))
                     continue;
                 const auto color = palette.colors[clut_x + index - palette.x];
                 if (trace) {
                     trace->palette_value = color;
-                    trace->clut_upload_index = static_cast<std::size_t>(
-                        std::distance(cluts_.begin(), palette_it.base()) - 1);
+                    trace->clut_upload_index = clut_index;
                 }
                 if (color == 0) return Ps1TextureSample::Transparent;
                 rgb = {{expand5(color & 31u), expand5((color >> 5) & 31u),

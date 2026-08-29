@@ -13,7 +13,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Roster scenario contract validation failed.' }
 
     if (-not $SkipBuild) {
-        & (Join-Path $PSScriptRoot 'build.ps1')
+        & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
         if ($LASTEXITCODE -ne 0) { throw 'Native build failed.' }
     }
 

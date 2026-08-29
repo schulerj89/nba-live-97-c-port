@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $tradeRepo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $tradeRepo
 try {
-    if (-not $SkipBuild) { & ./scripts/build.ps1 }
+    if (-not $SkipBuild) { & ./scripts/build.ps1 -Configuration Debug -AllTargets }
     python -m unittest discover -s tools -p test_trade_progress.py
     if ($LASTEXITCODE -ne 0) { throw 'Trade ledger regression failed.' }
     python tools/verify_trade_rosters.py --check --native-test build-windows/Debug/nba97_trade_tests.exe

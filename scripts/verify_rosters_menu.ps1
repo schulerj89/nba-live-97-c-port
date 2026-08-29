@@ -4,7 +4,9 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $repo
 try {
-    if (-not $SkipBuild) { & (Join-Path $PSScriptRoot 'build.ps1') }
+    if (-not $SkipBuild) {
+        & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
+    }
     $exe = Join-Path $repo 'build-windows\Debug\nba97_boot_decomp.exe'
     & $exe --self-test --trace '.local/logs/rosters_menu_self_test.log'
     if ($LASTEXITCODE -ne 0) { throw 'Rosters menu native self-test failed.' }

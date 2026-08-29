@@ -122,6 +122,10 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
         {0, static_cast<std::int16_t>(-std::int32_t(config.root_yaw) * 4), 0});
     out.frontend_view_transform = frontend_view_transform(
         packed_trig, config.apply_frontend_view, config.frontend_angles);
+    out.frontend_view_transform.translation = {
+        config.frontend_translation.x,
+        config.frontend_translation.y,
+        config.frontend_translation.z};
     out.scaled_root_transform = scale_zdomf_gte_rotation(
         out.root_transform, out.scale_16_16);
     out.composed_root_transform = compose_zdomf_gte_columns(
@@ -134,8 +138,9 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
     out.root_translation = config.root_position;
     out.root_translation.y += 0x24 + shift16(
         std::int64_t(std::int32_t(mocap.root_height) >> 4) * out.scale_16_16);
-    out.record_root_translation = rotate_world(
-        out.frontend_view_transform, out.root_translation);
+    out.record_root_translation = add(rotate_world(
+        out.frontend_view_transform, out.root_translation),
+        config.frontend_translation);
     if (config.use_record_root_translation)
         out.record_root_translation = config.record_root_translation;
     for (std::size_t part = 0; part < out.composed_part_matrices.size(); ++part) {
@@ -166,6 +171,9 @@ ZdomfWorldVec3 apply_zdomf_runtime_pose(const ZdomfRuntimePose& runtime,
     world.y += runtime.root_translation.y;
     world.z += runtime.root_translation.z;
     world = rotate_world(runtime.frontend_view_transform, world);
+    world.x += runtime.frontend_view_transform.translation[0];
+    world.y += runtime.frontend_view_transform.translation[1];
+    world.z += runtime.frontend_view_transform.translation[2];
     return world;
 }
 

@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace nba97 {
@@ -70,8 +71,22 @@ public:
     [[nodiscard]] std::size_t uploadCount() const { return uploads_.size(); }
 
 private:
+    [[nodiscard]] const std::vector<std::size_t>& uploadCandidates(
+        std::uint16_t texture_variant) const;
+    [[nodiscard]] const std::vector<std::size_t>& clutCandidates(
+        std::uint16_t palette_variant) const;
+
     std::vector<Ps1VramTextureUpload> uploads_;
     std::vector<Ps1VramClutUpload> cluts_;
+    // A Create Player team atlas contains 936 mutually exclusive head
+    // variants and 144 mutually exclusive CLUT uploads. Sampling used to walk
+    // every entry for every rasterized pixel. Cache the small reverse-ordered
+    // subset that can be active for one variant; upload methods invalidate the
+    // corresponding cache so last-write-wins semantics remain exact.
+    mutable std::unordered_map<std::uint16_t, std::vector<std::size_t>>
+        upload_candidates_;
+    mutable std::unordered_map<std::uint16_t, std::vector<std::size_t>>
+        clut_candidates_;
 };
 
 } // namespace nba97

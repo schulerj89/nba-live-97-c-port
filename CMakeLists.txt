@@ -3,6 +3,12 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 option(NBA97_RECOVERED_TESTS_ONLY "Build asset-free recovered logic tests without the UI" OFF)
+if(MSVC)
+    # Visual Studio can compile a target's translation units concurrently.
+    # Serialize writes to the shared compiler PDB so clean parallel builds do
+    # not intermittently fail with C1041.
+    add_compile_options(/FS)
+endif()
 if(BUILD_TESTING)
     add_executable(nba97_create_player_tests tests/create_player_test.cpp
         src/recovered/create_player.c src/recovered/semantic_trace.c)

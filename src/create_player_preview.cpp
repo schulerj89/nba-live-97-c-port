@@ -1,4 +1,5 @@
 #include "create_player_preview.hpp"
+#include "create_player_motion.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -535,8 +536,10 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
     }
 
     mocap_=load_zdomf_mocap(asset_root/"menu"/"ZFEMOCAP.BIN");
-    if(mocap_.clips[1].physical_frames!=18||mocap_.clips[1].logical_ticks!=36)
-        throw std::runtime_error("ZFEMOCAP Create Player clip is not 18 keys / 36 ticks");
+    if(mocap_.clips[1].physical_frames!=18||mocap_.clips[1].logical_ticks!=36||
+       mocap_.clips[1].timing_code!=0x28)
+        throw std::runtime_error(
+            "ZFEMOCAP Create Player clip is not 18 keys / 36 ticks / timing 0x28");
     for(const auto& entry:std::filesystem::directory_iterator(model_root))
         if(entry.path().filename().string().rfind("ZDOMF",0)==0 && entry.path().extension()==".BIN")
             ++team_family_count_;
@@ -825,9 +828,15 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
     // FUN_80035260 initializes clip 1. The appearance callbacks at B380/B358
     // then write context+0x4E=0 for Skin Tone through Facial Hair; B3A8/B3D4
     // restore clip 1 when the selector leaves those four rows.
+    // FUN_80039574 presents once per two NTSC vblanks. Each presentation
+    // advances FUN_80034DC0's clip-1 accumulator by 0x300 against a 0x280
+    // logical-tick threshold, and FUN_800355A0 advances yaw by 8/1024 turn.
+    // The elapsed-time origin is the synchronized retail audit phase
+    // (tick 7, accumulator 0x80, yaw 808), not a frozen pose.
+    const auto motion=create_player_full_body_motion(elapsed_ms);
     const auto pose=sample_zdomf_mocap(
         mocap_,clip_index,
-        ((elapsed_ms/33u)+(appearance_field?0u:7u))%clip.logical_ticks);
+        appearance_field?0u:motion.logical_tick%clip.logical_ticks);
     ZdomfRuntimeConfig runtime_config{};
     runtime_config.height_value=editor.height_inches;
     // FUN_800355A0 takes 13 frames to move the model context from its
@@ -837,15 +846,17 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
     // 4240/33792/-2496, or {132,-78,1056} after the runtime's >>5 boundary.
     runtime_config.root_position=appearance_field?
         ZdomfWorldVec3{132,-78,1056}:ZdomfWorldVec3{256,0,640};
-    runtime_config.root_yaw=appearance_field?0x3f0:808;
+    runtime_config.root_yaw=appearance_field?0x3f0:
+        static_cast<std::int16_t>(motion.root_yaw);
     runtime_config.apply_frontend_view=true;
     runtime_config.frontend_angles={2051,191,0};
-    // Exact shared parent-MATRIX translations from synchronized no$psx RAM:
-    // clip-1/tick-7 full body, and the stable clip-0 close-up obtained after
-    // forcing only the original context+0x4E selector and waiting 13 frames.
-    runtime_config.use_record_root_translation=true;
-    runtime_config.record_root_translation=appearance_field?
-        ZdomfWorldVec3{162,104,231}:ZdomfWorldVec3{544,9,594};
+    // FUN_80031F48 installs DAT_800ED55C/55E/560 = {0x1C0,0xC0,0x500}.
+    // Applying that recovered frontend translation after the rotated context
+    // root reproduces both synchronized anchors exactly: {544,9,594} at
+    // clip-1/tick-7 and {162,104,231} in the settled clip-0 close-up. Unlike
+    // the former frozen anchor, it also preserves clip 1's changing root lift,
+    // which supplies the retail jog's vertical hop.
+    runtime_config.frontend_translation={448,192,1280};
     const auto runtime=build_zdomf_runtime_pose(
         model.pivots,packed_trig_,pose,runtime_config);
     if(appearance_field&&elapsed_ms==0) {

@@ -17,7 +17,7 @@ $hierarchySmoke = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_smo
 Push-Location $repo
 try {
     if (-not $SkipBuild) {
-        & (Join-Path $PSScriptRoot 'build.ps1')
+        & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
         if ($LASTEXITCODE -ne 0) { throw 'Native build failed.' }
     }
     if (-not (Test-Path -LiteralPath $exe)) { throw "Missing native executable: $exe" }
@@ -58,7 +58,7 @@ try {
     Write-Host 'CREATE PLAYER HIERARCHY: PASS - FUN_80069098 parent graph and fixed-point world composition.'
     & $mocapTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF mocap/runtime checks failed.' }
-    Write-Host 'CREATE PLAYER MOCAP: PASS - FUN_80035260 paired directories, FUN_80065D40 blending, and FUN_80062C00 scale.'
+    Write-Host 'CREATE PLAYER MOCAP: PASS - FUN_80035260 paired directories, FUN_80065D40 blending, FUN_80062C00 scale/root lift, translated hop-jog, two-vblank presentation timing, 0x300/0x280 cadence, and 128-presentation orbit.'
     & $vramTextureTest
     if ($LASTEXITCODE -ne 0) { throw 'PS1 VRAM texture addressing checks failed.' }
     Write-Host 'CREATE PLAYER VRAM: PASS - 4/8-bpp TPAGE word addressing, FUN_80067F74 dthr/dthl, five FUN_80067A14 team uploads, and shared SHOE upload.'

@@ -34,7 +34,7 @@ try {
         Write-Host '[5/9] Native build skipped by request'
     } else {
         Write-Host '[5/9] Building the native C/C++ application'
-        & (Join-Path $PSScriptRoot 'build.ps1')
+        & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
         if ($LASTEXITCODE -ne 0) { throw 'Native build verification failed.' }
     }
 

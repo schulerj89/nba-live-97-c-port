@@ -99,7 +99,54 @@ int main() {
         check(transparency.sampleDetailed(0x7d20,0x001d,1,0,0,0,rgb)==
                   nba97::Ps1TextureSample::Opaque && rgb[0]==0 && rgb[1]==0 && rgb[2]==0,
               "0x8000 CLUT entry is opaque black");
-        std::cout << "PS1 VRAM TEXTURE: PASS - raw-word 4/8-bpp addressing, shared dthr face sample, packet CLUT selection, same/cross-depth last-write-wins overlap, and transparency\n";
+        nba97::Ps1VramTextureAtlas cache_invalidation;
+        cache_invalidation.upload8Indexed(2,1,{0,0},832,256,7);
+        cache_invalidation.uploadClut({0x001f,0x03e0},512,500,5);
+        check(cache_invalidation.sample(0x7d20,0x00bd,0,0,5,7,rgb)&&rgb[0]==255,
+              "variant candidate cache initial sample");
+        cache_invalidation.upload8Indexed(2,1,{1,1},832,256,7);
+        check(cache_invalidation.sample(0x7d20,0x00bd,0,0,5,7,rgb)&&rgb[1]==255,
+              "upload candidate cache invalidates on later write");
+        cache_invalidation.uploadClut({0x7c00,0x001f},512,500,5);
+        check(cache_invalidation.sample(0x7d20,0x00bd,0,0,5,7,rgb)&&rgb[0]==255&&rgb[1]==0,
+              "CLUT candidate cache invalidates on later write");
+
+        nba97::Ps1VramTextureAtlas wildcard_after_exact;
+        wildcard_after_exact.upload8Indexed(1,1,{0},832,256,7);
+        wildcard_after_exact.upload8Indexed(1,1,{1},832,256,0xffff);
+        wildcard_after_exact.upload8Indexed(1,1,{2},832,256,9);
+        wildcard_after_exact.uploadClut({0x001f,0x03e0,0x7c00},512,500);
+        check(wildcard_after_exact.sample(0x7d20,0x00bd,0,0,0,7,rgb)&&rgb[1]==255,
+              "later wildcard texture upload wins over an earlier exact variant");
+
+        nba97::Ps1VramTextureAtlas exact_after_wildcard;
+        exact_after_wildcard.upload8Indexed(1,1,{0},832,256,0xffff);
+        exact_after_wildcard.upload8Indexed(1,1,{1},832,256,7);
+        exact_after_wildcard.upload8Indexed(1,1,{2},832,256,9);
+        exact_after_wildcard.uploadClut({0x001f,0x03e0,0x7c00},512,500);
+        check(exact_after_wildcard.sample(0x7d20,0x00bd,0,0,0,7,rgb)&&rgb[1]==255,
+              "later exact texture variant wins over an earlier wildcard");
+        check(exact_after_wildcard.sample(0x7d20,0x00bd,0,0,0,8,rgb)&&rgb[0]==255,
+              "unrelated texture variants are skipped while wildcard remains active");
+
+        nba97::Ps1VramTextureAtlas clut_precedence;
+        clut_precedence.upload8Indexed(1,1,{0},832,256);
+        clut_precedence.uploadClut({0x001f},512,500,5);
+        clut_precedence.uploadClut({0x03e0},512,500,0xffff);
+        clut_precedence.uploadClut({0x7c00},512,500,9);
+        check(clut_precedence.sample(0x7d20,0x00bd,0,0,5,0,rgb)&&rgb[1]==255,
+              "later wildcard CLUT wins over an earlier exact variant");
+
+        nba97::Ps1VramTextureAtlas exact_clut_precedence;
+        exact_clut_precedence.upload8Indexed(1,1,{0},832,256);
+        exact_clut_precedence.uploadClut({0x001f},512,500,0xffff);
+        exact_clut_precedence.uploadClut({0x03e0},512,500,5);
+        exact_clut_precedence.uploadClut({0x7c00},512,500,9);
+        check(exact_clut_precedence.sample(0x7d20,0x00bd,0,0,5,0,rgb)&&rgb[1]==255,
+              "later exact CLUT variant wins over an earlier wildcard");
+        check(exact_clut_precedence.sample(0x7d20,0x00bd,0,0,8,0,rgb)&&rgb[0]==255,
+              "unrelated CLUT variants are skipped while wildcard remains active");
+        std::cout << "PS1 VRAM TEXTURE: PASS - raw-word 4/8-bpp addressing, shared dthr face sample, packet CLUT selection, cached variant lookup, same/cross-depth last-write-wins overlap, and transparency\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "PS1 VRAM TEXTURE: FAIL - " << error.what() << '\n';

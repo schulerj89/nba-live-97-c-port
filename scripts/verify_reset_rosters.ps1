@@ -9,7 +9,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Reset extraction tests failed' }
     python -m unittest discover -s tools -p 'test_reset_release_host.py'
     if ($LASTEXITCODE -ne 0) { throw 'Release/Reset evidence tests failed' }
-    & (Join-Path $PSScriptRoot 'build.ps1')
+    & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
     if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
     python tools/verify_reset_rosters.py --check --native-test build-windows/Debug/nba97_roster_reset_tests.exe
     if ($LASTEXITCODE -ne 0) { throw 'Reset core tests/accounting failed' }

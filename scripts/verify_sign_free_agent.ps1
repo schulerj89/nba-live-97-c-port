@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $signRepo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $signRepo
 try {
-    if (-not $SkipBuild) { & ./scripts/build.ps1 }
+    if (-not $SkipBuild) { & ./scripts/build.ps1 -Configuration Debug -AllTargets }
     python -m unittest discover -s tools -p test_sign*.py
     if ($LASTEXITCODE -ne 0) { throw 'Sign evidence regression failed.' }
     python -m unittest discover -s tools -p test_trade_assets.py

@@ -3,7 +3,9 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $repo
 try {
-    if (-not $SkipBuild) { & (Join-Path $PSScriptRoot 'build.ps1') }
+    if (-not $SkipBuild) {
+        & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
+    }
     $exe = Join-Path $repo 'build-windows\Debug\nba97_reorder_tests.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw 'Build nba97_reorder_tests first.' }
     & (Join-Path $repo 'build-windows\Debug\nba97_frontend_title_tests.exe')

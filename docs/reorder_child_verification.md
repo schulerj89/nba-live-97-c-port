@@ -44,7 +44,7 @@ for these Re-order recording pairs.
 Windows with private assets:
 
 ```powershell
-./scripts/build.ps1
+./scripts/build.ps1 -Configuration Debug -AllTargets
 ./scripts/verify_reorder_rosters.ps1 -SkipBuild -RequireDatabase
 python tools/verify_reorder_screen.py
 ```

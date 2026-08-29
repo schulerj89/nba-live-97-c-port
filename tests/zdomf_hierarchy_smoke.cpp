@@ -663,8 +663,60 @@ int main(int argc,char** argv) {
         visual_config.root_yaw=808;
         visual_config.apply_frontend_view=true;
         visual_config.frontend_angles={2051,191,0};
+        visual_config.frontend_translation={448,192,1280};
         const auto visual_runtime=nba97::build_zdomf_runtime_pose(
             model.pivots,trig,visual_pose,visual_config);
+        std::cout<<"TRACE visual tick7 root-translation="
+                 <<visual_runtime.root_translation.x<<'/'
+                 <<visual_runtime.root_translation.y<<'/'
+                 <<visual_runtime.root_translation.z<<" record-root="
+                 <<visual_runtime.record_root_translation.x<<'/'
+                 <<visual_runtime.record_root_translation.y<<'/'
+                 <<visual_runtime.record_root_translation.z<<'\n';
+        if(visual_runtime.record_root_translation.x!=544||
+           visual_runtime.record_root_translation.y!=9||
+           visual_runtime.record_root_translation.z!=594)
+            throw std::runtime_error("tick-7 frontend translation anchor changed");
+        auto appearance_config=visual_config;
+        appearance_config.root_position={132,-78,1056};
+        appearance_config.root_yaw=0x3f0;
+        const auto appearance_runtime=nba97::build_zdomf_runtime_pose(
+            model.pivots,trig,nba97::sample_zdomf_mocap(mocap,0,0),appearance_config);
+        std::cout<<"TRACE visual appearance root-translation="
+                 <<appearance_runtime.root_translation.x<<'/'
+                 <<appearance_runtime.root_translation.y<<'/'
+                 <<appearance_runtime.root_translation.z<<" record-root="
+                 <<appearance_runtime.record_root_translation.x<<'/'
+                 <<appearance_runtime.record_root_translation.y<<'/'
+                 <<appearance_runtime.record_root_translation.z<<'\n';
+        if(appearance_runtime.record_root_translation.x!=162||
+           appearance_runtime.record_root_translation.y!=104||
+           appearance_runtime.record_root_translation.z!=231)
+            throw std::runtime_error("appearance frontend translation anchor changed");
+        const auto hop_runtime=nba97::build_zdomf_runtime_pose(
+            model.pivots,trig,nba97::sample_zdomf_mocap(mocap,1,0),visual_config);
+        std::cout<<"TRACE visual tick0 record-root="
+                 <<hop_runtime.record_root_translation.x<<'/'
+                 <<hop_runtime.record_root_translation.y<<'/'
+                 <<hop_runtime.record_root_translation.z<<'\n';
+        if(hop_runtime.record_root_translation.x!=544||
+           hop_runtime.record_root_translation.y!=16||
+           hop_runtime.record_root_translation.z!=594)
+            throw std::runtime_error("clip-1 root-height hop was flattened");
+        const auto hop_tick9_runtime=nba97::build_zdomf_runtime_pose(
+            model.pivots,trig,nba97::sample_zdomf_mocap(mocap,1,9),visual_config);
+        const auto hop_tick10_runtime=nba97::build_zdomf_runtime_pose(
+            model.pivots,trig,nba97::sample_zdomf_mocap(mocap,1,10),visual_config);
+        std::cout<<"TRACE visual tick9/tick10 record-root-y="
+                 <<hop_tick9_runtime.record_root_translation.y<<'/'
+                 <<hop_tick10_runtime.record_root_translation.y<<'\n';
+        if(hop_tick9_runtime.record_root_translation.x!=544||
+           hop_tick9_runtime.record_root_translation.y!=19||
+           hop_tick9_runtime.record_root_translation.z!=594||
+           hop_tick10_runtime.record_root_translation.x!=544||
+           hop_tick10_runtime.record_root_translation.y!=25||
+           hop_tick10_runtime.record_root_translation.z!=594)
+            throw std::runtime_error("captured tick-9/tick-10 hop anchors changed");
         std::array<int,4> bounds{{512,240,-1,-1}};
         std::size_t saturated=0,visible=0;
         std::vector<Rgb> image(512*240,{5,8,16});

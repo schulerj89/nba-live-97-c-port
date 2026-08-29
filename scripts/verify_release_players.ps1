@@ -5,7 +5,7 @@ Push-Location $repo
 try {
     python -m unittest discover -s tools -p 'test_release_*.py'
     if ($LASTEXITCODE -ne 0) { throw 'Release accounting/extractor tests failed.' }
-    & (Join-Path $PSScriptRoot 'build.ps1')
+    & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Debug -AllTargets
     if ($LASTEXITCODE -ne 0) { throw 'Native build failed.' }
     python tools/verify_release_players.py --check --native-test build-windows/Debug/nba97_release_tests.exe
     if ($LASTEXITCODE -ne 0) { throw 'Release native tests or accounting failed.' }
