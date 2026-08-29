@@ -23,6 +23,11 @@ if(BUILD_TESTING)
     target_compile_features(nba97_zdomf_transform_tests PRIVATE cxx_std_17)
     target_include_directories(nba97_zdomf_transform_tests PRIVATE src)
     add_test(NAME zdomf_transform_core COMMAND nba97_zdomf_transform_tests)
+    add_executable(nba97_zdomf_gte_compose_tests tests/zdomf_gte_compose_test.cpp
+        src/zdomf_gte_compose.cpp)
+    target_compile_features(nba97_zdomf_gte_compose_tests PRIVATE cxx_std_17)
+    target_include_directories(nba97_zdomf_gte_compose_tests PRIVATE src)
+    add_test(NAME zdomf_gte_compose_core COMMAND nba97_zdomf_gte_compose_tests)
     add_executable(nba97_zdomf_projection_tests tests/zdomf_projection_test.cpp
         src/zdomf_projection.cpp src/zdomf_transform.cpp)
     target_compile_features(nba97_zdomf_projection_tests PRIVATE cxx_std_17)
@@ -41,7 +46,8 @@ if(BUILD_TESTING)
     add_test(NAME zdomf_mocap_core COMMAND nba97_zdomf_mocap_tests)
     add_executable(nba97_zdomf_hierarchy_smoke tests/zdomf_hierarchy_smoke.cpp
         src/zdomf_hierarchy.cpp src/zdomf_model.cpp src/zdomf_projection.cpp
-        src/zdomf_transform.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp)
+        src/zdomf_transform.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp
+        src/zdomf_gte_compose.cpp)
     target_compile_features(nba97_zdomf_hierarchy_smoke PRIVATE cxx_std_17)
     target_include_directories(nba97_zdomf_hierarchy_smoke PRIVATE src)
     add_executable(nba97_release_tests tests/roster_release_test.cpp src/recovered/roster_release.c

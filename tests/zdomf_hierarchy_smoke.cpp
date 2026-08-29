@@ -1,4 +1,5 @@
 #include "zdomf_model.hpp"
+#include "zdomf_gte_compose.hpp"
 #include "zdomf_mocap.hpp"
 #include "zdomf_projection.hpp"
 #include "zdomf_runtime.hpp"
@@ -129,6 +130,78 @@ int main(int argc,char** argv) {
                  <<trace_part9_vertex.z<<" expected=106/20/40 PASS\n";
         const auto projection=nba97::load_create_player_projection(root/"ZDOMTRIG.BIN");
         const auto mocap=nba97::load_zdomf_mocap(mocap_path);
+        // Live no$psx capture at FUN_8006539C while r17 == 9. The caller has
+        // loaded this exact 32-byte record through FUN_80066C40/80066C6C.
+        const std::array<std::array<std::int16_t,3>,3> retail_part9{{
+            {{1211,-2443,2825}},
+            {{-2107,-1248,-177}},
+            {{1006,-1460,-1697}},
+        }};
+        std::uint64_t closest_part9_error=~std::uint64_t{0};
+        std::size_t closest_part9_tick=0;
+        nba97::ZdomfTransform closest_part9{};
+        for(std::size_t tick=0;tick<mocap.clips[1].logical_ticks;++tick) {
+            const auto candidate_pose=nba97::sample_zdomf_mocap(mocap,1,tick);
+            const auto candidate=nba97::make_zdomf_rotation(
+                trig,candidate_pose.joints[9].angles);
+            std::uint64_t error=0;
+            for(std::size_t row=0;row<3;++row)for(std::size_t column=0;column<3;++column) {
+                const auto delta=std::int64_t(candidate.rotation[row][column])-
+                                 retail_part9[row][column];
+                error+=static_cast<std::uint64_t>(delta*delta);
+            }
+            if(error<closest_part9_error) {
+                closest_part9_error=error;
+                closest_part9_tick=tick;
+                closest_part9=candidate;
+            }
+        }
+        std::cout<<"TRACE live part9 closest clip1 tick="<<closest_part9_tick
+                 <<" error2="<<closest_part9_error<<" matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<closest_part9.rotation[row][0]<<'/'
+                     <<closest_part9.rotation[row][1]<<'/'
+                     <<closest_part9.rotation[row][2];
+        }
+        std::cout<<'\n';
+        const std::array<std::array<std::int16_t,3>,3> retail_part9_local{{
+            {{-96,3442,2213}},
+            {{1076,2155,-3308}},
+            {{-3950,505,-955}},
+        }};
+        std::uint64_t closest_part9_local_error=~std::uint64_t{0};
+        std::size_t closest_part9_local_tick=0;
+        nba97::ZdomfTransform closest_part9_local{};
+        for(std::size_t tick=0;tick<mocap.clips[1].logical_ticks;++tick) {
+            const auto candidate_pose=nba97::sample_zdomf_mocap(mocap,1,tick);
+            const auto candidate=nba97::make_zdomf_rotation(
+                trig,candidate_pose.joints[9].angles);
+            std::uint64_t error=0;
+            for(std::size_t row=0;row<3;++row)for(std::size_t column=0;column<3;++column) {
+                const auto delta=std::int64_t(candidate.rotation[row][column])-
+                                 retail_part9_local[row][column];
+                error+=static_cast<std::uint64_t>(delta*delta);
+            }
+            if(error<closest_part9_local_error) {
+                closest_part9_local_error=error;
+                closest_part9_local_tick=tick;
+                closest_part9_local=candidate;
+            }
+        }
+        std::cout<<"TRACE live part9 local closest clip1 tick="
+                 <<closest_part9_local_tick<<" error2="
+                 <<closest_part9_local_error<<" matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<closest_part9_local.rotation[row][0]<<'/'
+                     <<closest_part9_local.rotation[row][1]<<'/'
+                     <<closest_part9_local.rotation[row][2];
+        }
+        std::cout<<'\n';
+        if(closest_part9_local_tick!=0 || closest_part9_local_error!=0)
+            throw std::runtime_error(
+                "live part9 local matrix no longer matches decoded mocap tick 0");
         std::array<int,6> raw_bounds{{32767,32767,32767,-32768,-32768,-32768}};
         for(const auto& face:model.primary_faces)for(const auto& corner:face.corners) {
             raw_bounds[0]=std::min(raw_bounds[0],int(corner.position.x));
@@ -167,11 +240,41 @@ int main(int argc,char** argv) {
         auto original_view=nba97::make_zdomf_rotation(trig,{0x5dc,0,0});
         for(auto& value:original_view.rotation[0])
             value=static_cast<std::int16_t>((static_cast<std::int32_t>(value)*16)/10);
+        std::cout<<"TRACE frontend GTE matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<original_view.rotation[row][0]<<'/'
+                     <<original_view.rotation[row][1]<<'/'
+                     <<original_view.rotation[row][2];
+        }
+        std::cout<<'\n';
         auto original_scaled_root=nba97::make_zdomf_rotation(trig,{0,0,0});
         for(auto& row:original_scaled_root.rotation)for(auto& value:row)
             value=static_cast<std::int16_t>(
                 (static_cast<std::int32_t>(value)*runtime.scale_16_16)/65536);
         const auto original_view_root=multiply_rotation(original_view,original_scaled_root);
+        // Exact MATRIX at a0=0x800F9450 when retail FUN_80066090 reaches its
+        // part-9 output writer at 0x80066434. Translation documents the full
+        // input record but is not selected by this rotation-only MVMVA path.
+        nba97::ZdomfTransform live_gte_input{};
+        live_gte_input.rotation={{{{-2646,0,2901}},
+                                  {{8,-2457,8}},
+                                  {{1814,11,1653}}}};
+        live_gte_input.translation={{544,16,594}};
+        const auto part9_gte=nba97::compose_zdomf_gte_rows(
+            live_gte_input,runtime.part_matrices[9]);
+        std::cout<<"TRACE part9 GTE composition=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<part9_gte.matrix.rotation[row][0]<<'/'
+                     <<part9_gte.matrix.rotation[row][1]<<'/'
+                     <<part9_gte.matrix.rotation[row][2];
+        }
+        std::cout<<" retail-word0=1629/-3038";
+        if(part9_gte.matrix.rotation[0][0]!=1629 ||
+           part9_gte.matrix.rotation[0][1]!=-3038)
+            throw std::runtime_error("part9 GTE composition live word differs");
+        std::cout<<" PASS\n";
         const auto original_part_matrix=multiply_rotation(
             original_view_root,runtime.part_matrices[trace_base.part]);
         std::array<nba97::ZdomfTransform,20> original_part_matrices{};
