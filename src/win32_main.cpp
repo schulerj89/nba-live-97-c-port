@@ -392,7 +392,7 @@ private:
         validateMenuAsset(menu_root / "ZFEPLAYR.ART", 73984);
         create_player_preview_=std::make_unique<nba97::CreatePlayerPreview>(options_.asset_root);
         trace_.log("CREATE-MODEL-DECODE", create_player_preview_->description()+
-            "; 0x800687BC relocation, 0x80035260 8+12-joint mocap, 0x80065D40 blending, 0x80069098 hierarchy, 0x80062C40 scaling, and the primary 0x80066FF4/0x80066090 rotation plus attachment-MVMVA are native-tested; attachment preprocessing/parent routing, dynamic frontend-camera state, mirrored matrices, and textured PS1 packets remain under translation");
+            "; 0x800687BC relocation, 0x80035260 mocap, 0x80069098 parent routing, 0x80062F4C pivots, 0x800631B8 vertices, all 20 runtime matrices/attachment endpoints, and far-to-near packet order are live-RAM exact; FUN_80067A14 team atlas uploads=(r2@832/256,r6@949/374,r7@889/374,r4@832/488,r0@886/468), shared SHOE=(ZFEPLAYR:r6@922/454), packet groups=237x8bpp+14x4bpp; dynamic camera playback, secondary head pass, and exact CLUT modulation remain pending");
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);

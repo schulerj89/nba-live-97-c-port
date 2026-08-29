@@ -27,6 +27,9 @@ int main() {
         check(projected.flags == nba97::ZdomfProjectionNone,
               "identity RTPS flags");
 
+        check(nba97::zdomf_gte_unr_divide(160, 611) == 17162,
+              "PS1 GTE UNR reciprocal fixture");
+
         identity.camera.translation[2] = 0;
         const auto overflow = nba97::project_zdomf_vertex(identity, {2000, 0, 0});
         check((overflow.flags & nba97::ZdomfProjectionDivideOverflow) != 0,

@@ -41,6 +41,10 @@ ZdomfProjectionConfig make_create_player_projection(
 ZdomfProjectionConfig load_create_player_projection(
     const std::filesystem::path& packed_trig_path);
 
+// Exact PS1 GTE unsigned Newton-Raphson reciprocal used by RTPS/RTPT for
+// H/SZ3. The 17-bit result saturates to 0x1FFFF.
+std::uint32_t zdomf_gte_unr_divide(std::uint32_t lhs, std::uint32_t rhs);
+
 // Native RTPS-compatible projection boundary used by FUN_8006734C and by
 // the RTPT triangle helpers at FUN_80065330/FUN_80065388.
 ZdomfProjectedVertex project_zdomf_vertex(

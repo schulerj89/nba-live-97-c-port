@@ -11,6 +11,7 @@ $gteComposeTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_gte_compose_t
 $projectionTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_projection_tests.exe'
 $hierarchyTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_tests.exe'
 $mocapTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_mocap_tests.exe'
+$vramTextureTest = Join-Path $repo 'build-windows\Debug\nba97_ps1_vram_texture_tests.exe'
 $hierarchySmoke = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_smoke.exe'
 
 Push-Location $repo
@@ -28,6 +29,7 @@ try {
     if (-not (Test-Path -LiteralPath $projectionTest)) { throw "Missing ZDOMF projection test: $projectionTest" }
     if (-not (Test-Path -LiteralPath $hierarchyTest)) { throw "Missing ZDOMF hierarchy test: $hierarchyTest" }
     if (-not (Test-Path -LiteralPath $mocapTest)) { throw "Missing ZDOMF mocap test: $mocapTest" }
+    if (-not (Test-Path -LiteralPath $vramTextureTest)) { throw "Missing PS1 VRAM texture test: $vramTextureTest" }
     if (-not (Test-Path -LiteralPath $hierarchySmoke)) { throw "Missing ZDOMF hierarchy smoke test: $hierarchySmoke" }
     if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'menu\ZSET5-decoded'))) {
         throw 'Missing private ZSET5 assets. Run scripts/extract_assetpacks.ps1 locally first.'
@@ -57,6 +59,9 @@ try {
     & $mocapTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF mocap/runtime checks failed.' }
     Write-Host 'CREATE PLAYER MOCAP: PASS - FUN_80035260 paired directories, FUN_80065D40 blending, and FUN_80062C00 scale.'
+    & $vramTextureTest
+    if ($LASTEXITCODE -ne 0) { throw 'PS1 VRAM texture addressing checks failed.' }
+    Write-Host 'CREATE PLAYER VRAM: PASS - 4/8-bpp TPAGE word addressing, five FUN_80067A14 team uploads, and shared SHOE upload.'
 
     $hierarchyEvidence = Join-Path $repo '.local\verification\create_player\hierarchy'
     New-Item -ItemType Directory -Force -Path $hierarchyEvidence | Out-Null
@@ -122,7 +127,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
     Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM preview frames, two-directory mocap decoding/blending, runtime hierarchy/root/height transforms, exact primary FUN_80066FF4/FUN_80066090 rotation and attachment-MVMVA fixtures, filled 3D smoke rendering, and numeric RTPS/camera coverage. Dynamic attachment preprocessing/parent routing, mirrored matrices, dynamic frontend-camera state, textured PS1 polygon packets, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM preview frames, two-directory mocap, exact 20-record parent/pivot/matrix/endpoint runtime, 753/753 transformed vertices, RTPS coverage, far-to-near primitive order, and all 251 primary faces routed through recovered 4/8-bpp VRAM uploads. Dynamic frontend-camera playback, the secondary head pass, exact CLUT modulation, roster insertion, and original visual scoring remain pending.'
 } finally {
     Pop-Location
 }

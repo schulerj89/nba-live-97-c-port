@@ -1,6 +1,7 @@
 #pragma once
 
 #include "psh_image.hpp"
+#include "ps1_vram_texture.hpp"
 #include "recovered/create_player.h"
 #include "zdomf_model.hpp"
 #include "zdomf_hierarchy.hpp"
@@ -34,9 +35,11 @@ private:
     std::array<std::int32_t, 6> projection_flat_bounds_{};
     std::array<std::int32_t, 6> projection_bounds_{};
     std::size_t projection_saturated_vertices_=0;
-    std::vector<PshImage> team_jerseys_;
-    std::vector<PshImage> team_shorts_;
-    std::vector<PshImage> team_shorts_alt_;
+    // FUN_80067A14 uploads five team SHPP records into fixed PS1 VRAM
+    // rectangles.  Keep the decoded sources separate so packet TPAGE/UV can
+    // address the same logical atlas without retaining copyrighted assets in
+    // the repository.
+    std::vector<Ps1VramTextureAtlas> team_texture_uploads_;
     std::size_t team_family_count_=0;
 };
 

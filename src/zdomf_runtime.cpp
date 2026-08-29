@@ -44,12 +44,13 @@ ZdomfWorldVec3 add(ZdomfWorldVec3 a, ZdomfWorldVec3 b) {
 }
 
 ZdomfTransform frontend_view_transform(
-    const std::vector<std::uint8_t>& packed_trig, bool enabled) {
+    const std::vector<std::uint8_t>& packed_trig, bool enabled,
+    const ZdomfEulerAngles& angles) {
     if (!enabled) return make_zdomf_rotation(packed_trig, {0, 0, 0});
     // FUN_8006A1E8 initializes {0x5DC,0,0}. FUN_8006A3C4 passes those
     // angles to FUN_80066DA8, then applies signed (value << 4) / 10 to the
     // first matrix row at DAT_800ED278 before FUN_800696C4 composes it.
-    auto view = make_zdomf_rotation(packed_trig, {0x5dc, 0, 0});
+    auto view = make_zdomf_rotation(packed_trig, angles);
     for (auto& value : view.rotation[0]) {
         value = static_cast<std::int16_t>((static_cast<std::int32_t>(value) * 16) / 10);
     }
@@ -112,10 +113,15 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
     for (std::size_t group = 0; group < group_parts.size(); ++group)
         out.group_offsets[group] = out.part_endpoints[group_parts[group]];
     out.scale_16_16 = zdomf_height_scale(config.height_value);
+    // FUN_800696C4 writes context+0xA8 << 2 into the temporary Euler record,
+    // but FUN_80066DA8/FUN_80067100's retail Y convention is the wrapped
+    // negative of the host-facing editor value. The synchronized word 808
+    // therefore produces angle 863 (-(808<<2) mod 4096), not 3232.
     out.root_transform = make_zdomf_rotation(
-        packed_trig, {0, static_cast<std::int16_t>(config.root_yaw * 4), 0});
+        packed_trig,
+        {0, static_cast<std::int16_t>(-std::int32_t(config.root_yaw) * 4), 0});
     out.frontend_view_transform = frontend_view_transform(
-        packed_trig, config.apply_frontend_view);
+        packed_trig, config.apply_frontend_view, config.frontend_angles);
     out.scaled_root_transform = scale_zdomf_gte_rotation(
         out.root_transform, out.scale_16_16);
     out.composed_root_transform = compose_zdomf_gte_columns(
@@ -128,6 +134,19 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
     out.root_translation = config.root_position;
     out.root_translation.y += 0x24 + shift16(
         std::int64_t(std::int32_t(mocap.root_height) >> 4) * out.scale_16_16);
+    out.record_root_translation = rotate_world(
+        out.frontend_view_transform, out.root_translation);
+    if (config.use_record_root_translation)
+        out.record_root_translation = config.record_root_translation;
+    for (std::size_t part = 0; part < out.composed_part_matrices.size(); ++part) {
+        const auto parent = parents[part];
+        const auto origin = parent < 0 ? out.record_root_translation :
+            out.record_part_endpoints[static_cast<std::size_t>(parent)];
+        out.record_part_origins[part] = origin;
+        out.record_part_endpoints[part] = add(origin, rotate_world(
+            out.composed_part_matrices[part],
+            {pivots[part].x, pivots[part].y, pivots[part].z}));
+    }
     return out;
 }
 
@@ -148,6 +167,16 @@ ZdomfWorldVec3 apply_zdomf_runtime_pose(const ZdomfRuntimePose& runtime,
     world.z += runtime.root_translation.z;
     world = rotate_world(runtime.frontend_view_transform, world);
     return world;
+}
+
+ZdomfWorldVec3 apply_zdomf_runtime_record_pose(
+    const ZdomfRuntimePose& runtime, std::size_t part,
+    const ZdomfVec3& vertex) {
+    if (part >= runtime.composed_part_matrices.size())
+        throw std::runtime_error("invalid ZDOMF runtime-record part");
+    return add(rotate_world(runtime.composed_part_matrices[part],
+                            {vertex.x, vertex.y, vertex.z}),
+               runtime.record_part_origins[part]);
 }
 
 ZdomfWorldVec3 apply_zdomf_runtime_mirrored_pose(

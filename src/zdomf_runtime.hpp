@@ -16,6 +16,12 @@ struct ZdomfRuntimeConfig {
     std::int16_t root_yaw = 0;
     std::int16_t part11_angle = 0;
     bool apply_frontend_view = false;
+    // Live frontend camera angles passed to FUN_80066DA8 before the original
+    // row-0 scale and FUN_80066FF4 composition. The startup value is 1500/0/0;
+    // Create Player updates this context while the preview is active.
+    ZdomfEulerAngles frontend_angles{1500, 0, 0};
+    bool use_record_root_translation = false;
+    ZdomfWorldVec3 record_root_translation{};
 };
 
 struct ZdomfRuntimePose {
@@ -32,11 +38,17 @@ struct ZdomfRuntimePose {
     ZdomfTransform root_transform{};
     ZdomfTransform frontend_view_transform{};
     // Staged original FUN_80062C40 -> FUN_80066FF4 -> FUN_80066090 path.
-    // These remain separate from the active renderer until their translation
-    // and attachment inputs have been proven at the same boundary.
+    // These remain separate from the active renderer while parent routing and
+    // the remaining special-group boundaries are traced polygon-by-polygon.
     ZdomfTransform scaled_root_transform{};
     ZdomfTransform composed_root_transform{};
     std::array<ZdomfTransform, 20> composed_part_matrices{};
+    // Literal FUN_80066090 record contract. Each part's vertices use its
+    // composed matrix but inherit translation from the parent's +0x64 output
+    // MATRIX; roots inherit the shared transformed root translation.
+    ZdomfWorldVec3 record_root_translation{};
+    std::array<ZdomfWorldVec3, 20> record_part_origins{};
+    std::array<ZdomfWorldVec3, 20> record_part_endpoints{};
     std::int32_t scale_16_16 = 0;
     ZdomfWorldVec3 root_translation{};
 };
@@ -56,6 +68,12 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
 ZdomfWorldVec3 apply_zdomf_runtime_pose(const ZdomfRuntimePose& runtime,
                                         std::size_t part,
                                         const ZdomfVec3& vertex);
+
+// Applies the exact per-record matrix/parent-translation boundary used by
+// FUN_800631B8/FUN_800632D4 instead of recombining a host-space skeleton.
+ZdomfWorldVec3 apply_zdomf_runtime_record_pose(
+    const ZdomfRuntimePose& runtime, std::size_t part,
+    const ZdomfVec3& vertex);
 
 ZdomfWorldVec3 apply_zdomf_runtime_mirrored_pose(
     const ZdomfRuntimePose& runtime,

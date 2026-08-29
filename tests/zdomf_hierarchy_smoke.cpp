@@ -322,17 +322,239 @@ int main(int argc,char** argv) {
         // FUN_80035260 explicitly calls FUN_80034CC8(context,1) before
         // FUN_800351F4, selecting the 18-key Create Player clip.
         const auto pose=nba97::sample_zdomf_mocap(mocap,1,0);
+        const nba97::ZdomfEulerAngles live_part17_angles{-41,1455,913};
+        const auto& decoded_part17_angles=pose.joints[17].angles;
+        std::cout<<"TRACE part17 angles decoded="
+                 <<decoded_part17_angles.x<<'/'<<decoded_part17_angles.y<<'/'
+                 <<decoded_part17_angles.z<<" original="
+                 <<live_part17_angles.x<<'/'<<live_part17_angles.y<<'/'
+                 <<live_part17_angles.z<<" match="
+                 <<((decoded_part17_angles.x==live_part17_angles.x &&
+                      decoded_part17_angles.y==live_part17_angles.y &&
+                      decoded_part17_angles.z==live_part17_angles.z)?"yes":"no")
+                 <<'\n';
+        std::uint64_t nearest_part17_angle_error=~std::uint64_t{0};
+        std::size_t nearest_part17_tick=0;
+        std::size_t nearest_part17_joint=0;
+        nba97::ZdomfEulerAngles nearest_part17_angles{};
+        for(std::size_t tick=0;tick<mocap.clips[1].logical_ticks;++tick) {
+            const auto candidate_pose=nba97::sample_zdomf_mocap(mocap,1,tick);
+            for(std::size_t joint=0;joint<candidate_pose.joints.size();++joint) {
+                const auto& candidate=candidate_pose.joints[joint].angles;
+                const auto dx=std::int64_t(candidate.x)-live_part17_angles.x;
+                const auto dy=std::int64_t(candidate.y)-live_part17_angles.y;
+                const auto dz=std::int64_t(candidate.z)-live_part17_angles.z;
+                const auto error=static_cast<std::uint64_t>(dx*dx+dy*dy+dz*dz);
+                if(error<nearest_part17_angle_error) {
+                    nearest_part17_angle_error=error;
+                    nearest_part17_tick=tick;
+                    nearest_part17_joint=joint;
+                    nearest_part17_angles=candidate;
+                }
+            }
+        }
+        std::cout<<"TRACE part17 original-angle nearest clip1 tick="
+                 <<nearest_part17_tick<<" joint="<<nearest_part17_joint
+                 <<" angles="<<nearest_part17_angles.x<<'/'
+                 <<nearest_part17_angles.y<<'/'<<nearest_part17_angles.z
+                 <<" error2="<<nearest_part17_angle_error<<'\n';
+        const std::array<std::array<std::int16_t,3>,3> live_later_part17_local{{
+            {{-363,-2443,-3264}},
+            {{-4066,480,91}},
+            {{328,3248,-2469}},
+        }};
+        std::uint64_t nearest_part17_local_error=~std::uint64_t{0};
+        std::size_t nearest_part17_local_tick=0;
+        nba97::ZdomfTransform nearest_part17_local{};
+        for(std::size_t tick=0;tick<mocap.clips[1].logical_ticks;++tick) {
+            const auto candidate_pose=nba97::sample_zdomf_mocap(mocap,1,tick);
+            const auto candidate=nba97::make_zdomf_rotation(
+                trig,candidate_pose.joints[17].angles);
+            std::uint64_t error=0;
+            for(std::size_t row=0;row<3;++row)for(std::size_t column=0;column<3;++column) {
+                const auto delta=std::int64_t(candidate.rotation[row][column])-
+                                 live_later_part17_local[row][column];
+                error+=static_cast<std::uint64_t>(delta*delta);
+            }
+            if(error<nearest_part17_local_error) {
+                nearest_part17_local_error=error;
+                nearest_part17_local_tick=tick;
+                nearest_part17_local=candidate;
+            }
+        }
+        std::cout<<"TRACE part17 original-local nearest clip1 tick="
+                 <<nearest_part17_local_tick<<" matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<nearest_part17_local.rotation[row][0]<<'/'
+                     <<nearest_part17_local.rotation[row][1]<<'/'
+                     <<nearest_part17_local.rotation[row][2];
+        }
+        std::cout<<" error2="<<nearest_part17_local_error<<'\n';
+        const bool part9_preprocess_match=model.pivots[9].x==61 &&
+            model.pivots[9].y==0 && model.pivots[9].z==0;
         std::cout<<"TRACE part9 attachment decoded="<<model.pivots[9].x<<'/'
                  <<model.pivots[9].y<<'/'<<model.pivots[9].z
-                 <<" live-current=91/0/0 pending-preprocess="
-                 <<((model.pivots[9].x==91 && model.pivots[9].y==0 &&
-                     model.pivots[9].z==0)?"no":"yes")<<'\n';
+                 <<" live-preprocess=61/0/0 match="
+                 <<(part9_preprocess_match?"yes":"no")<<'\n';
+        if(!part9_preprocess_match)
+            throw std::runtime_error("part9 FUN_80062F4C attachment writeback mismatch");
         // FUN_800351F4 stores {0x2000,0x5000,0}; FUN_800696C4 shifts them
         // and maps context +8/+10/+C to render X/Y/Z respectively.
         nba97::ZdomfRuntimeConfig trace_config{75,{256,0,640},0,0};
         trace_config.apply_frontend_view=true;
         const auto runtime=nba97::build_zdomf_runtime_pose(
             model.pivots,trig,pose,trace_config);
+        // Same-reload no$psx capture at FUN_80065388 for routing slot
+        // 0x80138F40 (part 17). FUN_80066C40 loaded the 3x3 matrix from
+        // 0x80138EC0 immediately before the projection call.
+        const std::array<std::array<std::int16_t,3>,3> live_part17_projection{{
+            {{3119,608,2311}},
+            {{1487,-279,-1933}},
+            {{-134,2410,-449}},
+        }};
+        std::uint64_t part17_projection_error=0;
+        std::cout<<"TRACE part17 live projection matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            for(std::size_t column=0;column<3;++column) {
+                if(column)std::cout<<'/';
+                const auto actual=runtime.composed_part_matrices[17].rotation[row][column];
+                std::cout<<actual;
+                const auto delta=std::int64_t(actual)-live_part17_projection[row][column];
+                part17_projection_error+=static_cast<std::uint64_t>(delta*delta);
+            }
+        }
+        std::cout<<" original=3119/608/2311;1487/-279/-1933;-134/2410/-449"
+                 <<" error2="<<part17_projection_error<<'\n';
+        // Re-run the same boundary with the matrices captured during this
+        // exact no$psx reload.  The editor smoke configuration above (height
+        // 75, yaw 0, initialization camera) is intentionally a different
+        // state and therefore cannot be compared directly with 0x80138EC0.
+        nba97::ZdomfTransform captured_composed_root{};
+        captured_composed_root.rotation={{{{-762,0,-3857}},
+                                           {{-12,-2457,1}},
+                                           {{-2410,11,476}}}};
+        const auto captured_pose=nba97::sample_zdomf_mocap(mocap,1,3);
+        const auto captured_part17_local=nba97::make_zdomf_rotation(
+            trig,captured_pose.joints[17].angles);
+        std::cout<<"TRACE part17 local tick3=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<captured_part17_local.rotation[row][0]<<'/'
+                     <<captured_part17_local.rotation[row][1]<<'/'
+                     <<captured_part17_local.rotation[row][2];
+        }
+        std::cout<<'\n';
+        const auto captured_part17=nba97::compose_zdomf_gte_rows(
+            captured_composed_root,captured_part17_local).matrix;
+        std::uint64_t captured_part17_error=0;
+        std::cout<<"TRACE part17 same-state composition=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            for(std::size_t column=0;column<3;++column) {
+                if(column)std::cout<<'/';
+                const auto actual=captured_part17.rotation[row][column];
+                std::cout<<actual;
+                const auto delta=std::int64_t(actual)-live_part17_projection[row][column];
+                captured_part17_error+=static_cast<std::uint64_t>(delta*delta);
+            }
+        }
+        std::cout<<" original=3119/608/2311;1487/-279/-1933;-134/2410/-449"
+                 <<" error2="<<captured_part17_error<<'\n';
+        // Fully synchronized tick-4 capture: the root at 0x800F9450, the
+        // local part-17 matrix at sp+0x50, and the completed destination at
+        // 0x80138EC0 were all read while stopped in the same traversal.
+        nba97::ZdomfTransform synchronized_tick4_root{};
+        synchronized_tick4_root.rotation={{{{-572,0,-3889}},
+                                            {{-12,-2457,1}},
+                                            {{-2430,11,357}}}};
+        const auto synchronized_tick4_pose=nba97::sample_zdomf_mocap(mocap,1,4);
+        const auto synchronized_tick4_local=nba97::make_zdomf_rotation(
+            trig,synchronized_tick4_pose.joints[17].angles);
+        const auto synchronized_tick4_part17=nba97::compose_zdomf_gte_rows(
+            synchronized_tick4_root,synchronized_tick4_local).matrix;
+        const std::array<std::array<std::int16_t,3>,3> live_tick4_part17{{
+            {{3149,481,2298}},
+            {{1465,-276,-1950}},
+            {{-76,2421,-402}},
+        }};
+        std::uint64_t synchronized_tick4_error=0;
+        std::cout<<"TRACE part17 synchronized tick4 composition=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            for(std::size_t column=0;column<3;++column) {
+                if(column)std::cout<<'/';
+                const auto actual=synchronized_tick4_part17.rotation[row][column];
+                std::cout<<actual;
+                const auto delta=std::int64_t(actual)-live_tick4_part17[row][column];
+                synchronized_tick4_error+=static_cast<std::uint64_t>(delta*delta);
+            }
+        }
+        std::cout<<" original=3149/481/2298;1465/-276/-1950;-76/2421/-402"
+                 <<" error2="<<synchronized_tick4_error<<'\n';
+        if(synchronized_tick4_error!=0)
+            throw std::runtime_error("part17 synchronized GTE composition mismatch");
+        nba97::ZdomfProjectionConfig synchronized_tick4_projection{};
+        synchronized_tick4_projection.camera=synchronized_tick4_part17;
+        // FUN_80069AB4 dereferences part-17 routing slot 0x80138F40 to
+        // 0x80138E6C; FUN_80066C6C then loads +0x14/+0x18/+0x1C.
+        synchronized_tick4_projection.camera.translation={{521,-83,628}};
+        // GPU packet SXY values precede the native port's explicit +128
+        // viewport composition offset.
+        synchronized_tick4_projection.draw_offset_x=0;
+        const std::array<nba97::ZdomfVec3,3> synchronized_tick4_triangle{{
+            {-18,32,-2}, {-7,18,25}, {40,17,20},
+        }};
+        const std::array<std::array<std::int16_t,2>,3> live_tick4_sxy{{
+            {{381,97}}, {{389,95}}, {{264,99}},
+        }};
+        std::array<nba97::ZdomfProjectedVertex,3> synchronized_tick4_projected{};
+        std::cout<<"TRACE part17 synchronized tick4 RTPS=";
+        for(std::size_t corner=0;corner<synchronized_tick4_triangle.size();++corner) {
+            if(corner)std::cout<<';';
+            const auto projected=nba97::project_zdomf_vertex(
+                synchronized_tick4_projection,synchronized_tick4_triangle[corner]);
+            synchronized_tick4_projected[corner]=projected;
+            std::cout<<projected.x<<'/'<<projected.y
+                     <<"(original="<<live_tick4_sxy[corner][0]<<'/'
+                     <<live_tick4_sxy[corner][1]<<",depth="<<projected.depth
+                     <<",flags="<<projected.flags<<')';
+        }
+        std::cout<<'\n';
+        if(synchronized_tick4_projected[0].x!=live_tick4_sxy[0][0] ||
+           synchronized_tick4_projected[0].y!=live_tick4_sxy[0][1] ||
+           synchronized_tick4_projected[1].x!=live_tick4_sxy[1][0] ||
+           synchronized_tick4_projected[1].y!=live_tick4_sxy[1][1])
+            throw std::runtime_error("face219 part17 RTPS component mismatch");
+        // Face 219's third component is routed independently from part 9,
+        // triangle 12.  This fixture was stopped by a write watchpoint on
+        // packet field 0x80141E78: PC 0x800654A4, packet base 0x80141E60.
+        // Matrix 0x80138A20, translation registers, input V2 and SXY2 were
+        // therefore captured at the same RTPT boundary.  An earlier 398/94
+        // packet observation belonged to a different animation instant and
+        // must not be combined with the tick-4 hierarchy matrix.
+        nba97::ZdomfProjectionConfig write_watch_part9_projection{};
+        write_watch_part9_projection.camera.rotation={{
+            {{-1901,3227,1175}},
+            {{-2128,-1221,-84}},
+            {{295,-677,2340}},
+        }};
+        write_watch_part9_projection.camera.translation={{541,-47,590}};
+        write_watch_part9_projection.draw_offset_x=0;
+        const auto write_watch_part9_corner=nba97::project_zdomf_vertex(
+            write_watch_part9_projection,{77,28,42});
+        std::cout<<"TRACE face219 part9 write-watch SXY="
+                 <<write_watch_part9_corner.x<<'/'
+                 <<write_watch_part9_corner.y
+                 <<" original=396/94"
+                 <<" depth="<<write_watch_part9_corner.depth
+                 <<" flags="<<write_watch_part9_corner.flags<<'\n';
+        if(write_watch_part9_corner.x!=396 ||
+           write_watch_part9_corner.y!=94 ||
+           write_watch_part9_corner.depth!=614 ||
+           write_watch_part9_corner.flags!=nba97::ZdomfProjectionNone)
+            throw std::runtime_error("face219 part9 RTPS component mismatch");
         auto original_view=nba97::make_zdomf_rotation(trig,{0x5dc,0,0});
         for(auto& value:original_view.rotation[0])
             value=static_cast<std::int16_t>((static_cast<std::int32_t>(value)*16)/10);
@@ -434,6 +656,15 @@ int main(int argc,char** argv) {
             throw std::runtime_error("legacy transform comparison changed");
         const auto trace_world=nba97::apply_zdomf_runtime_pose(
             runtime,trace_base.part,trace_base.position);
+        const auto visual_pose=nba97::sample_zdomf_mocap(mocap,1,7);
+        nba97::ZdomfRuntimeConfig visual_config{};
+        visual_config.height_value=63;
+        visual_config.root_position={256,0,640};
+        visual_config.root_yaw=808;
+        visual_config.apply_frontend_view=true;
+        visual_config.frontend_angles={2051,191,0};
+        const auto visual_runtime=nba97::build_zdomf_runtime_pose(
+            model.pivots,trig,visual_pose,visual_config);
         std::array<int,4> bounds{{512,240,-1,-1}};
         std::size_t saturated=0,visible=0;
         std::vector<Rgb> image(512*240,{5,8,16});
@@ -453,8 +684,8 @@ int main(int argc,char** argv) {
             std::array<nba97::ZdomfWorldVec3,3> world{};
             for(std::size_t corner=0;corner<3;++corner) {
                 const auto& source=face.corners[corner];
-                world[corner]=nba97::apply_zdomf_runtime_pose(
-                    runtime,source.part,source.position);
+                world[corner]=nba97::apply_zdomf_runtime_record_pose(
+                    visual_runtime,source.part,source.position);
                 world_bounds[0]=std::min(world_bounds[0],int(world[corner].x));
                 world_bounds[1]=std::min(world_bounds[1],int(world[corner].y));
                 world_bounds[2]=std::min(world_bounds[2],int(world[corner].z));
