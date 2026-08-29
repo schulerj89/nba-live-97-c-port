@@ -14,11 +14,22 @@ struct ZdomfRuntimeConfig {
     ZdomfWorldVec3 root_position{};
     std::int16_t root_yaw = 0;
     std::int16_t part11_angle = 0;
+    bool apply_frontend_view = false;
 };
 
 struct ZdomfRuntimePose {
     ZdomfHierarchy hierarchy{};
+    std::array<ZdomfTransform, 20> part_matrices{};
+    std::array<ZdomfWorldVec3, 20> part_origins{};
+    std::array<ZdomfWorldVec3, 20> part_endpoints{};
+    std::array<ZdomfTransform, 8> mirrored_matrices{};
+    std::array<ZdomfWorldVec3, 8> mirrored_origins{};
+    std::array<ZdomfWorldVec3, 8> mirrored_endpoints{};
+    // FUN_80066090 publishes four chain-end offsets used by later attachment
+    // and special-group stages: parts 3, 7, 15, and 19.
+    std::array<ZdomfWorldVec3, 4> group_offsets{};
     ZdomfTransform root_transform{};
+    ZdomfTransform frontend_view_transform{};
     std::int32_t scale_16_16 = 0;
     ZdomfWorldVec3 root_translation{};
 };
@@ -38,5 +49,10 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
 ZdomfWorldVec3 apply_zdomf_runtime_pose(const ZdomfRuntimePose& runtime,
                                         std::size_t part,
                                         const ZdomfVec3& vertex);
+
+ZdomfWorldVec3 apply_zdomf_runtime_mirrored_pose(
+    const ZdomfRuntimePose& runtime,
+    std::size_t part,
+    const ZdomfVec3& vertex);
 
 } // namespace nba97

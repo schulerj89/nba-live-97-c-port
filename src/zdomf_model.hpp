@@ -34,15 +34,20 @@ struct ZdomfLayout {
     std::size_t descriptor_offset = 0;
     std::size_t primary_packet_a_offset = 0;
     std::size_t primary_packet_b_offset = 0;
+    std::size_t secondary_packet_a_offset = 0;
+    std::size_t secondary_packet_b_offset = 0;
     std::size_t part_header_offset = 0;
     std::size_t transformed_vertex_offset = 0;
     std::size_t transformed_vertex_end = 0;
+    std::size_t secondary_source_offset = 0;
+    std::size_t secondary_source_end = 0;
 };
 
 struct ZdomfModel {
     std::array<ZdomfVec3, 20> pivots{};
     std::array<std::uint32_t, 20> part_triangle_counts{};
     std::vector<ZdomfFace> primary_faces;
+    std::vector<ZdomfFace> secondary_faces;
     ZdomfLayout layout{};
     std::uint32_t secondary_face_count = 0;
     std::uint32_t secondary_triangle_count = 0;

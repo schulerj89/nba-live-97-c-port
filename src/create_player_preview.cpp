@@ -192,6 +192,8 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
 void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
                                std::uint32_t elapsed_ms) const {
     const auto& clip=mocap_.clips[1];
+    // FUN_80035260 explicitly selects clip 1 through FUN_80034CC8 before
+    // FUN_800351F4 initializes playback.
     const auto pose=sample_zdomf_mocap(mocap_,1,(elapsed_ms/33u)%clip.logical_ticks);
     const auto runtime=build_zdomf_runtime_pose(
         model_.pivots,packed_trig_,pose,{editor.height_inches,{0,0,0},0,0});
@@ -265,7 +267,7 @@ std::string CreatePlayerPreview::description() const {
         " mixed-part="+std::to_string(model_.mixed_part_face_count)+
         " secondary-triangles="+std::to_string(model_.secondary_face_count)+layout.str()+" team-models="+
         std::to_string(team_family_count_)+" uniforms="+
-        std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-clips=6 create=18keys/36ticks base-transform-sets="+
+        std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-clips=6 create=clip1/18keys/36ticks base-transform-sets="+
         std::to_string(base_transforms_.available_sets)+
         " hierarchy=3roots/depth"+std::to_string(hierarchy_.max_depth)+
         " projection=RTPS(H="+std::to_string(projection_.projection_distance)+

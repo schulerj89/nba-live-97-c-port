@@ -38,26 +38,33 @@ int main() {
     try {
         std::vector<std::uint8_t> data(0xCA4, 0);
         put32(data, 0xC6C, 2); // primary faces
-        put32(data, 0xC70, 0); // secondary faces
+        put32(data, 0xC70, 1); // secondary faces
 
-        auto cursor = std::size_t{0xCA4} + 2 * 12;
+        auto cursor = std::size_t{0xCA4} + 3 * 12;
         put32(data, cursor, 0); put32(data, cursor + 4, 0); put32(data, cursor + 8, 0);
         cursor += 12;
         cursor += 4;      // table B sentinel
         cursor += 2 * 12; // primary index table 0
-        cursor += 4;      // secondary index table 0 sentinel
+        cursor += 4 * 4;  // secondary index table 0 + sentinel
         cursor += 2 * 12; // primary index table 1
         cursor += 2 * 12; // primary index table 2
-        cursor += 4;      // secondary index table 2 sentinel
+        cursor += 1 * 12; // secondary index table 1
+        cursor += 4 * 4;  // secondary index table 2 + sentinel
         const auto packet_a = cursor;
         cursor += 2 * 32;
         cursor += 2 * 32;
+        const auto secondary_packet_a = cursor;
+        cursor += 32;
+        cursor += 32;
         cursor += 4;      // packet-bank sentinel
         const auto part_headers = cursor;
         put32(data, part_headers + 2 * 16, 2);
         put32(data, part_headers + 3 * 16, 1);
+        put32(data, part_headers + 20 * 16, 1);
         cursor += 20 * 16 + 6 * 16 + 4;
         cursor += 3 * 64; // two source-record banks per triangle
+        cursor += 1 * 64; // secondary source-record banks
+        const auto secondary_source = cursor - 1 * 64;
         const auto transformed = cursor;
         data.resize(transformed + 3 * 24);
 
@@ -66,6 +73,9 @@ int main() {
         put_vertex(data, transformed + 16, 12, 22, 32);
         put_vertex(data, transformed + 24, 40, 50, 60);  // part 2, tri 1
         put_vertex(data, transformed + 48, -7, -8, -9);  // part 3, tri 0
+        put_vertex(data, secondary_source + 8, 70, 80, 90);
+        put_vertex(data, secondary_source + 16, 71, 81, 91);
+        put_vertex(data, secondary_source + 24, 72, 82, 92);
 
         // Face 0 is wholly part 2. Face 1 deliberately crosses part 3 -> 2.
         put32(data, 0xCA4 + 0, 0x00000200);
@@ -74,6 +84,9 @@ int main() {
         put32(data, 0xCA4 + 12, 0x00000300);
         put32(data, 0xCA4 + 16, 0x00010200);
         put32(data, 0xCA4 + 20, 0x00000201);
+        put32(data, 0xCA4 + 24, 0x00000000);
+        put32(data, 0xCA4 + 28, 0x00000001);
+        put32(data, 0xCA4 + 32, 0x00000002);
 
         for (std::size_t face = 0; face < 2; ++face) {
             const auto packet = packet_a + face * 32;
@@ -82,14 +95,25 @@ int main() {
             put32(data, packet + 20, 0x003E281E);
             put32(data, packet + 28, 0x00003C32);
         }
+        put32(data, secondary_packet_a + 4, 0x24807F7E);
+        put32(data, secondary_packet_a + 12, 0x5678140A);
+        put32(data, secondary_packet_a + 20, 0x003E281E);
+        put32(data, secondary_packet_a + 28, 0x00003C32);
 
         const auto model = nba97::decode_zdomf_model(data);
         check(model.primary_faces.size() == 2, "primary face count");
+        check(model.secondary_faces.size() == 1 &&
+              model.secondary_faces[0].corners[0].part == 1 &&
+              model.secondary_faces[0].corners[2].position.z == 92,
+              "secondary six-group face decode");
         check(model.mixed_part_face_count == 1, "mixed-part face count");
         check(model.part_triangle_counts[2] == 2 && model.part_triangle_counts[3] == 1,
               "part triangle counts");
         check(model.layout.primary_packet_a_offset == packet_a, "derived packet offset");
         check(model.layout.transformed_vertex_offset == transformed, "derived vertex offset");
+        check(model.layout.secondary_packet_a_offset == secondary_packet_a &&
+              model.layout.secondary_source_offset == secondary_source,
+              "secondary packet/source offsets");
         const auto& mixed = model.primary_faces[1];
         check(mixed.corners[0].part == 3 && mixed.corners[1].part == 2 &&
               mixed.corners[2].part == 2, "per-corner part ownership");

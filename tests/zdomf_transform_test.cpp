@@ -35,8 +35,11 @@ int main() {
               "identity fixed-point transform");
         const auto rotated = nba97::apply_zdomf_transform(
             set.parts[1], nba97::ZdomfVec3{10, 0, 0});
-        check(rotated.x == 0 && rotated.y == 10 && rotated.z == 0,
-              "quarter-turn fixed-point transform");
+        check(set.parts[1].rotation[0][1] == 4096 &&
+              set.parts[1].rotation[1][0] == -4096,
+              "GTE row layout");
+        check(rotated.x == 0 && rotated.y == -10 && rotated.z == 0,
+              "retail quarter-turn fixed-point transform");
         std::cout << "ZDOMF TRANSFORM: PASS - FUN_80067100 matrix construction and "
                      "FUN_80067378 fixed-point application\n";
         return 0;

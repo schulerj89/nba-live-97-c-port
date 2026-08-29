@@ -1,5 +1,6 @@
 #include "zdomf_transform.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -99,6 +100,15 @@ ZdomfTransform make_rotation_impl(const std::vector<std::uint8_t>& trig,
     out.rotation[1][2] = static_cast<std::int16_t>(
         shift12(std::int64_t(cxsy) * z.sine) -
         shift12(std::int64_t(x.sine) * z.cosine));
+
+    // FUN_80067100 derives the three axis vectors above, then packs them for
+    // the GTE as matrix rows.  Treating the derived vectors as host rows
+    // transposes the live MATRIX record.  FUN_800631B0 proves the packed
+    // layout with part 9: the retail matrix at 800EFB80 is the transpose of
+    // the uncorrected host result.
+    std::swap(out.rotation[0][1], out.rotation[1][0]);
+    std::swap(out.rotation[0][2], out.rotation[2][0]);
+    std::swap(out.rotation[1][2], out.rotation[2][1]);
     return out;
 }
 

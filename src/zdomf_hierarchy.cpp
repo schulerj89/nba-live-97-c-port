@@ -108,12 +108,12 @@ ZdomfWorldVec3 apply_zdomf_hierarchy(
     }
     const auto& node = hierarchy.parts[part];
     const auto rotated = rotate(node.world_transform, local_vertex);
-    // FUN_80066090 transforms the part pivot through the composed rotation,
-    // adds the parent translation, and stores that joint endpoint as this
-    // part matrix's translation before any vertices are submitted.
-    return {rotated.x + node.joint_end.x,
-            rotated.y + node.joint_end.y,
-            rotated.z + node.joint_end.z};
+    // FUN_800632D4/FUN_80069A08 load the part rotation but load translation
+    // from the parent matrix pointer at part+0xA4. The part's own endpoint is
+    // the origin inherited by its children, not its own vertex translation.
+    return {rotated.x + node.joint_origin.x,
+            rotated.y + node.joint_origin.y,
+            rotated.z + node.joint_origin.z};
 }
 
 } // namespace nba97

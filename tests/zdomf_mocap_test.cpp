@@ -80,13 +80,25 @@ int main() {
         for (auto& pivot : pivots) pivot = {10, 0, 0};
         nba97::ZdomfMocapPose still{};
         still.root_height = 160;
+        nba97::ZdomfRuntimeConfig isolated_runtime_config{64, {1, 2, 3}, 0, 0};
+        isolated_runtime_config.apply_frontend_view = false;
         const auto runtime = nba97::build_zdomf_runtime_pose(
-            pivots, trig, still, {64, {1, 2, 3}, 0, 0});
+            pivots, trig, still, isolated_runtime_config);
         const auto placed = nba97::apply_zdomf_runtime_pose(runtime, 0, {0, 0, 0});
         check(runtime.scale_16_16 == 64 * 0x270 &&
               runtime.root_translation.y == 44 &&
-              placed.x == 7 && placed.y == 44 && placed.z == 3,
-              "FUN_800696C4 root lift and scaled endpoint");
+              placed.x == 1 && placed.y == 44 && placed.z == 3 &&
+              runtime.part_origins[0].x == 0 &&
+              runtime.part_endpoints[0].x == 10 &&
+              runtime.part_origins[1].x == 10 &&
+              runtime.group_offsets[0].x == 40 &&
+              runtime.group_offsets[2].x == 60,
+              "FUN_80066090 parent origins/groups and FUN_800696C4 root lift");
+        check(runtime.mirrored_matrices[0].rotation[0][0] == 4096 &&
+              runtime.mirrored_matrices[0].rotation[1][1] == -4096 &&
+              runtime.mirrored_matrices[0].rotation[2][2] == -4096 &&
+              runtime.mirrored_origins[1].x == 10,
+              "FUN_80066090 second matrix and mirrored parent chain");
         std::cout << "ZDOMF MOCAP: PASS - two six-entry directories, 8+12 joint frames, "
                      "wrapped blending, height scale, and runtime root placement\n";
         return 0;
