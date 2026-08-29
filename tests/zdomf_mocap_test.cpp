@@ -99,6 +99,12 @@ int main() {
               runtime.mirrored_matrices[0].rotation[2][2] == -4096 &&
               runtime.mirrored_origins[1].x == 10,
               "FUN_80066090 second matrix and mirrored parent chain");
+        check(runtime.scaled_root_transform.rotation[0][0] == 2496 &&
+              runtime.scaled_root_transform.rotation[1][1] == 2496 &&
+              runtime.scaled_root_transform.rotation[2][2] == 2496 &&
+              runtime.composed_root_transform.rotation[0][0] == 2496 &&
+              runtime.composed_part_matrices[0].rotation[0][0] == 2496,
+              "staged FUN_80062C40/80066FF4/80066090 matrix chain");
         std::cout << "ZDOMF MOCAP: PASS - two six-entry directories, 8+12 joint frames, "
                      "wrapped blending, height scale, and runtime root placement\n";
         return 0;

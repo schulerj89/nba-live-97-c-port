@@ -43,6 +43,15 @@ int main() {
         check(root_result.matrix.rotation == expected_root,
               "FUN_80066FF4 live root composition differs");
 
+        nba97::ZdomfTransform signed_scale_probe{};
+        signed_scale_probe.rotation[0] = {{4096, -4096, 1}};
+        const auto scaled_probe = nba97::scale_zdomf_gte_rotation(
+            signed_scale_probe, 39312);
+        check(scaled_probe.rotation[0][0] == 2457 &&
+              scaled_probe.rotation[0][1] == -2457 &&
+              scaled_probe.rotation[0][2] == 0,
+              "FUN_80062C40 signed high-word scaling differs");
+
         // FUN_80066090 then consumes that exact matrix at PC 0x80066434,
         // part r7=9, but submits rows from the local part matrix.
         nba97::ZdomfTransform gte{};
@@ -73,9 +82,22 @@ int main() {
               "live 0x80066434 first output word differs");
         check(result.matrix.translation == std::array<std::int32_t, 3>{{0, 0, 0}},
               "rotation composition leaked translation");
+
+        // Exact continuation of the live part-9 capture. FUN_80066090 loads
+        // this composed matrix, parent translation, and attachment vector,
+        // then stores MAC1..MAC3 at 0x80138FA8..0x80138FB0.
+        nba97::ZdomfTransform captured_part9{};
+        captured_part9.rotation = {{{{1978, 2819, -1882}},
+                                    {{1856, -241, 1588}},
+                                    {{1022, -1693, -1454}}}};
+        const auto captured_translation = nba97::transform_zdomf_gte_attachment(
+            captured_part9, {563, -39, 553}, {91, 0, 0});
+        check(captured_translation ==
+                  std::array<std::int32_t, 3>{{606, 2, 575}},
+              "FUN_80066090 live part9 attachment translation differs");
         std::cout << "ZDOMF GTE COMPOSE: PASS - live view x scaled-root "
-                     "matrix, part9 first word 0xF422065D, and all IR values "
-                     "match\n";
+                     "matrix, part9 first word 0xF422065D, all IR values, "
+                     "and translated origin {606,2,575} match\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "ZDOMF GTE COMPOSE: FAIL - " << error.what() << '\n';

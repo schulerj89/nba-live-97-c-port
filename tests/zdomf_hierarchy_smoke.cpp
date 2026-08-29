@@ -165,6 +165,65 @@ int main(int argc,char** argv) {
                      <<closest_part9.rotation[row][2];
         }
         std::cout<<'\n';
+        const std::array<std::array<std::int16_t,3>,3> live_frontend{{
+            {{6272,0,-1892}},{{-5,-4096,-19}},{{-1183,19,-3920}},
+        }};
+        std::uint64_t closest_yz_error=~std::uint64_t{0};
+        std::int16_t closest_y=0,closest_z=0;
+        for(int y=0;y<4096;++y) {
+            auto y_probe=nba97::make_zdomf_rotation(
+                trig,{0,static_cast<std::int16_t>(y),0});
+            y_probe.rotation[0][2]=static_cast<std::int16_t>(
+                (static_cast<std::int32_t>(y_probe.rotation[0][2])*16)/10);
+            if(y_probe.rotation[0][2]!=live_frontend[0][2])continue;
+            for(int z=0;z<4096;++z) {
+                auto candidate=nba97::make_zdomf_rotation(
+                    trig,{0,static_cast<std::int16_t>(y),static_cast<std::int16_t>(z)});
+                for(auto& value:candidate.rotation[0])
+                    value=static_cast<std::int16_t>((static_cast<std::int32_t>(value)*16)/10);
+                std::uint64_t error=0;
+                for(std::size_t column=0;column<3;++column) {
+                    const auto delta=std::int64_t(candidate.rotation[0][column])-
+                                     live_frontend[0][column];
+                    error+=static_cast<std::uint64_t>(delta*delta);
+                }
+                if(error<closest_yz_error) {
+                    closest_yz_error=error;
+                    closest_y=static_cast<std::int16_t>(y);
+                    closest_z=static_cast<std::int16_t>(z);
+                }
+            }
+        }
+        std::uint64_t closest_view_error=~std::uint64_t{0};
+        std::int16_t closest_x=0;
+        nba97::ZdomfTransform closest_view{};
+        for(int x=0;x<4096;++x) {
+            auto candidate=nba97::make_zdomf_rotation(
+                trig,{static_cast<std::int16_t>(x),closest_y,closest_z});
+            for(auto& value:candidate.rotation[0])
+                value=static_cast<std::int16_t>((static_cast<std::int32_t>(value)*16)/10);
+            std::uint64_t error=0;
+            for(std::size_t row=0;row<3;++row)for(std::size_t column=0;column<3;++column) {
+                const auto delta=std::int64_t(candidate.rotation[row][column])-
+                                 live_frontend[row][column];
+                error+=static_cast<std::uint64_t>(delta*delta);
+            }
+            if(error<closest_view_error) {
+                closest_view_error=error;
+                closest_x=static_cast<std::int16_t>(x);
+                closest_view=candidate;
+            }
+        }
+        std::cout<<"TRACE live frontend closest angles="<<closest_x<<'/'
+                 <<closest_y<<'/'<<closest_z<<" error2="<<closest_view_error
+                 <<" matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<closest_view.rotation[row][0]<<'/'
+                     <<closest_view.rotation[row][1]<<'/'
+                     <<closest_view.rotation[row][2];
+        }
+        std::cout<<'\n';
         const std::array<std::array<std::int16_t,3>,3> retail_part9_local{{
             {{-96,3442,2213}},
             {{1076,2155,-3308}},
@@ -202,6 +261,38 @@ int main(int argc,char** argv) {
         if(closest_part9_local_tick!=0 || closest_part9_local_error!=0)
             throw std::runtime_error(
                 "live part9 local matrix no longer matches decoded mocap tick 0");
+        const std::array<std::array<std::int16_t,3>,3> live_scaled_root{{
+            {{-2108,0,1259}},{{0,2457,0}},{{-1260,0,-2108}},
+        }};
+        std::uint64_t closest_root_error=~std::uint64_t{0};
+        std::size_t closest_root_angle=0;
+        nba97::ZdomfTransform closest_root{};
+        for(std::size_t angle=0;angle<4096;++angle) {
+            const auto rotation=nba97::make_zdomf_rotation(
+                trig,{0,static_cast<std::int16_t>(angle),0});
+            const auto candidate=nba97::scale_zdomf_gte_rotation(
+                rotation,nba97::zdomf_height_scale(63));
+            std::uint64_t error=0;
+            for(std::size_t row=0;row<3;++row)for(std::size_t column=0;column<3;++column) {
+                const auto delta=std::int64_t(candidate.rotation[row][column])-
+                                 live_scaled_root[row][column];
+                error+=static_cast<std::uint64_t>(delta*delta);
+            }
+            if(error<closest_root_error) {
+                closest_root_error=error;
+                closest_root_angle=angle;
+                closest_root=candidate;
+            }
+        }
+        std::cout<<"TRACE live scaled-root closest yaw="<<closest_root_angle
+                 <<" error2="<<closest_root_error<<" matrix=";
+        for(std::size_t row=0;row<3;++row) {
+            if(row)std::cout<<';';
+            std::cout<<closest_root.rotation[row][0]<<'/'
+                     <<closest_root.rotation[row][1]<<'/'
+                     <<closest_root.rotation[row][2];
+        }
+        std::cout<<'\n';
         std::array<int,6> raw_bounds{{32767,32767,32767,-32768,-32768,-32768}};
         for(const auto& face:model.primary_faces)for(const auto& corner:face.corners) {
             raw_bounds[0]=std::min(raw_bounds[0],int(corner.position.x));
@@ -231,6 +322,11 @@ int main(int argc,char** argv) {
         // FUN_80035260 explicitly calls FUN_80034CC8(context,1) before
         // FUN_800351F4, selecting the 18-key Create Player clip.
         const auto pose=nba97::sample_zdomf_mocap(mocap,1,0);
+        std::cout<<"TRACE part9 attachment decoded="<<model.pivots[9].x<<'/'
+                 <<model.pivots[9].y<<'/'<<model.pivots[9].z
+                 <<" live-current=91/0/0 pending-preprocess="
+                 <<((model.pivots[9].x==91 && model.pivots[9].y==0 &&
+                     model.pivots[9].z==0)?"no":"yes")<<'\n';
         // FUN_800351F4 stores {0x2000,0x5000,0}; FUN_800696C4 shifts them
         // and maps context +8/+10/+C to render X/Y/Z respectively.
         nba97::ZdomfRuntimeConfig trace_config{75,{256,0,640},0,0};
@@ -297,7 +393,9 @@ int main(int argc,char** argv) {
                                       original_origins[part].y+offset.y,
                                       original_origins[part].z+offset.z};
         }
-        std::cout<<"TRACE corrected composite="
+        // Retained only as a regression comparison for the superseded host
+        // multiplication path. The live GTE fixtures above are authoritative.
+        std::cout<<"TRACE legacy host composite="
                  <<original_part_matrix.rotation[0][0]<<'/'
                  <<original_part_matrix.rotation[0][1]<<'/'
                  <<original_part_matrix.rotation[0][2]<<';'
@@ -310,8 +408,10 @@ int main(int argc,char** argv) {
         if(original_part_matrix.rotation[0][0]!=572 ||
            original_part_matrix.rotation[1][0]!=-2195 ||
            original_part_matrix.rotation[2][0]!=1895)
-            throw std::runtime_error("polygon trace composite matrix changed");
+            throw std::runtime_error("legacy host comparison matrix changed");
         const auto original_rotated=rotate_trace(original_part_matrix,trace_base.position);
+        const auto gte_rotated=rotate_trace(
+            runtime.composed_part_matrices[trace_base.part],trace_base.position);
         auto port_staged=rotate_trace(runtime.part_matrices[trace_base.part],trace_base.position);
         port_staged.x=static_cast<std::int32_t>(
             std::int64_t(port_staged.x)*runtime.scale_16_16/65536);
@@ -324,12 +424,14 @@ int main(int argc,char** argv) {
             static_cast<std::int16_t>(port_staged.y),
             static_cast<std::int16_t>(port_staged.z)};
         port_staged=rotate_trace(runtime.frontend_view_transform,staged16);
-        std::cout<<"TRACE corrected rotation original="<<original_rotated.x<<'/'
+        std::cout<<"TRACE rotation comparison legacy-host="<<original_rotated.x<<'/'
                  <<original_rotated.y<<'/'<<original_rotated.z<<" port="
-                 <<port_staged.x<<'/'<<port_staged.y<<'/'<<port_staged.z<<'\n';
+                 <<port_staged.x<<'/'<<port_staged.y<<'/'<<port_staged.z
+                 <<" gte="<<gte_rotated.x<<'/'<<gte_rotated.y<<'/'
+                 <<gte_rotated.z<<'\n';
         if(original_rotated.x!=40||original_rotated.y!=-5||original_rotated.z!=1||
            port_staged.x!=38||port_staged.y!=-4||port_staged.z!=1)
-            throw std::runtime_error("polygon trace transform order changed");
+            throw std::runtime_error("legacy transform comparison changed");
         const auto trace_world=nba97::apply_zdomf_runtime_pose(
             runtime,trace_base.part,trace_base.position);
         std::array<int,4> bounds{{512,240,-1,-1}};
@@ -502,7 +604,7 @@ int main(int argc,char** argv) {
                  <<runtime.part_matrices[trace_base.part].rotation[2][1]<<'/'
                  <<runtime.part_matrices[trace_base.part].rotation[2][2]
                  <<",viewM00="<<runtime.frontend_view_transform.rotation[0][0]
-                 <<",originalComposite="
+                 <<",legacyHostComposite="
                  <<original_part_matrix.rotation[0][0]<<'/'
                  <<original_part_matrix.rotation[0][1]<<'/'
                  <<original_part_matrix.rotation[0][2]<<';'
@@ -512,7 +614,7 @@ int main(int argc,char** argv) {
                  <<original_part_matrix.rotation[2][0]<<'/'
                  <<original_part_matrix.rotation[2][1]<<'/'
                  <<original_part_matrix.rotation[2][2]
-                 <<",rotationXYZ(original="<<original_rotated.x<<'/'
+                 <<",rotationXYZ(legacyHost="<<original_rotated.x<<'/'
                  <<original_rotated.y<<'/'<<original_rotated.z
                  <<",portStaged="<<port_staged.x<<'/'<<port_staged.y<<'/'
                  <<port_staged.z<<')'
@@ -534,7 +636,7 @@ int main(int argc,char** argv) {
                  <<largest_edge_world[0].x<<'/'<<largest_edge_world[0].y<<'/'<<largest_edge_world[0].z<<';'
                  <<largest_edge_world[1].x<<'/'<<largest_edge_world[1].y<<'/'<<largest_edge_world[1].z<<';'
                  <<largest_edge_world[2].x<<'/'<<largest_edge_world[2].y<<'/'<<largest_edge_world[2].z
-                 <<" original="
+                 <<" legacyHost="
                  <<largest_edge_original[0].x<<'/'<<largest_edge_original[0].y<<'/'<<largest_edge_original[0].z<<';'
                  <<largest_edge_original[1].x<<'/'<<largest_edge_original[1].y<<'/'<<largest_edge_original[1].z<<';'
                  <<largest_edge_original[2].x<<'/'<<largest_edge_original[2].y<<'/'<<largest_edge_original[2].z

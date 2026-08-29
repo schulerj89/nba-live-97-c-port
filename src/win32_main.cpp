@@ -392,7 +392,7 @@ private:
         validateMenuAsset(menu_root / "ZFEPLAYR.ART", 73984);
         create_player_preview_=std::make_unique<nba97::CreatePlayerPreview>(options_.asset_root);
         trace_.log("CREATE-MODEL-DECODE", create_player_preview_->description()+
-            "; 0x800687BC relocation, 0x80035260 8+12-joint mocap, 0x80065D40 blending, 0x80069098 hierarchy, 0x80062C00 height scale, and runtime root placement are native; exact 0x80066090 dual-matrix/GTE equivalence and textured PS1 packets remain under translation");
+            "; 0x800687BC relocation, 0x80035260 8+12-joint mocap, 0x80065D40 blending, 0x80069098 hierarchy, 0x80062C40 scaling, and the primary 0x80066FF4/0x80066090 rotation plus attachment-MVMVA are native-tested; attachment preprocessing/parent routing, dynamic frontend-camera state, mirrored matrices, and textured PS1 packets remain under translation");
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);

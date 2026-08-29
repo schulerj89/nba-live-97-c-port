@@ -116,6 +116,14 @@ ZdomfRuntimePose build_zdomf_runtime_pose(
         packed_trig, {0, static_cast<std::int16_t>(config.root_yaw * 4), 0});
     out.frontend_view_transform = frontend_view_transform(
         packed_trig, config.apply_frontend_view);
+    out.scaled_root_transform = scale_zdomf_gte_rotation(
+        out.root_transform, out.scale_16_16);
+    out.composed_root_transform = compose_zdomf_gte_columns(
+        out.frontend_view_transform, out.scaled_root_transform).matrix;
+    for (std::size_t part = 0; part < out.composed_part_matrices.size(); ++part) {
+        out.composed_part_matrices[part] = compose_zdomf_gte_rows(
+            out.composed_root_transform, local[part]).matrix;
+    }
     // FUN_800696C4: ((signed frame-root >> 4) * scale >> 16) + root + 0x24.
     out.root_translation = config.root_position;
     out.root_translation.y += 0x24 + shift16(

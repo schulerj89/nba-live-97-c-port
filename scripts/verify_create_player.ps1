@@ -7,6 +7,7 @@ $coreTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_tests.exe'
 $storeTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_store_tests.exe'
 $modelTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_model_tests.exe'
 $transformTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_transform_tests.exe'
+$gteComposeTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_gte_compose_tests.exe'
 $projectionTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_projection_tests.exe'
 $hierarchyTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_tests.exe'
 $mocapTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_mocap_tests.exe'
@@ -23,6 +24,7 @@ try {
     if (-not (Test-Path -LiteralPath $storeTest)) { throw "Missing Create Player store test: $storeTest" }
     if (-not (Test-Path -LiteralPath $modelTest)) { throw "Missing ZDOMF model decoder test: $modelTest" }
     if (-not (Test-Path -LiteralPath $transformTest)) { throw "Missing ZDOMF transform test: $transformTest" }
+    if (-not (Test-Path -LiteralPath $gteComposeTest)) { throw "Missing ZDOMF GTE composition test: $gteComposeTest" }
     if (-not (Test-Path -LiteralPath $projectionTest)) { throw "Missing ZDOMF projection test: $projectionTest" }
     if (-not (Test-Path -LiteralPath $hierarchyTest)) { throw "Missing ZDOMF hierarchy test: $hierarchyTest" }
     if (-not (Test-Path -LiteralPath $mocapTest)) { throw "Missing ZDOMF mocap test: $mocapTest" }
@@ -43,6 +45,9 @@ try {
     & $transformTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF fixed-point transform checks failed.' }
     Write-Host 'CREATE PLAYER TRANSFORM: PASS - FUN_80067100 matrix construction and FUN_80067378 fixed-point application.'
+    & $gteComposeTest
+    if ($LASTEXITCODE -ne 0) { throw 'ZDOMF GTE composition checks failed.' }
+    Write-Host 'CREATE PLAYER GTE COMPOSE: PASS - live FUN_80066FF4 column path plus FUN_80066090 row and attachment-translation paths.'
     & $projectionTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF GTE projection checks failed.' }
     Write-Host 'CREATE PLAYER PROJECTION: PASS - recovered camera state and FUN_8006734C RTPS fixed-point boundary.'
@@ -117,7 +122,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
     Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM preview frames, two-directory mocap decoding/blending, runtime hierarchy/root/height transforms, filled 3D smoke rendering, and numeric RTPS/camera coverage. Exact dual-matrix FUN_80066090 equivalence, textured PS1 polygon packets, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM preview frames, two-directory mocap decoding/blending, runtime hierarchy/root/height transforms, exact primary FUN_80066FF4/FUN_80066090 rotation and attachment-MVMVA fixtures, filled 3D smoke rendering, and numeric RTPS/camera coverage. Dynamic attachment preprocessing/parent routing, mirrored matrices, dynamic frontend-camera state, textured PS1 polygon packets, roster insertion, and original visual scoring remain pending.'
 } finally {
     Pop-Location
 }

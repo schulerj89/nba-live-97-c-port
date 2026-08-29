@@ -1,6 +1,7 @@
 #pragma once
 
 #include "zdomf_hierarchy.hpp"
+#include "zdomf_gte_compose.hpp"
 #include "zdomf_mocap.hpp"
 
 #include <array>
@@ -30,6 +31,12 @@ struct ZdomfRuntimePose {
     std::array<ZdomfWorldVec3, 4> group_offsets{};
     ZdomfTransform root_transform{};
     ZdomfTransform frontend_view_transform{};
+    // Staged original FUN_80062C40 -> FUN_80066FF4 -> FUN_80066090 path.
+    // These remain separate from the active renderer until their translation
+    // and attachment inputs have been proven at the same boundary.
+    ZdomfTransform scaled_root_transform{};
+    ZdomfTransform composed_root_transform{};
+    std::array<ZdomfTransform, 20> composed_part_matrices{};
     std::int32_t scale_16_16 = 0;
     ZdomfWorldVec3 root_translation{};
 };
