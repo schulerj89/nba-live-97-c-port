@@ -18,6 +18,8 @@
 
 namespace nba97 {
 
+class CreatePlayerPreview;
+
 enum class MenuRow : std::uint8_t { GameOptions, FrontendButtons };
 
 class MainMenu final {
@@ -405,7 +407,8 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const RosterDatabase& database,
                                   const PshFont& font,
                                   const MenuSpritePack& sprites,
-                                  std::uint32_t elapsed_ms);
+                                  std::uint32_t elapsed_ms,
+                                  const CreatePlayerPreview* preview = nullptr);
 
 PshImage renderCreatedPlayerPicker(const Nba97CreatedPlayerPicker& picker,
                                    const Nba97CreatedPlayerCatalog& catalog,

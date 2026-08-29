@@ -114,6 +114,13 @@ int main() {
     assert(!nba97_create_editor_move(&editor, 1));
     assert(nba97_create_editor_append_letter(&editor, 'a'));
     assert(std::string(editor.first_name) == "A");
+    for (char letter : std::string("BCDEFGHIJKL"))
+        assert(nba97_create_editor_append_letter(&editor, letter));
+    assert(std::string(editor.first_name) == "ABCDEFGHIJKL");
+    assert(!nba97_create_editor_append_letter(&editor, 'M'));
+    for (int index = 0; index < 11; ++index)
+        assert(nba97_create_editor_backspace(&editor));
+    assert(std::string(editor.first_name) == "A");
     assert(nba97_create_editor_move(&editor, 1));
     assert(!nba97_create_editor_move(&editor, 1));
     assert(nba97_create_editor_append_letter(&editor, 'b'));
@@ -121,6 +128,31 @@ int main() {
     assert(nba97_create_editor_move(&editor, 1));
     assert(editor.selected_field == NBA97_CREATE_TEAM);
     assert(nba97_create_editor_adjust(&editor, 1) && editor.team == 1);
+
+    editor.selected_field = NBA97_CREATE_COLLEGE;
+    nba97_create_editor_set_college_count(&editor, 4);
+    assert(nba97_create_editor_adjust(&editor, -1) && editor.college == 3);
+    assert(nba97_create_editor_adjust(&editor, 1) && editor.college == 0);
+    editor.selected_field = NBA97_CREATE_TEAM;
+
+    Nba97CreateEditor scrolling = editor;
+    scrolling.selected_field = NBA97_CREATE_HAND;
+    scrolling.visible_first_field = scrolling.previous_visible_first_field = 2;
+    assert(nba97_create_editor_move(&scrolling, 1));
+    assert(scrolling.selected_field == NBA97_CREATE_HEIGHT &&
+           scrolling.previous_visible_first_field == 2 &&
+           scrolling.visible_first_field == 3 &&
+           scrolling.scroll_ticks_remaining == 6);
+    for (int tick = 0; tick < 6; ++tick) nba97_create_editor_tick(&scrolling);
+    assert(scrolling.scroll_ticks_remaining == 0);
+
+    scrolling.selected_field = NBA97_CREATE_DUNKING;
+    scrolling.visible_first_field = scrolling.previous_visible_first_field =
+        NBA97_CREATE_FIELD_GOALS;
+    assert(nba97_create_editor_move(&scrolling, 1));
+    assert(scrolling.selected_field == NBA97_CREATE_STEALING &&
+           scrolling.visible_first_field == NBA97_CREATE_FIELD_GOALS + 4 &&
+           scrolling.scroll_ticks_remaining == 6);
 
     while (editor.selected_field < NBA97_CREATE_HEIGHT)
         assert(nba97_create_editor_move(&editor, 1));

@@ -12,17 +12,23 @@
     "function_count": 8,
     "instruction_count": 1018,
     "behavior_complete": 0,
-    "researched_only": 8
+    "native_exercised_partial": 5,
+    "researched_only": 3
   },
   "verified_slice": {
-    "name": "manager availability and New-player editor behavior",
-    "scenarios": 11,
+    "name": "manager, New-player editor behavior, and articulated preview",
+    "scenarios": 16,
     "deterministic_runs": 2,
-    "assets": "private ZSET5.PSP decode; assets are not tracked",
+    "assets": "private ZSET5.PSP plus local-only ZDOM E/F/S, ZFEMOCAP, and ZFEPLAYR families; assets are not tracked",
     "functions": ["0x8004AEBC", "0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DA74", "0x8004DAE8"]
   },
   "behavior_checks": [
     "first and last names are both required before leaving their fields",
+    "both retail 0x0D-byte name buffers accept twelve characters plus NUL",
+    "College wraps in both directions over the extracted roster school list",
+    "field-bank changes animate through the recovered six-vblank scroll window",
+    "selection tint traverses the recovered twenty-vblank neutral-to-gold transition",
+    "the 20-part ZDOM anchor graph, team SHPP uniform, height scale, and 116-frame mocap source visibly drive the native preview",
     "all 32 fields follow the audited original order",
     "new-player defaults and single-step adjustments are deterministic",
     "Down on the final Dribbling field is a no-op",
@@ -36,10 +42,10 @@
   ],
   "partial_functions": ["0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DAE8"],
   "pending": [
-    "recover exact per-field bounds and text-entry viewport behavior",
-    "decode and render the original ZFEMODEL/ZFEMOCAP player",
-    "rebuild team uniform, palette, skin, and head on field changes",
-    "recover exact editor/model animation, sound, and transitions",
+    "recover remaining exact per-field bounds",
+    "replace the articulated ZDOM preview with original textured PS1 polygon-packet rasterization",
+    "rebuild exact head, hair, facial hair, palette, and jersey-number composition",
+    "recover remaining exact editor/model camera, sound, and transition behavior",
     "insert created players into the selected team/free-agent roster exactly like FUN_8004D514",
     "original-reference visual and interaction acceptance"
   ],

@@ -19,6 +19,7 @@
 #include "roster_save_store.hpp"
 #include "create_player_store.hpp"
 #include "create_player_delete_assets.hpp"
+#include "create_player_preview.hpp"
 #include "roster_reset_assets.hpp"
 #include "reorder_preview.hpp"
 #include "trade_assets.hpp"
@@ -38,6 +39,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -388,6 +390,9 @@ private:
         validateMenuAsset(menu_root / "ZFEMODEL.BIN", 44288);
         validateMenuAsset(menu_root / "ZFEMOCAP.BIN", 22188);
         validateMenuAsset(menu_root / "ZFEPLAYR.ART", 73984);
+        create_player_preview_=std::make_unique<nba97::CreatePlayerPreview>(options_.asset_root);
+        trace_.log("CREATE-MODEL-DECODE", create_player_preview_->description()+
+            "; 0x800687BC/0x80069098 anchors and the 116-frame idle mocap stream are native; textured PS1 polygon packets remain under translation");
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);
@@ -3275,19 +3280,37 @@ private:
             throw std::runtime_error("Create Player editor fixture failed");
         const auto capture_editor = [&](const char* name, std::uint32_t elapsed = 0) {
             writePpm(nba97::renderCreatePlayerEditor(editor, roster_database_, menu_font_,
-                create_player_sprites_, elapsed), output / name);
+                create_player_sprites_, elapsed, create_player_preview_.get()), output / name);
         };
         capture_editor("editor-first-required.ppm");
+        capture_editor("editor-selector-gold.ppm", 340);
         nba97_create_editor_append_letter(&editor, 'A');
         nba97_create_editor_move(&editor, 1);
         nba97_create_editor_append_letter(&editor, 'B');
         editor.selected_field = NBA97_CREATE_HAIR_STYLE;
+        editor.previous_visible_first_field = editor.visible_first_field =
+            NBA97_CREATE_HAIR_STYLE - 3;
+        editor.scroll_ticks_remaining = 0;
         editor.skin_tone = 1;
         editor.hair_style = 1;
         editor.hair_color = 1;
         editor.facial_hair = 1;
         capture_editor("editor-appearance-layer.ppm");
+        /* 680 ms is one complete selector-pulse period, isolating mocap change
+           from the gold tint in the model-region regression crop. */
+        capture_editor("editor-model-motion-phase.ppm", 680);
+        editor.selected_field = NBA97_CREATE_HAND;
+        editor.previous_visible_first_field = editor.visible_first_field = 2;
+        nba97_create_editor_move(&editor, 1);
+        capture_editor("editor-layer-scroll-enter.ppm");
+        for(int tick=0;tick<3;++tick) nba97_create_editor_tick(&editor);
+        capture_editor("editor-layer-scroll-mid.ppm");
+        for(int tick=0;tick<3;++tick) nba97_create_editor_tick(&editor);
+        capture_editor("editor-layer-scroll-settled.ppm");
         editor.selected_field = NBA97_CREATE_DRIBBLING;
+        editor.previous_visible_first_field = editor.visible_first_field =
+            NBA97_CREATE_FIELD_GOALS + 12;
+        editor.scroll_ticks_remaining = 0;
         capture_editor("editor-ratings-final.ppm");
         nba97_create_editor_cancel(&editor.txn);
 
@@ -3337,7 +3360,7 @@ private:
         capture("full-new-disabled.ppm");
         if (create_player_menu_.enabled[1] || create_player_menu_.selected != 0)
             throw std::runtime_error("Create Player full-menu predicates failed");
-        trace_.log("CREATE-CAPTURE", "PASS: 11 deterministic 512x240 frames; manager empty/one/full predicates, required-name/appearance/final-ratings editor layers, and all three exact FEONLY Delete descriptors; ZFEMODEL visual equivalence remains separately pending");
+        trace_.log("CREATE-CAPTURE", "PASS: 16 deterministic 512x240 frames; manager empty/one/full predicates, recovered 20-vblank selector pulse, six-vblank bank scroll, articulated ZDOM/mocap phase, required-name/appearance/final-ratings layers, and all three exact FEONLY Delete descriptors; textured PS1 polygon equivalence remains separately pending");
         return 0;
     }
 
@@ -4666,6 +4689,8 @@ private:
                 music_underruns_logged_=underruns;
             }
             menu_elapsed_ms_ += now - previous_tick_;
+            if (create_player_editor_active_)
+                nba97_create_editor_tick(&create_player_editor_);
             updatePlayerPhoto();
             if(cool_fact_flash_.remaining) {
                 const auto tick=menu_elapsed_ms_/17;
@@ -5191,6 +5216,17 @@ private:
         create_player_delete_tick_=tick;
     }
 
+    std::uint16_t createPlayerCollegeCount() const {
+        std::vector<std::string> schools;
+        schools.reserve(roster_database_.players().size());
+        for (const auto& player : roster_database_.players())
+            if (!player.school_name.empty() && player.school_name != "n/a")
+                schools.push_back(player.school_name);
+        std::sort(schools.begin(), schools.end());
+        schools.erase(std::unique(schools.begin(), schools.end()), schools.end());
+        return static_cast<std::uint16_t>(schools.size() + 1u); // zero is n/a
+    }
+
     void handleCreatePlayerKey(WPARAM key) {
         if(create_player_delete_active_) {
             const auto mask=createDeleteKeyMask(key);
@@ -5217,6 +5253,8 @@ private:
                 const auto slot=nba97_created_picker_slot(&created_player_picker_);
                 if(created_player_picker_.frontend_state==0x20 &&
                    nba97_create_editor_open_edit(&create_player_editor_,&created_players_,slot)) {
+                    nba97_create_editor_set_college_count(&create_player_editor_,
+                        createPlayerCollegeCount());
                     created_player_picker_active_=false; create_player_editor_active_=true;
                     trace_.log("CREATE-EDIT", "state 0x20 selected slot="+std::to_string(slot)+
                         "; FUN_8004D514 copied the original 44-byte draft plus decoded port metadata");
@@ -5304,6 +5342,17 @@ private:
                                 : field >= NBA97_CREATE_SHOOTING_RANGE
                                     ? "; full-body preview camera"
                                     : ""));
+                if(previous!=field && create_player_editor_.scroll_ticks_remaining)
+                    trace_.log("CREATE-SCROLL", "selector bank "+
+                        std::to_string(create_player_editor_.previous_visible_first_field)+" -> "+
+                        std::to_string(create_player_editor_.visible_first_field)+
+                        "; recovered six-vblank list transition armed");
+                if(field==NBA97_CREATE_FIRST_NAME||field==NBA97_CREATE_LAST_NAME) {
+                    const auto& name=field==NBA97_CREATE_FIRST_NAME ?
+                        create_player_editor_.first_name:create_player_editor_.last_name;
+                    trace_.log("CREATE-NAME", "retail 0x0D-byte buffer length="+
+                        std::to_string(std::strlen(name))+"/12");
+                }
                 playBottomMenuSound(previous == field
                     ? recoveredMenuDirectionSound(key == VK_LEFT ? -1 : 1, 0)
                     : recoveredMenuDirectionSound(0, key == VK_UP ? -1 : 1),
@@ -5355,6 +5404,8 @@ private:
                     trace_.log("CREATE-NEW", "blocked: all 40 original slots occupied");
                     return;
                 }
+                nba97_create_editor_set_college_count(&create_player_editor_,
+                    createPlayerCollegeCount());
                 create_player_editor_active_ = true;
                 trace_.log("CREATE-NEW", "0x8004D514 opened isolated 44-byte draft slot=" +
                     std::to_string(create_player_editor_.txn.slot) +
@@ -6077,7 +6128,8 @@ private:
                     roster_database_,menu_font_,create_player_sprites_,menu_elapsed_ms_)
                 : create_player_editor_active_
                     ? nba97::renderCreatePlayerEditor(create_player_editor_, roster_database_,
-                        menu_font_, create_player_sprites_, menu_elapsed_ms_)
+                        menu_font_, create_player_sprites_, menu_elapsed_ms_,
+                        create_player_preview_.get())
                     : nba97::renderCreatePlayerMenu(create_player_menu_, menu_font_,
                         create_player_sprites_, create_player_cards_, menu_elapsed_ms_);
             if(create_player_delete_active_)
@@ -6331,6 +6383,7 @@ private:
     nba97::MenuSpritePack player_sprites_;
     nba97::MenuSpritePack users_sprites_;
     nba97::MenuSpritePack create_player_sprites_;
+    std::unique_ptr<nba97::CreatePlayerPreview> create_player_preview_;
     nba97::MenuCardPack menu_cards_;
     nba97::RosterCardPack roster_menu_cards_;
     nba97::CreatePlayerCardPack create_player_cards_;

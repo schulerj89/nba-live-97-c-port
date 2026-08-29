@@ -92,7 +92,7 @@ if(BUILD_TESTING)
     target_include_directories(nba97_frontend_help_tests PRIVATE src)
     add_test(NAME frontend_help_core COMMAND nba97_frontend_help_tests)
     add_executable(nba97_reorder_child_tests tests/reorder_child_test.cpp
-        src/main_menu.cpp src/frontend_settings.cpp src/user_profiles.cpp
+        src/main_menu.cpp src/create_player_preview.cpp src/frontend_settings.cpp src/user_profiles.cpp
         src/roster_database.cpp src/psh_font.cpp src/recovered/reorder_children.c
         src/recovered/reorder_screen.c src/recovered/roster_reorder.c
         src/recovered/roster_lists.c src/recovered/create_player.c
@@ -233,6 +233,7 @@ endif()
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)
+target_sources(nba97_boot_decomp PRIVATE src/create_player_preview.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/create_player_store.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/create_player_delete_assets.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_reorder.c)

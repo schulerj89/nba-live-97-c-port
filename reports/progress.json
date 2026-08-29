@@ -113,8 +113,8 @@
   "native_port": {
     "catalogued_features": 48,
     "status_counts": {
-      "not_started": 15,
-      "partial": 8,
+      "not_started": 14,
+      "partial": 9,
       "verified": 25
     },
     "measurement": "manually_catalogued_milestone_counts",
@@ -156,8 +156,8 @@
       "Roster transactions": {
         "items": 7,
         "status_counts": {
-          "not_started": 6,
-          "partial": 1
+          "not_started": 5,
+          "partial": 2
         }
       },
       "Rosters": {
@@ -353,7 +353,8 @@
         "id": "rosters.create",
         "group": "Roster transactions",
         "name": "Create player",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Original ZSET5 manager, 40-slot catalogue rules and isolated edit/new transactions are native-tested. Editor fields, animated model, persistence and original-reference acceptance remain pending. See docs/create_player_progress.md."
       },
       {
         "id": "rosters.injuries",

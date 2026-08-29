@@ -1,4 +1,5 @@
 #include "main_menu.hpp"
+#include "create_player_preview.hpp"
 #include "frontend_title.hpp"
 #include "recovered/semantic_trace.h"
 
@@ -1590,7 +1591,8 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const RosterDatabase& database,
                                   const PshFont& font,
                                   const MenuSpritePack& sprites,
-                                  std::uint32_t elapsed_ms) {
+                                  std::uint32_t elapsed_ms,
+                                  const CreatePlayerPreview* preview) {
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;
@@ -1608,8 +1610,19 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                        std::get<1>(border), std::get<2>(border));
     blitJumbledTitleSprite(image, sprites, "ba05", 35, 10, elapsed_ms);
     blitAt(image, sprites, "help", 235, 217);
+    if (preview != nullptr) preview->draw(image, editor, elapsed_ms);
 
-    const bool flash_on = ((elapsed_ms / 136u) & 1u) == 0;
+    /* FUN_8004DE08/FUN_8004DEC4 start a 20-vblank transition from the
+       selector's neutral 0x808080 tint into the gold 0x786600 tint. The
+       previous hard 136 ms on/off toggle was both too fast and too abrupt. */
+    constexpr std::uint32_t pulse_ticks = 20;
+    const auto pulse_tick = (elapsed_ms / 17u) % (pulse_ticks * 2u);
+    const auto pulse_step = pulse_tick <= pulse_ticks ? pulse_tick :
+        pulse_ticks * 2u - pulse_tick;
+    const int pulse = static_cast<int>(pulse_step * 255u / pulse_ticks);
+    const auto selected_channel = [pulse](int neutral, int gold) {
+        return static_cast<std::uint8_t>((neutral * (255 - pulse) + gold * pulse) / 255);
+    };
     const auto valueFor = [&](std::uint8_t field) {
         Nba97CreateEditor copy = editor;
         copy.selected_field = field;
@@ -1640,30 +1653,37 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
     const auto drawRow = [&](std::uint8_t field, int y, int label_x = 62,
                              int value_x = 212) {
         const bool selected = editor.selected_field == field;
-        const bool lit = selected && flash_on;
-        if (lit) drawText(image, font, ">", label_x - 17, y, 1, 255, 220, 30);
+        const std::uint8_t red = selected ? selected_channel(225, 255) : 225;
+        const std::uint8_t green = selected ? selected_channel(225, 214) : 225;
+        const std::uint8_t blue = selected ? selected_channel(225, 24) : 225;
+        if (selected) drawText(image, font, ">", label_x - 17, y, 1, red, green, blue);
         drawText(image, font, std::string(nba97_create_field_name(field)) + ":",
-                 label_x, y, 1, lit ? 255 : 225, lit ? 220 : 225,
-                 lit ? 30 : 225);
+                 label_x, y, 1, red, green, blue);
         drawText(image, font, valueFor(field), value_x, y, 1,
-                 lit ? 255 : 225, lit ? 220 : 225, lit ? 30 : 225);
+                 red, green, blue);
     };
 
     drawRow(NBA97_CREATE_FIRST_NAME, 88);
     drawRow(NBA97_CREATE_LAST_NAME, 103);
-    if (editor.selected_field < NBA97_CREATE_FIELD_GOALS) {
-        const int selected = static_cast<int>(editor.selected_field);
-        int first = 2;
-        if (selected >= 2) first = std::clamp(selected - 3, 2,
-            static_cast<int>(NBA97_CREATE_ENDURANCE) - 3);
-        for (int row = 0; row < 4; ++row)
-            drawRow(static_cast<std::uint8_t>(first + row), 133 + row * 15);
+    const auto drawBank = [&](int first, int offset_y) {
+        for (int row = 0; row < 4; ++row) {
+            const int y = 133 + row * 15 + offset_y;
+            const int field = first + row;
+            if (y >= 133 && y <= 178 && field < NBA97_CREATE_FIELD_COUNT)
+                drawRow(static_cast<std::uint8_t>(field), y, 62, 212);
+        }
+    };
+    if (editor.scroll_ticks_remaining != 0) {
+        const int progress = 6 - editor.scroll_ticks_remaining;
+        const int direction = editor.visible_first_field >= editor.previous_visible_first_field ? 1 : -1;
+        const int old_offset = -direction * progress * 60 / 6;
+        const int new_offset = direction * (60 - progress * 60 / 6);
+        drawBank(editor.previous_visible_first_field, old_offset);
+        drawBank(editor.visible_first_field, new_offset);
     } else {
-        const int detail = static_cast<int>(editor.selected_field) - NBA97_CREATE_FIELD_GOALS;
-        const int bank = detail / 4;
-        const int first = NBA97_CREATE_FIELD_GOALS + bank * 4;
-        for (int row = 0; row < 4; ++row)
-            drawRow(static_cast<std::uint8_t>(first + row), 133 + row * 15, 62, 212);
+        drawBank(editor.visible_first_field, 0);
+    }
+    if (editor.selected_field >= NBA97_CREATE_FIELD_GOALS) {
         const auto average = [&](int first_rating) {
             int total = 0;
             for (int index = 0; index < 4; ++index)

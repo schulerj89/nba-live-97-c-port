@@ -33,6 +33,9 @@ The native Windows build currently covers:
   saves/discard/Reset ([verification and remaining work](docs/trade_rosters_workflow.md));
 - Sign Free Agent: 100-slot source list, destination validation, signing and
   local saves ([bounded accounting and tests](docs/sign_free_agent_progress.md));
+- Create Player: 40-slot durable catalogue, manager/Edit/New/Delete flow,
+  32-field editor, recovered name/College/scroll timing, and a local-only
+  ZDOM/ZFEMOCAP articulated preview ([status and remaining polygon work](docs/create_player_progress.md));
 - original frontend music and recovered menu sounds; and
 - a CLI trace describing recovered states, assets, audio, and transitions.
 

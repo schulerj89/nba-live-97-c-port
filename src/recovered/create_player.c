@@ -196,6 +196,26 @@ static uint8_t clamp_u8(int value, int minimum, int maximum) {
     return (uint8_t)value;
 }
 
+static uint8_t visible_bank_for_field(uint8_t field) {
+    int first;
+    if (field < NBA97_CREATE_FIELD_GOALS) {
+        first = 2;
+        if (field >= 2) first = (int)field - 3;
+        if (first < 2) first = 2;
+        if (first > NBA97_CREATE_ENDURANCE - 3)
+            first = NBA97_CREATE_ENDURANCE - 3;
+        return (uint8_t)first;
+    }
+    return (uint8_t)(NBA97_CREATE_FIELD_GOALS +
+        (((int)field - NBA97_CREATE_FIELD_GOALS) / 4) * 4);
+}
+
+static void initialize_presentation(Nba97CreateEditor* editor) {
+    editor->visible_first_field = visible_bank_for_field(editor->selected_field);
+    editor->previous_visible_first_field = editor->visible_first_field;
+    editor->scroll_ticks_remaining = 0;
+}
+
 int nba97_create_editor_open_new(Nba97CreateEditor* editor,
                                  const Nba97CreatedPlayerCatalog* catalog) {
     int rating;
@@ -205,6 +225,7 @@ int nba97_create_editor_open_new(Nba97CreateEditor* editor,
     editor->height_inches = 63;       /* original default: 5'3\" */
     editor->weight_pounds = 200;
     editor->shooting_range_feet = 8;
+    initialize_presentation(editor);
     for (rating = 0; rating < 17; ++rating) editor->ratings[rating] = 50;
     return 1;
 }
@@ -236,6 +257,7 @@ int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
              catalog->metadata[slot].first_name);
     snprintf(editor->last_name, sizeof(editor->last_name), "%s",
              catalog->metadata[slot].last_name);
+    initialize_presentation(editor);
     return 1;
 }
 
@@ -250,7 +272,30 @@ int nba97_create_editor_move(Nba97CreateEditor* editor, int direction) {
     if (direction > 0 && editor->selected_field == NBA97_CREATE_LAST_NAME &&
         editor->last_name[0] == '\0') return 0;
     editor->selected_field = (uint8_t)candidate;
+    {
+        const uint8_t next_first = visible_bank_for_field(editor->selected_field);
+        if (next_first != editor->visible_first_field) {
+            editor->previous_visible_first_field = editor->visible_first_field;
+            editor->visible_first_field = next_first;
+            /* Recovered selector tints settle over six vblanks; the list bank
+               moves across that same callback window instead of snapping. */
+            editor->scroll_ticks_remaining = 6;
+        }
+    }
     return 1;
+}
+
+void nba97_create_editor_set_college_count(Nba97CreateEditor* editor,
+                                           uint16_t college_count) {
+    if (editor == NULL) return;
+    editor->college_count = college_count;
+    if (college_count != 0 && editor->college >= college_count)
+        editor->college = (uint16_t)(editor->college % college_count);
+}
+
+void nba97_create_editor_tick(Nba97CreateEditor* editor) {
+    if (editor != NULL && editor->scroll_ticks_remaining != 0)
+        --editor->scroll_ticks_remaining;
 }
 
 int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
@@ -272,9 +317,11 @@ int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
         break;
     }
     case NBA97_CREATE_COLLEGE: {
-        int value = (int)editor->college + step;
-        if (value < 0) value = 0;
-        if (value > 511) value = 511;
+        int value;
+        if (editor->college_count == 0) return 0;
+        value = (int)editor->college + step;
+        if (value < 0) value = editor->college_count - 1;
+        if (value >= editor->college_count) value = 0;
         editor->college = (uint16_t)value;
         break;
     }

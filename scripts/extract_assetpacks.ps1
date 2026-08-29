@@ -28,6 +28,9 @@ python $extractor $DiscImage (Join-Path $fonts 'ZFONT2.PSH') --lba 249042 --size
 python $extractor $DiscImage (Join-Path $menu 'ZFEMOCAP.BIN') --lba 248918 --size 22188
 python $extractor $DiscImage (Join-Path $menu 'ZFEMODEL.BIN') --lba 248929 --size 44288
 python $extractor $DiscImage (Join-Path $menu 'ZFEPLAYR.ART') --lba 248951 --size 73984
+python (Join-Path $repo 'tools\extract_create_player_model_assets.py') $DiscImage `
+    (Join-Path $repo '.local\assetpacks\create_player\model')
+if ($LASTEXITCODE -ne 0) { throw 'Private Create Player ZDOM model extraction failed.' }
 python $extractor $DiscImage (Join-Path $menu 'ZLOGOS.PSH') --lba 249370 --size 99848
 python $extractor $DiscImage (Join-Path $menu 'ZTMPAL.PSH') --lba 267022 --size 21544
 python $extractor $DiscImage (Join-Path $menu 'ZBPAL.PSH') --lba 234694 --size 17264

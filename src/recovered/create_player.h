@@ -19,8 +19,10 @@ typedef struct Nba97CreatedPlayerRecord {
 } Nba97CreatedPlayerRecord;
 
 typedef struct Nba97CreatedPlayerMetadata {
-    char first_name[12];
-    char last_name[16];
+    /* FUN_8004D514 clears exactly 0x0D bytes for each retail name buffer:
+       twelve entered characters plus the trailing NUL. */
+    char first_name[13];
+    char last_name[13];
     uint8_t team;
     /* Port-side membership needed to preserve the retail Delete branches:
        0..4 starter, 5..99 bench/free-list position, FF unassigned. */
@@ -107,8 +109,14 @@ typedef struct Nba97CreateEditor {
     uint8_t facial_hair;
     uint8_t shooting_range_feet;
     uint8_t ratings[17]; /* endurance, then the 16 detailed ratings */
-    char first_name[12];
-    char last_name[16];
+    char first_name[13];
+    char last_name[13];
+    /* Presentation state recovered from the banked selector. This remains
+       transient and is never serialized into the 68-byte player record. */
+    uint8_t visible_first_field;
+    uint8_t previous_visible_first_field;
+    uint8_t scroll_ticks_remaining;
+    uint16_t college_count;
 } Nba97CreateEditor;
 
 typedef struct Nba97CreatedPlayerPicker {
@@ -156,6 +164,9 @@ int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
                                   int16_t slot);
 int nba97_create_editor_move(Nba97CreateEditor* editor, int direction);
 int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction);
+void nba97_create_editor_set_college_count(Nba97CreateEditor* editor,
+                                           uint16_t college_count);
+void nba97_create_editor_tick(Nba97CreateEditor* editor);
 int nba97_create_editor_append_letter(Nba97CreateEditor* editor, char letter);
 int nba97_create_editor_backspace(Nba97CreateEditor* editor);
 int nba97_create_editor_valid(const Nba97CreateEditor* editor);

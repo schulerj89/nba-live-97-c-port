@@ -16,10 +16,11 @@
 namespace nba97 {
 namespace {
 constexpr std::uint8_t kMagic[8]{'N','9','7','C','P','L','R',0};
-constexpr std::uint16_t kMajor = 1, kMinor = 1;
+constexpr std::uint16_t kMajor = 1, kMinor = 2;
 constexpr std::size_t kHeader = 32;
-constexpr std::size_t kOldSlotBytes = NBA97_CREATED_PLAYER_RECORD_SIZE + 12 + 16 + 1;
-constexpr std::size_t kSlotBytes = kOldSlotBytes + 1;
+constexpr std::size_t kV10SlotBytes = NBA97_CREATED_PLAYER_RECORD_SIZE + 12 + 16 + 1;
+constexpr std::size_t kV11SlotBytes = kV10SlotBytes + 1;
+constexpr std::size_t kSlotBytes = NBA97_CREATED_PLAYER_RECORD_SIZE + 13 + 13 + 2;
 constexpr std::size_t kPayload = NBA97_CREATED_PLAYER_CAPACITY * kSlotBytes;
 
 void u16(std::vector<std::uint8_t>& out, std::uint16_t value) {
@@ -96,8 +97,9 @@ bool CreatedPlayerStore::readFile(const std::filesystem::path& path,Nba97Created
             throw std::runtime_error("bad magic or file size");
         if(get16(bytes,8)!=kMajor) throw std::runtime_error("unsupported major version");
         const auto payload=get32(bytes,20);
-        const auto old_payload=NBA97_CREATED_PLAYER_CAPACITY*kOldSlotBytes;
-        if((payload!=kPayload && payload!=old_payload) || bytes.size()!=kHeader+payload)
+        const auto v10_payload=NBA97_CREATED_PLAYER_CAPACITY*kV10SlotBytes;
+        const auto v11_payload=NBA97_CREATED_PLAYER_CAPACITY*kV11SlotBytes;
+        if((payload!=kPayload && payload!=v10_payload && payload!=v11_payload) || bytes.size()!=kHeader+payload)
             throw std::runtime_error("payload size mismatch");
         const auto stored=get32(bytes,24); patch32(bytes,24,0);
         if(crc32(bytes)!=stored) throw std::runtime_error("CRC32 mismatch");
@@ -106,10 +108,17 @@ bool CreatedPlayerStore::readFile(const std::filesystem::path& path,Nba97Created
         std::size_t at=kHeader;
         for(int slot=0;slot<NBA97_CREATED_PLAYER_CAPACITY;++slot) {
             std::memcpy(catalog.records[slot].raw,bytes.data()+at,NBA97_CREATED_PLAYER_RECORD_SIZE); at+=NBA97_CREATED_PLAYER_RECORD_SIZE;
-            std::memcpy(catalog.metadata[slot].first_name,bytes.data()+at,12); at+=12;
-            std::memcpy(catalog.metadata[slot].last_name,bytes.data()+at,16); at+=16;
+            if(payload==kPayload) {
+                std::memcpy(catalog.metadata[slot].first_name,bytes.data()+at,13); at+=13;
+                std::memcpy(catalog.metadata[slot].last_name,bytes.data()+at,13); at+=13;
+            } else {
+                std::memcpy(catalog.metadata[slot].first_name,bytes.data()+at,12); at+=12;
+                std::memcpy(catalog.metadata[slot].last_name,bytes.data()+at,13); at+=16;
+                catalog.metadata[slot].first_name[12]='\0';
+                catalog.metadata[slot].last_name[12]='\0';
+            }
             catalog.metadata[slot].team=bytes[at++];
-            catalog.metadata[slot].roster_slot=payload==kPayload ? bytes[at++] : UINT8_MAX;
+            catalog.metadata[slot].roster_slot=payload==v10_payload ? UINT8_MAX : bytes[at++];
         }
         validate(catalog); error.clear(); return true;
     } catch(const std::exception& problem) { error=problem.what(); return false; }

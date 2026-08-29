@@ -47,7 +47,12 @@ try {
         'empty-new-selected.ppm',
         'empty-title-phase.ppm',
         'editor-first-required.ppm',
+        'editor-selector-gold.ppm',
         'editor-appearance-layer.ppm',
+        'editor-model-motion-phase.ppm',
+        'editor-layer-scroll-enter.ppm',
+        'editor-layer-scroll-mid.ppm',
+        'editor-layer-scroll-settled.ppm',
         'editor-ratings-final.ppm',
         'one-edit-selected.ppm',
         'one-delete-selected.ppm',
@@ -73,9 +78,11 @@ try {
         }
     }
 
-    Write-Host "CREATE PLAYER: PASS - 11/11 scenarios reproduced byte-identically across two runs."
+    python (Join-Path $repo 'tools\verify_create_player_frames.py') $first
+    if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
+    Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, and deterministic native frames. ZFEMODEL equivalence, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM/mocap preview frames. Textured PS1 polygon equivalence, roster insertion, and original visual scoring remain pending.'
 } finally {
     Pop-Location
 }
