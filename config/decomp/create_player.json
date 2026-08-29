@@ -19,7 +19,7 @@
     "name": "manager, New-player editor behavior, and articulated preview",
     "scenarios": 16,
     "deterministic_runs": 2,
-    "assets": "private ZSET5.PSP plus local-only ZDOM D/E/F/S, ZFEMOCAP, and ZFEPLAYR families; assets are not tracked",
+    "assets": "private ZSET5.PSP plus local-only ZDOM D/E/F/S, ZDEFLIST, exact FEONLY trig, ZFEMOCAP, and ZFEPLAYR families; assets are not tracked",
     "functions": ["0x8004AEBC", "0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DA74", "0x8004DAE8"]
   },
   "behavior_checks": [
@@ -29,6 +29,7 @@
     "field-bank changes animate through the recovered six-vblank scroll window",
     "selection tint traverses the recovered twenty-vblank neutral-to-gold transition",
     "the real 251-triangle surface is rebuilt from the retail ZDOM descriptors, 81 signed-XYZ source triangles, and 20 recovered pivots",
+    "FUN_80067100 builds the 20 original 4.12 base matrices and FUN_80067378 applies them to pivots and vertices",
     "team SHPP uniform, height/weight scale, and 116-frame mocap source visibly drive the native mesh",
     "all 32 fields follow the audited original order",
     "new-player defaults and single-step adjustments are deterministic",

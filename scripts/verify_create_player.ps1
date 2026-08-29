@@ -6,6 +6,7 @@ $exe = Join-Path $repo 'build-windows\Debug\nba97_boot_decomp.exe'
 $coreTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_tests.exe'
 $storeTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_store_tests.exe'
 $modelTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_model_tests.exe'
+$transformTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_transform_tests.exe'
 
 Push-Location $repo
 try {
@@ -17,6 +18,7 @@ try {
     if (-not (Test-Path -LiteralPath $coreTest)) { throw "Missing Create Player core test: $coreTest" }
     if (-not (Test-Path -LiteralPath $storeTest)) { throw "Missing Create Player store test: $storeTest" }
     if (-not (Test-Path -LiteralPath $modelTest)) { throw "Missing ZDOMF model decoder test: $modelTest" }
+    if (-not (Test-Path -LiteralPath $transformTest)) { throw "Missing ZDOMF transform test: $transformTest" }
     if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'menu\ZSET5-decoded'))) {
         throw 'Missing private ZSET5 assets. Run scripts/extract_assetpacks.ps1 locally first.'
     }
@@ -30,6 +32,9 @@ try {
     & $modelTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF model decoder checks failed.' }
     Write-Host 'CREATE PLAYER MODEL: PASS - FUN_800687BC-derived layout, signed vertices, FT3 metadata, and per-corner part ownership.'
+    & $transformTest
+    if ($LASTEXITCODE -ne 0) { throw 'ZDOMF fixed-point transform checks failed.' }
+    Write-Host 'CREATE PLAYER TRANSFORM: PASS - FUN_80067100 matrix construction and FUN_80067378 fixed-point application.'
 
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $root = Join-Path $repo ".local\verification\create_player\run-$stamp"

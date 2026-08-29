@@ -19,8 +19,10 @@ from list_raw_cd_files import USER_DATA_SIZE, read_extent, walk_directory
 
 SHARED = {
     "ZDOMCSHD.BIN", "ZDOMHAIR.BIN", "ZDOMLTRS.BIN", "ZDOMPLYR.BIN",
-    "ZDOMPSKN.BIN",
+    "ZDOMPSKN.BIN", "ZDEFLIST.BIN",
 }
+TRIG_OFFSET = 0xACD40
+TRIG_SIZE = 4096 * 4
 
 
 def iso_entries(disc_path: Path) -> dict[str, tuple[int, int, str]]:
@@ -71,6 +73,27 @@ def main() -> int:
         files.append({"name": name, "lba": lba, "size": size,
                       "sha256": digest, "source_path": source_path})
         print(f"CREATE-MODEL extracted {name} lba={lba} bytes={size} sha256={digest[:12]}")
+
+    # FUN_80067100 indexes the original 4096-entry packed sin/cos table at
+    # 0x800C1D40. In this executable it is FEONLY offset 0xACD40. Keep the
+    # exact table private alongside ZDEFLIST rather than approximating PSYQ
+    # fixed-point trig or publishing retail-derived values in source.
+    if "FEONLY.BIN" not in entries:
+        raise RuntimeError("disc is missing FEONLY.BIN for the private transform table")
+    fe_lba, fe_size, fe_path = entries["FEONLY.BIN"]
+    with args.disc.open("rb") as disc:
+        feonly = read_extent(disc, fe_lba, fe_size)
+    trig = feonly[TRIG_OFFSET:TRIG_OFFSET + TRIG_SIZE]
+    if len(trig) != TRIG_SIZE or trig[:4] != b"\x00\x00\x00\x10":
+        raise RuntimeError("FEONLY packed sin/cos table does not match the retail executable")
+    trig_path = output / "ZDOMTRIG.BIN"
+    trig_path.write_bytes(trig)
+    trig_digest = hashlib.sha256(trig).hexdigest()
+    files.append({"name": trig_path.name, "lba": fe_lba, "size": len(trig),
+                  "sha256": trig_digest, "source_path": fe_path,
+                  "source_offset": TRIG_OFFSET})
+    print(f"CREATE-MODEL extracted {trig_path.name} FEONLY+0x{TRIG_OFFSET:X} "
+          f"bytes={len(trig)} sha256={trig_digest[:12]}")
 
     manifest = {"schema_version": 1, "private": True,
                 "source": args.disc.name, "families": families, "files": files}

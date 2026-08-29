@@ -132,6 +132,15 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
     if(model_.primary_faces.size()!=251 || model_.secondary_face_count!=38 ||
        model_.mixed_part_face_count!=94)
         throw std::runtime_error("unexpected ZDOMF geometry header");
+    base_transforms_=load_zdomf_base_transforms(
+        model_root/"ZDEFLIST.BIN",model_root/"ZDOMTRIG.BIN");
+    // Isolated native transcription of the one-set frontend path through
+    // FUN_80062F4C and FUN_800631B0. Preserve all later motion/projection and
+    // material approximations so this stage can be evaluated independently.
+    for(std::size_t part=0;part<model_.pivots.size();++part)
+        model_.pivots[part]=apply_zdomf_transform(base_transforms_.parts[part],model_.pivots[part]);
+    for(auto& face:model_.primary_faces)for(auto& corner:face.corners)
+        corner.position=apply_zdomf_transform(base_transforms_.parts[corner.part],corner.position);
 
     const auto mocap=bytes(asset_root/"menu"/"ZFEMOCAP.BIN");
     if(mocap.size()!=22188 || u32(mocap,0)!=0x5670 || u32(mocap,4)!=0x5688 ||
@@ -239,6 +248,7 @@ std::string CreatePlayerPreview::description() const {
         " secondary-triangles="+std::to_string(model_.secondary_face_count)+layout.str()+" team-models="+
         std::to_string(team_family_count_)+" uniforms="+
         std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-idle=116 frames samples="+
-        std::to_string(motion_samples_.size());
+        std::to_string(motion_samples_.size())+" base-transform-sets="+
+        std::to_string(base_transforms_.available_sets);
 }
 } // namespace nba97
