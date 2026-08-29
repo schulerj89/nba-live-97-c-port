@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "scope": "Create Player manager, editor transaction, and frontend model pipeline",
+  "primary_functions": {
+    "function_count": 14,
+    "instruction_count": 1020,
+    "behavior_complete": 3,
+    "native_exercised_partial": 4,
+    "researched_only": 7
+  },
+  "shared_model_helpers": {
+    "function_count": 8,
+    "instruction_count": 1018,
+    "behavior_complete": 0,
+    "researched_only": 8
+  },
+  "verified_slice": {
+    "name": "manager availability and New-player editor behavior",
+    "scenarios": 8,
+    "deterministic_runs": 2,
+    "assets": "private ZSET5.PSP decode; assets are not tracked",
+    "functions": ["0x8004AEBC", "0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DA74", "0x8004DAE8"]
+  },
+  "behavior_checks": [
+    "first and last names are both required before leaving their fields",
+    "all 32 fields follow the audited original order",
+    "new-player defaults and single-step adjustments are deterministic",
+    "Down on the final Dribbling field is a no-op",
+    "cancel leaves the 40-slot catalogue unchanged",
+    "START/accept saves immediately into a free slot and reduces capacity"
+  ],
+  "partial_functions": ["0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DAE8"],
+  "pending": [
+    "recover exact per-field bounds, text-entry viewport behavior, and Edit/Delete child screens",
+    "decode and render the original ZFEMODEL/ZFEMOCAP player",
+    "rebuild team uniform, palette, skin, and head on field changes",
+    "recover exact animation, sound, prompts, and transitions",
+    "versioned created-player persistence and roster integration",
+    "original-reference visual and interaction acceptance"
+  ],
+  "warning": "Instruction inventory is an audit denominator, not a completion percentage. Deterministic native rendering does not prove visual equivalence to the original."
+}

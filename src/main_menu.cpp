@@ -1533,6 +1533,155 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
     return image;
 }
 
+PshImage renderCreatePlayerMenu(const Nba97CreateMenu& menu,
+                                const PshFont& font,
+                                const MenuSpritePack& sprites,
+                                const CreatePlayerCardPack& cards,
+                                std::uint32_t elapsed_ms,
+                                bool selected_overlay_visible) {
+    PshImage image;
+    image.width = kWidth;
+    image.height = kHeight;
+    image.tag = "CPLY";
+    image.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+    blitAt(image, sprites, "Bkge", 0, 0);
+    blitAt(image, sprites, "Bkgf", 128, 0);
+    blitAt(image, sprites, "Bkgg", 256, 0);
+    blitAt(image, sprites, "Bkgh", 384, 0);
+    for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}})
+        blitBlueBorder(image, sprites, std::get<0>(border),
+                       std::get<1>(border), std::get<2>(border));
+    blitAt(image, sprites, "XXL1", 30, 16);
+    blitAt(image, sprites, "XXR2", 404, 16);
+    blitJumbledTitleSprite(image, sprites, "ba05", 139, 10, elapsed_ms);
+    blitAt(image, sprites, "help", 235, 217);
+
+    static constexpr std::array<int, 3> card_x{91, 212, 321};
+    static constexpr std::array<int, 3> card_y{82, 80, 82};
+    static constexpr std::array<int, 3> art_x{107, 222, 335};
+    static constexpr std::array<int, 3> art_y{100, 99, 100};
+    static constexpr std::array<const char*, 3> normal{"c00c","c02c","c04c"};
+    static constexpr std::array<const char*, 3> selected{"c01c","c03c","c05c"};
+    static constexpr std::array<const char*, 3> disabled{"c00r","c02c","c04r"};
+    for (int index = 0; index < 3; ++index) {
+        const auto& art = cards[static_cast<std::size_t>(index)];
+        if (!art.rgba.empty())
+            blitScaled(image, art, 0, 0, art.width, art.height,
+                       art_x[static_cast<std::size_t>(index)],
+                       art_y[static_cast<std::size_t>(index)], art.width, art.height);
+        const bool focused = menu.selected == index && selected_overlay_visible;
+        const char* tag = !menu.enabled[index] ? disabled[static_cast<std::size_t>(index)] :
+                          focused ? selected[static_cast<std::size_t>(index)] :
+                                    normal[static_cast<std::size_t>(index)];
+        blitAt(image, sprites, tag, card_x[static_cast<std::size_t>(index)],
+               card_y[static_cast<std::size_t>(index)]);
+    }
+    char status[96]{};
+    nba97_create_menu_status(&menu, status, sizeof(status));
+    drawCenteredText(image, font, status, 256, 201, 1, 220, 220, 220,
+                     false, elapsed_ms, 74);
+    return image;
+}
+
+PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
+                                  const RosterDatabase& database,
+                                  const PshFont& font,
+                                  const MenuSpritePack& sprites,
+                                  std::uint32_t elapsed_ms) {
+    PshImage image;
+    image.width = kWidth;
+    image.height = kHeight;
+    image.tag = "CPED";
+    image.rgba.assign(static_cast<std::size_t>(kWidth) * kHeight * 4, 0);
+    blitAt(image, sprites, "Bkge", 0, 0);
+    blitAt(image, sprites, "Bkgf", 128, 0);
+    blitAt(image, sprites, "Bkgg", 256, 0);
+    blitAt(image, sprites, "Bkgh", 384, 0);
+    for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
+        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
+        {"brbg",256,185},{"brbh",384,185}}})
+        blitBlueBorder(image, sprites, std::get<0>(border),
+                       std::get<1>(border), std::get<2>(border));
+    blitJumbledTitleSprite(image, sprites, "ba05", 35, 10, elapsed_ms);
+    blitAt(image, sprites, "help", 235, 217);
+
+    const bool flash_on = ((elapsed_ms / 136u) & 1u) == 0;
+    const auto valueFor = [&](std::uint8_t field) {
+        Nba97CreateEditor copy = editor;
+        copy.selected_field = field;
+        char value[64]{};
+        nba97_create_editor_value(&copy, value, sizeof(value));
+        if (field == NBA97_CREATE_TEAM) {
+            if (const auto* team = database.team(editor.team))
+                return team->displayName();
+        }
+        if (field == NBA97_CREATE_COLLEGE) {
+            if (editor.college == 0) return std::string("n/a");
+            std::vector<std::string> schools;
+            schools.reserve(database.players().size());
+            for (const auto& player : database.players())
+                if (!player.school_name.empty() && player.school_name != "n/a")
+                    schools.push_back(player.school_name);
+            std::sort(schools.begin(), schools.end());
+            schools.erase(std::unique(schools.begin(), schools.end()), schools.end());
+            const auto index = static_cast<std::size_t>(editor.college - 1);
+            if (index < schools.size()) return schools[index];
+        }
+        static constexpr std::array<const char*, 5> positions{
+            "center", "power forward", "small forward", "shooting guard", "point guard"};
+        if (field == NBA97_CREATE_POSITION && editor.position < positions.size())
+            return std::string(positions[editor.position]);
+        return std::string(value);
+    };
+    const auto drawRow = [&](std::uint8_t field, int y, int label_x = 62,
+                             int value_x = 212) {
+        const bool selected = editor.selected_field == field;
+        const bool lit = selected && flash_on;
+        if (lit) drawText(image, font, ">", label_x - 17, y, 1, 255, 220, 30);
+        drawText(image, font, std::string(nba97_create_field_name(field)) + ":",
+                 label_x, y, 1, lit ? 255 : 225, lit ? 220 : 225,
+                 lit ? 30 : 225);
+        drawText(image, font, valueFor(field), value_x, y, 1,
+                 lit ? 255 : 225, lit ? 220 : 225, lit ? 30 : 225);
+    };
+
+    drawRow(NBA97_CREATE_FIRST_NAME, 88);
+    drawRow(NBA97_CREATE_LAST_NAME, 103);
+    if (editor.selected_field < NBA97_CREATE_FIELD_GOALS) {
+        const int selected = static_cast<int>(editor.selected_field);
+        int first = 2;
+        if (selected >= 2) first = std::clamp(selected - 3, 2,
+            static_cast<int>(NBA97_CREATE_ENDURANCE) - 3);
+        for (int row = 0; row < 4; ++row)
+            drawRow(static_cast<std::uint8_t>(first + row), 133 + row * 15);
+    } else {
+        const int detail = static_cast<int>(editor.selected_field) - NBA97_CREATE_FIELD_GOALS;
+        const int bank = detail / 4;
+        const int first = NBA97_CREATE_FIELD_GOALS + bank * 4;
+        for (int row = 0; row < 4; ++row)
+            drawRow(static_cast<std::uint8_t>(first + row), 133 + row * 15, 62, 212);
+        const auto average = [&](int first_rating) {
+            int total = 0;
+            for (int index = 0; index < 4; ++index)
+                total += editor.ratings[first_rating + index];
+            return total / 4;
+        };
+        static constexpr std::array<const char*, 4> summary{
+            "scoring", "defense", "rebounds", "control"};
+        for (int row = 0; row < 4; ++row) {
+            drawText(image, font, std::string(summary[row]) + ":", 275,
+                     133 + row * 15, 1, 225, 225, 225);
+            drawText(image, font, std::to_string(average(1 + row * 4)), 428,
+                     133 + row * 15, 1, 225, 225, 225);
+        }
+    }
+    return image;
+}
+
 PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const UserProfileStore& store,
                                 const PshFont& font,

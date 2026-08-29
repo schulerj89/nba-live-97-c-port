@@ -28,7 +28,7 @@
     {"id":"rosters.release","group":"Roster transactions","name":"Release player","status":"not_started"},
     {"id":"rosters.reset","group":"Roster transactions","name":"Reset rosters","status":"not_started"},
     {"id":"rosters.reorder","group":"Roster transactions","name":"Re-order rosters","status":"partial","notes":"Tested C swap core plus selection/cancel controller and in-memory database integration through CLI; original screen, audio and persistence pending. See docs/reorder_rosters_progress.md."},
-    {"id":"rosters.create","group":"Roster transactions","name":"Create player","status":"not_started"},
+    {"id":"rosters.create","group":"Roster transactions","name":"Create player","status":"partial","notes":"Original ZSET5 manager, 40-slot catalogue rules and isolated edit/new transactions are native-tested. Editor fields, animated model, persistence and original-reference acceptance remain pending. See docs/create_player_progress.md."},
     {"id":"rosters.injuries","group":"Roster transactions","name":"Player injuries","status":"not_started"},
     {"id":"audio.frontend_music","group":"Audio","name":"Looping frontend music decoder","status":"verified"},
     {"id":"audio.menu_sfx","group":"Audio","name":"Original frontend menu sound effects","status":"partial"},

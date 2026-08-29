@@ -8,6 +8,7 @@
 #include "compare_assets.hpp"
 #include "frontend_palette_assets.hpp"
 #include "recovered/roster_compare.h"
+#include "recovered/create_player.h"
 
 #include <cstdint>
 #include <array>
@@ -359,6 +360,7 @@ private:
 using MenuSpritePack = std::unordered_map<std::string, PshImage>;
 using MenuCardPack = std::array<PshImage, 4>;
 using RosterCardPack = std::array<PshImage, 8>;
+using CreatePlayerCardPack = std::array<PshImage, 3>;
 
 PshImage renderCompareScreen(const Nba97CompareRefresh&, const RosterDatabase&,
     const CompareAssets&, const MenuSpritePack&, const PshFont&,
@@ -391,6 +393,19 @@ PshImage renderRecoveredBottomMenu(const RecoveredBottomMenu& menu,
                                    const RosterCardPack& roster_cards,
                                    std::uint32_t elapsed_ms,
                                    bool selected_overlay_visible = true);
+
+PshImage renderCreatePlayerMenu(const Nba97CreateMenu& menu,
+                                const PshFont& font,
+                                const MenuSpritePack& sprites,
+                                const CreatePlayerCardPack& cards,
+                                std::uint32_t elapsed_ms,
+                                bool selected_overlay_visible = true);
+
+PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
+                                  const RosterDatabase& database,
+                                  const PshFont& font,
+                                  const MenuSpritePack& sprites,
+                                  std::uint32_t elapsed_ms);
 
 PshImage renderUserProfileSetup(const UserProfileMenu& menu,
                                 const UserProfileStore& store,

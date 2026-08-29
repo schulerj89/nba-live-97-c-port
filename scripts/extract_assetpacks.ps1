@@ -43,6 +43,8 @@ python $extractor $DiscImage (Join-Path $menu 'Z2PORT.IDX') --lba 233315 --size 
 python $extractor $DiscImage (Join-Path $menu 'ZTMENU1.CNK') --lba 252406 --size 8522396
 python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 342448
 python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
+python $extractor $DiscImage (Join-Path $menu 'ZSET5.PSP') --lba 251846 --size 146888
+python $extractor $DiscImage (Join-Path $menu 'ZSET6.PSP') --lba 251918 --size 376240
 python $extractor $DiscImage (Join-Path $menu 'ZSET7.PSP') --lba 252102 --size 323444
 python $extractor $DiscImage (Join-Path $menu 'ZSET8.PSP') --lba 252260 --size 297432
 if ($LASTEXITCODE -ne 0) { throw 'Private asset extraction failed.' }
@@ -52,6 +54,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Private roster database extraction failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Private Game Setup sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET4
 if ($LASTEXITCODE -ne 0) { throw 'Private Rosters sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET5
+if ($LASTEXITCODE -ne 0) { throw 'Private Create Player sprite decoding failed.' }
+& (Join-Path $PSScriptRoot 'decode_frontend_pack.ps1') -Pack ZSET6
+if ($LASTEXITCODE -ne 0) { throw 'Private secondary setup sprite decoding failed.' }
 & (Join-Path $PSScriptRoot 'decode_team_logos.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'Private View Player team-logo decoding failed.' }
 python (Join-Path $repo 'tools\decode_team_backgrounds.py') `

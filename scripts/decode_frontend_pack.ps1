@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('ZSET1', 'ZSET4', 'ZSET7', 'ZSET8')]
+    [ValidateSet('ZSET1', 'ZSET4', 'ZSET5', 'ZSET6', 'ZSET7', 'ZSET8')]
     [string]$Pack
 )
 $ErrorActionPreference = 'Stop'
@@ -82,16 +82,23 @@ with src.open("rb") as stream:
     # artwork; they are not separate replacement pictures in the archive.
     # Preserve those exact local-only runtime variants for the native compositor.
     disabled_variants = {}
-    if src.stem.upper() == "ZSET4":
+    if src.stem.upper() in ("ZSET4", "ZSET5"):
         red1_entry = next((entry for entry in archive.dir_entry_list
                            if entry.tag == "red1"), None)
         if red1_entry is None:
-            raise RuntimeError("ZSET4 is missing FEONLY's disabled red1 palette carrier")
+            raise RuntimeError(f"{src.stem} is missing FEONLY's disabled red1 palette carrier")
         red1 = get_palette_info_dto_from_dir_entry(red1_entry, archive)
         if len(red1.data) != 32:
             raise RuntimeError(f"red1 has {len(red1.data)} bytes; expected 16 BGR555 colours")
-        disabled_variants = {"c06d": (red1, "c06r"),
-                             "c14d": (red1, "c14r")}
+        if src.stem.upper() == "ZSET4":
+            disabled_variants = {"c06d": (red1, "c06r"),
+                                 "c14d": (red1, "c14r")}
+        else:
+            # FUN_8004DAE8 disables Edit/Delete when the catalogue is empty.
+            # Like the Rosters locks, state bit 0x80 recolours the authored
+            # normal plate through red1; it does not substitute another card.
+            disabled_variants = {"c00c": (red1, "c00r"),
+                                 "c04c": (red1, "c04r")}
     for entry in archive.dir_entry_list:
         converted = entry.img_convert_data
         if pal0 is not None and entry.tag in pal0_targets:

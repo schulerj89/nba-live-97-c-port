@@ -4,6 +4,11 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 include(CTest)
 option(NBA97_RECOVERED_TESTS_ONLY "Build asset-free recovered logic tests without the UI" OFF)
 if(BUILD_TESTING)
+    add_executable(nba97_create_player_tests tests/create_player_test.cpp
+        src/recovered/create_player.c src/recovered/semantic_trace.c)
+    target_compile_features(nba97_create_player_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_create_player_tests PRIVATE src)
+    add_test(NAME create_player_core COMMAND nba97_create_player_tests)
     add_executable(nba97_release_tests tests/roster_release_test.cpp src/recovered/roster_release.c
         src/recovered/roster_trade.c src/recovered/roster_reorder.c src/recovered/roster_lists.c src/recovered/semantic_trace.c)
     target_compile_features(nba97_release_tests PRIVATE c_std_99 cxx_std_17)
@@ -85,7 +90,8 @@ if(BUILD_TESTING)
         src/main_menu.cpp src/frontend_settings.cpp src/user_profiles.cpp
         src/roster_database.cpp src/psh_font.cpp src/recovered/reorder_children.c
         src/recovered/reorder_screen.c src/recovered/roster_reorder.c
-        src/recovered/roster_lists.c src/recovered/semantic_trace.c)
+        src/recovered/roster_lists.c src/recovered/create_player.c
+        src/recovered/semantic_trace.c)
     target_compile_features(nba97_reorder_child_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_reorder_child_tests PRIVATE src)
     target_sources(nba97_reorder_child_tests PRIVATE src/recovered/roster_compare.c)
@@ -221,6 +227,7 @@ endif()
 
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_reorder.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_lists.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_trade.c src/recovered/roster_sign.c src/trade_assets.cpp)

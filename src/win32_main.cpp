@@ -84,6 +84,7 @@ struct Options {
     std::string verify_reorder_save;
     std::filesystem::path reorder_save_capture_dir;
     std::filesystem::path rosters_menu_capture_dir;
+    std::filesystem::path create_player_capture_dir;
     std::filesystem::path view_rosters_capture_dir;
     std::filesystem::path reorder_capture_dir;
     std::filesystem::path trade_capture_dir;
@@ -204,6 +205,8 @@ Options parseOptions(int argc, char** argv) {
             options.reorder_save_capture_dir = argv[++i];
         else if (arg == "--capture-rosters-menu" && i + 1 < argc)
             options.rosters_menu_capture_dir = argv[++i];
+        else if (arg == "--capture-create-player" && i + 1 < argc)
+            options.create_player_capture_dir = argv[++i];
         else if (arg == "--capture-view-rosters" && i + 1 < argc)
             options.view_rosters_capture_dir = argv[++i];
         else if (arg == "--capture-reorder" && i + 1 < argc)
@@ -235,7 +238,8 @@ Options parseOptions(int argc, char** argv) {
         throw std::runtime_error("--record-native-audio requires --record-native-frames");
     if(!options.native_record_dir.empty() && (options.self_test || !options.verify_reorder_save.empty() ||
        !options.reorder_capture_dir.empty() || !options.trade_capture_dir.empty() || !options.sign_capture_dir.empty() || !options.view_rosters_capture_dir.empty() ||
-       !options.rosters_menu_capture_dir.empty() || !options.release_capture_dir.empty()))
+       !options.rosters_menu_capture_dir.empty() || !options.create_player_capture_dir.empty() ||
+       !options.release_capture_dir.empty()))
         throw std::runtime_error("native recording requires the live window, not checkpoint/self-test mode");
     return options;
 }
@@ -296,6 +300,8 @@ public:
         if (options_.self_test) return runSelfTest();
         if (!options_.rosters_menu_capture_dir.empty())
             return captureRostersMenu();
+        if (!options_.create_player_capture_dir.empty())
+            return captureCreatePlayer();
         if (!options_.view_rosters_capture_dir.empty())
             return captureViewRosters();
         if (!options_.reorder_capture_dir.empty()) return captureReorder();
@@ -384,19 +390,24 @@ private:
         validateMenuAsset(menu_root / "ZTMENU1.CNK", 8522396);
         validateMenuAsset(menu_root / "ZSET1.PSP", 342448);
         validateMenuAsset(menu_root / "ZSET4.PSP", 332084);
+        validateMenuAsset(menu_root / "ZSET5.PSP", 146888);
         validateMenuAsset(menu_root / "ZSET7.PSP", 323444);
         validateMenuAsset(menu_root / "ZSET8.PSP", 297432);
         loadMenuSprites(menu_root / "ZSET1-decoded");
         loadRecoveredBottomSprites(menu_root / "ZSET4-decoded", roster_sprites_, true);
+        loadCreatePlayerSprites(menu_root / "ZSET5-decoded");
         loadTeamRosterBackgrounds(menu_root / "ZSET4-team-backgrounds");
         loadRecoveredBottomSprites(menu_root / "ZSET7-decoded", users_sprites_, false);
         loadPlayerCardSprites(menu_root / "ZSET8-decoded");
         loadMenuCards(menu_root / "ZCARD-decoded");
+        nba97_created_catalog_init(&created_players_);
         trace_.log("RECOVERED", "0x8002F258 selects ZTMENU1.CNK frontend audio");
         trace_.log("RECOVERED", "0x8002FDA4 loads 33 ZTMPAL.PSH palettes; 0x80030308 loads ZBPAL.PSH");
         trace_.log("ROSTER-PALETTE", "FUN_8002FE58 patches ZSET4 Bkg colors 0..159 from ZTMPAL.PSH and preserves local colors 160..255");
         trace_.log("ROSTER-LAYOUT", "state 0x10 / ZSET4: Bkga-d x=0/128/256/384, ba35=(142,10), frml=(30,15), dynamic team logo=(40,16), team arrows=ZFONT0 0x8D/0x8A at (157/381,66), scroll arrows=0x8B/0x8C at (48,108/168), help=(235,217)");
         trace_.log("ROSTER-ANIM", "ba35 title uses FUN_8003186C/FUN_80034A5C discrete four-corner shake; FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
+        trace_.log("CREATE-ASSETS", "screen 0x1F uses private ZSET5.PSP: ba05 Create Player, c00c..c05c Edit/New/Delete plates, red1 disabled Edit/Delete variants; model assets remain separate");
+        trace_.log("CREATE-MODEL", "8004C344 -> 8006785C/80067A14/8006781C/80067F50; ZFEMODEL+ZFEMOCAP+ZFEPLAYR plus team ZDOM E/F/S families rebuild the live preview");
         trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; live no$psx confirms L2/R2 stat-layer change enters FUN_80059610; six-row repeat=7/5/3/1 ticks");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
         trace_.log("RECOVERED", "state 0x24 FUN_8005A538 loads Z1PORT.IDX/BIG and Z1COOL.IDX/BIG for View Player");
@@ -2988,6 +2999,31 @@ private:
             "ZLOGOS.PSH exact 44x48 player-card crests decoded locally; Chicago tag chi -> chiL");
     }
 
+    void loadCreatePlayerSprites(const std::filesystem::path& root) {
+        static constexpr const char* tags[] = {
+            "Bkge","Bkgf","Bkgg","Bkgh","help","ba05",
+            "brte","brtf","brtg","brth","brle","brri",
+            "brbe","brbf","brbg","brbh","XXL1","XXR2",
+            "c00c","c01c","c02c","c03c","c04c","c05c","c00r","c04r"
+        };
+        for (const char* tag : tags) {
+            const auto path = root / (std::string(tag) + ".png");
+            if (!std::filesystem::exists(path))
+                throw std::runtime_error("missing decoded ZSET5 Create Player sprite: " +
+                    path.string() + " (run scripts/extract_assetpacks.ps1)");
+            PshImage image = load_png_image(path);
+            if (std::string_view(tag).rfind("Bkg", 0) != 0) {
+                for (std::size_t at = 0; at < image.rgba.size(); at += 4)
+                    if (image.rgba[at] == 0 && image.rgba[at + 1] == 0 &&
+                        image.rgba[at + 2] == 0)
+                        image.rgba[at + 3] = 0;
+            }
+            create_player_sprites_.emplace(tag, std::move(image));
+        }
+        trace_.log("MENU-SPRITE", "ZSET5.PSP Create Player screen 0x1F decoded locally: " +
+            std::to_string(create_player_sprites_.size()) + " exact/runtime sprites");
+    }
+
     void loadPlayerCardSprites(const std::filesystem::path& root) {
         static constexpr const char* tags[] = {
             "Bkge","Bkgf","Bkgg","Bkgh","help",
@@ -3130,7 +3166,9 @@ private:
     }
 
     void loadMenuCards(const std::filesystem::path& root) {
-        const auto random_seed = options_.rosters_menu_capture_dir.empty()
+        const bool deterministic_capture = !options_.rosters_menu_capture_dir.empty() ||
+                                           !options_.create_player_capture_dir.empty();
+        const auto random_seed = !deterministic_capture
             ? static_cast<std::mt19937::result_type>(
                   std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
                   static_cast<long long>(GetTickCount64()))
@@ -3172,6 +3210,7 @@ private:
 
         const auto setup_indices = fill_random_pack(menu_cards_);
         const auto roster_indices = fill_random_pack(roster_menu_cards_);
+        const auto create_indices = fill_random_pack(create_player_cards_);
         const auto index_list = [](const auto& indices) {
             std::string result;
             for (const int index : indices) {
@@ -3181,13 +3220,73 @@ private:
             return result;
         };
         trace_.log("MENU-CARD", "0x80031A88 loaded 95 ZCARD.BIN images; setup PRNG picks=" +
-            index_list(setup_indices) + "; Rosters PRNG picks=" + index_list(roster_indices));
-        trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup plus 8 Rosters 69x63 SHPP composites");
+            index_list(setup_indices) + "; Rosters PRNG picks=" + index_list(roster_indices) +
+            "; Create Player PRNG picks=" + index_list(create_indices));
+        trace_.log("RECOVERED", "0x80031F48 flags=0x20 replacement: per-screen PRNG with unique index&31 mask; 4 setup, 8 Rosters and 3 Create Player 69x63 SHPP composites");
         trace_.log("ROSTER-MENU", "FUN_80057CE4 state=9: 8 choices x 3 runtime objects (normal/selected/ZCARD); draw-order=back-row 0..3 then front-row 4..7");
         trace_.log("ROSTER-STACK", "FEONLY screen-9 table 0x80094ED4 records 16..39: back plates=(65,81)/(165,75)/(270,75)/(365,81), front plates=(50,116)/(150,110)/(255,110)/(345,116); pair dy=35; ZCARD origins individually authored");
         trace_.log("ROSTER-LOCK", "FUN_80057C48 Reset requires roster snapshot delta and no special-state override; FUN_80057A98 Injuries requires active context plus any non-zero value among 536 injury bytes; FUN_800399C4 state 0x80 routes locked c06/c14 indices through the red1 CLUT while preserving white labels and blocking focus");
         trace_.log("ROSTER-FLASH", "FUN_8003F240 toggles the selected object's normal/selected plate for 12 vblanks; the underlying plate and ZCARD composite remain present in both phases");
         trace_.log("ROSTER-SFX", "FUN_8003D930 + live no$psx: down/up/left/right map ZCURSOR ids 1/2/3/4; FUN_8003F240 select=id6 and toggles selected plate 12 vblanks");
+    }
+
+    int captureCreatePlayer() {
+        const auto output = options_.create_player_capture_dir;
+        std::filesystem::create_directories(output);
+        const auto context = createPlayerContext();
+        nba97_create_menu_open(&create_player_menu_, &created_players_, context);
+        const auto capture = [&](const char* name, std::uint32_t elapsed = 0) {
+            writePpm(nba97::renderCreatePlayerMenu(create_player_menu_, menu_font_,
+                create_player_sprites_, create_player_cards_, elapsed), output / name);
+        };
+        capture("empty-new-selected.ppm");
+        capture("empty-title-phase.ppm", 75);
+        if (create_player_menu_.selected != 1 || create_player_menu_.enabled[0] ||
+            !create_player_menu_.enabled[1] || create_player_menu_.enabled[2])
+            throw std::runtime_error("Create Player empty-menu predicates failed");
+
+        Nba97CreateEditor editor{};
+        if (!nba97_create_editor_open_new(&editor, &created_players_))
+            throw std::runtime_error("Create Player editor fixture failed");
+        const auto capture_editor = [&](const char* name, std::uint32_t elapsed = 0) {
+            writePpm(nba97::renderCreatePlayerEditor(editor, roster_database_, menu_font_,
+                create_player_sprites_, elapsed), output / name);
+        };
+        capture_editor("editor-first-required.ppm");
+        nba97_create_editor_append_letter(&editor, 'A');
+        nba97_create_editor_move(&editor, 1);
+        nba97_create_editor_append_letter(&editor, 'B');
+        editor.selected_field = NBA97_CREATE_HAIR_STYLE;
+        editor.skin_tone = 1;
+        editor.hair_style = 1;
+        editor.hair_color = 1;
+        editor.facial_hair = 1;
+        capture_editor("editor-appearance-layer.ppm");
+        editor.selected_field = NBA97_CREATE_DRIBBLING;
+        capture_editor("editor-ratings-final.ppm");
+        nba97_create_editor_cancel(&editor.txn);
+
+        Nba97CreateEditorTxn txn{};
+        if (!nba97_create_editor_begin_new(&txn, &created_players_) ||
+            !nba97_create_editor_accept(&txn, &created_players_))
+            throw std::runtime_error("Create Player single-record fixture failed");
+        nba97_create_menu_open(&create_player_menu_, &created_players_, context);
+        create_player_menu_.selected = 0;
+        capture("one-edit-selected.ppm");
+        create_player_menu_.selected = 2;
+        capture("one-delete-selected.ppm");
+
+        while (nba97_created_count(&created_players_) < NBA97_CREATED_PLAYER_CAPACITY) {
+            if (!nba97_create_editor_begin_new(&txn, &created_players_) ||
+                !nba97_create_editor_accept(&txn, &created_players_))
+                throw std::runtime_error("Create Player full-catalogue fixture failed");
+        }
+        nba97_create_menu_open(&create_player_menu_, &created_players_, context);
+        capture("full-new-disabled.ppm");
+        if (create_player_menu_.enabled[1] || create_player_menu_.selected != 0)
+            throw std::runtime_error("Create Player full-menu predicates failed");
+        trace_.log("CREATE-CAPTURE", "PASS: 8 deterministic 512x240 frames; manager empty/one/full predicates plus required-name, appearance, and final-ratings editor layers; ZFEMODEL visual equivalence remains separately pending");
+        return 0;
     }
 
     int captureRostersMenu() {
@@ -4378,6 +4477,7 @@ private:
                 frontend_page_ != nba97::FrontendPage::ProfileSetup &&
                 frontend_page_ != nba97::FrontendPage::ViewRosters &&
                 frontend_page_ != nba97::FrontendPage::ReorderRosters &&
+                frontend_page_ != nba97::FrontendPage::CreatePlayers &&
                 !isRosterEditor())
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
@@ -4864,6 +4964,10 @@ private:
             handleRosterViewKey(key);
             return;
         }
+        if (frontend_page_ == nba97::FrontendPage::CreatePlayers) {
+            handleCreatePlayerKey(key);
+            return;
+        }
         if (frontend_page_ != nba97::FrontendPage::GameSetup &&
             frontend_page_ != nba97::FrontendPage::Rules &&
             frontend_page_ != nba97::FrontendPage::Options) {
@@ -4939,6 +5043,149 @@ private:
         }
     }
 
+    Nba97CreateMenuContext createPlayerContext() const {
+        Nba97CreateMenuContext context{};
+        context.new_context_allowed = static_cast<uint8_t>(
+            nba97_created_first_free(&created_players_) >= 0);
+        return context;
+    }
+
+    void handleCreatePlayerKey(WPARAM key) {
+        if (create_player_editor_active_) {
+            bool changed = false;
+            const auto previous = create_player_editor_.selected_field;
+            if (key == VK_UP)
+                changed = nba97_create_editor_move(&create_player_editor_, -1) != 0;
+            else if (key == VK_DOWN)
+                changed = nba97_create_editor_move(&create_player_editor_, 1) != 0;
+            else if (key == VK_LEFT)
+                changed = nba97_create_editor_adjust(&create_player_editor_, -1) != 0;
+            else if (key == VK_RIGHT)
+                changed = nba97_create_editor_adjust(&create_player_editor_, 1) != 0;
+            else if (key == VK_BACK)
+                changed = nba97_create_editor_backspace(&create_player_editor_) != 0;
+            else if (key >= 'A' && key <= 'Z')
+                changed = nba97_create_editor_append_letter(
+                    &create_player_editor_, static_cast<char>(key)) != 0;
+            else if (key == VK_ESCAPE) {
+                nba97_create_editor_cancel(&create_player_editor_.txn);
+                create_player_editor_active_ = false;
+                trace_.log("CREATE-CANCEL",
+                    "editor transaction discarded; created-player catalogue unchanged");
+                nba97_create_menu_open(&create_player_menu_, &created_players_,
+                                       createPlayerContext());
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+                return;
+            } else if (key == VK_RETURN || key == VK_SPACE) {
+                if (!nba97_create_editor_save(&create_player_editor_, &created_players_)) {
+                    trace_.log("CREATE-VALIDATE",
+                        "START blocked: original requires non-empty first and last names");
+                    return;
+                }
+                create_player_editor_active_ = false;
+                nba97_create_menu_open(&create_player_menu_, &created_players_,
+                                       createPlayerContext());
+                trace_.log("CREATE-SAVE", "0x8004D328 committed slot=" +
+                    std::to_string(create_player_editor_.txn.slot) + " id=" +
+                    std::to_string(NBA97_CREATED_PLAYER_FIRST_ID +
+                                   create_player_editor_.txn.slot) + " created=" +
+                    std::to_string(nba97_created_count(&created_players_)) + " free=" +
+                    std::to_string(NBA97_CREATED_PLAYER_CAPACITY -
+                                   nba97_created_count(&created_players_)) +
+                    "; immediate return to manager, no confirmation dialog");
+                playBottomMenuSound(6, "create-save");
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+                return;
+            }
+            if (changed) {
+                char value[64]{};
+                nba97_create_editor_value(&create_player_editor_, value, sizeof(value));
+                const auto field = create_player_editor_.selected_field;
+                trace_.log(previous == field ? "CREATE-ADJUST" : "CREATE-FIELD",
+                    "field=" + std::to_string(field) + " name=" +
+                    nba97_create_field_name(field) + " value=\"" + value + "\"" +
+                    (field >= NBA97_CREATE_SKIN_TONE &&
+                     field <= NBA97_CREATE_FACIAL_HAIR
+                        ? "; close-up camera + localized head/texture rebuild required"
+                        : field == NBA97_CREATE_TEAM
+                            ? "; 0x8004DCF4 team uniform rebuild required"
+                            : field == NBA97_CREATE_HEIGHT
+                                ? "; 0x80067F50 live model scale rebuild required"
+                                : field >= NBA97_CREATE_SHOOTING_RANGE
+                                    ? "; full-body preview camera"
+                                    : ""));
+                playBottomMenuSound(previous == field
+                    ? recoveredMenuDirectionSound(key == VK_LEFT ? -1 : 1, 0)
+                    : recoveredMenuDirectionSound(0, key == VK_UP ? -1 : 1),
+                    previous == field ? "create-adjust" : "create-field");
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+            } else if (key == VK_DOWN || key == VK_UP || key == VK_LEFT ||
+                       key == VK_RIGHT) {
+                trace_.log("CREATE-BOUNDARY", "field=" +
+                    std::to_string(create_player_editor_.selected_field) + " name=" +
+                    nba97_create_field_name(create_player_editor_.selected_field) +
+                    "; required-name gate or recovered value/navigation boundary");
+            }
+            return;
+        }
+        bool changed = false;
+        const char* direction = nullptr;
+        std::uint32_t sound_id = 0;
+        if (key == VK_LEFT) {
+            changed = nba97_create_menu_move(&create_player_menu_, -1) != 0;
+            direction = "left";
+            sound_id = recoveredMenuDirectionSound(-1, 0);
+        } else if (key == VK_RIGHT) {
+            changed = nba97_create_menu_move(&create_player_menu_, 1) != 0;
+            direction = "right";
+            sound_id = recoveredMenuDirectionSound(1, 0);
+        } else if (key == VK_ESCAPE || key == VK_BACK) {
+            beginFrontendTransition(nba97::FrontendPage::Rosters,
+                "Create Player manager back input");
+            return;
+        } else if (key == VK_RETURN || key == VK_SPACE) {
+            if (create_player_menu_.selected == 1 && create_player_menu_.enabled[1]) {
+                if (!nba97_create_editor_open_new(&create_player_editor_,
+                                                  &created_players_)) {
+                    trace_.log("CREATE-NEW", "blocked: all 40 original slots occupied");
+                    return;
+                }
+                create_player_editor_active_ = true;
+                trace_.log("CREATE-NEW", "0x8004D514 opened isolated 44-byte draft slot=" +
+                    std::to_string(create_player_editor_.txn.slot) +
+                    "; defaults height=5'3\" weight=200 lbs shooting-range=8 ft ratings=50; first/last required");
+                playBottomMenuSound(6, "create-new");
+                rebuildMenuFrame();
+                InvalidateRect(window_, nullptr, FALSE);
+                return;
+            }
+            char status[96]{};
+            nba97_create_menu_status(&create_player_menu_, status, sizeof(status));
+            trace_.log("CREATE-SELECT", "screen 0x1F card=" +
+                std::to_string(create_player_menu_.selected) + " status=\"" + status +
+                "\"; Edit/Delete child remains a separate bounded slice");
+            playBottomMenuSound(6, "create-select");
+            return;
+        }
+        if (changed) {
+            playBottomMenuSound(sound_id, direction);
+            char status[96]{};
+            nba97_create_menu_status(&create_player_menu_, status, sizeof(status));
+            trace_.log("CREATE-FOCUS", std::string("direction=") + direction +
+                " card=" + std::to_string(create_player_menu_.selected) +
+                " created=" + std::to_string(create_player_menu_.created_count) +
+                " status=\"" + status + "\"");
+            rebuildMenuFrame();
+            InvalidateRect(window_, nullptr, FALSE);
+        } else if (direction != nullptr) {
+            trace_.log("CREATE-BOUNDARY", std::string(direction) +
+                " blocked by edge or disabled Edit/Delete card");
+        }
+    }
+
     void activateRecoveredBottomSelection() {
         if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) return;
         if (bottom_select_pending_) return;
@@ -4972,6 +5219,11 @@ private:
     }
 
     void completeRecoveredBottomSelection() {
+        if (frontend_page_ == nba97::FrontendPage::Rosters && bottom_menu_.selected() == 6) {
+            beginFrontendTransition(nba97::FrontendPage::CreatePlayers,
+                "Create Players selected; 80057CE4 -> 8004DAE8 screen 0x1F");
+            return;
+        }
         if(frontend_page_==nba97::FrontendPage::Rosters && bottom_menu_.selected()==2) {
             if(!bottom_menu_.enabled(2))return;
             beginFrontendTransition(nba97::FrontendPage::ReleasePlayers,"Release selected; 80057CE4 -> state17 -> 8005721C");return;
@@ -5617,6 +5869,12 @@ private:
         else if (frontend_page_ == nba97::FrontendPage::ProfileSetup)
             menu_frame_ = makeFrame(nba97::renderUserProfileSetup(
                 profile_menu_, profile_store_, menu_font_, menu_sprites_, menu_elapsed_ms_));
+        else if (frontend_page_ == nba97::FrontendPage::CreatePlayers)
+            menu_frame_ = makeFrame(create_player_editor_active_
+                ? nba97::renderCreatePlayerEditor(create_player_editor_, roster_database_,
+                    menu_font_, create_player_sprites_, menu_elapsed_ms_)
+                : nba97::renderCreatePlayerMenu(create_player_menu_, menu_font_,
+                    create_player_sprites_, create_player_cards_, menu_elapsed_ms_));
         else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
             prepareFrontendTitle();
             auto image = nba97::renderRosterViewer(
@@ -5652,6 +5910,7 @@ private:
         if (page == nba97::FrontendPage::TradePlayers) return "Trade Players";
         if (page == nba97::FrontendPage::SignFreeAgent) return "Sign Free Agent";
         if (page == nba97::FrontendPage::ReleasePlayers) return "Release Players";
+        if (page == nba97::FrontendPage::CreatePlayers) return "Create Player";
         if (page == nba97::FrontendPage::Users) return "Users";
         if (page == nba97::FrontendPage::Card) return "Memory Card";
         return "Game Setup";
@@ -5685,6 +5944,16 @@ private:
         else if (target == nba97::FrontendPage::ReorderRosters) openReorder();
         else if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
+        else if (target == nba97::FrontendPage::CreatePlayers) {
+            const auto context = createPlayerContext();
+            nba97_create_menu_open(&create_player_menu_, &created_players_, context);
+            char status[96]{};
+            nba97_create_menu_status(&create_player_menu_, status, sizeof(status));
+            trace_.log("CREATE-ENTRY", "8004DAE8 objects=3 order=Edit/New/Delete; count=" +
+                std::to_string(create_player_menu_.created_count) + " focus=" +
+                std::to_string(create_player_menu_.selected) + " status=\"" + status + "\"");
+            trace_.log("CREATE-CAPACITY", "8004AEBC scans 40 records x 68 bytes; IDs begin at 493; New additionally requires an open 535-slot roster/free-agent destination");
+        }
         else if (target == nba97::FrontendPage::ViewRosters) {
             roster_viewer_.open(roster_database_);
             logRosterViewFocus("FUN_800592C4 restored selection");
@@ -5714,6 +5983,8 @@ private:
                 bottom_menu_.setSelected(4);
             if (target == nba97::FrontendPage::Rosters && previous_page == nba97::FrontendPage::ReorderRosters)
                 bottom_menu_.setSelected(5);
+            if (target == nba97::FrontendPage::Rosters && previous_page == nba97::FrontendPage::CreatePlayers)
+                bottom_menu_.setSelected(6);
         }
         rebuildMenuFrame();
         frontend_transition_tick_ = GetTickCount();
@@ -5726,6 +5997,7 @@ private:
                            target == nba97::FrontendPage::TradePlayers ? 0x0D :
                            target == nba97::FrontendPage::SignFreeAgent ? 0x0E :
                            target == nba97::FrontendPage::ReleasePlayers ? 0x11 :
+                           target == nba97::FrontendPage::CreatePlayers ? 0x1F :
                            target == nba97::FrontendPage::Rules ? 1 :
                            target == nba97::FrontendPage::Options ? 2 :
                            target == nba97::FrontendPage::Rosters ? 9 :
@@ -5846,8 +6118,14 @@ private:
     nba97::MenuSpritePack roster_sprites_;
     nba97::MenuSpritePack player_sprites_;
     nba97::MenuSpritePack users_sprites_;
+    nba97::MenuSpritePack create_player_sprites_;
     nba97::MenuCardPack menu_cards_;
     nba97::RosterCardPack roster_menu_cards_;
+    nba97::CreatePlayerCardPack create_player_cards_;
+    Nba97CreatedPlayerCatalog created_players_{};
+    Nba97CreateMenu create_player_menu_{};
+    Nba97CreateEditor create_player_editor_{};
+    bool create_player_editor_active_ = false;
     PshImage roster_portrait_;
     bool roster_portrait_loaded_ = false;
     nba97::PlayerPhotoLoader player_photo_loader_{decodePlayerPhotoOnWorker};
