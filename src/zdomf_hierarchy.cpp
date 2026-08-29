@@ -108,9 +108,12 @@ ZdomfWorldVec3 apply_zdomf_hierarchy(
     }
     const auto& node = hierarchy.parts[part];
     const auto rotated = rotate(node.world_transform, local_vertex);
-    return {rotated.x + node.joint_origin.x,
-            rotated.y + node.joint_origin.y,
-            rotated.z + node.joint_origin.z};
+    // FUN_80066090 transforms the part pivot through the composed rotation,
+    // adds the parent translation, and stores that joint endpoint as this
+    // part matrix's translation before any vertices are submitted.
+    return {rotated.x + node.joint_end.x,
+            rotated.y + node.joint_end.y,
+            rotated.z + node.joint_end.z};
 }
 
 } // namespace nba97

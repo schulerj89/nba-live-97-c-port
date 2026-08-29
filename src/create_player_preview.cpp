@@ -66,10 +66,6 @@ PshImage decode_team_texture(const std::filesystem::path& path,std::uint32_t rec
     }
     return image;
 }
-Point3 rotate_z(Point3 value,double radians) {
-    const double c=std::cos(radians),s=std::sin(radians);
-    return {value.x*c-value.y*s,value.x*s+value.y*c,value.z};
-}
 struct RasterFace {
     std::array<Point3,3> world{};
     std::array<Point,3> screen{};
@@ -134,6 +130,7 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         throw std::runtime_error("unexpected ZDOMF geometry header");
     base_transforms_=load_zdomf_base_transforms(
         model_root/"ZDEFLIST.BIN",model_root/"ZDOMTRIG.BIN");
+    packed_trig_=bytes(model_root/"ZDOMTRIG.BIN");
     projection_=load_create_player_projection(model_root/"ZDOMTRIG.BIN");
     // Isolated native transcription of the one-set frontend path through
     // FUN_80062F4C and FUN_800631B0. Preserve all later motion/projection and
@@ -168,23 +165,9 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         if(projected.flags!=ZdomfProjectionNone)++projection_saturated_vertices_;
     }
 
-    const auto mocap=bytes(asset_root/"menu"/"ZFEMOCAP.BIN");
-    if(mocap.size()!=22188 || u32(mocap,0)!=0x5670 || u32(mocap,4)!=0x5688 ||
-       u32(mocap,0x5670)!=8 || u32(mocap,0x5688)!=116)
-        throw std::runtime_error("ZFEMOCAP directory does not contain recovered 8/116-frame sets");
-    /* The 116-frame idle set begins at 0x790. Its compressed records retain
-       signed XYZ values followed by the retail ABCD/DCBA sentinel. Preserve
-       those values for deterministic articulated motion while the polygon
-       packet decoder is translated separately. */
-    for(std::size_t at=0x79C;at+8<=0xC64;at+=2) {
-        const auto marker=u16(mocap,at+6);
-        if(marker==0xABCD||marker==0xDCBA) {
-            motion_samples_.push_back({s16(mocap,at),s16(mocap,at+2),s16(mocap,at+4)});
-            at+=6;
-        }
-    }
-    if(motion_samples_.size()<116)
-        throw std::runtime_error("ZFEMOCAP idle stream has too few signed motion records");
+    mocap_=load_zdomf_mocap(asset_root/"menu"/"ZFEMOCAP.BIN");
+    if(mocap_.clips[1].physical_frames!=18||mocap_.clips[1].logical_ticks!=36)
+        throw std::runtime_error("ZFEMOCAP Create Player clip is not 18 keys / 36 ticks");
     for(const auto& entry:std::filesystem::directory_iterator(model_root))
         if(entry.path().filename().string().rfind("ZDOMF",0)==0 && entry.path().extension()==".BIN")
             ++team_family_count_;
@@ -208,23 +191,21 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
 
 void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
                                std::uint32_t elapsed_ms) const {
-    const auto& sample=motion_samples_[(elapsed_ms/17u)%116u];
-    const double idle=static_cast<double>(sample.x)/4096.0*0.16;
-    const double counter=static_cast<double>(sample.y)/4096.0*0.10;
+    const auto& clip=mocap_.clips[1];
+    const auto pose=sample_zdomf_mocap(mocap_,1,(elapsed_ms/33u)%clip.logical_ticks);
+    const auto runtime=build_zdomf_runtime_pose(
+        model_.pivots,packed_trig_,pose,{editor.height_inches,{0,0,0},0,0});
     const bool appearance_closeup=editor.selected_field>=NBA97_CREATE_SKIN_TONE&&
         editor.selected_field<=NBA97_CREATE_FACIAL_HAIR;
-    const double scale=(appearance_closeup?0.86:0.47)*
-        (static_cast<double>(editor.height_inches)/75.0);
     const double width_scale=std::clamp(1.0+(static_cast<double>(editor.weight_pounds)-200.0)/500.0,
                                         0.82,1.25);
-    const double camera_y=appearance_closeup?188.0:147.0;
-    const double bob=static_cast<double>(sample.z)/4096.0*2.0;
     const std::array<std::array<std::uint8_t,3>,8> skin{{
         {{244,194,142}},{{222,165,113}},{{198,133,82}},{{171,105,65}},
         {{143,84,54}},{{116,67,45}},{{91,52,39}},{{70,42,34}}}};
     const auto skin_color=skin[std::min<std::size_t>(editor.skin_tone,skin.size()-1)];
     std::vector<RasterFace> raster;
     raster.reserve(model_.primary_faces.size());
+    std::array<double,4> view_bounds{{1e9,1e9,-1e9,-1e9}};
     for(const auto& face:model_.primary_faces) {
         // Preserve the previous material heuristic for this isolated test.
         // Only transform ownership changes: FUN_800687BC retains a distinct
@@ -232,31 +213,19 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
         RasterFace out{};out.part=face.corners[2].part;
         for(std::size_t corner=0;corner<3;++corner) {
             const auto part=face.corners[corner].part;
-            double angle=0;
-            if(part>=13&&part<=15)angle=idle+counter;
-            else if(part>=17&&part<=19)angle=-idle-counter;
-            else if(part>=1&&part<=3)angle=-idle*0.35;
-            else if(part>=5&&part<=7)angle=idle*0.35;
-            const auto& bone=model_.pivots[part];
             const auto& vertex=face.corners[corner].position;
-            Point3 local{double(vertex.x)-bone.x,
-                         double(vertex.y)-bone.y,
-                         double(vertex.z)-bone.z};
-            local=rotate_z(local,angle);
-            const ZdomfVec3 posed{
-                static_cast<std::int16_t>(local.x+bone.x),
-                static_cast<std::int16_t>(local.y+bone.y),
-                static_cast<std::int16_t>(local.z+bone.z)};
-            const auto assembled=apply_zdomf_hierarchy(hierarchy_,part,posed);
+            const auto assembled=apply_zdomf_runtime_pose(runtime,part,vertex);
             out.world[corner]={double(assembled.x),double(assembled.y),double(assembled.z)};
             out.uv[corner]={double(face.uv[corner][0]),double(face.uv[corner][1])};
-            // Hierarchy output is now native-exercised above. Keep the visible
-            // compatibility camera isolated until exact ZFEMOCAP joint
-            // rotations and the original root placement/scale are recovered;
-            // static RTPS output is valid but still only about 16x25 pixels.
+            // This screen-space fit remains port-owned and isolated. The exact
+            // RTPS path is exercised separately by the runtime smoke test while
+            // FUN_80066090's second matrix/group buffers are still translated.
             const double yaw_x=(out.world[corner].x*0.94+out.world[corner].z*0.34)*width_scale;
             const double yaw_z=-out.world[corner].x*0.34+out.world[corner].z*0.94;
-            out.screen[corner]={390.0+yaw_x*scale,camera_y+bob-out.world[corner].y*scale};
+            view_bounds[0]=std::min(view_bounds[0],yaw_x);
+            view_bounds[1]=std::min(view_bounds[1],out.world[corner].y);
+            view_bounds[2]=std::max(view_bounds[2],yaw_x);
+            view_bounds[3]=std::max(view_bounds[3],out.world[corner].y);
             out.depth+=yaw_z/3.0;
         }
         const Point3 a{out.world[1].x-out.world[0].x,out.world[1].y-out.world[0].y,out.world[1].z-out.world[0].z};
@@ -264,6 +233,20 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
         const double nz=a.x*b.y-a.y*b.x;
         out.light=std::clamp(0.70+std::abs(nz)/12000.0,0.70,1.0);
         raster.push_back(out);
+    }
+    const double source_width=std::max(1.0,view_bounds[2]-view_bounds[0]);
+    const double source_height=std::max(1.0,view_bounds[3]-view_bounds[1]);
+    const double target_width=appearance_closeup?180.0:140.0;
+    const double target_height=appearance_closeup?190.0:155.0;
+    const double scale=std::min(target_width/source_width,target_height/source_height);
+    const double center_x=408.0;
+    const double center_y=128.0;
+    const double source_center_x=(view_bounds[0]+view_bounds[2])*0.5;
+    const double source_center_y=(view_bounds[1]+view_bounds[3])*0.5;
+    for(auto& face:raster)for(std::size_t corner=0;corner<3;++corner) {
+        const double yaw_x=(face.world[corner].x*0.94+face.world[corner].z*0.34)*width_scale;
+        face.screen[corner]={center_x+(yaw_x-source_center_x)*scale,
+                             center_y-(face.world[corner].y-source_center_y)*scale};
     }
     std::sort(raster.begin(),raster.end(),[](const auto& a,const auto& b){return a.depth<b.depth;});
     const auto team=std::min<std::size_t>(editor.team,team_jerseys_.size()-1);
@@ -282,8 +265,7 @@ std::string CreatePlayerPreview::description() const {
         " mixed-part="+std::to_string(model_.mixed_part_face_count)+
         " secondary-triangles="+std::to_string(model_.secondary_face_count)+layout.str()+" team-models="+
         std::to_string(team_family_count_)+" uniforms="+
-        std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-idle=116 frames samples="+
-        std::to_string(motion_samples_.size())+" base-transform-sets="+
+        std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-clips=6 create=18keys/36ticks base-transform-sets="+
         std::to_string(base_transforms_.available_sets)+
         " hierarchy=3roots/depth"+std::to_string(hierarchy_.max_depth)+
         " projection=RTPS(H="+std::to_string(projection_.projection_distance)+

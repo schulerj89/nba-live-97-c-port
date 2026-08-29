@@ -4,7 +4,9 @@
 #include "recovered/create_player.h"
 #include "zdomf_model.hpp"
 #include "zdomf_hierarchy.hpp"
+#include "zdomf_mocap.hpp"
 #include "zdomf_projection.hpp"
+#include "zdomf_runtime.hpp"
 #include "zdomf_transform.hpp"
 
 #include <array>
@@ -26,11 +28,12 @@ private:
     ZdomfModel model_{};
     ZdomfTransformSet base_transforms_{};
     ZdomfHierarchy hierarchy_{};
+    ZdomfMocap mocap_{};
     ZdomfProjectionConfig projection_{};
+    std::vector<std::uint8_t> packed_trig_;
     std::array<std::int32_t, 6> projection_flat_bounds_{};
     std::array<std::int32_t, 6> projection_bounds_{};
     std::size_t projection_saturated_vertices_=0;
-    std::vector<ZdomfVec3> motion_samples_;
     std::vector<PshImage> team_jerseys_;
     std::vector<PshImage> team_shorts_;
     std::vector<PshImage> team_shorts_alt_;

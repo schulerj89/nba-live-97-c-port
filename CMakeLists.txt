@@ -33,9 +33,15 @@ if(BUILD_TESTING)
     target_compile_features(nba97_zdomf_hierarchy_tests PRIVATE cxx_std_17)
     target_include_directories(nba97_zdomf_hierarchy_tests PRIVATE src)
     add_test(NAME zdomf_hierarchy_core COMMAND nba97_zdomf_hierarchy_tests)
+    add_executable(nba97_zdomf_mocap_tests tests/zdomf_mocap_test.cpp
+        src/zdomf_mocap.cpp src/zdomf_runtime.cpp src/zdomf_hierarchy.cpp
+        src/zdomf_transform.cpp)
+    target_compile_features(nba97_zdomf_mocap_tests PRIVATE cxx_std_17)
+    target_include_directories(nba97_zdomf_mocap_tests PRIVATE src)
+    add_test(NAME zdomf_mocap_core COMMAND nba97_zdomf_mocap_tests)
     add_executable(nba97_zdomf_hierarchy_smoke tests/zdomf_hierarchy_smoke.cpp
         src/zdomf_hierarchy.cpp src/zdomf_model.cpp src/zdomf_projection.cpp
-        src/zdomf_transform.cpp)
+        src/zdomf_transform.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp)
     target_compile_features(nba97_zdomf_hierarchy_smoke PRIVATE cxx_std_17)
     target_include_directories(nba97_zdomf_hierarchy_smoke PRIVATE src)
     add_executable(nba97_release_tests tests/roster_release_test.cpp src/recovered/roster_release.c
@@ -116,7 +122,7 @@ if(BUILD_TESTING)
     target_include_directories(nba97_frontend_help_tests PRIVATE src)
     add_test(NAME frontend_help_core COMMAND nba97_frontend_help_tests)
     add_executable(nba97_reorder_child_tests tests/reorder_child_test.cpp
-        src/main_menu.cpp src/create_player_preview.cpp src/zdomf_model.cpp src/zdomf_transform.cpp src/zdomf_projection.cpp src/zdomf_hierarchy.cpp src/frontend_settings.cpp src/user_profiles.cpp
+        src/main_menu.cpp src/create_player_preview.cpp src/zdomf_model.cpp src/zdomf_transform.cpp src/zdomf_projection.cpp src/zdomf_hierarchy.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp src/frontend_settings.cpp src/user_profiles.cpp
         src/roster_database.cpp src/psh_font.cpp src/recovered/reorder_children.c
         src/recovered/reorder_screen.c src/recovered/roster_reorder.c
         src/recovered/roster_lists.c src/recovered/create_player.c
@@ -262,6 +268,7 @@ target_sources(nba97_boot_decomp PRIVATE src/zdomf_model.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/zdomf_transform.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/zdomf_projection.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/zdomf_hierarchy.cpp)
+target_sources(nba97_boot_decomp PRIVATE src/zdomf_mocap.cpp src/zdomf_runtime.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/create_player_store.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/create_player_delete_assets.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/roster_reorder.c)

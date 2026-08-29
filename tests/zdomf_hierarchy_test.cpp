@@ -26,8 +26,8 @@ int main() {
               hierarchy.parts[19].joint_end.x == 60,
               "four-deep leg branches");
         const auto vertex = nba97::apply_zdomf_hierarchy(hierarchy, 3, {2, 3, 4});
-        check(vertex.x == 32 && vertex.y == 3 && vertex.z == 4,
-              "world vertex translation");
+        check(vertex.x == 42 && vertex.y == 3 && vertex.z == 4,
+              "FUN_80066090 endpoint matrix translation");
         std::cout << "ZDOMF HIERARCHY: PASS - FUN_80069098 parent graph, "
                      "three roots, five-edge depth, and fixed-point world composition\n";
         return 0;
