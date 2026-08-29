@@ -425,7 +425,7 @@ private:
         trace_.log("ROSTER-LAYOUT", "state 0x10 / ZSET4: Bkga-d x=0/128/256/384, ba35=(142,10), frml=(30,15), dynamic team logo=(40,16), team arrows=ZFONT0 0x8D/0x8A at (157/381,66), scroll arrows=0x8B/0x8C at (48,108/168), help=(235,217)");
         trace_.log("ROSTER-ANIM", "ba35 title uses FUN_8003186C/FUN_80034A5C discrete four-corner shake; FUN_8002FF80 team crossfade=17 ticks; FUN_8002AB88 selected-row neutral-to-gold pulse=20 ticks");
         trace_.log("CREATE-ASSETS", "screen 0x1F uses private ZSET5.PSP: ba05 Create Player, c00c..c05c Edit/New/Delete plates, red1 disabled Edit/Delete variants; model assets remain separate");
-        trace_.log("CREATE-MODEL", "8004C344 -> 8006785C/80067A14/8006781C/80067F50; ZFEMODEL+ZFEMOCAP+ZFEPLAYR plus team ZDOM E/F/S families rebuild the live preview");
+        trace_.log("CREATE-MODEL", "8004C344 -> 8006785C/80067A14/8006781C/80067F50; ZFEMODEL+ZFEMOCAP+ZFEPLAYR plus team ZDOM D/E/F/S families rebuild the live preview");
         trace_.log("ROSTER-FIELDS", "recomp descriptor tables: categories=6 displays=56; live no$psx confirms L2/R2 stat-layer change enters FUN_80059610; six-row repeat=7/5/3/1 ticks");
         trace_.log("RECOVERED", "0x80035260 loads ZFEMOCAP.BIN; original frontend model/art packs are local");
         trace_.log("RECOVERED", "state 0x24 FUN_8005A538 loads Z1PORT.IDX/BIG and Z1COOL.IDX/BIG for View Player");

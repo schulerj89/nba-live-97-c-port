@@ -14,7 +14,7 @@ The first bounded native editor slice is working: the original three-card manage
 | New-player acceptance | Native tested | START/accept saves immediately without confirmation and consumes one of 40 slots |
 | Rendering determinism | Native tested | Sixteen 512x240 scenarios reproduce byte-identically across two runs; selector tint, mocap phase, and three scroll stages must also differ |
 | Original visual acceptance | Pending | Reference captures exist locally; exact layout/timing comparison is not yet a pass gate |
-| Editor and animated model | Partial/native tested | Local extractor provides all 101 ZDOM files. The 20-part anchor graph, 251/38 geometry header, height scaling, skin/team response, and 116-frame mocap motion are rendered; original textured polygon packets remain pending |
+| Editor and animated model | Partial/native tested | Local extractor provides all 133 D/E/F/S and shared ZDOM files. The real 20-part, 251-triangle body topology is decoded from retail descriptors and signed XYZ records; recovered pivots, height/weight scaling, skin/team response, and the 116-frame mocap source drive it. Exact head/hair assembly and GPU-packet-equivalent texturing remain pending |
 | Persistence | Native tested | `.n97cpl` version/generation/CRC, atomic replacement, backup recovery, no-op protection |
 | Edit/Delete picker | Native tested slice | `FUN_8004E184`, states `0x20/0x21`, sparse scan, seven visible, cursor/top and hard boundaries |
 | Delete confirmation | Native tested | Exact FEONLY descriptors `0x800AF352/3D6/460`, free/bench/starter branches, recovered `FUN_80040A1C` input/animation, atomic deletion and picker loop |
@@ -32,7 +32,7 @@ The recomp also establishes the shared created-player picker: `0x8004E46C` enter
 
 Created players persist locally in `.local/saves/created_players.n97cpl`. Each slot retains the original 68-byte record plus a small explicitly port-owned metadata section for decoded names, team, and roster membership context. Version 1.2 still reads 1.0 and 1.1 saves, safely migrates their shorter name fields, and marks legacy roster membership unknown where needed. This avoids inventing retail record offsets before they are proven and leaves the format upgradeable. The file is fixed-size, bounded, versioned, generation-counted, CRC-protected, atomically replaced, and backed up; private game assets are never embedded.
 
-The primary manager/editor inventory contains 1,020 instructions across 14 functions. The input slice now additionally accounts for the recovered 13-byte name buffers and 20/6-vblank selector/list transitions. Eight shared model helpers (1,018 instructions) are separately inventoried: their asset family, relinked anchor graph, model header, scaling path, and mocap directory are native-exercised, while textured GPU-packet rasterization remains research/translation work. These are audit counts, not a whole-feature percentage.
+The primary manager/editor inventory contains 1,020 instructions across 14 functions. The input slice now additionally accounts for the recovered 13-byte name buffers and 20/6-vblank selector/list transitions. Eight shared model helpers (1,018 instructions) are separately inventoried: their complete D/E/F/S asset family, relinked anchor graph, 81 source-triangle banks, 251 surface descriptors, scaling path, and mocap directory are native-exercised. Exact secondary head construction and textured GPU-packet equivalence remain research/translation work. These are audit counts, not a whole-feature percentage.
 
 ## Fresh verification
 

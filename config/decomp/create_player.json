@@ -19,7 +19,7 @@
     "name": "manager, New-player editor behavior, and articulated preview",
     "scenarios": 16,
     "deterministic_runs": 2,
-    "assets": "private ZSET5.PSP plus local-only ZDOM E/F/S, ZFEMOCAP, and ZFEPLAYR families; assets are not tracked",
+    "assets": "private ZSET5.PSP plus local-only ZDOM D/E/F/S, ZFEMOCAP, and ZFEPLAYR families; assets are not tracked",
     "functions": ["0x8004AEBC", "0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DA74", "0x8004DAE8"]
   },
   "behavior_checks": [
@@ -28,7 +28,8 @@
     "College wraps in both directions over the extracted roster school list",
     "field-bank changes animate through the recovered six-vblank scroll window",
     "selection tint traverses the recovered twenty-vblank neutral-to-gold transition",
-    "the 20-part ZDOM anchor graph, team SHPP uniform, height scale, and 116-frame mocap source visibly drive the native preview",
+    "the real 251-triangle surface is rebuilt from the retail ZDOM descriptors, 81 signed-XYZ source triangles, and 20 recovered pivots",
+    "team SHPP uniform, height/weight scale, and 116-frame mocap source visibly drive the native mesh",
     "all 32 fields follow the audited original order",
     "new-player defaults and single-step adjustments are deterministic",
     "Down on the final Dribbling field is a no-op",
@@ -43,8 +44,8 @@
   "partial_functions": ["0x8004D328", "0x8004D514", "0x8004D80C", "0x8004DAE8"],
   "pending": [
     "recover remaining exact per-field bounds",
-    "replace the articulated ZDOM preview with original textured PS1 polygon-packet rasterization",
-    "rebuild exact head, hair, facial hair, palette, and jersey-number composition",
+    "match the native mesh rasterizer to the original textured PS1 polygon packets and UV/material tables",
+    "decode the secondary 38-triangle head, hair, facial hair, palette, and jersey-number composition",
     "recover remaining exact editor/model camera, sound, and transition behavior",
     "insert created players into the selected team/free-agent roster exactly like FUN_8004D514",
     "original-reference visual and interaction acceptance"

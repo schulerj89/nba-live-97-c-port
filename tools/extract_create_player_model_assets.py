@@ -39,7 +39,7 @@ def iso_entries(disc_path: Path) -> dict[str, tuple[int, int, str]]:
 
 def wanted(name: str) -> bool:
     return name in SHARED or (
-        name.startswith(("ZDOME", "ZDOMF", "ZDOMS")) and name.endswith(".BIN")
+        name.startswith(("ZDOMD", "ZDOME", "ZDOMF", "ZDOMS")) and name.endswith(".BIN")
     )
 
 
@@ -57,11 +57,11 @@ def main() -> int:
     entries = iso_entries(args.disc)
     selected = sorted((name, *entry) for name, entry in entries.items() if wanted(name))
     families = {prefix: sum(name.startswith(prefix) for name, *_ in selected)
-                for prefix in ("ZDOME", "ZDOMF", "ZDOMS")}
+                for prefix in ("ZDOMD", "ZDOME", "ZDOMF", "ZDOMS")}
     if len(SHARED.intersection(name for name, *_ in selected)) != len(SHARED):
         raise RuntimeError("disc is missing a required shared ZDOM model asset")
     if len(set(families.values())) != 1 or next(iter(families.values())) < 29:
-        raise RuntimeError(f"incomplete or mismatched E/F/S team families: {families}")
+        raise RuntimeError(f"incomplete or mismatched D/E/F/S team families: {families}")
 
     files = []
     for name, lba, size, source_path in selected:

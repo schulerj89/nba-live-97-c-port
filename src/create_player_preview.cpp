@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 
 namespace nba97 {
@@ -29,48 +31,34 @@ void pixel(PshImage& image,int x,int y,std::uint8_t r,std::uint8_t g,std::uint8_
     const auto at=(static_cast<std::size_t>(y)*image.width+x)*4;
     image.rgba[at]=r;image.rgba[at+1]=g;image.rgba[at+2]=b;image.rgba[at+3]=255;
 }
-void circle(PshImage& image,int cx,int cy,int radius,std::uint8_t r,std::uint8_t g,std::uint8_t b) {
-    for(int y=-radius;y<=radius;++y)for(int x=-radius;x<=radius;++x)
-        if(x*x+y*y<=radius*radius)pixel(image,cx+x,cy+y,r,g,b);
-}
-void line(PshImage& image,int x0,int y0,int x1,int y1,int width,
-          std::uint8_t r,std::uint8_t g,std::uint8_t b) {
-    const int dx=std::abs(x1-x0),sx=x0<x1?1:-1,dy=-std::abs(y1-y0),sy=y0<y1?1:-1;
-    int error=dx+dy;
-    for(;;){circle(image,x0,y0,width,r,g,b);if(x0==x1&&y0==y1)break;
-        const int twice=2*error;if(twice>=dy){error+=dy;x0+=sx;}if(twice<=dx){error+=dx;y0+=sy;}}
-}
 struct Point { double x=0,y=0; };
-Point rotate(Point value,double radians) {
-    const double c=std::cos(radians),s=std::sin(radians);
-    return {value.x*c-value.y*s,value.x*s+value.y*c};
-}
+struct Point3 { double x=0,y=0,z=0; };
 std::uint8_t expand5(std::uint16_t value) {
     return static_cast<std::uint8_t>((value<<3)|(value>>2));
 }
-PshImage decode_first_team_texture(const std::filesystem::path& path) {
+PshImage decode_team_texture(const std::filesystem::path& path,std::uint32_t record) {
     const auto data=bytes(path);
-    if(data.size()<0x4A0 || std::string(data.begin(),data.begin()+4)!="SHPP" || u32(data,8)!=10)
+    if(data.size()<32 || std::string(data.begin(),data.begin()+4)!="SHPP" || record>=u32(data,8))
         throw std::runtime_error("invalid Create Player team SHPP: "+path.string());
-    const auto image_at=static_cast<std::size_t>(u32(data,0x14));
-    const auto next_image_at=static_cast<std::size_t>(u32(data,0x1c));
+    const auto image_at=static_cast<std::size_t>(u32(data,20+record*8));
+    const auto next_image_at=record+1<u32(data,8)?
+        static_cast<std::size_t>(u32(data,20+(record+1)*8)):data.size()-12;
     const auto format=u32(data,image_at);
     const auto width=u16(data,image_at+4),height=u16(data,image_at+6);
-    if((format&0xff)!=0x40||width<30||width>32||height!=64||next_image_at<=image_at+64)
+    if((format&0xff)!=0x41||!width||!height||next_image_at<=image_at+544)
         throw std::runtime_error("unexpected Create Player team texture format");
     const auto pixel_at=image_at+16;
-    const auto palette_at=next_image_at-32;
+    const auto palette_at=next_image_at-512;
     const auto palette_descriptor_at=palette_at-16;
-    const auto packed=palette_descriptor_at-pixel_at;
-    const auto stored_width=packed*2/height;
+    const auto stored_width=(palette_descriptor_at-pixel_at)/height;
     if(stored_width<width) throw std::runtime_error("team texture row stride is truncated");
-    if(palette_at+32>data.size()) throw std::runtime_error("truncated team texture palette");
-    PshImage image;image.width=width;image.height=height;image.tag="chr0";
+    if(palette_at+512>data.size()) throw std::runtime_error("truncated team texture palette");
+    PshImage image;image.width=width;image.height=height;
+    image.tag.assign(reinterpret_cast<const char*>(data.data()+16+record*8),4);
     image.rgba.resize(static_cast<std::size_t>(width)*height*4);
     for(std::size_t index=0;index<static_cast<std::size_t>(width)*height;++index) {
         const auto x=index%width,y=index/width;
-        const auto packed_byte=data[pixel_at+y*(stored_width/2)+x/2];
-        const auto palette_index=static_cast<std::uint8_t>((x&1)?packed_byte>>4:packed_byte&15);
+        const auto palette_index=data[pixel_at+y*stored_width+x];
         const auto color=u16(data,palette_at+palette_index*2);
         const auto out=index*4;
         image.rgba[out]=expand5(color&31);image.rgba[out+1]=expand5((color>>5)&31);
@@ -78,32 +66,71 @@ PshImage decode_first_team_texture(const std::filesystem::path& path) {
     }
     return image;
 }
-void textured_jersey(PshImage& output,const PshImage& texture,int cx,int top,int height) {
-    for(int y=0;y<height;++y) {
-        const int half=12+(y*5)/height;
-        const int source_y=std::min<int>(texture.height-1,y*texture.height/height);
-        for(int x=-half;x<=half;++x) {
-            const int source_x=std::clamp((x+half)*texture.width/(half*2+1),0,int(texture.width)-1);
-            const auto at=(static_cast<std::size_t>(source_y)*texture.width+source_x)*4;
-            if(texture.rgba[at+3])pixel(output,cx+x,top+y,texture.rgba[at],texture.rgba[at+1],texture.rgba[at+2]);
+Point3 rotate_z(Point3 value,double radians) {
+    const double c=std::cos(radians),s=std::sin(radians);
+    return {value.x*c-value.y*s,value.x*s+value.y*c,value.z};
+}
+struct RasterFace {
+    std::array<Point3,3> world{};
+    std::array<Point,3> screen{};
+    std::array<Point,3> uv{};
+    std::uint8_t part=0;
+    double depth=0,light=1;
+};
+double edge(Point a,Point b,Point p) {
+    return (p.x-a.x)*(b.y-a.y)-(p.y-a.y)*(b.x-a.x);
+}
+bool uniform_part(std::uint8_t part) {
+    return part==1||part==5||part==8||part==11;
+}
+bool skin_part(std::uint8_t part) {
+    return part==2||part==6||part==9||
+        (part>=13&&part<=15)||(part>=17&&part<=19);
+}
+void triangle(PshImage& output,const RasterFace& face,const PshImage& jersey,
+              const PshImage& shorts,const PshImage& shorts_alt,
+              const std::array<std::uint8_t,3>& skin) {
+    const double area=edge(face.screen[0],face.screen[1],face.screen[2]);
+    if(std::abs(area)<0.01)return;
+    const int min_x=std::max(0,static_cast<int>(std::floor(std::min({face.screen[0].x,face.screen[1].x,face.screen[2].x}))));
+    const int max_x=std::min(output.width-1,static_cast<int>(std::ceil(std::max({face.screen[0].x,face.screen[1].x,face.screen[2].x}))));
+    const int min_y=std::max(0,static_cast<int>(std::floor(std::min({face.screen[0].y,face.screen[1].y,face.screen[2].y}))));
+    const int max_y=std::min(output.height-1,static_cast<int>(std::ceil(std::max({face.screen[0].y,face.screen[1].y,face.screen[2].y}))));
+    for(int y=min_y;y<=max_y;++y)for(int x=min_x;x<=max_x;++x) {
+        const Point p{double(x)+0.5,double(y)+0.5};
+        const double a=edge(face.screen[1],face.screen[2],p)/area;
+        const double b=edge(face.screen[2],face.screen[0],p)/area;
+        const double c=1.0-a-b;
+        if(a<0||b<0||c<0)continue;
+        std::array<std::uint8_t,3> color{{38,38,44}};
+        if(skin_part(face.part)) color=skin;
+        else if(uniform_part(face.part)) {
+            const int packet_u=std::clamp(static_cast<int>(a*face.uv[0].x+b*face.uv[1].x+c*face.uv[2].x),0,255);
+            const int packet_v=std::clamp(static_cast<int>(a*face.uv[0].y+b*face.uv[1].y+c*face.uv[2].y),0,255);
+            const PshImage* texture=&jersey;
+            int tx=std::clamp(packet_u,0,int(jersey.width)-1);
+            int ty=std::clamp(packet_v,0,int(jersey.height)-1);
+            if(packet_v>=118&&packet_v<198) {
+                texture=packet_u<120?&shorts:&shorts_alt;
+                tx=std::clamp(packet_u-(packet_u<120?0:120),0,int(texture->width)-1);
+                ty=std::clamp(packet_v-118,0,int(texture->height)-1);
+            }
+            const auto at=(static_cast<std::size_t>(ty)*texture->width+tx)*4;
+            if(texture->rgba[at+3])color={{texture->rgba[at],texture->rgba[at+1],texture->rgba[at+2]}};
+            else color={{185,185,190}};
         }
+        pixel(output,x,y,static_cast<std::uint8_t>(color[0]*face.light),
+              static_cast<std::uint8_t>(color[1]*face.light),
+              static_cast<std::uint8_t>(color[2]*face.light));
     }
 }
 }
 
 CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root) {
     const auto model_root=asset_root/"create_player"/"model";
-    const auto model=bytes(model_root/"ZDOMFATL.BIN");
-    if(model.size()!=45148 || model.size()<0xCA4)
-        throw std::runtime_error("ZDOMFATL.BIN does not match the retail model extent");
-    /* FUN_800687BC sets DAT_800EFF74=base+0xBCC; FUN_80069098 wires the
-       following twenty eight-byte translation records into body parts. */
-    for(std::size_t index=0;index<bones_.size();++index) {
-        const auto at=0xBCC+index*8;
-        bones_[index]={s16(model,at),s16(model,at+2),s16(model,at+4)};
-    }
-    vertex_count_=u32(model,0xC6C); face_count_=u32(model,0xC70);
-    if(vertex_count_!=251 || face_count_!=38)
+    model_=load_zdomf_model(model_root/"ZDOMFATL.BIN");
+    if(model_.primary_faces.size()!=251 || model_.secondary_face_count!=38 ||
+       model_.mixed_part_face_count!=94)
         throw std::runtime_error("unexpected ZDOMF geometry header");
 
     const auto mocap=bytes(asset_root/"menu"/"ZFEMOCAP.BIN");
@@ -130,65 +157,88 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
     std::vector<std::filesystem::path> team_paths;
     for(const auto& entry:std::filesystem::directory_iterator(model_root)) {
         const auto name=entry.path().filename().string();
-        if(name.rfind("ZDOME",0)!=0||entry.path().extension()!=".BIN"||
-           name=="ZDOMEALE.BIN"||name=="ZDOMEALW.BIN"||name=="ZDOMEFRE.BIN") continue;
+        if(name.rfind("ZDOMS",0)!=0||entry.path().extension()!=".BIN"||
+           name=="ZDOMSALE.BIN"||name=="ZDOMSALW.BIN"||name=="ZDOMSFRE.BIN") continue;
         team_paths.push_back(entry.path());
     }
     std::sort(team_paths.begin(),team_paths.end());
-    for(const auto& path:team_paths) team_textures_.push_back(decode_first_team_texture(path));
-    if(team_textures_.size()!=29) throw std::runtime_error("expected 29 NBA team uniform textures");
+    for(const auto& path:team_paths) {
+        team_jerseys_.push_back(decode_team_texture(path,3));
+        team_shorts_.push_back(decode_team_texture(path,8));
+        team_shorts_alt_.push_back(decode_team_texture(path,9));
+    }
+    if(team_jerseys_.size()!=29||team_shorts_.size()!=29||team_shorts_alt_.size()!=29)
+        throw std::runtime_error("expected 29 NBA jersey and shorts texture pairs");
 }
 
 void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
                                std::uint32_t elapsed_ms) const {
     const auto& sample=motion_samples_[(elapsed_ms/17u)%116u];
-    const double idle=static_cast<double>(sample.x)/4096.0*0.10;
-    const double counter=static_cast<double>(sample.y)/4096.0*0.055;
-    const double scale=0.19*(static_cast<double>(editor.height_inches)/75.0);
-    const Point root{390.0,116.0+static_cast<double>(sample.z)/4096.0*1.5};
-    const auto point=[&](Point from,const Vec3& vector,double angle) {
-        auto delta=rotate({vector.x*scale,-vector.y*scale},angle);
-        return Point{from.x+delta.x,from.y+delta.y};
-    };
-    const auto chain=[&](int first,Point origin,double angle,std::uint8_t r,
-                         std::uint8_t g,std::uint8_t b,int width) {
-        Point at=origin;
-        for(int index=0;index<4;++index) {
-            const Point next=point(at,bones_[first+index],angle*(index+1)/4.0);
-            line(image,static_cast<int>(at.x),static_cast<int>(at.y),
-                 static_cast<int>(next.x),static_cast<int>(next.y),width,r,g,b);
-            at=next;
-        }
-        return at;
-    };
+    const double idle=static_cast<double>(sample.x)/4096.0*0.16;
+    const double counter=static_cast<double>(sample.y)/4096.0*0.10;
+    const bool appearance_closeup=editor.selected_field>=NBA97_CREATE_SKIN_TONE&&
+        editor.selected_field<=NBA97_CREATE_FACIAL_HAIR;
+    const double scale=(appearance_closeup?0.86:0.47)*
+        (static_cast<double>(editor.height_inches)/75.0);
+    const double width_scale=std::clamp(1.0+(static_cast<double>(editor.weight_pounds)-200.0)/500.0,
+                                        0.82,1.25);
+    const double camera_y=appearance_closeup?188.0:147.0;
+    const double bob=static_cast<double>(sample.z)/4096.0*2.0;
     const std::array<std::array<std::uint8_t,3>,8> skin{{
         {{244,194,142}},{{222,165,113}},{{198,133,82}},{{171,105,65}},
         {{143,84,54}},{{116,67,45}},{{91,52,39}},{{70,42,34}}}};
     const auto skin_color=skin[std::min<std::size_t>(editor.skin_tone,skin.size()-1)];
-    chain(0,root,idle,skin_color[0],skin_color[1],skin_color[2],4);
-    chain(4,root,-idle,skin_color[0],skin_color[1],skin_color[2],4);
-    Point chest=root;
-    for(int index=8;index<11;++index) {
-        const Point next=point(chest,bones_[index],counter);
-        line(image,static_cast<int>(chest.x),static_cast<int>(chest.y),
-             static_cast<int>(next.x),static_cast<int>(next.y),8,
-             190,190,190);
-        chest=next;
+    std::vector<RasterFace> raster;
+    raster.reserve(model_.primary_faces.size());
+    for(const auto& face:model_.primary_faces) {
+        // Preserve the previous material heuristic for this isolated test.
+        // Only transform ownership changes: FUN_800687BC retains a distinct
+        // part reference for every corner, including 94 cross-part faces.
+        RasterFace out{};out.part=face.corners[2].part;
+        for(std::size_t corner=0;corner<3;++corner) {
+            const auto part=face.corners[corner].part;
+            double angle=0;
+            if(part>=13&&part<=15)angle=idle+counter;
+            else if(part>=17&&part<=19)angle=-idle-counter;
+            else if(part>=1&&part<=3)angle=-idle*0.35;
+            else if(part>=5&&part<=7)angle=idle*0.35;
+            const auto& bone=model_.pivots[part];
+            const auto& vertex=face.corners[corner].position;
+            Point3 local{double(vertex.x)-bone.x,
+                         double(vertex.y)-bone.y,
+                         double(vertex.z)-bone.z};
+            local=rotate_z(local,angle);
+            out.world[corner]={local.x+bone.x,local.y+bone.y,local.z+bone.z};
+            out.uv[corner]={double(face.uv[corner][0]),double(face.uv[corner][1])};
+            const double yaw_x=(out.world[corner].x*0.94+out.world[corner].z*0.34)*width_scale;
+            const double yaw_z=-out.world[corner].x*0.34+out.world[corner].z*0.94;
+            out.screen[corner]={390.0+yaw_x*scale,camera_y+bob-out.world[corner].y*scale};
+            out.depth+=yaw_z/3.0;
+        }
+        const Point3 a{out.world[1].x-out.world[0].x,out.world[1].y-out.world[0].y,out.world[1].z-out.world[0].z};
+        const Point3 b{out.world[2].x-out.world[0].x,out.world[2].y-out.world[0].y,out.world[2].z-out.world[0].z};
+        const double nz=a.x*b.y-a.y*b.x;
+        out.light=std::clamp(0.70+std::abs(nz)/12000.0,0.70,1.0);
+        raster.push_back(out);
     }
-    if(editor.team<team_textures_.size())
-        textured_jersey(image,team_textures_[editor.team],static_cast<int>(root.x),
-                        static_cast<int>(chest.y+5),38);
-    chain(12,chest,idle+counter,skin_color[0],skin_color[1],skin_color[2],4);
-    chain(16,chest,-idle-counter,skin_color[0],skin_color[1],skin_color[2],4);
-    circle(image,static_cast<int>(chest.x),static_cast<int>(chest.y-9),9,
-           skin_color[0],skin_color[1],skin_color[2]);
+    std::sort(raster.begin(),raster.end(),[](const auto& a,const auto& b){return a.depth<b.depth;});
+    const auto team=std::min<std::size_t>(editor.team,team_jerseys_.size()-1);
+    for(const auto& face:raster)
+        triangle(image,face,team_jerseys_[team],team_shorts_[team],team_shorts_alt_[team],skin_color);
 }
 
 std::string CreatePlayerPreview::description() const {
-    return "ZDOMF parts=20 vertices="+std::to_string(vertex_count_)+
-        " faces="+std::to_string(face_count_)+" team-models="+
+    std::ostringstream layout;
+    layout<<std::hex<<std::uppercase
+          <<" packets=0x"<<model_.layout.primary_packet_a_offset
+          <<"/0x"<<model_.layout.primary_packet_b_offset
+          <<" vertices=0x"<<model_.layout.transformed_vertex_offset
+          <<"..0x"<<model_.layout.transformed_vertex_end;
+    return "ZDOMF relinked parts=20 surface-triangles="+std::to_string(model_.primary_faces.size())+
+        " mixed-part="+std::to_string(model_.mixed_part_face_count)+
+        " secondary-triangles="+std::to_string(model_.secondary_face_count)+layout.str()+" team-models="+
         std::to_string(team_family_count_)+" uniforms="+
-        std::to_string(team_textures_.size())+"x10-SHPP mocap-idle=116 frames samples="+
+        std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-idle=116 frames samples="+
         std::to_string(motion_samples_.size());
 }
 } // namespace nba97
