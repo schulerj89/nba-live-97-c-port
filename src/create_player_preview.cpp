@@ -142,9 +142,23 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         model_.pivots[part]=apply_zdomf_transform(base_transforms_.parts[part],model_.pivots[part]);
     for(auto& face:model_.primary_faces)for(auto& corner:face.corners)
         corner.position=apply_zdomf_transform(base_transforms_.parts[corner.part],corner.position);
+    hierarchy_=build_zdomf_hierarchy(model_.pivots);
+    projection_flat_bounds_={{32767,32767,65535,-32768,-32768,0}};
     projection_bounds_={{32767,32767,65535,-32768,-32768,0}};
     for(const auto& face:model_.primary_faces)for(const auto& corner:face.corners) {
-        const auto projected=project_zdomf_vertex(projection_,corner.position);
+        const auto flat=project_zdomf_vertex(projection_,corner.position);
+        projection_flat_bounds_[0]=std::min<std::int32_t>(projection_flat_bounds_[0],flat.x);
+        projection_flat_bounds_[1]=std::min<std::int32_t>(projection_flat_bounds_[1],flat.y);
+        projection_flat_bounds_[2]=std::min<std::int32_t>(projection_flat_bounds_[2],flat.depth);
+        projection_flat_bounds_[3]=std::max<std::int32_t>(projection_flat_bounds_[3],flat.x);
+        projection_flat_bounds_[4]=std::max<std::int32_t>(projection_flat_bounds_[4],flat.y);
+        projection_flat_bounds_[5]=std::max<std::int32_t>(projection_flat_bounds_[5],flat.depth);
+        const auto assembled=apply_zdomf_hierarchy(hierarchy_,corner.part,corner.position);
+        const ZdomfVec3 assembled16{
+            static_cast<std::int16_t>(assembled.x),
+            static_cast<std::int16_t>(assembled.y),
+            static_cast<std::int16_t>(assembled.z)};
+        const auto projected=project_zdomf_vertex(projection_,assembled16);
         projection_bounds_[0]=std::min<std::int32_t>(projection_bounds_[0],projected.x);
         projection_bounds_[1]=std::min<std::int32_t>(projection_bounds_[1],projected.y);
         projection_bounds_[2]=std::min<std::int32_t>(projection_bounds_[2],projected.depth);
@@ -229,13 +243,17 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
                          double(vertex.y)-bone.y,
                          double(vertex.z)-bone.z};
             local=rotate_z(local,angle);
-            out.world[corner]={local.x+bone.x,local.y+bone.y,local.z+bone.z};
+            const ZdomfVec3 posed{
+                static_cast<std::int16_t>(local.x+bone.x),
+                static_cast<std::int16_t>(local.y+bone.y),
+                static_cast<std::int16_t>(local.z+bone.z)};
+            const auto assembled=apply_zdomf_hierarchy(hierarchy_,part,posed);
+            out.world[corner]={double(assembled.x),double(assembled.y),double(assembled.z)};
             out.uv[corner]={double(face.uv[corner][0]),double(face.uv[corner][1])};
-            // The recovered RTPS path is numerically audited in projection_,
-            // but cannot replace this visible compatibility projection until
-            // the original hierarchy has assembled local parts into world
-            // space. Applying RTPS before that stage shrinks the body to a
-            // 7x11-pixel cluster; keep the last known-visible output here.
+            // Hierarchy output is now native-exercised above. Keep the visible
+            // compatibility camera isolated until exact ZFEMOCAP joint
+            // rotations and the original root placement/scale are recovered;
+            // static RTPS output is valid but still only about 16x25 pixels.
             const double yaw_x=(out.world[corner].x*0.94+out.world[corner].z*0.34)*width_scale;
             const double yaw_z=-out.world[corner].x*0.34+out.world[corner].z*0.94;
             out.screen[corner]={390.0+yaw_x*scale,camera_y+bob-out.world[corner].y*scale};
@@ -267,8 +285,13 @@ std::string CreatePlayerPreview::description() const {
         std::to_string(team_jerseys_.size())+"xZDOMS-jersey/shorts mocap-idle=116 frames samples="+
         std::to_string(motion_samples_.size())+" base-transform-sets="+
         std::to_string(base_transforms_.available_sets)+
+        " hierarchy=3roots/depth"+std::to_string(hierarchy_.max_depth)+
         " projection=RTPS(H="+std::to_string(projection_.projection_distance)+
-        ",OF=256/120,draw=128/0,bounds="+
+        ",OF=256/120,draw=128/0,flat="+
+        std::to_string(projection_flat_bounds_[0])+"/"+std::to_string(projection_flat_bounds_[1])+"/"+
+        std::to_string(projection_flat_bounds_[2])+".."+std::to_string(projection_flat_bounds_[3])+"/"+
+        std::to_string(projection_flat_bounds_[4])+"/"+std::to_string(projection_flat_bounds_[5])+
+        ",assembled="+
         std::to_string(projection_bounds_[0])+"/"+std::to_string(projection_bounds_[1])+"/"+
         std::to_string(projection_bounds_[2])+".."+std::to_string(projection_bounds_[3])+"/"+
         std::to_string(projection_bounds_[4])+"/"+std::to_string(projection_bounds_[5])+

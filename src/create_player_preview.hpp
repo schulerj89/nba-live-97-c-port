@@ -3,6 +3,7 @@
 #include "psh_image.hpp"
 #include "recovered/create_player.h"
 #include "zdomf_model.hpp"
+#include "zdomf_hierarchy.hpp"
 #include "zdomf_projection.hpp"
 #include "zdomf_transform.hpp"
 
@@ -24,7 +25,9 @@ public:
 private:
     ZdomfModel model_{};
     ZdomfTransformSet base_transforms_{};
+    ZdomfHierarchy hierarchy_{};
     ZdomfProjectionConfig projection_{};
+    std::array<std::int32_t, 6> projection_flat_bounds_{};
     std::array<std::int32_t, 6> projection_bounds_{};
     std::size_t projection_saturated_vertices_=0;
     std::vector<ZdomfVec3> motion_samples_;

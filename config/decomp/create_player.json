@@ -12,8 +12,8 @@
     "function_count": 9,
     "instruction_count": 1029,
     "behavior_complete": 0,
-    "native_exercised_partial": 6,
-    "researched_only": 3
+    "native_exercised_partial": 7,
+    "researched_only": 2
   },
   "verified_slice": {
     "name": "manager, New-player editor behavior, and articulated preview",
@@ -30,6 +30,7 @@
     "selection tint traverses the recovered twenty-vblank neutral-to-gold transition",
     "the real 251-triangle surface is rebuilt from the retail ZDOM descriptors, 81 signed-XYZ source triangles, and 20 recovered pivots",
     "FUN_80067100 builds the 20 original 4.12 base matrices and FUN_80067378 applies them to pivots and vertices",
+    "FUN_80069098's recovered parent links assemble all 20 parts into three roots with a maximum depth of five; a private-asset smoke test renders every decoded corner through the hierarchy and RTPS boundary",
     "FUN_8006734C RTPS projection is isolated and numerically tested with the recovered H=160 and OF=256/120 Create Player camera state; the port-owned viewport offset remains explicit",
     "team SHPP uniform, height/weight scale, and 116-frame mocap source visibly drive the native mesh",
     "all 32 fields follow the audited original order",
@@ -48,7 +49,7 @@
     "recover remaining exact per-field bounds",
     "match the native mesh rasterizer to the original textured PS1 polygon packets and UV/material tables",
     "decode the secondary 38-triangle head, hair, facial hair, palette, and jersey-number composition",
-    "recover the exact part hierarchy/world assembly required before the verified camera/GTE projection can drive the visible model",
+    "decode exact ZFEMOCAP joint rotations and recover the original root translation/scale before the verified camera/GTE projection drives the visible model",
     "recover remaining exact editor/model sound and transition behavior",
     "insert created players into the selected team/free-agent roster exactly like FUN_8004D514",
     "original-reference visual and interaction acceptance"

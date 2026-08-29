@@ -392,7 +392,7 @@ private:
         validateMenuAsset(menu_root / "ZFEPLAYR.ART", 73984);
         create_player_preview_=std::make_unique<nba97::CreatePlayerPreview>(options_.asset_root);
         trace_.log("CREATE-MODEL-DECODE", create_player_preview_->description()+
-            "; 0x800687BC relocation and 0x80062F4C/0x800631B0 base transforms are native; 0x8006734C RTPS plus recovered camera state is numerically verified and awaits exact hierarchy/world assembly before visible activation; textured PS1 packets remain under translation");
+            "; 0x800687BC relocation, 0x80062F4C/0x800631B0 base transforms, and the 0x80069098 three-root hierarchy are native; 0x8006734C RTPS plus recovered camera state is numerically verified and awaits exact mocap/root scale before visible activation; textured PS1 packets remain under translation");
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);

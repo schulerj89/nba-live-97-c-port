@@ -8,6 +8,8 @@ $storeTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_store_test
 $modelTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_model_tests.exe'
 $transformTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_transform_tests.exe'
 $projectionTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_projection_tests.exe'
+$hierarchyTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_tests.exe'
+$hierarchySmoke = Join-Path $repo 'build-windows\Debug\nba97_zdomf_hierarchy_smoke.exe'
 
 Push-Location $repo
 try {
@@ -21,6 +23,8 @@ try {
     if (-not (Test-Path -LiteralPath $modelTest)) { throw "Missing ZDOMF model decoder test: $modelTest" }
     if (-not (Test-Path -LiteralPath $transformTest)) { throw "Missing ZDOMF transform test: $transformTest" }
     if (-not (Test-Path -LiteralPath $projectionTest)) { throw "Missing ZDOMF projection test: $projectionTest" }
+    if (-not (Test-Path -LiteralPath $hierarchyTest)) { throw "Missing ZDOMF hierarchy test: $hierarchyTest" }
+    if (-not (Test-Path -LiteralPath $hierarchySmoke)) { throw "Missing ZDOMF hierarchy smoke test: $hierarchySmoke" }
     if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'menu\ZSET5-decoded'))) {
         throw 'Missing private ZSET5 assets. Run scripts/extract_assetpacks.ps1 locally first.'
     }
@@ -40,6 +44,16 @@ try {
     & $projectionTest
     if ($LASTEXITCODE -ne 0) { throw 'ZDOMF GTE projection checks failed.' }
     Write-Host 'CREATE PLAYER PROJECTION: PASS - recovered camera state and FUN_8006734C RTPS fixed-point boundary.'
+    & $hierarchyTest
+    if ($LASTEXITCODE -ne 0) { throw 'ZDOMF hierarchy checks failed.' }
+    Write-Host 'CREATE PLAYER HIERARCHY: PASS - FUN_80069098 parent graph and fixed-point world composition.'
+
+    $hierarchyEvidence = Join-Path $repo '.local\verification\create_player\hierarchy'
+    New-Item -ItemType Directory -Force -Path $hierarchyEvidence | Out-Null
+    $hierarchyFrame = Join-Path $hierarchyEvidence 'smoke.ppm'
+    & $hierarchySmoke (Join-Path $assetRoot 'create_player\model') $hierarchyFrame
+    if ($LASTEXITCODE -ne 0) { throw 'ZDOMF hierarchy rendered smoke check failed.' }
+    Write-Host "CREATE PLAYER HIERARCHY SMOKE: PASS - exact 1x GTE output plus readable 6x diagnostic inset: $hierarchyFrame"
 
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $root = Join-Path $repo ".local\verification\create_player\run-$stamp"
@@ -97,7 +111,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
     Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM/mocap preview frames, and numeric RTPS/camera coverage. Exact hierarchy/world assembly, textured PS1 polygon equivalence, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM/mocap preview frames, static three-root hierarchy assembly, and numeric RTPS/camera coverage. Exact mocap-to-joint rotations/root scale, textured PS1 polygon equivalence, roster insertion, and original visual scoring remain pending.'
 } finally {
     Pop-Location
 }
