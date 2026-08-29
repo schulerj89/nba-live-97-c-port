@@ -17,6 +17,10 @@ struct ZdomfVec3 {
 struct ZdomfCornerRef {
     ZdomfVec3 position{};
     std::size_t source_offset = 0;
+    // Secondary faces stitch projected corners from six existing part
+    // streams. Retain the relocated POLY_FT3 SXY-word provenance separately
+    // from the actual XYZ source above.
+    std::size_t projected_packet_word_offset = 0;
     std::uint16_t triangle_index = 0;
     std::uint8_t component = 0;
     std::uint8_t part = 0;
@@ -28,6 +32,8 @@ struct ZdomfFace {
     std::size_t packet_offset = 0;
     std::uint16_t clut = 0;
     std::uint16_t tpage = 0;
+    // POLY_FT3 texture modulation bytes stored before command 0x24.
+    std::array<std::uint8_t, 3> modulation{{128,128,128}};
 };
 
 struct ZdomfLayout {
@@ -37,6 +43,8 @@ struct ZdomfLayout {
     std::size_t secondary_packet_a_offset = 0;
     std::size_t secondary_packet_b_offset = 0;
     std::size_t part_header_offset = 0;
+    std::size_t primary_source_offset = 0;
+    std::size_t primary_source_end = 0;
     std::size_t transformed_vertex_offset = 0;
     std::size_t transformed_vertex_end = 0;
     std::size_t secondary_source_offset = 0;
@@ -46,6 +54,11 @@ struct ZdomfLayout {
 struct ZdomfModel {
     std::array<ZdomfVec3, 20> pivots{};
     std::array<std::uint32_t, 20> part_triangle_counts{};
+    std::array<std::vector<std::array<ZdomfVec3, 3>>, 20> part_triangles{};
+    // Each articulated part owns a direct POLY_FT3 stream in addition to the
+    // 251 cross-part descriptor faces below. The retail draw path submits
+    // both layers to the same ordering table.
+    std::array<std::vector<ZdomfFace>, 20> part_faces{};
     std::vector<ZdomfFace> primary_faces;
     std::vector<ZdomfFace> secondary_faces;
     ZdomfLayout layout{};

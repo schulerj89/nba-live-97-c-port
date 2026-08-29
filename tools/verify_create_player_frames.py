@@ -40,7 +40,7 @@ def main() -> int:
     args = parser.parse_args()
     changed(args.capture, "editor-first-required.ppm", "editor-selector-gold.ppm",
             (35, 78, 275, 116), "20-vblank-selector-tint")
-    changed(args.capture, "editor-appearance-layer.ppm", "editor-model-motion-phase.ppm",
+    changed(args.capture, "editor-layer-scroll-enter.ppm", "editor-model-motion-phase.ppm",
             (335, 40, 510, 220), "18-key/36-tick-zdom-mocap-preview")
     changed(args.capture, "editor-layer-scroll-enter.ppm", "editor-layer-scroll-mid.ppm",
             (35, 125, 275, 194), "six-vblank-scroll-enter-mid")

@@ -1602,6 +1602,10 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
     blitAt(image, sprites, "Bkgf", 128, 0);
     blitAt(image, sprites, "Bkgg", 256, 0);
     blitAt(image, sprites, "Bkgh", 384, 0);
+    // The retail ordering table places the 3D model behind the authored
+    // frontend frame/help layer. Drawing it last let close-up legs overwrite
+    // the bottom border and HELP strip even when every model packet matched.
+    if (preview != nullptr) preview->draw(image, editor, elapsed_ms);
     for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
         {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
         {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
@@ -1610,7 +1614,6 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                        std::get<1>(border), std::get<2>(border));
     blitJumbledTitleSprite(image, sprites, "ba05", 35, 10, elapsed_ms);
     blitAt(image, sprites, "help", 235, 217);
-    if (preview != nullptr) preview->draw(image, editor, elapsed_ms);
 
     /* FUN_8004DE08/FUN_8004DEC4 start a 20-vblank transition from the
        selector's neutral 0x808080 tint into the gold 0x786600 tint. The

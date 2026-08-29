@@ -121,8 +121,11 @@ ZdomfModel decode_zdomf_model(const std::vector<std::uint8_t>& data) {
     // points each part's mutable signed-XYZ output at the following buffer.
     cursor = checked_add(secondary_header, 6, 16, "secondary part headers");
     cursor = checked_add(cursor, 1, 4, "part-header sentinel");
-    cursor = checked_add(cursor, static_cast<std::size_t>(primary_triangles), 64,
-                         "primary source records");
+    model.layout.primary_source_offset = cursor;
+    model.layout.primary_source_end = checked_add(
+        cursor, static_cast<std::size_t>(primary_triangles), 64,
+        "primary source records");
+    cursor = model.layout.primary_source_end;
     model.layout.secondary_source_offset = cursor;
     model.layout.secondary_source_end = checked_add(
         cursor, static_cast<std::size_t>(secondary_triangles), 64,
@@ -149,11 +152,62 @@ ZdomfModel decode_zdomf_model(const std::vector<std::uint8_t>& data) {
     if (vertex_cursor != model.layout.transformed_vertex_end) {
         throw std::runtime_error("inconsistent ZDOMF transformed vertex extent");
     }
+    auto primary_source_cursor = model.layout.primary_source_offset;
+    for (std::size_t part = 0; part < model.part_triangles.size(); ++part) {
+        auto& triangles = model.part_triangles[part];
+        auto& faces = model.part_faces[part];
+        triangles.reserve(model.part_triangle_counts[part]);
+        faces.reserve(model.part_triangle_counts[part]);
+        for (std::size_t triangle = 0;
+              triangle < model.part_triangle_counts[part]; ++triangle) {
+            std::array<ZdomfVec3, 3> vertices{};
+            for (std::size_t component = 0; component < vertices.size(); ++component)
+                vertices[component] = read_vec3(data, part_vertex_offsets[part] +
+                    triangle * 24 + component * 8);
+            triangles.push_back(vertices);
+
+            ZdomfFace face{};
+            // FUN_800687BC lays out a complete count*32 bank A followed by a
+            // complete count*32 bank B for each part (not interleaved A/B
+            // records per triangle).
+            face.packet_offset = primary_source_cursor + triangle * 32;
+            const auto command = read_u32(data, face.packet_offset + 4);
+            if ((command >> 24) != 0x24)
+                throw std::runtime_error("unexpected ZDOMF part GPU primitive");
+            face.modulation = {{static_cast<std::uint8_t>(command),
+                                static_cast<std::uint8_t>(command >> 8),
+                                static_cast<std::uint8_t>(command >> 16)}};
+            for (std::size_t component = 0; component < 3; ++component) {
+                auto& corner = face.corners[component];
+                corner.part = static_cast<std::uint8_t>(part);
+                corner.triangle_index = static_cast<std::uint16_t>(triangle);
+                corner.component = static_cast<std::uint8_t>(component);
+                corner.source_offset = part_vertex_offsets[part] +
+                    triangle * 24 + component * 8;
+                corner.position = vertices[component];
+                const auto packed = read_u32(
+                    data, face.packet_offset + 12 + component * 8);
+                face.uv[component] = {{static_cast<std::uint8_t>(packed),
+                                       static_cast<std::uint8_t>(packed >> 8)}};
+                if (component == 0)
+                    face.clut = static_cast<std::uint16_t>(packed >> 16);
+                if (component == 1)
+                    face.tpage = static_cast<std::uint16_t>(packed >> 16);
+            }
+            faces.push_back(face);
+        }
+        primary_source_cursor = checked_add(
+            primary_source_cursor, model.part_triangle_counts[part], 64,
+            "part source records");
+    }
+    if (primary_source_cursor != model.layout.primary_source_end)
+        throw std::runtime_error("inconsistent ZDOMF primary source extent");
 
     constexpr std::array<std::uint8_t, 6> kSecondaryParts{{1, 2, 3, 5, 6, 7}};
-    // The secondary pass never receives a 24-byte transformed output buffer.
-    // FUN_800687BC points its descriptor table directly at bank A of each
-    // group's two 32-byte-per-triangle source banks (+8/+16/+24 vertices).
+    // The secondary pass does not contain another XYZ bank. FUN_800687BC
+    // copies the six groups' source pointers from parts 1/2/3/5/6/7, renders
+    // those existing vertices into mutable packet banks, then relocates each
+    // secondary descriptor to an SXY word at +8/+16/+24 in that bank.
     std::array<std::size_t, 6> secondary_source_offsets{};
     auto secondary_source_cursor = model.layout.secondary_source_offset;
     for (std::size_t group = 0; group < secondary_source_offsets.size(); ++group) {
@@ -184,7 +238,8 @@ ZdomfModel decode_zdomf_model(const std::vector<std::uint8_t>& data) {
             corner.source_offset = part_vertex_offsets[corner.part] +
                 static_cast<std::size_t>(corner.triangle_index) * 24 +
                 static_cast<std::size_t>(corner.component) * 8;
-            corner.position = read_vec3(data, corner.source_offset);
+            corner.position = model.part_triangles[corner.part]
+                [corner.triangle_index][corner.component];
         }
         if (face.corners[1].part != face.corners[0].part ||
             face.corners[2].part != face.corners[0].part) {
@@ -197,6 +252,9 @@ ZdomfModel decode_zdomf_model(const std::vector<std::uint8_t>& data) {
         if ((command >> 24) != 0x24) {
             throw std::runtime_error("unexpected ZDOMF primary GPU primitive");
         }
+        face.modulation = {{static_cast<std::uint8_t>(command),
+                            static_cast<std::uint8_t>(command >> 8),
+                            static_cast<std::uint8_t>(command >> 16)}};
         for (std::size_t corner_index = 0; corner_index < 3; ++corner_index) {
             const auto packed = read_u32(data, face.packet_offset + 12 + corner_index * 8);
             face.uv[corner_index] = {{static_cast<std::uint8_t>(packed & 0xFF),
@@ -223,16 +281,25 @@ ZdomfModel decode_zdomf_model(const std::vector<std::uint8_t>& data) {
                 corner.triangle_index >= read_u32(data, secondary_header + group * 16))
                 throw std::runtime_error("invalid ZDOMF secondary face descriptor");
             corner.part = kSecondaryParts[group];
-            corner.source_offset = secondary_source_offsets[group] +
+            if (corner.triangle_index >= model.part_triangle_counts[corner.part])
+                throw std::runtime_error("secondary descriptor exceeds source part");
+            corner.source_offset = part_vertex_offsets[corner.part] +
+                static_cast<std::size_t>(corner.triangle_index) * 24 +
+                static_cast<std::size_t>(corner.component) * 8;
+            corner.projected_packet_word_offset = secondary_source_offsets[group] +
                 static_cast<std::size_t>(corner.triangle_index) * 32 + 8 +
                 static_cast<std::size_t>(corner.component) * 8;
-            corner.position = read_vec3(data, corner.source_offset);
+            corner.position = model.part_triangles[corner.part]
+                [corner.triangle_index][corner.component];
         }
         face.packet_offset = model.layout.secondary_packet_a_offset +
             static_cast<std::size_t>(face_index) * 32;
         const auto command = read_u32(data, face.packet_offset + 4);
         if ((command >> 24) != 0x24)
             throw std::runtime_error("unexpected ZDOMF secondary GPU primitive");
+        face.modulation = {{static_cast<std::uint8_t>(command),
+                            static_cast<std::uint8_t>(command >> 8),
+                            static_cast<std::uint8_t>(command >> 16)}};
         for (std::size_t corner_index = 0; corner_index < 3; ++corner_index) {
             const auto packed = read_u32(data, face.packet_offset + 12 + corner_index * 8);
             face.uv[corner_index] = {{static_cast<std::uint8_t>(packed & 0xFF),

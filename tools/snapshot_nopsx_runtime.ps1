@@ -3,6 +3,7 @@ param(
     [uint32]$EmulatedSignatureAddress = 0x00138A20,
     [uint32]$EmulatedDumpAddress = 0x00138488,
     [uint32]$DumpLength = 3004,
+    [uint32]$BackingLength = 0x200000,
     [string]$OutputPath = ".local/verification/create_player/runtime/nopsx-records.bin"
 )
 
@@ -168,9 +169,10 @@ foreach ($process in $processes) {
     foreach ($match in $processMatches) {
         $ramBase = $match - [int64]$EmulatedSignatureAddress
         try {
-            # Reject GTE/cache copies of the signature. A true candidate must
-            # expose the complete contiguous 2 MiB PS1 main-RAM image.
-            $ram = [NoPsxReadOnlyMemory]::Read($process.Id, $ramBase, 0x200000)
+            # Reject GTE/cache copies of the signature. Main-RAM callers retain
+            # the default complete 2 MiB validation; callers locating no$psx's
+            # separate raw GPU VRAM can request its 1 MiB backing length.
+            $ram = [NoPsxReadOnlyMemory]::Read($process.Id, $ramBase, $BackingLength)
         }
         catch {
             continue

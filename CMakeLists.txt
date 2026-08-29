@@ -134,7 +134,7 @@ if(BUILD_TESTING)
     target_include_directories(nba97_frontend_help_tests PRIVATE src)
     add_test(NAME frontend_help_core COMMAND nba97_frontend_help_tests)
     add_executable(nba97_reorder_child_tests tests/reorder_child_test.cpp
-        src/main_menu.cpp src/create_player_preview.cpp src/zdomf_model.cpp src/zdomf_transform.cpp src/zdomf_projection.cpp src/zdomf_hierarchy.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp src/zdomf_gte_compose.cpp src/frontend_settings.cpp src/user_profiles.cpp
+        src/main_menu.cpp src/create_player_preview.cpp src/ps1_vram_texture.cpp src/zdomf_model.cpp src/zdomf_transform.cpp src/zdomf_projection.cpp src/zdomf_hierarchy.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp src/zdomf_gte_compose.cpp src/frontend_settings.cpp src/user_profiles.cpp
         src/roster_database.cpp src/psh_font.cpp src/recovered/reorder_children.c
         src/recovered/reorder_screen.c src/recovered/roster_reorder.c
         src/recovered/roster_lists.c src/recovered/create_player.c

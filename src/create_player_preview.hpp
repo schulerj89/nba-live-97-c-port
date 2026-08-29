@@ -27,6 +27,7 @@ public:
 
 private:
     ZdomfModel model_{};
+    std::vector<ZdomfModel> team_models_;
     ZdomfTransformSet base_transforms_{};
     ZdomfHierarchy hierarchy_{};
     ZdomfMocap mocap_{};
@@ -40,7 +41,11 @@ private:
     // address the same logical atlas without retaining copyrighted assets in
     // the repository.
     std::vector<Ps1VramTextureAtlas> team_texture_uploads_;
+    std::vector<std::vector<Ps1VramTextureAtlas>> jersey_texture_uploads_;
+    std::array<std::vector<std::uint8_t>, 26> name_letter_indices_{};
+    std::array<std::uint8_t, 26> name_letter_widths_{};
     std::size_t team_family_count_=0;
+    mutable bool texture_audit_logged_=false;
 };
 
 } // namespace nba97

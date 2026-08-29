@@ -61,7 +61,7 @@ try {
     Write-Host 'CREATE PLAYER MOCAP: PASS - FUN_80035260 paired directories, FUN_80065D40 blending, and FUN_80062C00 scale.'
     & $vramTextureTest
     if ($LASTEXITCODE -ne 0) { throw 'PS1 VRAM texture addressing checks failed.' }
-    Write-Host 'CREATE PLAYER VRAM: PASS - 4/8-bpp TPAGE word addressing, five FUN_80067A14 team uploads, and shared SHOE upload.'
+    Write-Host 'CREATE PLAYER VRAM: PASS - 4/8-bpp TPAGE word addressing, FUN_80067F74 dthr/dthl, five FUN_80067A14 team uploads, and shared SHOE upload.'
 
     $hierarchyEvidence = Join-Path $repo '.local\verification\create_player\hierarchy'
     New-Item -ItemType Directory -Force -Path $hierarchyEvidence | Out-Null
@@ -85,6 +85,17 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Create Player capture failed: $capture" }
         if (-not (($output -join "`n") -match 'CREATE-CAPTURE\s+PASS:')) {
             throw "Create Player capture did not report PASS: $capture"
+        }
+        $textureAudit = $output -join "`n"
+        if ($textureAudit -notmatch '\[CREATE-TEXTURE-TOTAL\] opaque=3209 transparent=3 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-CLUT\] clut=0x7d60 opaque=1674 transparent=0 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-CLUT\] clut=0x7da2 opaque=243 transparent=0 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-UPLOAD\] upload=shared-dthr-r1 index=0 opaque=888 transparent=0 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-UPLOAD\] upload=shared-dthl-r4 index=1 opaque=566 transparent=0 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-UPLOAD\] upload=shoe-r6 index=7 opaque=243 transparent=0 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-UPLOAD\] upload=jersey-number .*opaque=2 transparent=3 missing=0' -or
+            $textureAudit -notmatch '\[CREATE-TEXTURE-SAMPLE-TRACE\] face=1 .*word=847/418 .*palette-index=234 palette-value=0xd71c .*final-rgb=227/196/173') {
+            throw "Create Player ordered-stream/VRAM texture audit failed: $capture"
         }
     }
 
@@ -126,8 +137,10 @@ try {
     python (Join-Path $repo 'tools\verify_create_player_frames.py') $first
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
     Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
+    Write-Host 'CREATE PLAYER MODEL: PASS - retail NCLIP selection and merged 251-primary/81-part FT3 streams reproduce the live ordering-table path.'
+    Write-Host 'CREATE PLAYER TEXTURE: PASS - packet-selected shared/team/head/number/name/shoe VRAM uploads have zero missing samples; exact face-1 palette trace matches live RAM.'
     Write-Host "Evidence: $root"
-    Write-Host 'Scope: manager/editor behavior, versioned persistence, three original Delete contexts, recovered name/college/scroll behavior, deterministic ZDOM preview frames, two-directory mocap, exact 20-record parent/pivot/matrix/endpoint runtime, 753/753 transformed vertices, RTPS coverage, far-to-near primitive order, and all 251 primary faces routed through recovered 4/8-bpp VRAM uploads. Dynamic frontend-camera playback, the secondary head pass, exact CLUT modulation, roster insertion, and original visual scoring remain pending.'
+    Write-Host 'Scope: manager/editor behavior, persistence, Delete contexts, deterministic ZDOM frames, exact field-selected frontend cameras, mocap, exact 20-record parent/pivot/matrix/endpoint runtime, synchronized 753/753 packet SXY, descriptor-0 AVSZ3 ordering, NCLIP, the merged primary/per-part FT3 streams, paired team geometry/UVs, shared dthr/dthl body surfaces, five indexed team uploads, dynamic hair/facial head composition, number/name pages, packet-selected CLUT rows, and SHOE 4-bpp. Roster insertion, pixel-exact PS1 triangle coverage/interpolation, and whole-screen original visual scoring remain pending.'
 } finally {
     Pop-Location
 }

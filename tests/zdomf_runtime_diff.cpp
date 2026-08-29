@@ -76,6 +76,10 @@ std::uint32_t u32(const std::vector<std::uint8_t>& data, std::size_t offset) {
            (std::uint32_t(data[offset + 3]) << 24);
 }
 
+std::int32_t s32(const std::vector<std::uint8_t>& data, std::size_t offset) {
+    return static_cast<std::int32_t>(u32(data, offset));
+}
+
 std::int16_t s16(const std::vector<std::uint8_t>& data, std::size_t offset) {
     if (offset + 2 > data.size()) throw std::runtime_error("truncated RAM s16");
     return static_cast<std::int16_t>(std::uint16_t(data[offset]) |
@@ -133,6 +137,27 @@ int main(int argc, char** argv) {
 
         const std::filesystem::path model_root = argv[3];
         auto model = nba97::load_zdomf_model(argv[4]);
+        std::array<std::size_t,20> secondary_part_corners{};
+        std::array<int,6> secondary_bounds{{32767,32767,32767,-32768,-32768,-32768}};
+        for(const auto& face:model.secondary_faces)for(const auto& corner:face.corners) {
+            ++secondary_part_corners[corner.part];
+            secondary_bounds[0]=std::min(secondary_bounds[0],int(corner.position.x));
+            secondary_bounds[1]=std::min(secondary_bounds[1],int(corner.position.y));
+            secondary_bounds[2]=std::min(secondary_bounds[2],int(corner.position.z));
+            secondary_bounds[3]=std::max(secondary_bounds[3],int(corner.position.x));
+            secondary_bounds[4]=std::max(secondary_bounds[4],int(corner.position.y));
+            secondary_bounds[5]=std::max(secondary_bounds[5],int(corner.position.z));
+        }
+        std::cout<<"[DIFF] secondary faces="<<model.secondary_faces.size()
+                 <<" source-triangles="<<model.secondary_triangle_count
+                 <<" source=0x"<<std::hex<<model.layout.secondary_source_offset
+                 <<"..0x"<<model.layout.secondary_source_end<<std::dec
+                 <<" bounds="<<secondary_bounds[0]<<'/'<<secondary_bounds[1]<<'/'<<secondary_bounds[2]
+                 <<".."<<secondary_bounds[3]<<'/'<<secondary_bounds[4]<<'/'<<secondary_bounds[5]
+                 <<" part-corners=";
+        for(std::size_t part=0;part<secondary_part_corners.size();++part)
+            if(secondary_part_corners[part])std::cout<<part<<':'<<secondary_part_corners[part]<<',';
+        std::cout<<'\n';
         const auto transforms = nba97::load_zdomf_base_transforms(
             model_root / "ZDEFLIST.BIN", model_root / "ZDOMTRIG.BIN");
         std::array<nba97::ZdomfVec3, 20> preprocessed_pivots{};
@@ -187,7 +212,56 @@ int main(int argc, char** argv) {
         }};
         std::vector<DrawFace> draw;
         draw.reserve(model.primary_faces.size());
-        for (const auto& face : model.primary_faces) {
+        const auto active_buffer = u32(ram, 0x1ede8);
+        if (active_buffer > 1) throw std::runtime_error("invalid packet buffer selector");
+        // FUN_800687BC geometry header words 6/7 are the relocated primary
+        // corner-pointer tables. Read the source SXY words through them: a
+        // debugger stop can catch FUN_80065740 halfway through copying the
+        // final packet bank, while these source packets are already complete.
+        const auto geometry_header = static_cast<std::size_t>(
+            (runtime_base + 0xc6cu) & 0x001fffffu);
+        const auto corner_pointer_table = u32(
+            ram, geometry_header + (6u + active_buffer) * 4u);
+        const auto runtime_packet_bank = runtime_base + static_cast<std::uint32_t>(
+            active_buffer == 0 ? model.layout.primary_packet_a_offset
+                               : model.layout.primary_packet_b_offset);
+        std::size_t packet_metadata_matches = 0;
+        for (std::size_t face_index = 0; face_index < model.primary_faces.size();
+             ++face_index) {
+            const auto& face = model.primary_faces[face_index];
+            const auto packet = static_cast<std::size_t>(
+                (runtime_packet_bank + face_index * 32) & 0x001fffffu);
+            const auto command = u32(ram, packet + 4);
+            const auto uv0 = u32(ram, packet + 12);
+            const auto uv1 = u32(ram, packet + 20);
+            const auto uv2 = u32(ram, packet + 28);
+            const bool matches = (command >> 24) == 0x24 &&
+                std::uint8_t(command) == face.modulation[0] &&
+                std::uint8_t(command >> 8) == face.modulation[1] &&
+                std::uint8_t(command >> 16) == face.modulation[2] &&
+                std::uint8_t(uv0) == face.uv[0][0] &&
+                std::uint8_t(uv0 >> 8) == face.uv[0][1] &&
+                std::uint16_t(uv0 >> 16) == face.clut &&
+                std::uint8_t(uv1) == face.uv[1][0] &&
+                std::uint8_t(uv1 >> 8) == face.uv[1][1] &&
+                std::uint16_t(uv1 >> 16) == face.tpage &&
+                std::uint8_t(uv2) == face.uv[2][0] &&
+                std::uint8_t(uv2 >> 8) == face.uv[2][1];
+            if (!matches)
+                throw std::runtime_error("first mismatch: POLY_FT3 UV/CLUT/TPAGE face " +
+                                         std::to_string(face_index));
+            ++packet_metadata_matches;
+        }
+        std::cout << "[DIFF] POLY_FT3 packet RGB/UV/CLUT/TPAGE MATCH "
+                  << packet_metadata_matches << '/' << model.primary_faces.size()
+                  << " active-bank=" << active_buffer << '\n';
+        std::size_t packet_sxy_matches = 0;
+        std::size_t packet_sxy_mismatches = 0;
+        const auto depth_pointer_table = u32(ram, geometry_header + 4u * 4u);
+        std::size_t ordering_key_matches = 0;
+        for (std::size_t face_index = 0; face_index < model.primary_faces.size();
+             ++face_index) {
+            const auto& face = model.primary_faces[face_index];
             DrawFace target{};
             target.part = face.corners[2].part;
             for (std::size_t corner_index = 0; corner_index < 3; ++corner_index) {
@@ -206,11 +280,62 @@ int main(int argc, char** argv) {
                 projection.draw_offset_x = 0;
                 const auto projected = nba97::project_zdomf_vertex(
                     projection, original_vertex);
+                const auto corner_pointer = u32(ram, static_cast<std::size_t>(
+                    (corner_pointer_table +
+                     (face_index * 3 + corner_index) * 4) & 0x001fffffu));
+                const auto packet_word = u32(ram, static_cast<std::size_t>(
+                    corner_pointer & 0x001fffffu));
+                const auto packet_x = static_cast<std::int16_t>(packet_word & 0xffffu);
+                const auto packet_y = static_cast<std::int16_t>(packet_word >> 16);
+                if (packet_x == projected.x && packet_y == projected.y) {
+                    ++packet_sxy_matches;
+                } else {
+                    if (packet_sxy_mismatches < 12)
+                        std::cout << "[DIFF] packet-SXY mismatch face=" << face_index
+                                  << " corner=" << corner_index << " part="
+                                  << int(corner.part) << " original=" << packet_x
+                                  << '/' << packet_y << " native=" << projected.x
+                                  << '/' << projected.y << '\n';
+                    ++packet_sxy_mismatches;
+                }
                 target.points[corner_index] = {double(projected.x), double(projected.y)};
                 target.depth += projected.depth / 3.0;
             }
+            const auto& order_corner = face.corners[0];
+            const auto& order_record = records[order_corner.part];
+            const auto order_geometry = static_cast<std::size_t>(
+                order_record.geometry_pointer & 0x001fffffu);
+            const auto order_vertices = u32(ram, order_geometry + 4);
+            std::int64_t source_depth_sum = 0;
+            for (std::size_t component = 0; component < 3; ++component) {
+                const auto vertex = vec3(ram, order_vertices +
+                    std::uint32_t(order_corner.triangle_index) * 24u +
+                    std::uint32_t(component) * 8u);
+                nba97::ZdomfProjectionConfig projection{};
+                projection.camera = order_record.current_matrix;
+                projection.camera.translation = nba97::decode_zdomf_runtime_matrix(
+                    ram, order_record.primary_parent_pointer).translation;
+                projection.draw_offset_x = 0;
+                source_depth_sum += nba97::project_zdomf_vertex(projection, vertex).depth;
+            }
+            // Retail GTE ZSF3 is 0x155 here, making the ordering-table key
+            // one quarter of the average screen depth before the byte offset.
+            const auto native_otz = std::clamp<std::int64_t>(
+                (source_depth_sum * 0x155) >> 12, 0, 0xffff);
+            const auto native_order_key = std::uint32_t(native_otz & 0xfff) << 2;
+            const auto depth_pointer = u32(ram, static_cast<std::size_t>(
+                (depth_pointer_table + face_index * 12) & 0x001fffffu));
+            const auto original_order_key = u32(ram, static_cast<std::size_t>(
+                depth_pointer & 0x001fffffu));
+            if (native_order_key == original_order_key) ++ordering_key_matches;
             draw.push_back(target);
         }
+        std::cout << "[DIFF] FUN_80065388->FUN_80065740 packet SXY MATCH "
+                  << packet_sxy_matches << '/' << model.primary_faces.size() * 3
+                  << " mismatches=" << packet_sxy_mismatches << '\n';
+        std::cout << "[DIFF] descriptor-0 AVSZ3 ordering key MATCH "
+                  << ordering_key_matches << '/' << model.primary_faces.size()
+                  << " ZSF3=0x155\n";
         std::sort(draw.begin(), draw.end(), [](const DrawFace& a, const DrawFace& b) {
             return a.depth > b.depth;
         });
@@ -222,6 +347,18 @@ int main(int argc, char** argv) {
 
         const auto mocap = nba97::load_zdomf_mocap(argv[2]);
         const auto trig = bytes(model_root / "ZDOMTRIG.BIN");
+        const auto context = static_cast<std::size_t>(u32(ram, 0x20bec) & 0x001fffffu);
+        const auto active_clip = static_cast<std::size_t>(s16(ram, context + 0x4e));
+        if (active_clip >= mocap.clips.size())
+            throw std::runtime_error("Create Player context selected an invalid mocap clip");
+        const nba97::ZdomfWorldVec3 context_root{
+            s32(ram, context + 8) / 32,
+            s32(ram, context + 0x10) / 32,
+            s32(ram, context + 0xc) / 32};
+        const auto context_yaw = static_cast<std::uint16_t>(s16(ram, context + 0xa8));
+        std::cout << "[DIFF] context clip=" << active_clip
+                  << " root=" << context_root.x << '/' << context_root.y << '/'
+                  << context_root.z << " yaw=" << context_yaw << '\n';
         const auto original_frontend = nba97::decode_zdomf_runtime_matrix(
             ram, 0x800ed278u);
         auto recovered_frontend = nba97::make_zdomf_rotation(
@@ -253,7 +390,10 @@ int main(int argc, char** argv) {
             ram, records[0].primary_parent_pointer);
         const auto recovered_root = nba97::compose_zdomf_gte_columns(
             recovered_frontend, best_scaled_root).matrix;
-        std::cout << "[DIFF] scaled root context-word=808 expected-shift=3232"
+        const auto expected_angle = static_cast<std::uint16_t>(
+            (-static_cast<std::int32_t>(context_yaw) * 4) & 0xfff);
+        std::cout << "[DIFF] scaled root context-word=" << context_yaw
+                  << " expected-angle=" << expected_angle
                   << " recovered-angle=" << best_angle
                   << " height=63 error2=" << best_scaled_error << '\n';
         std::cout << "[DIFF] composed root error2="
@@ -262,8 +402,8 @@ int main(int argc, char** argv) {
         std::uint64_t best_total = std::numeric_limits<std::uint64_t>::max();
         std::size_t best_tick = 0;
         std::array<std::uint64_t, 20> best_part_errors{};
-        for (std::size_t tick = 0; tick < mocap.clips[1].logical_ticks; ++tick) {
-            const auto pose = nba97::sample_zdomf_mocap(mocap, 1, tick);
+        for (std::size_t tick = 0; tick < mocap.clips[active_clip].logical_ticks; ++tick) {
+            const auto pose = nba97::sample_zdomf_mocap(mocap, active_clip, tick);
             std::uint64_t total = 0;
             std::array<std::uint64_t, 20> errors{};
             for (std::size_t part = 0; part < records.size(); ++part) {
@@ -280,7 +420,7 @@ int main(int argc, char** argv) {
         }
         std::cout << "[DIFF] closest native mocap tick=" << best_tick
                   << " root-word="
-                  << nba97::sample_zdomf_mocap(mocap, 1, best_tick).root_word
+                  << nba97::sample_zdomf_mocap(mocap, active_clip, best_tick).root_word
                   << " aggregate-error2=" << best_total << '\n';
         for (std::size_t part = 0; part < records.size(); ++part)
             std::cout << "[DIFF] matrix part=" << part
@@ -288,14 +428,60 @@ int main(int argc, char** argv) {
 
         nba97::ZdomfRuntimeConfig captured_config{};
         captured_config.height_value = 63;
-        captured_config.root_position = {256, 0, 640};
-        captured_config.root_yaw = 808;
+        captured_config.root_position = context_root;
+        captured_config.root_yaw = static_cast<std::int16_t>(context_yaw);
         captured_config.apply_frontend_view = true;
         captured_config.frontend_angles = {2051, 191, 0};
+        const auto original_root_translation = original_root.translation;
+        captured_config.use_record_root_translation = true;
+        captured_config.record_root_translation = {
+            original_root_translation[0], original_root_translation[1],
+            original_root_translation[2]};
         const auto native_runtime = nba97::build_zdomf_runtime_pose(
             preprocessed_pivots, trig,
-            nba97::sample_zdomf_mocap(mocap, 1, best_tick), captured_config);
-        const auto original_root_translation = original_root.translation;
+            nba97::sample_zdomf_mocap(mocap, active_clip, best_tick), captured_config);
+        std::size_t reconstructed_sxy_matches = 0;
+        std::size_t reconstructed_sxy_mismatches = 0;
+        nba97::ZdomfProjectionConfig packet_projection{};
+        packet_projection.camera.rotation = {{{4096,0,0},{0,4096,0},{0,0,4096}}};
+        packet_projection.camera.translation = {0,0,0};
+        packet_projection.draw_offset_x = 0;
+        for (std::size_t face_index = 0; face_index < model.primary_faces.size(); ++face_index) {
+            const auto& face = model.primary_faces[face_index];
+            for (std::size_t corner_index = 0; corner_index < 3; ++corner_index) {
+                const auto& corner = face.corners[corner_index];
+                const auto preprocessed = nba97::apply_zdomf_transform(
+                    transforms.parts[corner.part], corner.position);
+                const auto assembled = nba97::apply_zdomf_runtime_record_pose(
+                    native_runtime, corner.part, preprocessed);
+                const auto projected = nba97::project_zdomf_vertex(packet_projection, {
+                    static_cast<std::int16_t>(assembled.x),
+                    static_cast<std::int16_t>(assembled.y),
+                    static_cast<std::int16_t>(assembled.z)});
+                const auto corner_pointer = u32(ram, static_cast<std::size_t>(
+                    (corner_pointer_table + (face_index * 3 + corner_index) * 4) &
+                    0x001fffffu));
+                const auto packet_word = u32(ram, static_cast<std::size_t>(
+                    corner_pointer & 0x001fffffu));
+                const auto packet_x = static_cast<std::int16_t>(packet_word & 0xffffu);
+                const auto packet_y = static_cast<std::int16_t>(packet_word >> 16);
+                if (packet_x == projected.x && packet_y == projected.y) {
+                    ++reconstructed_sxy_matches;
+                } else {
+                    if (reconstructed_sxy_mismatches < 12)
+                        std::cout << "[DIFF] reconstructed-SXY mismatch face="
+                                  << face_index << " corner=" << corner_index
+                                  << " part=" << int(corner.part) << " original="
+                                  << packet_x << '/' << packet_y << " native="
+                                  << projected.x << '/' << projected.y << '\n';
+                    ++reconstructed_sxy_mismatches;
+                }
+            }
+        }
+        std::cout << "[DIFF] full native runtime packet SXY MATCH "
+                  << reconstructed_sxy_matches << '/'
+                  << model.primary_faces.size() * 3 << " mismatches="
+                  << reconstructed_sxy_mismatches << '\n';
         std::uint64_t endpoint_error = 0;
         for (std::size_t part = 0; part < records.size(); ++part) {
             const auto& native = native_runtime.record_part_endpoints[part];

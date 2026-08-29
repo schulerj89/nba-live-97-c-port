@@ -60,8 +60,9 @@ int main() {
         const auto part_headers = cursor;
         put32(data, part_headers + 2 * 16, 2);
         put32(data, part_headers + 3 * 16, 1);
-        put32(data, part_headers + 20 * 16, 1);
+        put32(data, part_headers + 20 * 16 + 1 * 16, 1);
         cursor += 20 * 16 + 6 * 16 + 4;
+        const auto primary_source = cursor;
         cursor += 3 * 64; // two source-record banks per triangle
         cursor += 1 * 64; // secondary source-record banks
         const auto secondary_source = cursor - 1 * 64;
@@ -77,6 +78,16 @@ int main() {
         put_vertex(data, secondary_source + 16, 71, 81, 91);
         put_vertex(data, secondary_source + 24, 72, 82, 92);
 
+        // Source packet banks are contiguous within each part: part 2 has
+        // A0/A1 then B0/B1; part 3 starts after those four records.
+        for (const auto packet : std::array<std::size_t, 3>{{
+                 primary_source, primary_source + 32, primary_source + 128}}) {
+            put32(data, packet + 4, 0x24807F7E);
+            put32(data, packet + 12, 0x4321140A);
+            put32(data, packet + 20, 0x00BD281E);
+            put32(data, packet + 28, 0x00003C32);
+        }
+
         // Face 0 is wholly part 2. Face 1 deliberately crosses part 3 -> 2.
         put32(data, 0xCA4 + 0, 0x00000200);
         put32(data, 0xCA4 + 4, 0x00000201);
@@ -84,9 +95,9 @@ int main() {
         put32(data, 0xCA4 + 12, 0x00000300);
         put32(data, 0xCA4 + 16, 0x00010200);
         put32(data, 0xCA4 + 20, 0x00000201);
-        put32(data, 0xCA4 + 24, 0x00000000);
-        put32(data, 0xCA4 + 28, 0x00000001);
-        put32(data, 0xCA4 + 32, 0x00000002);
+        put32(data, 0xCA4 + 24, 0x00000100);
+        put32(data, 0xCA4 + 28, 0x00000101);
+        put32(data, 0xCA4 + 32, 0x00000102);
 
         for (std::size_t face = 0; face < 2; ++face) {
             const auto packet = packet_a + face * 32;
@@ -103,27 +114,43 @@ int main() {
         const auto model = nba97::decode_zdomf_model(data);
         check(model.primary_faces.size() == 2, "primary face count");
         check(model.secondary_faces.size() == 1 &&
-              model.secondary_faces[0].corners[0].part == 1 &&
-              model.secondary_faces[0].corners[2].position.z == 92,
+              model.secondary_faces[0].corners[0].part == 2 &&
+              model.secondary_faces[0].corners[2].position.z == 32 &&
+              model.secondary_faces[0].corners[2].projected_packet_word_offset ==
+                  secondary_source + 24,
               "secondary six-group face decode");
         check(model.mixed_part_face_count == 1, "mixed-part face count");
         check(model.part_triangle_counts[2] == 2 && model.part_triangle_counts[3] == 1,
               "part triangle counts");
+        check(model.part_triangles[2].size() == 2 &&
+               model.part_triangles[2][1][0].x == 40,
+               "part source-triangle preservation");
+        check(model.part_faces[2].size() == 2 &&
+              model.part_faces[3].size() == 1 &&
+              model.part_faces[2][1].packet_offset == primary_source + 32 &&
+              model.part_faces[3][0].packet_offset == primary_source + 128 &&
+              model.part_faces[2][0].clut == 0x4321 &&
+              model.part_faces[2][0].tpage == 0x00BD &&
+              model.part_faces[2][0].uv[2][0] == 50,
+              "part POLY_FT3 stream decode");
         check(model.layout.primary_packet_a_offset == packet_a, "derived packet offset");
         check(model.layout.transformed_vertex_offset == transformed, "derived vertex offset");
-        check(model.layout.secondary_packet_a_offset == secondary_packet_a &&
+        check(model.layout.primary_source_offset == primary_source &&
+              model.layout.secondary_packet_a_offset == secondary_packet_a &&
               model.layout.secondary_source_offset == secondary_source,
-              "secondary packet/source offsets");
+              "primary/secondary packet source offsets");
         const auto& mixed = model.primary_faces[1];
         check(mixed.corners[0].part == 3 && mixed.corners[1].part == 2 &&
               mixed.corners[2].part == 2, "per-corner part ownership");
         check(mixed.corners[0].position.x == -7 && mixed.corners[0].position.y == -8 &&
               mixed.corners[0].position.z == -9, "signed vertex decode");
         check(mixed.clut == 0x1234 && mixed.tpage == 0x003E, "FT3 metadata decode");
+        check(mixed.modulation[0] == 0x7e && mixed.modulation[1] == 0x7f &&
+              mixed.modulation[2] == 0x80, "FT3 modulation decode");
         check(mixed.uv[0][0] == 10 && mixed.uv[0][1] == 20 &&
               mixed.uv[2][0] == 50 && mixed.uv[2][1] == 60, "FT3 UV decode");
         std::cout << "ZDOMF MODEL: PASS - derived relocation layout, signed vertices, "
-                     "FT3 metadata, and per-corner part ownership\n";
+                     "primary/part FT3 metadata, and per-corner part ownership\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "ZDOMF MODEL: FAIL - " << error.what() << '\n';

@@ -392,7 +392,7 @@ private:
         validateMenuAsset(menu_root / "ZFEPLAYR.ART", 73984);
         create_player_preview_=std::make_unique<nba97::CreatePlayerPreview>(options_.asset_root);
         trace_.log("CREATE-MODEL-DECODE", create_player_preview_->description()+
-            "; 0x800687BC relocation, 0x80035260 mocap, 0x80069098 parent routing, 0x80062F4C pivots, 0x800631B8 vertices, all 20 runtime matrices/attachment endpoints, and far-to-near packet order are live-RAM exact; FUN_80067A14 team atlas uploads=(r2@832/256,r6@949/374,r7@889/374,r4@832/488,r0@886/468), shared SHOE=(ZFEPLAYR:r6@922/454), packet groups=237x8bpp+14x4bpp; dynamic camera playback, secondary head pass, and exact CLUT modulation remain pending");
+            "; 0x800687BC relocation, 0x80035260 mocap, 0x80069098 parent routing, 0x80062F4C pivots, 0x800631B8 vertices, and all 20 runtime matrices/attachment endpoints are live-RAM exact; synchronized proof matches SXY=753/753, descriptor-0 AVSZ3 ordering=251/251, NCLIP acceptance, and the merged primary/per-part FT3 sequence=139/139; field-selected close-up/full-body camera state is live-RAM exact; FUN_80067F74 shared body uploads=(dthr:r1@832/374,dthl:r4@850/374), FUN_80067A14 team uploads=(r2@832/256,r6@949/374,r7@889/374,r4@832/488,r0@886/468), FUN_800626D0 dynamic head=(898/454), number/name pages=(960/256,960/320), shared SHOE=(922/454), packet CLUT rows=(512/500,512/501,528/502,544/502), synchronized raster missing=0; pixel-exact PS1 triangle coverage/interpolation and whole-screen original scoring remain pending");
         validateMenuAsset(menu_root / "ZLOGOS.PSH", 99848);
         validateMenuAsset(menu_root / "ZTMPAL.PSH", 21544);
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);
@@ -3291,18 +3291,30 @@ private:
         editor.previous_visible_first_field = editor.visible_first_field =
             NBA97_CREATE_HAIR_STYLE - 3;
         editor.scroll_ticks_remaining = 0;
+        if(std::getenv("NBA97_CREATE_ORIGINAL_VRAM")) {
+            /* The synchronized no$psx dump contains an uppercase A on the
+               generated 100x30 jersey-surname page. */
+            const auto saved_last=editor.last_name[0];
+            editor.last_name[0]='A';
+            capture_editor("editor-appearance-original-vram.ppm");
+            editor.last_name[0]=saved_last;
+        }
         editor.skin_tone = 1;
         editor.hair_style = 1;
         editor.hair_color = 1;
         editor.facial_hair = 1;
+        /* Match the captured PS1 appearance reference (Boston, values=1)
+           without changing the Atlanta full-body texture-audit fixture. */
+        editor.team = 1;
         capture_editor("editor-appearance-layer.ppm");
-        /* 680 ms is one complete selector-pulse period, isolating mocap change
-           from the gold tint in the model-region regression crop. */
-        capture_editor("editor-model-motion-phase.ppm", 680);
+        editor.team = 0;
         editor.selected_field = NBA97_CREATE_HAND;
         editor.previous_visible_first_field = editor.visible_first_field = 2;
         nba97_create_editor_move(&editor, 1);
         capture_editor("editor-layer-scroll-enter.ppm");
+        /* Clip 0 is the retail one-frame appearance pose. Verify animation
+           against clip 1 while the model is in the full-body field state. */
+        capture_editor("editor-model-motion-phase.ppm", 330);
         for(int tick=0;tick<3;++tick) nba97_create_editor_tick(&editor);
         capture_editor("editor-layer-scroll-mid.ppm");
         for(int tick=0;tick<3;++tick) nba97_create_editor_tick(&editor);
