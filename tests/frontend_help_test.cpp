@@ -150,15 +150,16 @@ int main(int argc,char** argv) {
             const std::filesystem::path root=argv[1];
             nba97::FrontendHelpPack pack(root/"reorder/help.n97ui");
             const auto font=nba97::load_psh_font(root/"fonts/ZFONT1.PSH",10,1);
-            for(const auto route : std::array<std::array<std::uint8_t,2>,5>{{
-                    {{34,1}},{{12,0}},{{12,1}},{{35,0}},{{36,0}}}}) {
+            for(const auto route : std::array<std::array<std::uint8_t,2>,9>{{
+                    {{34,0}},{{34,1}},{{34,2}},{{34,3}},{{34,4}},
+                    {{12,0}},{{12,1}},{{35,0}},{{36,0}}}}) {
                 const auto& d=pack.descriptor(route[0],route[1]);
                 Nba97HelpModal m{}; nba97_help_open(&m,d.rect,0x20);
                 for(int i=0;i<40;++i) nba97_help_tick(&m,0);
                 PshImage image; image.width=512; image.height=240; image.rgba.assign(512*240*4,0);
                 pack.draw(image,font,d,m); // Fails on missing original control or text glyphs.
             }
-            pass("private_five_descriptors_real_font_and_icons");
+            pass("private_nine_descriptors_real_font_and_icons");
         }
         return 0;
     } catch(const std::exception& e) { std::cerr<<"HELP FAIL "<<e.what()<<'\n'; return 1; }

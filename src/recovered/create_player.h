@@ -117,6 +117,7 @@ typedef struct Nba97CreateEditor {
     uint8_t previous_visible_first_field;
     uint8_t scroll_ticks_remaining;
     uint16_t college_count;
+    uint8_t rating_group_active; /* Cross selects summary; selected_field remembers return row. */
 } Nba97CreateEditor;
 
 typedef enum Nba97CreateNameCommand {
@@ -182,6 +183,9 @@ int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
                                   int16_t slot);
 int nba97_create_editor_move(Nba97CreateEditor* editor, int direction);
 int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction);
+int nba97_create_editor_toggle_rating_group(Nba97CreateEditor* editor);
+uint8_t nba97_create_editor_help_index(const Nba97CreateEditor* editor,
+                                      const Nba97CreateNameEditor* name_editor);
 void nba97_create_editor_set_college_count(Nba97CreateEditor* editor,
                                            uint16_t college_count);
 void nba97_create_editor_tick(Nba97CreateEditor* editor);

@@ -196,6 +196,14 @@ static uint8_t clamp_u8(int value, int minimum, int maximum) {
     return (uint8_t)value;
 }
 
+static int wrap_value(int value, int minimum, int maximum) {
+    /* FUN_8003AC10/AC6C -> FUN_8003A128: crossing either endpoint
+       selects the opposite endpoint. This is NOT the mixed-group clamp. */
+    if (value < minimum) return maximum;
+    if (value > maximum) return minimum;
+    return value;
+}
+
 static uint8_t visible_bank_for_field(uint8_t field) {
     int first;
     if (field < NBA97_CREATE_FIELD_GOALS) {
@@ -263,7 +271,7 @@ int nba97_create_editor_open_edit(Nba97CreateEditor* editor,
 
 int nba97_create_editor_move(Nba97CreateEditor* editor, int direction) {
     int candidate;
-    if (editor == NULL || direction == 0) return 0;
+    if (editor == NULL || direction == 0 || editor->rating_group_active) return 0;
     candidate = (int)editor->selected_field + (direction < 0 ? -1 : 1);
     if (candidate < 0 || candidate >= NBA97_CREATE_FIELD_COUNT) return 0;
     /* The original refuses to leave either required name while it is empty. */
@@ -303,17 +311,34 @@ int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
     uint8_t* rating;
     if (editor == NULL || direction == 0) return 0;
     step = direction < 0 ? -1 : 1;
+    if (editor->rating_group_active) {
+        int index, at_limit = 0;
+        int first;
+        if (editor->selected_field < NBA97_CREATE_FIELD_GOALS ||
+            editor->selected_field >= NBA97_CREATE_FIELD_COUNT) return 0;
+        first = 1 + ((editor->selected_field - NBA97_CREATE_FIELD_GOALS) / 4) * 4;
+        /* FUN_8004B710 -> B600/B688. Retail editor bytes are 0..49;
+           type-8 text adds 50. Native ratings retain that displayed 50..99
+           representation, including the all-at-limit wrap quirk. */
+        for (index = 0; index < 4; ++index) {
+            rating = &editor->ratings[first + index];
+            if (*rating == (step < 0 ? 50 : 99)) ++at_limit;
+            else *rating = clamp_u8((int)*rating + step, 50, 99);
+        }
+        if (at_limit == 4)
+            for (index = 0; index < 4; ++index)
+                editor->ratings[first + index] = (uint8_t)(step < 0 ? 99 : 50);
+        return 1;
+    }
     switch ((Nba97CreateField)editor->selected_field) {
-    case NBA97_CREATE_TEAM: editor->team = clamp_u8((int)editor->team + step, 0, 28); break;
-    case NBA97_CREATE_JERSEY_NUMBER: editor->jersey_number = clamp_u8((int)editor->jersey_number + step, 0, 99); break;
-    case NBA97_CREATE_POSITION: editor->position = clamp_u8((int)editor->position + step, 0, 4); break;
-    case NBA97_CREATE_HAND: editor->hand = clamp_u8((int)editor->hand + step, 0, 1); break;
-    case NBA97_CREATE_HEIGHT: editor->height_inches = clamp_u8((int)editor->height_inches + step, 63, 90); break;
+    case NBA97_CREATE_TEAM: editor->team = (uint8_t)wrap_value((int)editor->team + step, 0, 28); break;
+    case NBA97_CREATE_JERSEY_NUMBER: editor->jersey_number = (uint8_t)wrap_value((int)editor->jersey_number + step, 0, 99); break;
+    case NBA97_CREATE_POSITION: editor->position = (uint8_t)wrap_value((int)editor->position + step, 0, 4); break;
+    case NBA97_CREATE_HAND: editor->hand = (uint8_t)wrap_value((int)editor->hand + step, 0, 1); break;
+    case NBA97_CREATE_HEIGHT: editor->height_inches = (uint8_t)wrap_value((int)editor->height_inches + step, 63, 90); break;
     case NBA97_CREATE_WEIGHT: {
         int value = (int)editor->weight_pounds + step;
-        if (value < 150) value = 150;
-        if (value > 350) value = 350;
-        editor->weight_pounds = (uint16_t)value;
+        editor->weight_pounds = (uint16_t)wrap_value(value, 150, 350);
         break;
     }
     case NBA97_CREATE_COLLEGE: {
@@ -325,20 +350,45 @@ int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
         editor->college = (uint16_t)value;
         break;
     }
-    case NBA97_CREATE_YEARS_PRO: editor->years_pro = clamp_u8((int)editor->years_pro + step, 0, 25); break;
-    case NBA97_CREATE_SKIN_TONE: editor->skin_tone = clamp_u8((int)editor->skin_tone + step, 0, 7); break;
-    case NBA97_CREATE_HAIR_STYLE: editor->hair_style = clamp_u8((int)editor->hair_style + step, 0, 12); break;
-    case NBA97_CREATE_HAIR_COLOR: editor->hair_color = clamp_u8((int)editor->hair_color + step, 0, 2); break;
-    case NBA97_CREATE_FACIAL_HAIR: editor->facial_hair = clamp_u8((int)editor->facial_hair + step, 0, 8); break;
-    case NBA97_CREATE_SHOOTING_RANGE: editor->shooting_range_feet = clamp_u8((int)editor->shooting_range_feet + step, 8, 35); break;
+    case NBA97_CREATE_YEARS_PRO: editor->years_pro = (uint8_t)wrap_value((int)editor->years_pro + step, 0, 25); break;
+    case NBA97_CREATE_SKIN_TONE: editor->skin_tone = (uint8_t)wrap_value((int)editor->skin_tone + step, 0, 7); break;
+    case NBA97_CREATE_HAIR_STYLE: editor->hair_style = (uint8_t)wrap_value((int)editor->hair_style + step, 0, 12); break;
+    case NBA97_CREATE_HAIR_COLOR: editor->hair_color = (uint8_t)wrap_value((int)editor->hair_color + step, 0, 2); break;
+    case NBA97_CREATE_FACIAL_HAIR: editor->facial_hair = (uint8_t)wrap_value((int)editor->facial_hair + step, 0, 8); break;
+    case NBA97_CREATE_SHOOTING_RANGE: editor->shooting_range_feet = (uint8_t)wrap_value((int)editor->shooting_range_feet + step, 8, 35); break;
     default:
         if (editor->selected_field < NBA97_CREATE_ENDURANCE ||
             editor->selected_field >= NBA97_CREATE_FIELD_COUNT) return 0;
         rating = &editor->ratings[editor->selected_field - NBA97_CREATE_ENDURANCE];
-        *rating = clamp_u8((int)*rating + step, 0, 99);
+        /* Type-8 descriptor has 50 entries; generic left/right wraps the
+           editor index, whose displayed value is index + 50. */
+        if (step < 0 && *rating == 50) *rating = 99;
+        else if (step > 0 && *rating == 99) *rating = 50;
+        else *rating = clamp_u8((int)*rating + step, 50, 99);
         break;
     }
     return 1;
+}
+
+int nba97_create_editor_toggle_rating_group(Nba97CreateEditor* editor) {
+    if (editor == NULL || !editor->txn.active ||
+        editor->selected_field < NBA97_CREATE_FIELD_GOALS ||
+        editor->selected_field >= NBA97_CREATE_FIELD_COUNT) return 0;
+    /* FUN_8004B400 saves selected row at context+5 and selects 0x20..23;
+       B4F8 restores that row. No draft copy or separate modal is created. */
+    editor->rating_group_active = (uint8_t)!editor->rating_group_active;
+    return 6;
+}
+
+uint8_t nba97_create_editor_help_index(const Nba97CreateEditor* editor,
+                                      const Nba97CreateNameEditor* name_editor) {
+    /* FUN_80040FCC reads selected descriptor+9. State 0x22 rows 0x1E/1F
+       use 0 (temporarily 1 in C488); 0..0D use 2; 0E..1D use 3;
+       the four summary rows 0x20..23 use 4. */
+    if (name_editor != NULL && name_editor->active) return 1;
+    if (editor == NULL || editor->selected_field <= NBA97_CREATE_LAST_NAME) return 0;
+    if (editor->selected_field < NBA97_CREATE_FIELD_GOALS) return 2;
+    return editor->rating_group_active ? 4 : 3;
 }
 
 int16_t nba97_create_appearance_root_y(uint8_t height_inches) {
@@ -479,7 +529,12 @@ int nba97_create_name_input(Nba97CreateEditor* editor,
         if (name_editor->cursor == 11) return 0;
         ++name_editor->cursor;
         if (name_editor->cursor == name_editor->length) {
-            name[name_editor->cursor] = 'a';
+            /* FUN_8004C488 carries bVar3 (the currently highlighted alphabet
+               entry) into a newly appended slot. Starting from the retail
+               seed 'A' therefore produces A, AA, AAA... until the player
+               deliberately changes case/character; it does not reset to
+               lowercase 'a' for every new position. */
+            name[name_editor->cursor] = name[name_editor->cursor - 1];
             ++name_editor->length;
             name[name_editor->length] = '\0';
         }

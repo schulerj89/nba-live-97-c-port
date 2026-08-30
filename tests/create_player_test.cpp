@@ -1,9 +1,13 @@
 #include "recovered/create_player.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <array>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 static Nba97CreateMenuContext normal_context() {
     Nba97CreateMenuContext context{};
@@ -11,7 +15,129 @@ static Nba97CreateMenuContext normal_context() {
     return context;
 }
 
+static void editor_value_wrap_round_trips() {
+    Nba97CreatedPlayerCatalog catalog{};
+    nba97_created_catalog_init(&catalog);
+    Nba97CreateEditor editor{};
+    assert(nba97_create_editor_open_new(&editor,&catalog));
+    std::strcpy(editor.first_name,"Wrap"); std::strcpy(editor.last_name,"Test");
+    // Re-run every boundary after serializing and reopening Edit, not only New.
+    for(int pass=0;pass<2;++pass) {
+        nba97_create_editor_set_college_count(&editor,347);
+        const auto check=[&](uint8_t field,auto member,unsigned minimum,unsigned maximum) {
+            editor.selected_field=field;
+            auto& value=editor.*member;
+            using Value=std::remove_reference_t<decltype(value)>;
+            value=static_cast<Value>(minimum);
+            assert(nba97_create_editor_adjust(&editor,-1) && value==maximum);
+            assert(nba97_create_editor_adjust(&editor,1) && value==minimum);
+            for(unsigned i=minimum;i<maximum;++i)
+                assert(nba97_create_editor_adjust(&editor,1) && value==i+1);
+            assert(nba97_create_editor_adjust(&editor,1) && value==minimum);
+            for(unsigned i=maximum;i>=minimum;--i) {
+                assert(nba97_create_editor_adjust(&editor,-1) && value==i);
+                if(i==minimum) break;
+            }
+        };
+        check(NBA97_CREATE_TEAM,&Nba97CreateEditor::team,0,28);
+        check(NBA97_CREATE_JERSEY_NUMBER,&Nba97CreateEditor::jersey_number,0,99);
+        check(NBA97_CREATE_POSITION,&Nba97CreateEditor::position,0,4);
+        check(NBA97_CREATE_HAND,&Nba97CreateEditor::hand,0,1);
+        check(NBA97_CREATE_HEIGHT,&Nba97CreateEditor::height_inches,63,90);
+        check(NBA97_CREATE_WEIGHT,&Nba97CreateEditor::weight_pounds,150,350);
+        check(NBA97_CREATE_COLLEGE,&Nba97CreateEditor::college,0,346);
+        check(NBA97_CREATE_YEARS_PRO,&Nba97CreateEditor::years_pro,0,25);
+        check(NBA97_CREATE_SKIN_TONE,&Nba97CreateEditor::skin_tone,0,7);
+        check(NBA97_CREATE_HAIR_STYLE,&Nba97CreateEditor::hair_style,0,12);
+        check(NBA97_CREATE_HAIR_COLOR,&Nba97CreateEditor::hair_color,0,2);
+        check(NBA97_CREATE_FACIAL_HAIR,&Nba97CreateEditor::facial_hair,0,8);
+        check(NBA97_CREATE_SHOOTING_RANGE,&Nba97CreateEditor::shooting_range_feet,8,35);
+        assert(nba97_create_editor_save(&editor,&catalog));
+        assert(nba97_create_editor_open_edit(&editor,&catalog,0));
+    }
+    // No table and a one-entry table are valid degenerate College boundaries.
+    editor.selected_field=NBA97_CREATE_COLLEGE;
+    nba97_create_editor_set_college_count(&editor,0);
+    assert(!nba97_create_editor_adjust(&editor,-1));
+    nba97_create_editor_set_college_count(&editor,1);
+    assert(nba97_create_editor_adjust(&editor,-1) && editor.college==0);
+    assert(nba97_create_editor_adjust(&editor,1) && editor.college==0);
+}
+
+static void rating_group_round_trips() {
+    Nba97CreatedPlayerCatalog catalog{};
+    nba97_created_catalog_init(&catalog);
+    Nba97CreateEditor editor{};
+    Nba97CreateNameEditor name{};
+    assert(nba97_create_editor_open_new(&editor,&catalog));
+    assert(nba97_create_editor_help_index(&editor,&name)==0);
+    assert(nba97_create_name_begin(&editor,&name)==6);
+    assert(nba97_create_editor_help_index(&editor,&name)==1);
+    assert(nba97_create_name_accept(&editor,&name));
+    editor.selected_field=NBA97_CREATE_LAST_NAME;
+    assert(nba97_create_name_begin(&editor,&name)==6);
+    assert(nba97_create_name_accept(&editor,&name));
+    editor.selected_field=NBA97_CREATE_SKIN_TONE;
+    assert(nba97_create_editor_help_index(&editor,&name)==2);
+    assert(!nba97_create_editor_toggle_rating_group(&editor));
+    for(unsigned group=0;group<4;++group) {
+        const unsigned first=1+group*4;
+        for(unsigned member=0;member<4;++member) {
+            editor.selected_field=static_cast<uint8_t>(NBA97_CREATE_FIELD_GOALS+group*4+member);
+            const auto field=editor.selected_field;
+            assert(nba97_create_editor_help_index(&editor,&name)==3);
+            assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+            assert(nba97_create_editor_help_index(&editor,&name)==4);
+            const auto before=editor;
+            assert(!nba97_create_editor_move(&editor,-1));
+            assert(!nba97_create_editor_move(&editor,1));
+            assert(std::memcmp(&before,&editor,sizeof(editor))==0);
+            assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+            assert(editor.selected_field==field && !editor.rating_group_active);
+            assert(nba97_create_editor_help_index(&editor,&name)==3);
+        }
+        assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+        for(unsigned i=0;i<4;++i) editor.ratings[first+i]=50;
+        const auto other_ratings=editor;
+        assert(nba97_create_editor_adjust(&editor,-1));
+        for(unsigned i=0;i<4;++i) assert(editor.ratings[first+i]==99);
+        assert(nba97_create_editor_adjust(&editor,1));
+        for(unsigned i=0;i<4;++i) assert(editor.ratings[first+i]==50);
+        editor.ratings[first]=50; editor.ratings[first+1]=51;
+        editor.ratings[first+2]=98; editor.ratings[first+3]=99;
+        assert(nba97_create_editor_adjust(&editor,-1));
+        assert(editor.ratings[first]==50 && editor.ratings[first+1]==50 &&
+               editor.ratings[first+2]==97 && editor.ratings[first+3]==98);
+        assert(nba97_create_editor_adjust(&editor,1));
+        assert(editor.ratings[first]==51 && editor.ratings[first+1]==51 &&
+               editor.ratings[first+2]==98 && editor.ratings[first+3]==99);
+        assert(nba97_create_editor_adjust(&editor,1));
+        assert(editor.ratings[first]==52 && editor.ratings[first+1]==52 &&
+               editor.ratings[first+2]==99 && editor.ratings[first+3]==99);
+        for(unsigned i=0;i<17;++i)
+            if(i<first || i>=first+4) assert(editor.ratings[i]==other_ratings.ratings[i]);
+        assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+    }
+    editor.ratings[16]=50;
+    assert(nba97_create_editor_adjust(&editor,-1) && editor.ratings[16]==99);
+    assert(nba97_create_editor_adjust(&editor,1) && editor.ratings[16]==50);
+    assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+    assert(nba97_create_editor_save(&editor,&catalog)); // Start exits group, saves draft
+    const auto saved_catalog=catalog;
+    assert(nba97_create_editor_open_edit(&editor,&catalog,0));
+    assert(!editor.rating_group_active); // presentation state is not persisted
+    assert(editor.ratings[13]==52 && editor.ratings[14]==52 &&
+           editor.ratings[15]==99 && editor.ratings[16]==50);
+    editor.selected_field=NBA97_CREATE_DRIBBLING;
+    assert(nba97_create_editor_toggle_rating_group(&editor)==6);
+    assert(nba97_create_editor_adjust(&editor,-1));
+    nba97_create_editor_cancel(&editor.txn); // Select exits group, discards draft
+    assert(std::memcmp(&catalog,&saved_catalog,sizeof(catalog))==0);
+}
+
 int main() {
+    editor_value_wrap_round_trips();
+    rating_group_round_trips();
     Nba97CreatedPlayerCatalog catalog{};
     Nba97CreateMenu menu{};
     Nba97CreateEditorTxn txn{};
@@ -161,7 +287,8 @@ int main() {
         assert(nba97_create_name_input(&editor, &name_editor,
             NBA97_CREATE_NAME_ADD) == 6);
     assert(name_editor.length == 12 && name_editor.cursor == 11 &&
-           std::strlen(editor.first_name) == 12);
+           std::strlen(editor.first_name) == 12 &&
+           std::string(editor.first_name) == "AAAAAAAAAAAA");
     assert(nba97_create_name_input(&editor, &name_editor,
         NBA97_CREATE_NAME_ADD) == 0);
     assert(nba97_create_name_input(&editor, &name_editor,

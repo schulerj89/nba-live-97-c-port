@@ -146,6 +146,18 @@ bool CreatedPlayerStore::save(const Nba97CreatedPlayerCatalog& catalog) {
     const auto next=generation_+1; writeAtomically(serialize(catalog,next)); accepted_=catalog; generation_=next; return true;
 }
 
+CreatedPlayerAcceptStatus CreatedPlayerStore::acceptEditor(Nba97CreateEditor& editor,
+                                                           Nba97CreatedPlayerCatalog& catalog) {
+    auto candidate_editor = editor;
+    auto candidate_catalog = catalog;
+    if (!nba97_create_editor_save(&candidate_editor, &candidate_catalog))
+        return CreatedPlayerAcceptStatus::Invalid;
+    const bool written = save(candidate_catalog); // false is a successful no-op, not I/O failure
+    editor = candidate_editor;
+    catalog = candidate_catalog;
+    return written ? CreatedPlayerAcceptStatus::Written : CreatedPlayerAcceptStatus::Unchanged;
+}
+
 void CreatedPlayerStore::writeAtomically(const std::vector<std::uint8_t>& bytes) const {
     std::filesystem::create_directories(path_.parent_path());
     const auto temp=std::filesystem::path(path_.wstring()+L".tmp");

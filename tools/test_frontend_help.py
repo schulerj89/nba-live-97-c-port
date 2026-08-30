@@ -21,9 +21,9 @@ class HelpExtractionTests(unittest.TestCase):
     def test_routes_and_encoded_payload(self):
         data = fixture()
         result = extract(data)
-        self.assertEqual(result[:8], b'N97H\x01\0\x05\0')
+        self.assertEqual(result[:8], b'N97H\x01\0\x09\0')
         self.assertIn(b'\x9a\x9b\x1f\x12test', result)
-        self.assertEqual(result.count(b'SYNTHETIC'), 5)
+        self.assertEqual(result.count(b'SYNTHETIC'), 9)
 
     def test_pointer_bounds_and_wrong_route(self):
         for pointer in (0, 0xffffffff, BASE+1):

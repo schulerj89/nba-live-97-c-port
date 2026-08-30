@@ -10,12 +10,17 @@
 namespace nba97 {
 
 enum class CreatedPlayerLoadStatus { NewStore, Loaded, RecoveredBackup };
+enum class CreatedPlayerAcceptStatus { Invalid, Unchanged, Written };
 
 class CreatedPlayerStore final {
 public:
     CreatedPlayerLoadStatus load(const std::filesystem::path& path,
                                  Nba97CreatedPlayerCatalog& catalog);
     bool save(const Nba97CreatedPlayerCatalog& catalog);
+    // Start accepts a valid unchanged edit too, without a write/generation bump.
+    // Validation or I/O failure must leave the live editor/catalogue untouched.
+    CreatedPlayerAcceptStatus acceptEditor(Nba97CreateEditor& editor,
+                                           Nba97CreatedPlayerCatalog& catalog);
     [[nodiscard]] std::uint64_t generation() const noexcept { return generation_; }
     [[nodiscard]] const std::filesystem::path& path() const noexcept { return path_; }
 

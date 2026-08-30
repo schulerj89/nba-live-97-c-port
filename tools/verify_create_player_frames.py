@@ -40,10 +40,18 @@ def main() -> int:
     args = parser.parse_args()
     changed(args.capture, "editor-first-required.ppm", "editor-selector-gold.ppm",
             (35, 78, 275, 116), "20-vblank-selector-tint")
+    changed(args.capture, "editor-first-required.ppm", "editor-help-page-1.ppm",
+            (0, 0, 512, 240), "authored-editor-help-page-1")
     changed(args.capture, "editor-name-inline-open.ppm", "editor-name-inline-cycle.ppm",
             (200, 84, 360, 115), "screen-22-inline-name-character")
     changed(args.capture, "editor-name-inline-cycle.ppm", "editor-name-help-modal.ppm",
             (0, 0, 512, 240), "authored-inline-name-help-modal")
+    changed(args.capture, "editor-rating-help-page-4.ppm", "editor-rating-help-page-5.ppm",
+            (100, 50, 430, 210), "distinct-individual-group-help-pages")
+    changed(args.capture, "editor-rating-group-selected.ppm", "editor-rating-group-wrapped.ppm",
+            (200, 125, 460, 194), "rating-group-all-minimum-wrap")
+    changed(args.capture, "editor-rating-group-wrapped.ppm", "editor-rating-individual-return.ppm",
+            (35, 125, 460, 194), "rating-group-cross-return-focus")
     changed(args.capture, "editor-appearance-height-64.ppm", "editor-appearance-height-90.ppm",
             (320, 25, 512, 185), "height-relative-appearance-framing")
     changed(args.capture, "editor-layer-scroll-enter.ppm", "editor-model-motion-phase.ppm",

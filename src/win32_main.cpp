@@ -4,6 +4,7 @@
 #include <objbase.h>
 
 #include "boot_flow.hpp"
+#include "win32_keyboard.hpp"
 #include "frontend_music.hpp"
 #include "recovered_audio.hpp"
 #include "recovered/frontend_audio.h"
@@ -3283,10 +3284,23 @@ private:
         const auto capture_editor = [&](const char* name, std::uint32_t elapsed = 0,
                                         const Nba97CreateNameEditor* name_editor = nullptr) {
             writePpm(nba97::renderCreatePlayerEditor(editor, roster_database_, menu_font_,
-                create_player_sprites_, elapsed, create_player_preview_.get(),name_editor), output / name);
+                create_player_sprites_, elapsed, create_player_preview_.get(),name_editor,
+                &control_font_), output / name);
         };
         capture_editor("editor-first-required.ppm");
         capture_editor("editor-selector-gold.ppm", 340);
+        {
+            const auto& descriptor=create_player_help_pack_->descriptor(0x22,0);
+            Nba97HelpModal modal{};
+            if(nba97_help_open(&modal,descriptor.rect,0x20)!=NBA97_HELP_OPEN_SOUND)
+                throw std::runtime_error("Create Player editor Help fixture failed");
+            for(int tick=0;tick<40 && !nba97_help_text_visible(&modal);++tick)
+                nba97_help_tick(&modal,0);
+            auto image=nba97::renderCreatePlayerEditor(editor,roster_database_,menu_font_,
+                create_player_sprites_,0,create_player_preview_.get(),nullptr,&control_font_);
+            create_player_help_pack_->draw(image,control_font_,descriptor,modal);
+            writePpm(image,output/"editor-help-page-1.ppm");
+        }
         Nba97CreateNameEditor name_editor{};
         if(nba97_create_name_begin(&editor,&name_editor)!=6)
             throw std::runtime_error("Create Player inline name fixture failed");
@@ -3303,7 +3317,8 @@ private:
             for(int tick=0;tick<40 && !nba97_help_text_visible(&modal);++tick)
                 nba97_help_tick(&modal,0);
             auto image=nba97::renderCreatePlayerEditor(editor,roster_database_,menu_font_,
-                create_player_sprites_,0,create_player_preview_.get(),&name_editor);
+                create_player_sprites_,0,create_player_preview_.get(),&name_editor,
+                &control_font_);
             create_player_help_pack_->draw(image,control_font_,descriptor,modal);
             writePpm(image,output/"editor-name-help-modal.ppm");
             if(std::memcmp(&editor,&editor_before,sizeof(editor))!=0 ||
@@ -3357,6 +3372,30 @@ private:
             NBA97_CREATE_FIELD_GOALS + 12;
         editor.scroll_ticks_remaining = 0;
         capture_editor("editor-ratings-final.ppm");
+        const auto capture_rating_help=[&](const char* file) {
+            const auto page=nba97_create_editor_help_index(&editor,nullptr);
+            const auto& descriptor=create_player_help_pack_->descriptor(0x22,page);
+            Nba97HelpModal modal{};
+            nba97_help_open(&modal,descriptor.rect,0x20);
+            for(int tick=0;tick<40 && !nba97_help_text_visible(&modal);++tick)
+                nba97_help_tick(&modal,0);
+            auto frame=nba97::renderCreatePlayerEditor(editor,roster_database_,menu_font_,
+                create_player_sprites_,340,create_player_preview_.get(),nullptr,&control_font_);
+            create_player_help_pack_->draw(frame,control_font_,descriptor,modal);
+            writePpm(frame,output/file);
+        };
+        capture_rating_help("editor-rating-help-page-4.ppm");
+        if(nba97_create_editor_toggle_rating_group(&editor)!=6)
+            throw std::runtime_error("rating-group Cross fixture failed");
+        capture_editor("editor-rating-group-selected.ppm",340);
+        capture_rating_help("editor-rating-help-page-5.ppm");
+        if(!nba97_create_editor_adjust(&editor,-1) || editor.ratings[16]!=99)
+            throw std::runtime_error("rating-group all-minimum wrap fixture failed");
+        capture_editor("editor-rating-group-wrapped.ppm",340);
+        if(nba97_create_editor_toggle_rating_group(&editor)!=6 ||
+           editor.selected_field!=NBA97_CREATE_DRIBBLING)
+            throw std::runtime_error("rating-group remembered return-row fixture failed");
+        capture_editor("editor-rating-individual-return.ppm",340);
         nba97_create_editor_cancel(&editor.txn);
 
         Nba97CreateEditorTxn txn{};
@@ -3405,8 +3444,58 @@ private:
         capture("full-new-disabled.ppm");
         if (create_player_menu_.enabled[1] || create_player_menu_.selected != 0)
             throw std::runtime_error("Create Player full-menu predicates failed");
-        trace_.log("CREATE-CAPTURE", "PASS: 21 deterministic 512x240 frames; manager empty/one/full predicates, exact screen-0x22 inline name entry/cancel plus authored Help 2/5, recovered height-relative appearance framing, 20-vblank selector pulse, six-vblank bank scroll, articulated ZDOM/mocap phase, appearance/final-ratings layers, and all three exact FEONLY Delete descriptors; pixel-exact PS1 triangle coverage remains separately pending");
+        trace_.log("CREATE-CAPTURE", "PASS: 27 deterministic 512x240 frames; manager empty/one/full predicates, exact screen-0x22 controller-icon prompts, inline name entry/Select cancel plus authored Help 1/5, 2/5, 4/5 and 5/5, rating-group Cross/return and all-at-limit wrap, recovered height-relative appearance framing, 20-vblank selector pulse, six-vblank bank scroll, articulated ZDOM/mocap phase, appearance/final-ratings layers, and all three exact FEONLY Delete descriptors; pixel-exact PS1 triangle coverage remains separately pending");
+        verifyCreatePlayerEditAcceptance(output);
         return 0;
+    }
+
+    void verifyCreatePlayerEditAcceptance(const std::filesystem::path& output) {
+        // Exercise the real host handlers, not just the C core. This store is
+        // a capture-only fixture; never write the user's loaded catalogue.
+        created_player_store_.load(output / "editor-acceptance-fixture.n97cpl",created_players_);
+        nba97_created_catalog_init(&created_players_);
+        Nba97CreateEditor fixture{};
+        if(!nba97_create_editor_open_new(&fixture,&created_players_))
+            throw std::runtime_error("Edit acceptance fixture could not start");
+        std::strcpy(fixture.first_name,"Wrap"); std::strcpy(fixture.last_name,"Test");
+        created_player_store_.acceptEditor(fixture,created_players_);
+        const auto accepted_catalog=created_players_;
+        const auto generation=created_player_store_.generation();
+        frontend_page_=nba97::FrontendPage::CreatePlayers;
+        const auto open_edit=[&] {
+            if(!nba97_created_picker_open(&created_player_picker_,&created_players_,0x20))
+                throw std::runtime_error("Edit picker fixture could not start");
+            created_player_picker_active_=true;
+            handleCreatePlayerKey('C');
+            if(!create_player_editor_active_ || created_player_picker_active_)
+                throw std::runtime_error("Cross did not enter the actual Edit host path");
+        };
+        open_edit();
+        handleCreatePlayerKey(VK_RETURN);
+        if(create_player_editor_active_ || created_player_store_.generation()!=generation)
+            throw std::runtime_error("Unchanged Edit Start failed to exit without a write");
+        open_edit();
+        const auto colleges=createPlayerCollegeCount();
+        if(colleges<2 || create_player_editor_.college_count!=colleges)
+            throw std::runtime_error("Edit did not initialize the loaded College choices");
+        create_player_editor_.selected_field=NBA97_CREATE_COLLEGE;
+        handleCreatePlayerKey(VK_LEFT);
+        if(create_player_editor_.college!=colleges-1)
+            throw std::runtime_error("Actual Edit College Left did not wrap");
+        handleCreatePlayerKey(VK_RIGHT);
+        if(create_player_editor_.college!=0)
+            throw std::runtime_error("Actual Edit College Right did not wrap");
+        create_player_editor_.selected_field=NBA97_CREATE_JERSEY_NUMBER;
+        handleCreatePlayerKey(VK_LEFT);
+        if(create_player_editor_.jersey_number!=99)
+            throw std::runtime_error("Actual Edit jersey Left did not wrap");
+        handleCreatePlayerKey(VK_RIGHT);
+        handleCreatePlayerKey(VK_RETURN);
+        if(create_player_editor_active_ || created_player_store_.generation()!=generation ||
+           std::memcmp(&created_players_,&accepted_catalog,sizeof(created_players_)))
+            throw std::runtime_error("Reverted Edit did not exit as a no-op");
+        trace_.log("CREATE-EDIT-REGRESSION","PASS: actual picker/Cross -> Edit, Start unchanged/reverted exit; College choices="+
+            std::to_string(colleges)+" Left/Right wrap; jersey Left/Right wrap; catalogue and durable generation unchanged");
     }
 
     int captureRostersMenu() {
@@ -4558,6 +4647,20 @@ private:
             try { native_record_->input(nativeRecordTime(),message,wparam,lparam); }
             catch(const std::exception& e) { native_record_->invalidate(e.what());trace_.log("RECORD-ERROR",e.what());stopNativeRecording(); }
         }
+        const auto raw_key=wparam;
+        if (message == WM_KEYDOWN || message == WM_KEYUP)
+            wparam = nba97::normalizeWin32Shift(static_cast<std::uint32_t>(wparam),
+                                               static_cast<std::uintptr_t>(lparam));
+        if(message==WM_KEYDOWN && frontend_page_==nba97::FrontendPage::CreatePlayers &&
+           (static_cast<std::uintptr_t>(lparam)&(1u<<30))==0) {
+            char input[160]{};
+            sprintf_s(input,"vk=0x%02X scan=0x%02X normalized=0x%02X name-token=0x%03X editor=%u name=%u group=%u",
+                unsigned(raw_key),unsigned((static_cast<std::uintptr_t>(lparam)>>16)&0xff),
+                unsigned(wparam),unsigned(nba97::createPlayerNameKeyMask(unsigned(wparam))),
+                unsigned(create_player_editor_active_),unsigned(create_player_name_editor_.active),
+                unsigned(create_player_editor_.rating_group_active));
+            trace_.log("CREATE-KEY",input);
+        }
         switch (message) {
         case WM_KEYDOWN:
             if(wparam==VK_F9 && !options_.native_record_dir.empty()) {
@@ -4605,6 +4708,7 @@ private:
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      (frontend_page_ == nba97::FrontendPage::ViewRosters ||
+                      frontend_page_ == nba97::FrontendPage::CreatePlayers ||
                       frontend_page_ == nba97::FrontendPage::ReorderRosters || isRosterEditor()))
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE) DestroyWindow(window_);
@@ -5111,10 +5215,10 @@ private:
                 changed = bottom_menu_.move(0, 1);
                 sound_id = recoveredMenuDirectionSound(0, 1); direction = "down";
             }
-            else if (key == VK_BACK) {
+            else if (key == VK_BACK || key == VK_RSHIFT) {
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
                 return;
-            } else if (key == VK_RETURN || key == VK_SPACE) {
+            } else if (key == VK_RETURN || key == VK_SPACE || key == 'C') {
                 activateRecoveredBottomSelection();
                 return;
             }
@@ -5155,7 +5259,7 @@ private:
         else if (key == VK_RIGHT) changed = menu_.moveHorizontal(1);
         else if (key == VK_UP) changed = menu_.moveVertical(-1);
         else if (key == VK_DOWN) changed = menu_.moveVertical(1);
-        else if (key == VK_RETURN || key == VK_SPACE) {
+        else if (key == VK_RETURN || key == VK_SPACE || key == 'C') {
             activateMenuSelection();
             return;
         }
@@ -5266,29 +5370,47 @@ private:
         if(event==NBA97_HELP_OPEN_SOUND) playBottomMenuSound(7,"create-name-help-open");
         else if(event==NBA97_HELP_CLOSE_SOUND) playBottomMenuSound(8,"create-name-help-close");
         else if(event==NBA97_HELP_RETURNED)
-            trace_.log("CREATE-NAME-HELP","FUN_80040A1C return barrier cleared; inline name transaction resumed unchanged");
+            trace_.log("CREATE-HELP","FUN_80040A1C return barrier cleared; editor/name transaction resumed unchanged");
+    }
+
+    std::uint8_t createPlayerHelpIndex() const {
+        return nba97_create_editor_help_index(&create_player_editor_,
+                                              &create_player_name_editor_);
+    }
+
+    void openCreatePlayerHelp() {
+        create_player_help_index_=createPlayerHelpIndex();
+        const auto& descriptor=create_player_help_pack_->descriptor(0x22,create_player_help_index_);
+        createPlayerHelpEvent(nba97_help_open(&create_player_help_,descriptor.rect,0x20));
+        char route[160]{};
+        sprintf_s(route,"FUN_80040FCC -> FUN_80040A1C state=0x22 index=%u descriptor=0x%08X; authored Help %u/5 opened; draft retained",
+            unsigned(create_player_help_index_),unsigned(descriptor.address),
+            unsigned(create_player_help_index_+1));
+        trace_.log("CREATE-HELP",route);
     }
 
     void updateCreatePlayerHelp() {
         if(create_player_help_.phase==NBA97_HELP_CLOSED) return;
         std::uint16_t raw=0;
         for(auto key:{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,VK_RETURN,VK_SPACE,VK_ESCAPE,
-                      VK_BACK,VK_F1,int('C'),int('D'),int('F'),int('H'),int('S'),int('V'),int('X')})
-            if(GetAsyncKeyState(key)&0x8000) raw|=createPlayerNameKeyMask(key);
+                      VK_BACK,VK_RSHIFT,VK_F1,int('C'),int('D'),int('F'),int('H'),
+                      int('S'),int('V'),int('X')})
+            if(GetAsyncKeyState(key)&0x8000) raw|=createPlayerHelpKeyToken(key);
         createPlayerHelpEvent(nba97_help_tick(&create_player_help_,raw));
     }
 
     static std::uint16_t createPlayerNameKeyMask(WPARAM key) {
-        if(key==VK_UP) return 1;
-        if(key==VK_DOWN) return 2;
-        if(key==VK_RIGHT) return 4;
-        if(key==VK_LEFT) return 8;
-        if(key=='D') return 0x10;
-        if(key=='F'||key=='H'||key==VK_F1) return 0x20;
-        if(key=='S'||key==VK_BACK) return 0x40;
-        if(key==VK_RETURN) return 0x80;
-        if(key=='V'||key=='X'||key==VK_ESCAPE) return 0x100;
-        if(key=='C'||key==VK_SPACE) return 0x800;
+        return nba97::createPlayerNameKeyMask(static_cast<std::uint32_t>(key));
+    }
+
+    static std::uint16_t createPlayerHelpKeyToken(WPARAM key) {
+        const auto callback_mask=createPlayerNameKeyMask(key);
+        if(callback_mask) return callback_mask;
+        /* Help only compares held tokens for a change; these host-only tokens
+           let R1/R2 dismiss the modal without claiming a retail callback
+           bit that has not been recovered for this editor. */
+        if(key=='S') return 0x200;
+        if(key=='X') return 0x400;
         return 0;
     }
 
@@ -5311,8 +5433,13 @@ private:
             else createDeleteEvent(nba97_reset_input(&create_player_delete_prompt_,mask));
             rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
         }
+        if(create_player_help_.phase!=NBA97_HELP_CLOSED) {
+            createPlayerHelpEvent(nba97_help_input(&create_player_help_,
+                createPlayerHelpKeyToken(key)));
+            rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
+        }
         if (created_player_picker_active_) {
-            if (key == VK_ESCAPE || key == VK_BACK) {
+            if (key == VK_RSHIFT || key == VK_ESCAPE || key == VK_BACK) {
                 created_player_picker_active_=false;
                 trace_.log("CREATE-PICK", "cancelled state="+
                     std::to_string(created_player_picker_.frontend_state)+
@@ -5325,7 +5452,7 @@ private:
                         std::to_string(nba97_created_picker_slot(&created_player_picker_)));
                     playBottomMenuSound(recoveredMenuDirectionSound(0,key==VK_UP?-1:1),"create-player-picker");
                 } else trace_.log("CREATE-BOUNDARY", "created-player picker hard stop");
-            } else if (key == VK_RETURN || key == VK_SPACE) {
+            } else if (key == VK_RETURN || key == VK_SPACE || key == 'C') {
                 const auto slot=nba97_created_picker_slot(&created_player_picker_);
                 if(created_player_picker_.frontend_state==0x20 &&
                    nba97_create_editor_open_edit(&create_player_editor_,&created_players_,slot)) {
@@ -5343,11 +5470,6 @@ private:
         }
         if (create_player_editor_active_) {
             if (create_player_name_editor_.active) {
-                if(create_player_help_.phase!=NBA97_HELP_CLOSED) {
-                    createPlayerHelpEvent(nba97_help_input(&create_player_help_,
-                        createPlayerNameKeyMask(key)));
-                    rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
-                }
                 int sound = 0;
                 const char* action = nullptr;
                 const auto retail_name_input=[&](Nba97CreateNameCommand command) {
@@ -5388,23 +5510,20 @@ private:
                 } else if (key == 'D') {
                     sound = retail_name_input(NBA97_CREATE_NAME_DELETE);
                     action = "Square/delete";
-                } else if (key == 'S' || key == VK_BACK) {
+                } else if (key == 'V' || key == VK_BACK) {
                     sound = retail_name_input(NBA97_CREATE_NAME_BACKSPACE);
-                    action = key == 'S' ? "R1/backspace" : "host-Backspace convenience";
+                    action = key == 'V' ? "Circle/backspace" : "host-Backspace convenience";
                 } else if (key == VK_RETURN) {
                     sound = nba97_create_name_accept(&create_player_editor_,
                         &create_player_name_editor_);
                     action = "Start/accept";
-                } else if (key == 'V' || key == 'X' || key == VK_ESCAPE) {
+                } else if (key == VK_RSHIFT || key == VK_ESCAPE) {
                     sound = nba97_create_name_cancel(&create_player_editor_,
                         &create_player_name_editor_);
-                    action = "Circle/cancel-restore";
+                    action = key==VK_RSHIFT ? "Select/cancel-restore" :
+                        "host-Escape/cancel-restore";
                 } else if (key == 'F' || key == 'H' || key == VK_F1) {
-                    const auto& descriptor=create_player_help_pack_->descriptor(0x22,1);
-                    createPlayerHelpEvent(nba97_help_open(&create_player_help_,descriptor.rect,0x20));
-                    trace_.log("CREATE-NAME-HELP",
-                        "Triangle -> FUN_80040FCC -> FUN_80040A1C state=0x22 index=1 "
-                        "descriptor=0x800B1F20; authored help 2/5 opened; name snapshot retained");
+                    openCreatePlayerHelp();
                     rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE);
                     return;
                 } else if (key >= 'A' && key <= 'Z' &&
@@ -5443,6 +5562,8 @@ private:
             }
             bool changed = false;
             const auto previous = create_player_editor_.selected_field;
+            char prior_value[64]{};
+            nba97_create_editor_value(&create_player_editor_,prior_value,sizeof(prior_value));
             if (key == VK_UP)
                 changed = nba97_create_editor_move(&create_player_editor_, -1) != 0;
             else if (key == VK_DOWN)
@@ -5460,12 +5581,26 @@ private:
                     "FUN_8004C488 inline editor on screen 0x22 field="+
                     std::string(nba97_create_field_name(create_player_name_editor_.field))+
                     " cursor=0 alphabet=56 max=12 sound="+std::to_string(sound)+
-                    "; Start accepts, Circle restores all 13 bytes");
+                    "; Start accepts, Select restores all 13 bytes");
                 if(sound) playBottomMenuSound(static_cast<std::uint32_t>(sound),
                                                "create-name-open");
                 rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
             }
-            else if (key == VK_ESCAPE) {
+            else if ((key == 'C' || key == VK_SPACE) &&
+                     create_player_editor_.selected_field >= NBA97_CREATE_FIELD_GOALS) {
+                const auto sound=nba97_create_editor_toggle_rating_group(&create_player_editor_);
+                trace_.log("CREATE-RATING-FOCUS",std::string(create_player_editor_.rating_group_active ?
+                    "FUN_8004B400 Cross -> group" : "FUN_8004B4F8 Cross -> remembered individual")+
+                    " return-field="+std::to_string(create_player_editor_.selected_field)+
+                    " help-page="+std::to_string(createPlayerHelpIndex()+1)+" sound=6");
+                if(sound) playBottomMenuSound(sound,"create-rating-focus");
+                rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
+            }
+            else if (key == 'F' || key == 'H' || key == VK_F1) {
+                openCreatePlayerHelp();
+                rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
+            }
+            else if (key == VK_RSHIFT || key == VK_ESCAPE) {
                 nba97_create_editor_cancel(&create_player_editor_.txn);
                 create_player_editor_active_ = false;
                 trace_.log("CREATE-CANCEL",
@@ -5476,22 +5611,18 @@ private:
                 InvalidateRect(window_, nullptr, FALSE);
                 return;
             } else if (key == VK_RETURN || key == VK_SPACE) {
-                auto candidate_editor=create_player_editor_;
-                auto candidate_catalog=created_players_;
-                if (!nba97_create_editor_save(&candidate_editor, &candidate_catalog)) {
-                    trace_.log("CREATE-VALIDATE",
-                        "START blocked: original requires non-empty first and last names");
-                    return;
-                }
+                nba97::CreatedPlayerAcceptStatus acceptance;
                 try {
-                    if (!created_player_store_.save(candidate_catalog))
-                        throw std::runtime_error("created-player save unexpectedly contained no change");
+                    acceptance=created_player_store_.acceptEditor(create_player_editor_,created_players_);
                 } catch (const std::exception& error) {
                     trace_.log("CREATE-SAVE", std::string("durable commit failed; live catalogue and editor retained: ")+error.what());
                     return;
                 }
-                created_players_=candidate_catalog;
-                create_player_editor_=candidate_editor;
+                if (acceptance==nba97::CreatedPlayerAcceptStatus::Invalid) {
+                    trace_.log("CREATE-VALIDATE",
+                        "START blocked: original requires non-empty first and last names");
+                    return;
+                }
                 create_player_editor_active_ = false;
                 nba97_create_menu_open(&create_player_menu_, &created_players_,
                                        createPlayerContext());
@@ -5503,7 +5634,9 @@ private:
                     std::to_string(NBA97_CREATED_PLAYER_CAPACITY -
                                    nba97_created_count(&created_players_)) +
                     "; generation="+std::to_string(created_player_store_.generation())+
-                    "; atomic local save; immediate return to manager, no confirmation dialog");
+                    (acceptance==nba97::CreatedPlayerAcceptStatus::Written ?
+                     "; atomic local save; immediate return to manager, no confirmation dialog" :
+                     "; unchanged edit accepted; no disk write or generation bump; return to manager"));
                 playBottomMenuSound(6, "create-save");
                 rebuildMenuFrame();
                 InvalidateRect(window_, nullptr, FALSE);
@@ -5513,9 +5646,21 @@ private:
                 char value[64]{};
                 nba97_create_editor_value(&create_player_editor_, value, sizeof(value));
                 const auto field = create_player_editor_.selected_field;
+                if(create_player_editor_.rating_group_active) {
+                    const unsigned first=1+((field-NBA97_CREATE_FIELD_GOALS)/4)*4;
+                    const auto* values=create_player_editor_.ratings+first;
+                    trace_.log("CREATE-RATING-GROUP", "FUN_8004B710 -> "+
+                        std::string(key==VK_LEFT?"8004B600":"8004B688")+
+                        " displayed="+std::to_string(values[0])+","+std::to_string(values[1])+","+
+                        std::to_string(values[2])+","+std::to_string(values[3])+
+                        "; four-member clamp/all-at-limit wrap; Help 5/5");
+                }
                 trace_.log(previous == field ? "CREATE-ADJUST" : "CREATE-FIELD",
                     "field=" + std::to_string(field) + " name=" +
                     nba97_create_field_name(field) + " value=\"" + value + "\"" +
+                    (previous==field ? std::string(" prior=\"")+prior_value+"\"; direction="+
+                        (key==VK_LEFT?"left":"right")+"; endpoint policy="+
+                        (create_player_editor_.rating_group_active?"group clamp/all-limit wrap":"wrap") : "")+
                     (field >= NBA97_CREATE_SKIN_TONE &&
                      field <= NBA97_CREATE_FACIAL_HAIR
                         ? "; close-up camera + localized head/texture rebuild required"
@@ -5563,11 +5708,11 @@ private:
             changed = nba97_create_menu_move(&create_player_menu_, 1) != 0;
             direction = "right";
             sound_id = recoveredMenuDirectionSound(1, 0);
-        } else if (key == VK_ESCAPE || key == VK_BACK) {
+        } else if (key == VK_RSHIFT || key == VK_ESCAPE || key == VK_BACK) {
             beginFrontendTransition(nba97::FrontendPage::Rosters,
                 "Create Player manager back input");
             return;
-        } else if (key == VK_RETURN || key == VK_SPACE) {
+        } else if (key == VK_RETURN || key == VK_SPACE || key == 'C') {
             if ((create_player_menu_.selected == 0 && create_player_menu_.enabled[0]) ||
                 (create_player_menu_.selected == 2 && create_player_menu_.enabled[2])) {
                 const auto state=static_cast<uint8_t>(create_player_menu_.selected==0?0x20:0x21);
@@ -6313,7 +6458,8 @@ private:
                 : create_player_editor_active_
                     ? nba97::renderCreatePlayerEditor(create_player_editor_, roster_database_,
                         menu_font_, create_player_sprites_, menu_elapsed_ms_,
-                        create_player_preview_.get(), &create_player_name_editor_)
+                        create_player_preview_.get(), &create_player_name_editor_,
+                        &control_font_)
                     : nba97::renderCreatePlayerMenu(create_player_menu_, menu_font_,
                         create_player_sprites_, create_player_cards_, menu_elapsed_ms_);
             if(create_player_delete_active_)
@@ -6321,7 +6467,8 @@ private:
                     create_player_delete_team_,create_player_delete_prompt_);
             if(nba97_help_visible(&create_player_help_)) {
                 create_player_help_pack_->draw(image,control_font_,
-                    create_player_help_pack_->descriptor(0x22,1),create_player_help_);
+                    create_player_help_pack_->descriptor(0x22,create_player_help_index_),
+                    create_player_help_);
             }
             menu_frame_=makeFrame(image);
         }
@@ -6564,6 +6711,7 @@ private:
     std::unique_ptr<nba97::CreatePlayerDeleteAssets> create_player_delete_assets_;
     std::unique_ptr<nba97::FrontendHelpPack> create_player_help_pack_;
     Nba97HelpModal create_player_help_{};
+    std::uint8_t create_player_help_index_=0;
     nba97::UserProfileMenu profile_menu_;
     nba97::FrontendPage frontend_page_ = nba97::FrontendPage::GameSetup;
     nba97::PshFont menu_font_;

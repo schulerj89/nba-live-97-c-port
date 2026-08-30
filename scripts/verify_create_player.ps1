@@ -4,6 +4,7 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $assetRoot = Join-Path $repo '.local\assetpacks'
 $exe = Join-Path $repo 'build-windows\Debug\nba97_boot_decomp.exe'
 $coreTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_tests.exe'
+$keyboardTest = Join-Path $repo 'build-windows\Debug\nba97_win32_keyboard_tests.exe'
 $storeTest = Join-Path $repo 'build-windows\Debug\nba97_create_player_store_tests.exe'
 $modelTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_model_tests.exe'
 $transformTest = Join-Path $repo 'build-windows\Debug\nba97_zdomf_transform_tests.exe'
@@ -34,6 +35,11 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'menu\ZSET5-decoded'))) {
         throw 'Missing private ZSET5 assets. Run scripts/extract_assetpacks.ps1 locally first.'
     }
+
+    if (-not (Test-Path -LiteralPath $keyboardTest)) { throw "Missing keyboard test: $keyboardTest" }
+    & $keyboardTest
+    if ($LASTEXITCODE -ne 0) { throw 'Create Player keyboard translation checks failed.' }
+    Write-Host 'CREATE PLAYER KEYS: PASS - left/right Shift scan-code normalization and retail name callback tokens; physical-key delivery remains a live check.'
 
     & $coreTest
     if ($LASTEXITCODE -ne 0) { throw 'Create Player behavioral checks failed.' }
@@ -104,6 +110,7 @@ try {
         'empty-title-phase.ppm',
         'editor-first-required.ppm',
         'editor-selector-gold.ppm',
+        'editor-help-page-1.ppm',
         'editor-name-inline-open.ppm',
         'editor-name-inline-cycle.ppm',
         'editor-name-help-modal.ppm',
@@ -115,6 +122,11 @@ try {
         'editor-layer-scroll-mid.ppm',
         'editor-layer-scroll-settled.ppm',
         'editor-ratings-final.ppm',
+        'editor-rating-help-page-4.ppm',
+        'editor-rating-group-selected.ppm',
+        'editor-rating-help-page-5.ppm',
+        'editor-rating-group-wrapped.ppm',
+        'editor-rating-individual-return.ppm',
         'one-edit-selected.ppm',
         'one-delete-selected.ppm',
         'delete-free-agent.ppm',
@@ -141,7 +153,7 @@ try {
 
     python (Join-Path $repo 'tools\verify_create_player_frames.py') $first
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
-    Write-Host "CREATE PLAYER: PASS - 21/21 scenarios reproduced byte-identically across two runs; inline name entry and its authored Help modal, height-relative appearance framing, selector pulse, model motion, and three scroll phases are deterministic."
+    Write-Host "CREATE PLAYER: PASS - 27/27 scenarios reproduced byte-identically across two runs; controller-icon prompts, editor/name/rating Help, rating-group focus/wrap/return, height-relative appearance framing, selector pulse, model motion, and three scroll phases are deterministic."
     Write-Host 'CREATE PLAYER MODEL: PASS - retail NCLIP selection and merged 251-primary/81-part FT3 streams reproduce the live ordering-table path.'
     Write-Host 'CREATE PLAYER TEXTURE: PASS - packet-selected shared/team/head/number/name/shoe VRAM uploads have zero missing samples; exact face-1 palette trace matches live RAM.'
     Write-Host "Evidence: $root"

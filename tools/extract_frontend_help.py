@@ -6,7 +6,9 @@ import struct
 BASE = 0x80015000
 TABLE = 0x800B00E0
 # State, descriptor index, expected record address. Text is never copied to code.
-ROUTES = ((34, 1, 0x800B1F20),
+ROUTES = ((34, 0, 0x800B1E98), (34, 1, 0x800B1F20),
+          (34, 2, 0x800B1FD8), (34, 3, 0x800B2060),
+          (34, 4, 0x800B2100),
           (12, 0, 0x800B0F68), (12, 1, 0x800B102C),
           (35, 0, 0x800B2194), (36, 0, 0x800B22F0))
 LIMIT = 16384

@@ -96,19 +96,31 @@ Linux testing; the main reconstruction targets native Win32.
 These are native-port controls. For original-game testing, use the separately
 verified [no$psx keyboard mappings](docs/nopsx_controls.md).
 
+| PlayStation button | Native keyboard key |
+|---|---|
+| D-pad | Arrow keys |
+| Cross (X) | `C` (`Space` remains a convenience alias) |
+| Circle | `V` |
+| Square | `D` |
+| Triangle / Help | `F` |
+| Select / cancel-exit where authored | `Right Shift` |
+| Start / accept-exit where authored | `Enter` |
+| R1 / R2 | `S` / `X` |
+
 | Context | Controls |
 |---|---|
 | Intro/title | `Space` skips the movie; `Space` or `Enter` starts |
 | Menus | Arrow keys move/change values; `Enter` or `Space` selects |
-| Back | `Escape` or `Backspace` |
+| Back | Retail `Select` is `Right Shift`; `Escape` or `Backspace` remains a host convenience where supported |
 | View Rosters | `Left/Right` changes team; `Up/Down` changes player; `Q/E` changes category; `Z/C` changes field |
 | View Player | `Left/Right` changes player; `J/K` changes team; `Q/E` changes stat layer; `Up/Down` scrolls |
 | Re-order | Arrows browse rows/teams; `C`/`Space` picks; `X`/`Escape` cancels; `Enter` accepts from first selection |
 | Trade Players | Arrows browse the active list; `C`/`Space` picks/trades; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
 | Sign Free Agent | `Up/Down` browses the active list; `Left/Right` changes receiver; `C` picks/signs into an empty slot; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
-| Create Player name | `C` enters/adds; `Up/Down` cycles the retail alphabet; `Left/Right` moves the cursor; `D` deletes; `S` backspaces; `Enter` accepts; `V`, `X`, or `Escape` cancels and restores the prior name. `Ctrl+A`..`Ctrl+Z` is an optional host typing convenience. |
+| Create Player name | Cross (`C`) enters/adds; `Up/Down` cycles the retail alphabet; `Left/Right` moves the cursor; Square (`D`) deletes; Circle (`V`) backspaces; Start (`Enter`) accepts; Select (`Right Shift`) cancels and restores the prior 13 bytes. `Escape`, `Backspace`, and `Ctrl+A`..`Ctrl+Z` remain separate host conveniences. |
+| Create Player ratings | Cross (`C`) toggles individual/group focus; `Left/Right` adjusts; Cross returns to the remembered individual row; Triangle (`F`) opens Help 4/5 or 5/5. |
 | Cool Facts | `Enter` plays; `S` stops |
-| Help | `H` or `F1` |
+| Help | Triangle (`F`); `H` or `F1` remain convenience aliases |
 
 Mouse hover and selection are supported in menu cards; the two-list roster editors use keyboard controls.
 

@@ -1593,7 +1593,8 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const MenuSpritePack& sprites,
                                   std::uint32_t elapsed_ms,
                                   const CreatePlayerPreview* preview,
-                                  const Nba97CreateNameEditor* name_editor) {
+                                  const Nba97CreateNameEditor* name_editor,
+                                  const PshFont* control_font) {
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;
@@ -1656,10 +1657,11 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
     };
     const auto drawRow = [&](std::uint8_t field, int y, int label_x = 62,
                              int value_x = 212) {
-        const bool selected = editor.selected_field == field;
-        const std::uint8_t red = selected ? selected_channel(225, 255) : 225;
-        const std::uint8_t green = selected ? selected_channel(225, 214) : 225;
-        const std::uint8_t blue = selected ? selected_channel(225, 24) : 225;
+        const bool selected = !editor.rating_group_active && editor.selected_field == field;
+        const std::uint8_t neutral = editor.rating_group_active && field >= NBA97_CREATE_FIELD_GOALS ? 112 : 225;
+        const std::uint8_t red = selected ? selected_channel(225, 255) : neutral;
+        const std::uint8_t green = selected ? selected_channel(225, 214) : neutral;
+        const std::uint8_t blue = selected ? selected_channel(225, 24) : neutral;
         if (selected) drawText(image, font, ">", label_x - 17, y, 1, red, green, blue);
         drawText(image, font, std::string(nba97_create_field_name(field)) + ":",
                  label_x, y, 1, red, green, blue);
@@ -1712,10 +1714,16 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
         static constexpr std::array<const char*, 4> summary{
             "scoring", "defense", "rebounds", "control"};
         for (int row = 0; row < 4; ++row) {
+            const bool selected = editor.rating_group_active &&
+                row == (editor.selected_field - NBA97_CREATE_FIELD_GOALS) / 4;
+            const std::uint8_t r=selected ? selected_channel(225,255) : 225;
+            const std::uint8_t g=selected ? selected_channel(225,214) : 225;
+            const std::uint8_t b=selected ? selected_channel(225,24) : 225;
+            if(selected) drawText(image,font,">",258,133+row*15,1,r,g,b);
             drawText(image, font, std::string(summary[row]) + ":", 275,
-                     133 + row * 15, 1, 225, 225, 225);
+                     133 + row * 15, 1, r, g, b);
             drawText(image, font, std::to_string(average(1 + row * 4)), 428,
-                     133 + row * 15, 1, 225, 225, 225);
+                     133 + row * 15, 1, r, g, b);
         }
     }
     const bool editing_name=name_editor!=nullptr&&name_editor->active;
@@ -1724,12 +1732,33 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
         const auto field=editing_name?name_editor->field:editor.selected_field;
         const auto* value=field==NBA97_CREATE_FIRST_NAME?
             editor.first_name:editor.last_name;
-        drawCenteredText(image,font,
-            editing_name ? std::string("press START to accept ")+
-                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name."
-            : std::string("press C to ")+(value[0]?"edit ":"enter ")+
-                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name.",
-            256,196,1,225,225,225,false,elapsed_ms,100);
+        const auto drawControllerPrompt=[&](unsigned char glyph,
+                                             const std::string& suffix,
+                                             const char* fallback) {
+            const std::string prefix="press ";
+            if(control_font==nullptr || control_font->glyph(static_cast<char>(glyph))==nullptr) {
+                drawCenteredText(image,font,prefix+fallback+suffix,256,196,1,
+                    225,225,225,false,elapsed_ms,100);
+                return;
+            }
+            const std::string icon(1,static_cast<char>(glyph));
+            const int gap=2;
+            const int total=font.textWidth(prefix)+gap+control_font->textWidth(icon)+
+                gap+font.textWidth(suffix);
+            int x=256-total/2;
+            drawText(image,font,prefix,x,196,1,225,225,225);
+            x+=font.textWidth(prefix)+gap;
+            draw_psh_text_centered(image,*control_font,icon,
+                x+control_font->textWidth(icon)/2,196);
+            x+=control_font->textWidth(icon)+gap;
+            drawText(image,font,suffix,x,196,1,225,225,225);
+        };
+        if(editing_name)
+            drawControllerPrompt(0x9f,std::string(" to accept ")+
+                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name.","START");
+        else
+            drawControllerPrompt(0x94,std::string(" to ")+(value[0]?"edit ":"enter ")+
+                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name.","X");
     }
     return image;
 }
