@@ -775,6 +775,12 @@ private:
             pixels.rgba=menu_frame_.bgra;
             for(std::size_t i=0;i<pixels.rgba.size();i+=4) std::swap(pixels.rgba[i],pixels.rgba[i+2]);
             writePpm(pixels,output/(std::string(name)+".ppm"));
+            unsigned text_visible=0,marker_visible=0;
+            const auto& placement=user_setup_.placement();
+            for(unsigned c=0;c<8;++c)
+                if((placement.text_alive&(1u<<c)) && placement.text_x[c]<512) text_visible|=1u<<c;
+            if(user_setup_.topology()<4)
+                for(unsigned m=0;m<15;++m) if(placement.marker_x[m]<512) marker_visible|=1u<<m;
             if(count++) states<<",\n";
             states<<"{\"id\":\""<<name<<"\",\"page\":\""<<frontendPageName(frontend_page_)<<
                 "\",\"home\":"<<team_select_.team[0]<<",\"away\":"<<team_select_.team[1]<<
@@ -786,6 +792,7 @@ private:
                 ",\"assignment\":"<<unsigned(user_setup_.state().assignment[0])<<
                 ",\"user_help\":"<<unsigned(user_setup_.help().phase)<<
                 ",\"user_topology\":"<<user_setup_.topology()<<
+                ",\"user_text_visible\":"<<text_visible<<",\"user_marker_visible\":"<<marker_visible<<
                 ",\"editor\":"<<int(user_setup_.state().alphabet[0])<<
                 ",\"cursor\":"<<unsigned(user_setup_.state().cursor[0])<<
                 ",\"draft\":"<<std::quoted(user_setup_.state().draft[0])<<
@@ -959,7 +966,12 @@ private:
             "failed write must retain draft and refuse acceptance");frame("user-save-failure");
         userKey('C');userTicks(20);
         require(std::filesystem::remove(fail_path),"remove only the empty isolated failure fixture");
-        userKey(VK_RETURN);
+        user_setup_.setControllers(0,0x11);user_setup_.key(4,8,true);
+        handleMenuKey(VK_RETURN);user_setup_tick_+=2;userTicks(1); // One due row pass after a host stall.
+        require(user_setup_.state().side[4]==0 && user_setup_.placement().marker_x[1]==50 &&
+            !user_setup_.hasPendingRowTail(),"successful inline save must finish later controller before presentation");
+        trace_.log("USER-INLINE-SAVE-PASS","PASS: physical4 Left and placement completed in the same host update as physical0 save");
+        releaseFrontendPadKeys();user_setup_.releaseKeys();user_setup_.setControllers(0,1);userTicks(2);
         require(profile_store_.profiles().size()==1 && profile_store_.atSlot(0)->name=="B" &&
             user_setup_.state().alphabet[0]==-1 && !user_setup_.state().assignment[0],
             "retry accepts durable name without accepting match");frame("user-save-new");
@@ -1117,6 +1129,72 @@ private:
         frame("match-modified-roster",&modified_slots);
         std::ofstream(output/"match_modified_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         roster_database_.swap(reopened);roster_store_=std::move(prior_store);
+        // Controlled source-clock placement fixtures, not physical input or
+        // original-frame timing evidence. No profile/store writes are needed.
+        user_setup_=nba97::UserSetupSession{};
+        user_setup_.open({1,0,0,0,0,0,0,0},{},0,0x20);
+        user_setup_.setControllers(0,0x11);user_setup_.primeEntryTopology();user_setup_.step(0);
+        frame("user-placement-entry-hidden");
+        user_setup_.step(7);frame("user-placement-first-rows");
+        // Fixed original assets/palette/title, varying only retained targets.
+        // This tests the native adapter, not original framebuffer equivalence.
+        auto drawPlacement=[&](const Nba97UserPlacement& placement) {
+            return nba97::renderUserSetup(user_setup_.state(),user_setup_.names(),0,placement,
+                team_select_.team[0],team_select_.team[1],*user_setup_assets_,*team_select_assets_,
+                team_select_sprites_,menu_font_,team_select_palette_,nullptr,nullptr,false);
+        };
+        auto hidden=user_setup_.placement();
+        nba97_user_setup_placement_rebuild(&hidden,0);
+        const auto empty_pixels=drawPlacement(hidden);
+        auto label=hidden;label.text_x[0]=256;label.text_y[0]=88;
+        auto marker=hidden;marker.marker_x[0]=318;marker.marker_y[0]=73;
+        auto changedWithin=[&](const PshImage& image,int left,int top,int right,int bottom) {
+            unsigned changed=0;
+            for(int y=0;y<240;++y)for(int x=0;x<512;++x) {
+                const auto at=std::size_t(y*512+x)*4;
+                if(!std::equal(image.rgba.begin()+at,image.rgba.begin()+at+4,empty_pixels.rgba.begin()+at)) {
+                    require(x>=left && x<right && y>=top && y<bottom,"retained placement drew outside original asset region");
+                    ++changed;
+                }
+            }
+            require(changed>0,"retained placement did not draw original asset");
+        };
+        changedWithin(drawPlacement(label),180,70,312,120);
+        const auto& marker_sprite=team_select_sprites_.at(user_setup_assets_->layout()[18].tag);
+        changedWithin(drawPlacement(marker),318,73,318+marker_sprite.width,73+marker_sprite.height);
+        trace_.log("USER-PLACEMENT-PIXELS","PASS: original label and marker independently follow retained targets with fixed palette/title");
+        user_setup_.setControllers(0,0x10);user_setup_.step(13);frame("user-disconnect-before-row");
+        user_setup_.step(14);frame("user-disconnect-after-row");
+        user_setup_.setControllers(0,0x11);user_setup_.step(20);frame("user-reconnect-before-row");
+        user_setup_.step(21);frame("user-reconnect-after-row");
+        user_setup_.key(0,4,true);user_setup_.step(28);user_setup_.releaseKeys();user_setup_.step(35);
+        user_setup_.setControllers(3,0xff);
+        for(unsigned i=0;i<5;++i)user_setup_.step(36);
+        frame("user-rebuild-clock-closed");
+        user_setup_.key(0,0x20,true);
+        const auto help_action=user_setup_.step(42);
+        require(help_action.size()==1 && help_action[0].event==NBA97_USER_HELP && user_setup_.hasPendingRowTail(),
+            "rebuilt Help must suspend before current row placement");
+        user_setup_.openHelp(user_setup_assets_->help().descriptor(5,0).rect,0);
+        for(unsigned i=0;i<20;++i)user_setup_.tickHelp();
+        frame("user-rebuild-help-before-tail");
+        user_setup_.releaseKeys();user_setup_.tickHelp();user_setup_.key(0,0x800,true);
+        for(unsigned i=0;i<30;++i)user_setup_.tickHelp();
+        user_setup_.releaseKeys();user_setup_.tickHelp();
+        require(user_setup_.help().phase==NBA97_HELP_CLOSED,"placement fixture Help return");
+        user_setup_.setControllers(3,0xfe);user_setup_.step(1000);
+        frame("user-rebuild-help-resumed");
+        user_setup_.step(1001);frame("user-rebuild-next-pass");
+        user_setup_=nba97::UserSetupSession{};user_setup_.open({}, {},0);
+        user_setup_.configureEditor(user_setup_assets_->alphabet(),[&](const char* name){return menu_font_.textWidth(name);});
+        user_setup_.setControllers(0,1);user_setup_.step(0);
+        for(const auto input:std::array<std::pair<uint16_t,int32_t>,3>{{{4,7},{1,14},{0x800,21}}}) {
+            user_setup_.key(0,input.first,true);user_setup_.step(input.second);user_setup_.releaseKeys();
+        }
+        user_setup_.setControllers(2,0xf1);
+        for(unsigned i=0;i<5;++i)user_setup_.step(22);
+        frame("user-editor-rebuild-hidden");
+        user_setup_.step(28);frame("user-editor-rebuild-restored");
         states<<"\n]\n";
         trace_.log("TEAM-CAPTURE","PASS: "+std::to_string(count)+" original-asset native frames; host Team Select/User Setup/editor/modal/transaction/restart scenarios; match handoff pending; no real saves");
         return 0;
@@ -5850,6 +5928,7 @@ private:
             uint16_t aggregate=0;
             for(unsigned c=0;c<8;++c) if(user_setup_.connected()&(1u<<c)) aggregate|=user_setup_.raw(c);
             if(aggregate!=0x80) user_setup_refusal_logged_=false;
+            do {
             for(const auto& action:user_setup_.step(static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000))) {
                 if(action.sound) playBottomMenuSound(action.sound,"user-setup");
                 if(action.event==NBA97_USER_REFUSED && user_setup_refusal_logged_) continue;
@@ -5896,6 +5975,10 @@ private:
                     openUserDialog(kind,action.controller,name);
                 }
             }
+            // A successful durable save has no child modal. Complete that
+            // same row and any remaining controllers before36898 presents.
+            } while(user_setup_.hasPendingRowTail() && !user_setup_.state().result &&
+                    user_setup_.help().phase==NBA97_HELP_CLOSED && user_setup_.dialogKind()==nba97::UserSetupDialog::None);
         }
         prepareFrontendTitle();
         user_setup_.tickPresentation();
@@ -7206,7 +7289,7 @@ private:
         else if(frontend_page_==nba97::FrontendPage::UserSetup) {
             prepareFrontendTitle();
             auto image=nba97::renderUserSetup(user_setup_.state(),user_setup_.names(),user_setup_.topology(),
-                user_setup_.connected(),team_select_.team[0],team_select_.team[1],*user_setup_assets_,
+                user_setup_.placement(),team_select_.team[0],team_select_.team[1],*user_setup_assets_,
                 *team_select_assets_,team_select_sprites_,menu_font_,team_select_palette_,frontend_title_.corners(),
                 &user_setup_.editorTints(),user_setup_.help().phase!=NBA97_HELP_CLOSED && user_setup_.helpIndex()==1);
             if(nba97_help_visible(&user_setup_.help())) user_setup_assets_->help().draw(image,control_font_,

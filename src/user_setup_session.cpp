@@ -49,6 +49,7 @@ void UserSetupSession::open(const std::array<uint8_t,8>& initial,
     initialized_=true;masks_={};help_={};last_pass_=clock;continuing_pass_=false;next_row_=0;
     dialog_kind_=UserSetupDialog::None;dialog_={};prior_mask_=prior_mask;editor_tints_={};
     prior_controller_=prior_controller;topology_={99,-1};entry_topology_primed_=false;
+    nba97_user_setup_placement_open(&placement_);pending_row_tail_=-1;
 }
 void UserSetupSession::setControllers(unsigned topology,uint8_t connected) {
     if(topology>3) throw std::runtime_error("User Setup invalid topology");
@@ -56,8 +57,23 @@ void UserSetupSession::setControllers(unsigned topology,uint8_t connected) {
 }
 void UserSetupSession::primeEntryTopology() {
     if(!initialized_ || topology_.active!=99) return;
-    nba97_user_setup_topology_observe(&topology_,observed_topology_&1 ? 0x8000:0,observed_topology_&2 ? 0x8000:0);
+    observeTopology();
     entry_topology_primed_=true;
+}
+void UserSetupSession::observeTopology() {
+    if(nba97_user_setup_topology_observe(&topology_,observed_topology_&1 ? 0x8000:0,
+                                                  observed_topology_&2 ? 0x8000:0)) {
+        nba97_user_setup_placement_rebuild(&placement_,topology_.active);
+        // 36D88 recreates each included label, including an active editor's
+        // selected-character pulse. Draft/selector/cursor state is preserved.
+        for(unsigned row=0;row<nba97_user_setup_row_count(topology_.active);++row) {
+            const auto c=unsigned(nba97_user_setup_physical(topology_.active,row));
+            if(state_.alphabet[c]>=0) {
+                editor_tints_[c]={};std::fill_n(editor_tints_[c].rgb,3,uint8_t(128));
+                nba97_reorder_tint_pulse(&editor_tints_[c]);editor_tints_[c].duration=10;
+            }
+        }
+    }
 }
 void UserSetupSession::key(unsigned controller,uint16_t mask,bool down) {
     if(controller>=8) throw std::runtime_error("User Setup invalid physical controller");
@@ -68,9 +84,7 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
     std::vector<UserSetupAction> actions;
     if(state_.result || help_.phase!=NBA97_HELP_CLOSED || dialog_kind_!=UserSetupDialog::None) return actions;
     if(!continuing_pass_) {
-        if(!entry_topology_primed_)
-            nba97_user_setup_topology_observe(&topology_,observed_topology_&1 ? 0x8000:0,
-                                                       observed_topology_&2 ? 0x8000:0);
+        if(!entry_topology_primed_) observeTopology();
         entry_topology_primed_=false;
     }
     auto before=state_;
@@ -83,7 +97,10 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
     if(event!=NBA97_USER_NONE) {
         record(event,event==NBA97_USER_CANCELLED?0x100:0x80,before);
         if(event==NBA97_USER_CANCELLED) {prior_controller_=8;prior_mask_=0x100;}
-        if(state_.result) return actions;
+        if(state_.result) {
+            nba97_user_setup_placement_clear_text(&placement_);
+            return actions;
+        }
     }
     const auto elapsed=static_cast<uint32_t>(clock)-static_cast<uint32_t>(last_pass_);
     if(!continuing_pass_) {
@@ -92,9 +109,19 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
         last_pass_=clock;next_row_=0;
     }
     continuing_pass_=false;
+    if(pending_row_tail_>=0) {
+        // The connected branch was selected before the child call. Do not
+        // repoll it or re-check connectivity when its38820 tail resumes.
+        nba97_user_setup_placement_row(&placement_,&state_,topology_.active,unsigned(pending_row_tail_),1);
+        pending_row_tail_=-1;
+    }
     for(unsigned row=next_row_;row<nba97_user_setup_row_count(topology_.active);++row) {
         const auto c=unsigned(nba97_user_setup_physical(topology_.active,row));
-        if(!(connected_&(1u<<c))) {nba97_user_setup_disconnect(&state_,c);continue;}
+        if(!(connected_&(1u<<c))) {
+            nba97_user_setup_disconnect(&state_,c);
+            nba97_user_setup_placement_row(&placement_,&state_,topology_.active,row,0);
+            continue;
+        }
         before=state_;
         const auto token=nba97_user_setup_repeat(&repeat_[c],masks_[c],clock);
         if(editor_width_ && state_.alphabet[c]>=0) {
@@ -115,8 +142,9 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
         if(event==NBA97_USER_HELP || event==NBA97_USER_CAPACITY ||
            event==NBA97_USER_EDIT_REQUEST || event==NBA97_USER_DELETE_REQUEST ||
            event==NBA97_USER_PROFILE_FULL || event==NBA97_USER_NAME_DUPLICATE || event==NBA97_USER_SAVE_REQUEST) {
-            continuing_pass_=true;next_row_=row+1;return actions;
+            continuing_pass_=true;next_row_=row+1;pending_row_tail_=int(row);return actions;
         }
+        nba97_user_setup_placement_row(&placement_,&state_,topology_.active,row,1);
     }
     const auto included=nba97_user_setup_topology_mask(topology_.active);
     for(unsigned c=0;c<8;++c) if(!(included&(1u<<c))) nba97_user_setup_disconnect(&state_,c);
@@ -154,6 +182,9 @@ void UserSetupSession::tickPresentation() {
     for(unsigned c=0;c<8;++c) if(state_.alphabet[c]>=0) nba97_reorder_tint_tick(&editor_tints_[c]);
 }
 void UserSetupSession::deferMatch() noexcept {
+    // Explicit native pending-page policy: recreate the labels removed by the
+    // retail return, retaining placement while the next timed pass resumes.
+    placement_.text_alive|=nba97_user_setup_topology_mask(topology_.active);
     state_.result=0;state_.start_latch=1;
 }
 void UserSetupSession::configureEditor(const std::array<char,68>& alphabet,std::function<int(const char*)> width) {

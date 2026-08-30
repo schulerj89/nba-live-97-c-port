@@ -26,6 +26,21 @@ typedef struct Nba97UserSetup {
     uint8_t start_latch, sound, controller, cancel_origin;
     int8_t result;                /* 0 running,-1 previous,6 confirm */
 } Nba97UserSetup;
+
+/* State5-owned placement targets, applied by its next presentation. Text2B830
+ * reaches these targets on its first tick (duration1); marker31A0C writes both
+ * buffers immediately. This is not the shared text allocator/GPU lifecycle.
+ * Marker slots0..14 are graphic IDs18..32. Connectivity does not hide objects
+ * until the source row visits them. Text existence survives layout exclusion. */
+typedef struct Nba97UserPlacement {
+    int16_t text_x[8],text_y[8],marker_x[15],marker_y[15];
+    uint8_t text_alive;
+} Nba97UserPlacement;
+void nba97_user_setup_placement_open(Nba97UserPlacement*);
+void nba97_user_setup_placement_rebuild(Nba97UserPlacement*,unsigned topology);
+void nba97_user_setup_placement_row(Nba97UserPlacement*,const Nba97UserSetup*,
+                                   unsigned topology,unsigned row,int connected);
+void nba97_user_setup_placement_clear_text(Nba97UserPlacement*);
 typedef enum Nba97UserEvent {
     NBA97_USER_NONE, NBA97_USER_SIDE, NBA97_USER_PROFILE, NBA97_USER_HELP,
     NBA97_USER_CAPACITY, NBA97_USER_EDIT_REQUEST, NBA97_USER_DELETE_REQUEST,

@@ -16,7 +16,7 @@
     "source_comparison": "Private compiled C vs original-MIPS fixtures: 55588 polling/topology/random assertions; separate 7985 exact Setup Start/aggregate Cancel assertions. Controlled fixtures, not a live original run.",
     "instruction_accounting": "pending per-block assignment; zero credit",
     "native_unit": "tests/team_select_poll_test.cpp, tests/team_select_test.cpp, tests/user_setup_session_test.cpp",
-    "host_integration": "76 explicit combined scenarios; first/second process state, frame and owned-snapshot comparisons",
+    "host_integration": "88 explicit combined scenarios including retained state5 placement; first/second process state, frame and owned-snapshot comparisons",
     "native_rendering": "deterministic regression only; source presentation boundaries change earlier frame phases",
     "original_runtime": "pending",
     "original_visual_timing_audio": "pending",

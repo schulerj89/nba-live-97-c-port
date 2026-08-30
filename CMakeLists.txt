@@ -40,6 +40,12 @@ if(BUILD_TESTING)
     target_compile_features(nba97_user_setup_session_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_user_setup_session_tests PRIVATE src)
     add_test(NAME user_setup_session COMMAND nba97_user_setup_session_tests)
+    add_executable(nba97_user_setup_visibility_tests tests/user_setup_visibility_test.cpp
+        src/user_setup_session.cpp src/user_profiles.cpp src/recovered/user_setup.c src/recovered/frontend_help.c
+        src/recovered/roster_reset.c src/recovered/roster_reorder.c src/recovered/roster_lists.c src/recovered/semantic_trace.c)
+    target_compile_features(nba97_user_setup_visibility_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_user_setup_visibility_tests PRIVATE src)
+    add_test(NAME user_setup_visibility COMMAND nba97_user_setup_visibility_tests)
     add_executable(nba97_user_setup_tests tests/user_setup_test.cpp src/recovered/user_setup.c)
     target_compile_features(nba97_user_setup_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_user_setup_tests PRIVATE src)

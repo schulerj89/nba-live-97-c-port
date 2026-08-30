@@ -37,6 +37,8 @@ public:
     void tickPresentation();
     void deferMatch() noexcept; // Native pending boundary, not a retail transition.
     const Nba97UserSetup& state() const {return state_;}
+    const Nba97UserPlacement& placement() const {return placement_;}
+    bool hasPendingRowTail() const {return pending_row_tail_>=0;}
     const Nba97UserNames& names() const {return names_;}
     const Nba97HelpModal& help() const {return help_;}
     unsigned helpIndex() const {return help_index_;}
@@ -54,7 +56,9 @@ public:
     const std::array<Nba97ReorderTint,8>& editorTints() const {return editor_tints_;}
 private:
     void importProfiles(const std::vector<UserProfile>& profiles,bool retain_claims=false);
+    void observeTopology();
     Nba97UserSetup state_{};
+    Nba97UserPlacement placement_{};
     Nba97UserNames names_{};
     std::array<uint64_t,20> ids_{};
     std::array<Nba97UserRepeat,8> repeat_{};
@@ -68,6 +72,7 @@ private:
     bool continuing_pass_=false;
     bool entry_topology_primed_=false;
     unsigned next_row_=0;
+    int pending_row_tail_=-1;
     std::array<char,68> editor_alphabet_{};
     std::function<int(const char*)> editor_width_;
     UserSetupDialog dialog_kind_=UserSetupDialog::None;

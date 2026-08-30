@@ -397,7 +397,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect&, const Nba97TeamRanks&,
                          const std::array<Nba97ReorderTint,12>&,
                          const int16_t* title_corners=nullptr);
 PshImage renderUserSetup(const Nba97UserSetup&,const Nba97UserNames&,
-                        unsigned topology,uint8_t connected,int home,int away,
+                        unsigned topology,const Nba97UserPlacement& placement,int home,int away,
                         const UserSetupAssets&,const TeamSelectAssets&,
                         const MenuSpritePack&,const PshFont&,const Nba97FrontendPalette&,
                         const int16_t* title_corners=nullptr,

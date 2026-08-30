@@ -11,11 +11,11 @@ live original timing, GPU, audio or physical-controller comparison.
 | Original function | Native scope | Accounted / full instructions | Shared dependencies and evidence | Remaining uncertainty |
 |---|---|---|---|---|
 | FE8003AE4C | team_select_poll.c physical-pad sampling, first nonzero controller, history and repeat delays |0 /210 |76198,39574; team_select_poll_test and private source oracle |Queued tokens, complete state0 polling, driver/cache refresh, original phase |
-| FE8003D930 | State3 whole-mask dispatch, postwaits, both exits; exact state0 Start history fragment |0 /828 |3AE4C,3B194, callbacks; poll tests and76 host captures |Other descriptor routes, movement/text cleanup, arrow lifecycle, source GPU phase |
+| FE8003D930 | State3 whole-mask dispatch, postwaits, both exits; exact state0 Start history fragment |0 /828 |3AE4C,3B194, callbacks; poll tests and88 host captures |Other descriptor routes, movement/text cleanup, arrow lifecycle, source GPU phase |
 | FE8003B194 | Mandatory presentation, then remembered mask change; physical controller or aggregate8 |0 /21 |39574,76198; poll/session tests and original-MIPS barrier probe |Original driver/cache and shared presentation lifecycle |
 | FE8003F7C8 | Exhibition transitions and state5 Cancel fragment3FCF4..3FD18 |0 /1173 |3D930,4FCD8,37010,3B194,61674; host scenarios |Full dispatcher, other modes and gameplay launch |
 | FE8004F934 | Twelve random candidates; owner waits1..12 |0 /41 |Six-word RNG,39574; random/poll tests |Runtime seed history and absolute presentation phase |
-| FE80037010 | Topology observation and shared entry/Cancel history, alongside existing state5 logic |0 /1716 |36CA0,36B80,36898, modal owners; session tests and source oracle |Rebuild hide/restore visibility, text lifecycle, original runtime |
+| FE80037010 | Topology observation, retained row placement and shared entry/Cancel history, alongside existing state5 logic |0 /1716 |36CA0,36B80,36898, modal owners; session/placement tests and source oracle |Text lifecycle, physical rebuild cadence, original runtime |
 
 Only3B194 and3F7C8 are newly listed in frontend_input.json:1194 full caller
 instructions, all zero credit. The other functions retain their existing Team
@@ -83,17 +83,21 @@ then consumes that same observation on the first step without polling twice.
 Observation precedes global Start/Select and the signed elapsed>6 row gate.
 Help/dialog continuations and terminal returns do not start another outer
 iteration. Connectivity remains live inside a suspended pass, while its row
-order retains the previously adopted topology. Source topology rebuild hides
-labels/markers and later row processing restores them; that precise visibility
-sequence is still pending in the native direct renderer. Debouncing must not
-erase editor state to imitate those visual changes.
+order retains the previously adopted topology. The portable placement owner now
+hides all8 text groups and all15 marker objects on adoption. Each timed row tail
+restores its targets; a blocking child suspends before that same row's tail.
+Connectivity is checked when a row starts, not again when its child returns.
+The renderer consumes these retained targets without another connectivity or
+neutral-pulse filter. Recreated editor labels restart their cursor tint without
+erasing draft/profile/cursor state. See user_setup_placement_workflow.md for the
+bounded target contract; original text allocation and physical cadence remain pending.
 
 ## Evidence and first mismatches
 
 Public tests exercise every normalized mask, repeat boundaries, first-controller
 priority, postwait release, modal/reentry history, both exit paths, random caller
 ownership, changed nonzero handoffs, and topology/modal continuation ordering.
-The76 host scenarios include held input before/after polls, chords, focus/alias
+The88 host scenarios include held input before/after polls, chords, focus/alias
 handling, both Team Select exits, Setup Start, User Cancel, topology changes and
 the existing isolated persistence/snapshot flows. Two independent processes
 must agree; hashes are never adopted as retail fixtures.
@@ -128,8 +132,8 @@ glyphs but preserves stored tint-start bytes in reused text nodes. Prior flashes
 can leave gold history; initializing all stored colors to gray would invent
 behavior. Break at3D534 and its2ADEC call, dump the actual node including offsets
 30..32, and follow2AE5C updates with the node's flags. Compare the first differing
-field before changing rendering. Full text/arrow allocation and source topology
-rebuild visibility remain pending, as do synchronized visuals, sound bank/tone/
+field before changing rendering. Full text/arrow allocation and physical topology
+rebuild timing remain pending, as do synchronized visuals, sound bank/tone/
 pitch/sample timing, and a physical keyboard/controller walkthrough.
 
 The first original pre-selector RAM observation found200 free text slots, each

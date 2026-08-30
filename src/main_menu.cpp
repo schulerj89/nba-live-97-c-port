@@ -682,7 +682,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
 }
 
 PshImage renderUserSetup(const Nba97UserSetup& state,const Nba97UserNames& names,
-                        unsigned topology,uint8_t connected,int home,int away,
+                        unsigned topology,const Nba97UserPlacement& placement,int home,int away,
                         const UserSetupAssets& assets,const TeamSelectAssets& teams,
                         const MenuSpritePack& sprites,const PshFont& font,const Nba97FrontendPalette& palette,
                         const int16_t* title_corners,const std::array<Nba97ReorderTint,8>* editor_tints,bool edit_help) {
@@ -699,31 +699,30 @@ PshImage renderUserSetup(const Nba97UserSetup& state,const Nba97UserNames& names
             blitReorderPlate(image,sprites.at(teams.team(away).logo),40,16,0);
         }
     }
+    // Retained source placements are authoritative. A physical disconnect or
+    // early input mutation cannot bypass the timed/current-row tail boundary.
+    for(unsigned i=0;i<15;++i)
+        blitAt(image,sprites,assets.layout()[18+i].tag.c_str(),placement.marker_x[i],placement.marker_y[i]);
     const unsigned count=nba97_user_setup_row_count(topology);
-    static constexpr int xs[4][3]={{50,180,318},{80,216,350},{80,216,350},{106,230,380}};
-    static constexpr int stride[4]={75,27,27,17},name_y[4]={88,78,78,73},base[4]={18,20,20,25};
     for(unsigned row=0;row<count;++row) {
         const auto p=static_cast<unsigned>(nba97_user_setup_physical(topology,row));
-        if(!(connected&(1u<<p))) continue;
-        const auto& marker=assets.layout()[base[topology]+row];
-        if(!state.hide_marker[p]) blitAt(image,sprites,marker.tag.c_str(),xs[topology][state.side[p]],73+int(row)*stride[topology]);
-        if(state.side[p]==1) continue;
+        if(!(placement.text_alive&(1u<<p)) || placement.text_x[p]>=512) continue;
         const int selected=state.profile[p];
-        const int y=name_y[topology]+int(row)*stride[topology];
+        const int x=placement.text_x[p],y=placement.text_y[p];
         if(state.alphabet[p]>=0) {
             std::string name=state.draft[p];const auto cursor=state.cursor[p];
             if(cursor<name.size() && name[cursor]=='_')name[cursor]='=';
-            draw_psh_text_centered(image,font,name,256,y);
+            draw_psh_text_centered(image,font,name,x,y);
             if(editor_tints && cursor<name.size()) {
                 const std::string ch(1,name[cursor]);
-                const int x=256-font.textWidth(name)/2+font.textWidth(name.substr(0,cursor));
-                draw_psh_text_centered(image,font,ch,x+font.textWidth(ch)/2,y,(*editor_tints)[p].rgb);
+                const int char_x=x-font.textWidth(name)/2+font.textWidth(name.substr(0,cursor));
+                draw_psh_text_centered(image,font,ch,char_x+font.textWidth(ch)/2,y,(*editor_tints)[p].rgb);
             }
             continue;
         }
         const std::string name=selected==-2 ? assets.playerLabel(row):selected==-1 ? assets.newLabel():names.name[selected];
         const auto rgb=assets.colors()[p];
-        drawCenteredText(image,font,name,256,y,1,
+        drawCenteredText(image,font,name,x,y,1,
             static_cast<uint8_t>(std::min(255,int(rgb>>24)*255/128)),
             static_cast<uint8_t>(std::min(255,int((rgb>>16)&255)*255/128)),
             static_cast<uint8_t>(std::min(255,int((rgb>>8)&255)*255/128)));

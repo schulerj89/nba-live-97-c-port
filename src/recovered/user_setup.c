@@ -2,6 +2,51 @@
 #include <string.h>
 #include <limits.h>
 
+void nba97_user_setup_placement_open(Nba97UserPlacement* p) {
+    unsigned i;
+    if(!p) return;
+    memset(p,0,sizeof(*p));
+    for(i=0;i<8;++i) p->text_x[i]=700;
+    for(i=0;i<15;++i) p->marker_x[i]=700;
+}
+void nba97_user_setup_placement_rebuild(Nba97UserPlacement* p,unsigned topology) {
+    unsigned row,c;
+    if(!p || topology>3) return;
+    /* 373DC: recreate included groups, then hide all8 in the new row order.
+     * Excluded old groups remain allocated until the owner's2C0F0 exit. */
+    p->text_alive|=nba97_user_setup_topology_mask(topology);
+    for(row=0;row<8;++row) {
+        static const uint8_t remap[8]={0,4,5,6,7,1,2,3};
+        c=(topology==0 || topology==2) ? remap[row]:row;
+        p->text_x[c]=700;p->text_y[c]=(int16_t)(66+18*row);
+    }
+    /* All15 objects, not only the newly selected layout. */
+    for(row=0;row<15;++row) {
+        p->marker_x[row]=700;p->marker_y[row]=(int16_t)(66+18*row);
+    }
+}
+void nba97_user_setup_placement_row(Nba97UserPlacement* p,const Nba97UserSetup* s,
+                                   unsigned topology,unsigned row,int connected) {
+    static const int16_t xs[4][3]={{50,180,318},{80,216,350},{80,216,350},{106,230,380}};
+    static const uint8_t stride[4]={75,27,27,17},name_y[4]={88,78,78,73},base[4]={0,2,2,7};
+    unsigned c,m;
+    if(!p || !s || topology>3 || row>=nba97_user_setup_row_count(topology)) return;
+    c=(unsigned)nba97_user_setup_physical(topology,row);m=base[topology]+row;
+    if(!connected) {
+        /* Disconnection recreates the cleared label before hiding it. */
+        p->text_x[c]=700;p->text_y[c]=(int16_t)(name_y[topology]+18*row);
+        p->marker_x[m]=700;p->marker_y[m]=(int16_t)(66+18*row);
+    } else if(s->side[c]<=2) {
+        /* 38820 tail, including the same row after a blocking child returns. */
+        p->text_x[c]=(int16_t)(s->side[c]==1 ? 700:256);
+        p->text_y[c]=(int16_t)(name_y[topology]+stride[topology]*row);
+        p->marker_x[m]=(int16_t)(s->side[c]==1 && s->hide_marker[c] ? 700:xs[topology][s->side[c]]);
+        p->marker_y[m]=(int16_t)(73+stride[topology]*row);
+    }
+}
+void nba97_user_setup_placement_clear_text(Nba97UserPlacement* p) {
+    if(p) p->text_alive=0; /* 2C0F0(0), before either state5 return. */
+}
 int nba97_user_setup_topology_observe(Nba97UserTopology* s,uint16_t port0,uint16_t port1) {
     uint8_t next=(uint8_t)((port0==0x8000u)+2*(port1==0x8000u));
     if(!s) return 0;

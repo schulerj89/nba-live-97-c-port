@@ -213,12 +213,14 @@ def capture(first, second, contract, fixture):
                 "delete confirmation/notice close sounds")
         require(trace.count("USER-SAVE-FAILED")==1 and trace.count("USER-DELETE ")==1,
                 "failed-save retry and accepted deletion traces")
+        require(trace.count("USER-INLINE-SAVE-PASS PASS:")==1 and trace.count("USER-PLACEMENT-PIXELS PASS:")==1,
+                "same-update save continuation and independent retained-target rendering")
         require(trace.count("MATCH-CONTROLS-INIT ") == 1 and trace.count("MATCH-SNAPSHOT revision=") == 4 and
                 trace.count("MATCH-SNAPSHOT-PENDING ") == 1, "cold controls/snapshot publication/refusal traces")
         require("TEAM-HANDOFF" in trace and "USER-ENTRY" in trace and
                 "MATCH-HANDOFF-PENDING" in trace and "TEAM-CAPTURE PASS:" in trace, "missing boundary/pass trace")
     print(f"TEAM NATIVE PASS: {len(states)}/{len(states)} deterministic frames + host state + isolated saved-roster adapter")
-    print("PENDING: original state3/5 runtime, visuals/timing/audio, physical controls, text/arrow lifecycle, topology rebuild visibility and gameplay")
+    print("PENDING: original state3/5 runtime, visuals/timing/audio, physical controls/topology cadence, text/arrow lifecycle and gameplay")
 
 
 def main():

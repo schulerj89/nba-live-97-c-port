@@ -63,7 +63,8 @@ Choice text positions depend on the initial selection, not later navigation.
 Deletion waits for shrink and the final changed-input barrier before mutating.
 
 The first modal presentation advances rectangle growth, matching30C0C/30784.
-After a modal returns, the same host update resumes remaining controllers and
+After a modal returns, the same host update completes the invoking controller's
+placement tail, then resumes remaining controllers and
 then the ordinary36898 presentation. It does not insert an extra39574 RNG draw.
 Other modal updates use39574; ordinary frames use direct32BF0. Absolute original
 growth/poll/presentation phase, GPU timing and text-node lifecycle remain pending.
@@ -76,8 +77,11 @@ Topology-change debounce now follows the source: entry99/-1, exact8000 driver
 words, four deferred observations and adoption on the fifth. Observation occurs
 before global input and the row clock gate; modal continuations retain the old
 row order while connectivity stays live. Entry composition primes one observation
-that the first step consumes without querying twice. Exact rebuild hide/restore
-visibility is still pending; see frontend_input_workflow.md.
+that the first step consumes without querying twice. Rebuild hiding and timed
+row restoration now use retained portable placement targets. A hardware change
+does not bypass the current row's clock/modal boundary; see
+user_setup_placement_workflow.md. Actual original presentation timing remains
+pending.
 
 Select stores shared controller8/mask100 and returns to dispatcher3FD10. The host
 presents, then waits for the complete physically connected aggregate to differ
@@ -104,11 +108,13 @@ power-loss and ambiguous OS replacement outcomes remain unverified.
 Extract with tools/extract_user_setup.py after Team Select extraction. Run
 scripts/verify_team_select.ps1 with fresh isolated settings/profile/created/roster
 paths. It rejects unsafe defaults and fingerprints all real save/config files.
-The76 capture scenarios include held input, exit barriers, topology changes,
+The88 capture scenarios include held input, exit barriers, topology changes,
 both Help pages, editor controls, duplicate/full/
 capacity warnings, failed-save retry, rename/no-op, delete cancel/invalid input/
 eight-update delay/final barrier, restart, abandonment, shoulder chords and
 owned ordinary-exhibition snapshots with retained controls/current saved rosters.
+Twelve controlled-clock placement checkpoints additionally cover hidden entry,
+rebuilds, delayed disconnect/reconnect, Help return and retained editor state.
 Repeated native frames measure regression stability, not original GPU equivalence.
 
 Public tests cover all6,561 assignments, eligibility, repeat/clock ordering,

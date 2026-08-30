@@ -8,10 +8,11 @@
   },
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
-    "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
-    "host_integration": "76 combined isolated scenarios including topology debounce, shared history, Cancel barrier and partial match snapshots",
+    "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_setup_visibility_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
+    "host_integration": "88 combined isolated scenarios including retained topology/row placement, shared history, Cancel barrier and partial match snapshots; same-update inline save continuation asserted",
     "original_runtime": "pending",
-    "native_rendering": "two-run deterministic frames; original asset layout plus original-font inline baseline pixel test",
+    "native_rendering": "two-run deterministic frames; original-font inline baseline plus independent retained label/marker target pixel checks",
+    "placement_source_comparison": "11895 private compiled-C/original-MIPS target and tint assertions; 7 extracted-host save/delete/modal paths; controlled fixtures, not a live original run",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "editor": "implemented; private independent MIPS comparison4554 valid,17 legacy,33 boundaries; malformed fallback unclaimed",
@@ -25,7 +26,7 @@
       "scope": "user_setup_owner",
       "instructions_accounted": 0,
       "instructions_total": 1716,
-      "native_owner": "nba97_user_setup_open/input/global/edit_begin/edit_input/edit_accept/deleted/topology_observe; UserSetupSession; Win32 updateUserSetup",
+      "native_owner": "nba97_user_setup_open/input/global/edit_begin/edit_input/edit_accept/deleted/topology_observe/placement_*; UserSetupSession; Win32 updateUserSetup",
       "shared_dependencies": [
         "0x80036CA0",
         "0x80036B80",
@@ -37,9 +38,10 @@
       "tests_evidence": [
         "tests/user_setup_test.cpp",
         "tests/user_setup_session_test.cpp",
+        "tests/user_setup_visibility_test.cpp",
         "config/decomp/team_select_scenarios.json"
       ],
-      "remaining_uncertainty": "Topology rebuild hide/restore visibility, absolute loop/presentation timing, malformed fallback/raw unused tail, text-node lifecycle and original runtime remain pending; full owner retained."
+      "remaining_uncertainty": "Retained topology/row placement targets implemented; absolute loop/presentation timing, malformed fallback/raw unused tail, text-node lifecycle and original runtime remain pending; full owner retained."
     },
     {
       "address": "0x80036CA0",
@@ -126,7 +128,7 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 31,
-      "native_owner": "native ephemeral composition; source text-chain release pending",
+      "native_owner": "nba97_user_setup_placement_clear_text target lifetime; source text-chain release pending",
       "shared_dependencies": [],
       "tests_evidence": [
         "config/decomp/team_select_scenarios.json"
@@ -154,12 +156,12 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 28,
-      "native_owner": "renderUserSetup direct placement; queued text movement pending",
+      "native_owner": "nba97_user_setup_placement_rebuild/row; renderUserSetup retained state5 targets",
       "shared_dependencies": [],
       "tests_evidence": [
         "docs/user_setup_workflow.md"
       ],
-      "remaining_uncertainty": "Node target coordinates and queued movement flags not implemented as original text-list state."
+      "remaining_uncertainty": "State5 duration1 targets implemented; full text-node queued flags, interpolation and double-buffer lifecycle remain pending."
     },
     {
       "address": "0x80031A0C",
@@ -167,7 +169,7 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 31,
-      "native_owner": "renderUserSetup marker placement",
+      "native_owner": "nba97_user_setup_placement_rebuild/row; renderUserSetup retained15 marker targets",
       "shared_dependencies": [],
       "tests_evidence": [
         "config/decomp/team_select_scenarios.json"
