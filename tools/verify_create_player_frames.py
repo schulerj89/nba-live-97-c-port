@@ -40,6 +40,12 @@ def main() -> int:
     args = parser.parse_args()
     changed(args.capture, "editor-first-required.ppm", "editor-selector-gold.ppm",
             (35, 78, 275, 116), "20-vblank-selector-tint")
+    changed(args.capture, "editor-name-inline-open.ppm", "editor-name-inline-cycle.ppm",
+            (200, 84, 360, 115), "screen-22-inline-name-character")
+    changed(args.capture, "editor-name-inline-cycle.ppm", "editor-name-help-modal.ppm",
+            (0, 0, 512, 240), "authored-inline-name-help-modal")
+    changed(args.capture, "editor-appearance-height-64.ppm", "editor-appearance-height-90.ppm",
+            (320, 25, 512, 185), "height-relative-appearance-framing")
     changed(args.capture, "editor-layer-scroll-enter.ppm", "editor-model-motion-phase.ppm",
             (335, 40, 510, 220), "18-key/36-tick-zdom-mocap-preview")
     changed(args.capture, "editor-layer-scroll-enter.ppm", "editor-layer-scroll-mid.ppm",

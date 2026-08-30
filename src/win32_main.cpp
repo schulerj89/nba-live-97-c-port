@@ -414,6 +414,8 @@ private:
         loadCreatePlayerSprites(menu_root / "ZSET5-decoded");
         create_player_delete_assets_ =
             std::make_unique<nba97::CreatePlayerDeleteAssets>(options_.asset_root);
+        create_player_help_pack_ = std::make_unique<nba97::FrontendHelpPack>(
+            options_.asset_root / "reorder/help.n97ui");
         loadTeamRosterBackgrounds(menu_root / "ZSET4-team-backgrounds");
         loadRecoveredBottomSprites(menu_root / "ZSET7-decoded", users_sprites_, false);
         loadPlayerCardSprites(menu_root / "ZSET8-decoded");
@@ -3278,12 +3280,38 @@ private:
         Nba97CreateEditor editor{};
         if (!nba97_create_editor_open_new(&editor, &created_players_))
             throw std::runtime_error("Create Player editor fixture failed");
-        const auto capture_editor = [&](const char* name, std::uint32_t elapsed = 0) {
+        const auto capture_editor = [&](const char* name, std::uint32_t elapsed = 0,
+                                        const Nba97CreateNameEditor* name_editor = nullptr) {
             writePpm(nba97::renderCreatePlayerEditor(editor, roster_database_, menu_font_,
-                create_player_sprites_, elapsed, create_player_preview_.get()), output / name);
+                create_player_sprites_, elapsed, create_player_preview_.get(),name_editor), output / name);
         };
         capture_editor("editor-first-required.ppm");
         capture_editor("editor-selector-gold.ppm", 340);
+        Nba97CreateNameEditor name_editor{};
+        if(nba97_create_name_begin(&editor,&name_editor)!=6)
+            throw std::runtime_error("Create Player inline name fixture failed");
+        capture_editor("editor-name-inline-open.ppm",0,&name_editor);
+        nba97_create_name_input(&editor,&name_editor,NBA97_CREATE_NAME_NEXT_CHARACTER);
+        capture_editor("editor-name-inline-cycle.ppm",0,&name_editor);
+        {
+            const auto editor_before=editor;
+            const auto name_before=name_editor;
+            const auto& descriptor=create_player_help_pack_->descriptor(0x22,1);
+            Nba97HelpModal modal{};
+            if(nba97_help_open(&modal,descriptor.rect,0x20)!=NBA97_HELP_OPEN_SOUND)
+                throw std::runtime_error("Create Player name Help fixture failed");
+            for(int tick=0;tick<40 && !nba97_help_text_visible(&modal);++tick)
+                nba97_help_tick(&modal,0);
+            auto image=nba97::renderCreatePlayerEditor(editor,roster_database_,menu_font_,
+                create_player_sprites_,0,create_player_preview_.get(),&name_editor);
+            create_player_help_pack_->draw(image,control_font_,descriptor,modal);
+            writePpm(image,output/"editor-name-help-modal.ppm");
+            if(std::memcmp(&editor,&editor_before,sizeof(editor))!=0 ||
+               std::memcmp(&name_editor,&name_before,sizeof(name_editor))!=0)
+                throw std::runtime_error("Create Player name Help changed inline transaction");
+        }
+        if(nba97_create_name_cancel(&editor,&name_editor)!=10||editor.first_name[0]!='\0')
+            throw std::runtime_error("Create Player inline name cancellation did not restore 13 bytes");
         nba97_create_editor_append_letter(&editor, 'A');
         nba97_create_editor_move(&editor, 1);
         nba97_create_editor_append_letter(&editor, 'B');
@@ -3307,6 +3335,11 @@ private:
            without changing the Atlanta full-body texture-audit fixture. */
         editor.team = 1;
         capture_editor("editor-appearance-layer.ppm");
+        editor.height_inches=64;
+        capture_editor("editor-appearance-height-64.ppm");
+        editor.height_inches=90;
+        capture_editor("editor-appearance-height-90.ppm");
+        editor.height_inches=63;
         editor.team = 0;
         editor.selected_field = NBA97_CREATE_HAND;
         editor.previous_visible_first_field = editor.visible_first_field = 2;
@@ -3372,7 +3405,7 @@ private:
         capture("full-new-disabled.ppm");
         if (create_player_menu_.enabled[1] || create_player_menu_.selected != 0)
             throw std::runtime_error("Create Player full-menu predicates failed");
-        trace_.log("CREATE-CAPTURE", "PASS: 16 deterministic 512x240 frames; manager empty/one/full predicates, recovered 20-vblank selector pulse, six-vblank bank scroll, articulated ZDOM/mocap phase, required-name/appearance/final-ratings layers, and all three exact FEONLY Delete descriptors; textured PS1 polygon equivalence remains separately pending");
+        trace_.log("CREATE-CAPTURE", "PASS: 21 deterministic 512x240 frames; manager empty/one/full predicates, exact screen-0x22 inline name entry/cancel plus authored Help 2/5, recovered height-relative appearance framing, 20-vblank selector pulse, six-vblank bank scroll, articulated ZDOM/mocap phase, appearance/final-ratings layers, and all three exact FEONLY Delete descriptors; pixel-exact PS1 triangle coverage remains separately pending");
         return 0;
     }
 
@@ -4731,6 +4764,7 @@ private:
             }
             updateReset();
             updateCreatePlayerDelete();
+            updateCreatePlayerHelp();
             if (bottom_select_pending_ &&
                 menu_elapsed_ms_ - bottom_select_flash_start_ms_ >= kBottomSelectFlashMs) {
                 bottom_select_pending_ = false;
@@ -5228,6 +5262,36 @@ private:
         create_player_delete_tick_=tick;
     }
 
+    void createPlayerHelpEvent(Nba97HelpEvent event) {
+        if(event==NBA97_HELP_OPEN_SOUND) playBottomMenuSound(7,"create-name-help-open");
+        else if(event==NBA97_HELP_CLOSE_SOUND) playBottomMenuSound(8,"create-name-help-close");
+        else if(event==NBA97_HELP_RETURNED)
+            trace_.log("CREATE-NAME-HELP","FUN_80040A1C return barrier cleared; inline name transaction resumed unchanged");
+    }
+
+    void updateCreatePlayerHelp() {
+        if(create_player_help_.phase==NBA97_HELP_CLOSED) return;
+        std::uint16_t raw=0;
+        for(auto key:{VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,VK_RETURN,VK_SPACE,VK_ESCAPE,
+                      VK_BACK,VK_F1,int('C'),int('D'),int('F'),int('H'),int('S'),int('V'),int('X')})
+            if(GetAsyncKeyState(key)&0x8000) raw|=createPlayerNameKeyMask(key);
+        createPlayerHelpEvent(nba97_help_tick(&create_player_help_,raw));
+    }
+
+    static std::uint16_t createPlayerNameKeyMask(WPARAM key) {
+        if(key==VK_UP) return 1;
+        if(key==VK_DOWN) return 2;
+        if(key==VK_RIGHT) return 4;
+        if(key==VK_LEFT) return 8;
+        if(key=='D') return 0x10;
+        if(key=='F'||key=='H'||key==VK_F1) return 0x20;
+        if(key=='S'||key==VK_BACK) return 0x40;
+        if(key==VK_RETURN) return 0x80;
+        if(key=='V'||key=='X'||key==VK_ESCAPE) return 0x100;
+        if(key=='C'||key==VK_SPACE) return 0x800;
+        return 0;
+    }
+
     std::uint16_t createPlayerCollegeCount() const {
         std::vector<std::string> schools;
         schools.reserve(roster_database_.players().size());
@@ -5278,6 +5342,105 @@ private:
             rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
         }
         if (create_player_editor_active_) {
+            if (create_player_name_editor_.active) {
+                if(create_player_help_.phase!=NBA97_HELP_CLOSED) {
+                    createPlayerHelpEvent(nba97_help_input(&create_player_help_,
+                        createPlayerNameKeyMask(key)));
+                    rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
+                }
+                int sound = 0;
+                const char* action = nullptr;
+                const auto retail_name_input=[&](Nba97CreateNameCommand command) {
+                    const auto before_editor=create_player_editor_;
+                    const auto before_name=create_player_name_editor_;
+                    const auto result=nba97_create_name_input(&create_player_editor_,
+                        &create_player_name_editor_,command);
+                    const auto& value=create_player_name_editor_.field==NBA97_CREATE_FIRST_NAME?
+                        create_player_editor_.first_name:create_player_editor_.last_name;
+                    const int retail_limit=menu_font_.textWidth("Weatherspoon")-6;
+                    const int rejected_width=menu_font_.textWidth(value);
+                    if(result&&rejected_width>retail_limit) {
+                        create_player_editor_=before_editor;
+                        create_player_name_editor_=before_name;
+                        trace_.log("CREATE-NAME-WIDTH",
+                            "FUN_8004C488 rejected edit: rendered width="+
+                            std::to_string(rejected_width)+" limit="+
+                            std::to_string(retail_limit)+
+                            " (Weatherspoon minus six pixels); prior bytes/cursor restored");
+                    }
+                    return result;
+                };
+                if (key == VK_UP) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_NEXT_CHARACTER);
+                    action = "next-character";
+                } else if (key == VK_DOWN) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_PREVIOUS_CHARACTER);
+                    action = "previous-character";
+                } else if (key == VK_LEFT) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_CURSOR_LEFT);
+                    action = "cursor-left";
+                } else if (key == VK_RIGHT) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_CURSOR_RIGHT);
+                    action = "cursor-right";
+                } else if (key == 'C' || key == VK_SPACE) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_ADD);
+                    action = "Cross/add";
+                } else if (key == 'D') {
+                    sound = retail_name_input(NBA97_CREATE_NAME_DELETE);
+                    action = "Square/delete";
+                } else if (key == 'S' || key == VK_BACK) {
+                    sound = retail_name_input(NBA97_CREATE_NAME_BACKSPACE);
+                    action = key == 'S' ? "R1/backspace" : "host-Backspace convenience";
+                } else if (key == VK_RETURN) {
+                    sound = nba97_create_name_accept(&create_player_editor_,
+                        &create_player_name_editor_);
+                    action = "Start/accept";
+                } else if (key == 'V' || key == 'X' || key == VK_ESCAPE) {
+                    sound = nba97_create_name_cancel(&create_player_editor_,
+                        &create_player_name_editor_);
+                    action = "Circle/cancel-restore";
+                } else if (key == 'F' || key == 'H' || key == VK_F1) {
+                    const auto& descriptor=create_player_help_pack_->descriptor(0x22,1);
+                    createPlayerHelpEvent(nba97_help_open(&create_player_help_,descriptor.rect,0x20));
+                    trace_.log("CREATE-NAME-HELP",
+                        "Triangle -> FUN_80040FCC -> FUN_80040A1C state=0x22 index=1 "
+                        "descriptor=0x800B1F20; authored help 2/5 opened; name snapshot retained");
+                    rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE);
+                    return;
+                } else if (key >= 'A' && key <= 'Z' &&
+                           (GetKeyState(VK_CONTROL) & 0x8000)) {
+                    const auto before_editor=create_player_editor_;
+                    const auto before_name=create_player_name_editor_;
+                    sound = nba97_create_name_set_character(&create_player_editor_,
+                        &create_player_name_editor_, static_cast<char>(key));
+                    const auto& value=create_player_name_editor_.field==NBA97_CREATE_FIRST_NAME?
+                        create_player_editor_.first_name:create_player_editor_.last_name;
+                    if(sound && menu_font_.textWidth(value)>menu_font_.textWidth("Weatherspoon")-6) {
+                        create_player_editor_=before_editor;
+                        create_player_name_editor_=before_name;
+                        trace_.log("CREATE-NAME-WIDTH",
+                            "Ctrl+letter host convenience rejected by retail pixel-width bound");
+                    }
+                    action = "Ctrl+letter host convenience";
+                }
+                if (action != nullptr) {
+                    const auto& name = create_player_name_editor_.field ==
+                        NBA97_CREATE_FIRST_NAME ? create_player_editor_.first_name :
+                        create_player_editor_.last_name;
+                    trace_.log(sound ? "CREATE-NAME-INPUT" : "CREATE-NAME-BOUNDARY",
+                        std::string(action)+" field="+
+                        nba97_create_field_name(create_player_name_editor_.field)+
+                        " cursor="+std::to_string(create_player_name_editor_.cursor)+
+                        " length="+std::to_string(create_player_name_editor_.length)+
+                        " value=\""+name+"\""+
+                        (sound ? " sound="+std::to_string(sound) : " blocked"));
+                    if (sound) playBottomMenuSound(static_cast<std::uint32_t>(sound),
+                                                   "create-name-inline");
+                    rebuildMenuFrame();
+                    if(window_) InvalidateRect(window_,nullptr,FALSE);
+                }
+                return;
+            }
             bool changed = false;
             const auto previous = create_player_editor_.selected_field;
             if (key == VK_UP)
@@ -5288,11 +5451,20 @@ private:
                 changed = nba97_create_editor_adjust(&create_player_editor_, -1) != 0;
             else if (key == VK_RIGHT)
                 changed = nba97_create_editor_adjust(&create_player_editor_, 1) != 0;
-            else if (key == VK_BACK)
-                changed = nba97_create_editor_backspace(&create_player_editor_) != 0;
-            else if (key >= 'A' && key <= 'Z')
-                changed = nba97_create_editor_append_letter(
-                    &create_player_editor_, static_cast<char>(key)) != 0;
+            else if ((key == 'C' || key == VK_SPACE) &&
+                     (create_player_editor_.selected_field == NBA97_CREATE_FIRST_NAME ||
+                      create_player_editor_.selected_field == NBA97_CREATE_LAST_NAME)) {
+                const auto sound=nba97_create_name_begin(&create_player_editor_,
+                    &create_player_name_editor_);
+                trace_.log("CREATE-NAME-OPEN",
+                    "FUN_8004C488 inline editor on screen 0x22 field="+
+                    std::string(nba97_create_field_name(create_player_name_editor_.field))+
+                    " cursor=0 alphabet=56 max=12 sound="+std::to_string(sound)+
+                    "; Start accepts, Circle restores all 13 bytes");
+                if(sound) playBottomMenuSound(static_cast<std::uint32_t>(sound),
+                                               "create-name-open");
+                rebuildMenuFrame(); if(window_)InvalidateRect(window_,nullptr,FALSE); return;
+            }
             else if (key == VK_ESCAPE) {
                 nba97_create_editor_cancel(&create_player_editor_.txn);
                 create_player_editor_active_ = false;
@@ -6141,12 +6313,16 @@ private:
                 : create_player_editor_active_
                     ? nba97::renderCreatePlayerEditor(create_player_editor_, roster_database_,
                         menu_font_, create_player_sprites_, menu_elapsed_ms_,
-                        create_player_preview_.get())
+                        create_player_preview_.get(), &create_player_name_editor_)
                     : nba97::renderCreatePlayerMenu(create_player_menu_, menu_font_,
                         create_player_sprites_, create_player_cards_, menu_elapsed_ms_);
             if(create_player_delete_active_)
                 create_player_delete_assets_->draw(image,create_player_delete_address_,
                     create_player_delete_team_,create_player_delete_prompt_);
+            if(nba97_help_visible(&create_player_help_)) {
+                create_player_help_pack_->draw(image,control_font_,
+                    create_player_help_pack_->descriptor(0x22,1),create_player_help_);
+            }
             menu_frame_=makeFrame(image);
         }
         else if (frontend_page_ == nba97::FrontendPage::ViewRosters) {
@@ -6386,6 +6562,8 @@ private:
     nba97::UserProfileStore profile_store_;
     nba97::CreatedPlayerStore created_player_store_;
     std::unique_ptr<nba97::CreatePlayerDeleteAssets> create_player_delete_assets_;
+    std::unique_ptr<nba97::FrontendHelpPack> create_player_help_pack_;
+    Nba97HelpModal create_player_help_{};
     nba97::UserProfileMenu profile_menu_;
     nba97::FrontendPage frontend_page_ = nba97::FrontendPage::GameSetup;
     nba97::PshFont menu_font_;
@@ -6402,6 +6580,7 @@ private:
     Nba97CreatedPlayerCatalog created_players_{};
     Nba97CreateMenu create_player_menu_{};
     Nba97CreateEditor create_player_editor_{};
+    Nba97CreateNameEditor create_player_name_editor_{};
     bool create_player_editor_active_ = false;
     Nba97CreatedPlayerPicker created_player_picker_{};
     bool created_player_picker_active_ = false;

@@ -1,6 +1,7 @@
 #include "recovered/create_player.h"
 
 #include <cassert>
+#include <array>
 #include <cstring>
 #include <string>
 
@@ -109,6 +110,74 @@ int main() {
     assert(nba97_create_editor_open_new(&editor, &catalog));
     assert(editor.selected_field == NBA97_CREATE_FIRST_NAME);
     assert(editor.height_inches == 63 && editor.weight_pounds == 200);
+    assert(nba97_create_appearance_root_y(63) == -78);
+    assert(nba97_create_appearance_root_y(64) == -83);
+    assert(nba97_create_appearance_root_y(90) == -195);
+    assert(nba97_create_appearance_root_y(0) == -78);
+    assert(nba97_create_appearance_root_y(255) == -195);
+    assert(nba97_create_hair_style_record(0) == 0);
+    assert(nba97_create_hair_style_record(1) == 2);
+    assert(nba97_create_hair_style_record(10) == 11);
+    assert(nba97_create_hair_style_record(11) == 13);
+    assert(nba97_create_hair_style_record(12) == 14);
+    assert(nba97_create_hair_style_record(13) == 0);
+    assert(nba97_create_facial_hair_record(0) == 0);
+    assert(nba97_create_facial_hair_record(1) == 15);
+    assert(nba97_create_facial_hair_record(8) == 22);
+    assert(nba97_create_facial_hair_record(9) == 0);
+    Nba97CreateNameEditor name_editor{};
+    assert(nba97_create_name_begin(&editor, &name_editor) == 6);
+    assert(name_editor.active && name_editor.field == NBA97_CREATE_FIRST_NAME &&
+           name_editor.cursor == 0 && name_editor.length == 1 &&
+           std::string(editor.first_name) == "A");
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_PREVIOUS_CHARACTER) == 4);
+    assert(editor.first_name[0] == '_');
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_NEXT_CHARACTER) == 3 && editor.first_name[0] == 'A');
+    for (int step = 0; step < 56; ++step)
+        assert(nba97_create_name_input(&editor, &name_editor,
+            NBA97_CREATE_NAME_NEXT_CHARACTER) == 3);
+    assert(editor.first_name[0] == 'A');
+    assert(nba97_create_name_cancel(&editor, &name_editor) == 10);
+    assert(!name_editor.active && editor.first_name[0] == '\0');
+
+    std::memcpy(editor.first_name, "AB", 3);
+    std::array<char,13> original_name_bytes{};
+    std::memcpy(original_name_bytes.data(),editor.first_name,13);
+    assert(nba97_create_name_begin(&editor, &name_editor) == 6);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_CURSOR_LEFT) == 2 && name_editor.cursor == 1);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_CURSOR_RIGHT) == 4 && name_editor.cursor == 0);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_DELETE) == 5 && std::string(editor.first_name) == "B");
+    assert(nba97_create_name_cancel(&editor, &name_editor) == 10);
+    assert(std::memcmp(editor.first_name, original_name_bytes.data(), 13) == 0);
+
+    std::memset(editor.first_name, 0, sizeof(editor.first_name));
+    assert(nba97_create_name_begin(&editor, &name_editor) == 6);
+    for (int character = 1; character < 12; ++character)
+        assert(nba97_create_name_input(&editor, &name_editor,
+            NBA97_CREATE_NAME_ADD) == 6);
+    assert(name_editor.length == 12 && name_editor.cursor == 11 &&
+           std::strlen(editor.first_name) == 12);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_ADD) == 0);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_BACKSPACE) == 5 && name_editor.length == 11 &&
+           name_editor.cursor == 10);
+    assert(nba97_create_name_accept(&editor, &name_editor) == 9);
+    assert(!name_editor.active);
+
+    editor.selected_field = NBA97_CREATE_LAST_NAME;
+    std::memset(editor.last_name, 0, sizeof(editor.last_name));
+    assert(nba97_create_name_begin(&editor, &name_editor) == 6);
+    assert(nba97_create_name_input(&editor, &name_editor,
+        NBA97_CREATE_NAME_PREVIOUS_CHARACTER) == 4 && editor.last_name[0] == '_');
+    assert(nba97_create_name_accept(&editor, &name_editor) == 9 &&
+           editor.last_name[0] == ' ');
+    assert(nba97_create_editor_open_new(&editor, &catalog));
     assert(editor.shooting_range_feet == 8);
     for (auto rating : editor.ratings) assert(rating == 50);
     assert(!nba97_create_editor_move(&editor, 1));
@@ -197,6 +266,22 @@ int main() {
     assert(!nba97_create_editor_save(&editor, &catalog));
     nba97_create_editor_cancel(&editor.txn);
     assert(nba97_created_count(&catalog) == 1);
+
+    Nba97CreatedPlayerCatalog inline_catalog{};
+    nba97_created_catalog_init(&inline_catalog);
+    Nba97CreateEditor inline_editor{};
+    Nba97CreateNameEditor inline_name{};
+    assert(nba97_create_editor_open_new(&inline_editor,&inline_catalog));
+    assert(nba97_create_name_begin(&inline_editor,&inline_name)==6);
+    assert(nba97_create_name_accept(&inline_editor,&inline_name)==9);
+    assert(nba97_create_editor_move(&inline_editor,1));
+    assert(nba97_create_name_begin(&inline_editor,&inline_name)==6);
+    assert(nba97_create_name_accept(&inline_editor,&inline_name)==9);
+    assert(nba97_create_editor_save(&inline_editor,&inline_catalog));
+    Nba97CreateEditor inline_reopened{};
+    assert(nba97_create_editor_open_edit(&inline_reopened,&inline_catalog,0));
+    assert(std::string(inline_reopened.first_name)=="A"&&
+           std::string(inline_reopened.last_name)=="A");
 
     return 0;
 }

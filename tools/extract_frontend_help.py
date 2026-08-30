@@ -6,7 +6,8 @@ import struct
 BASE = 0x80015000
 TABLE = 0x800B00E0
 # State, descriptor index, expected record address. Text is never copied to code.
-ROUTES = ((12, 0, 0x800B0F68), (12, 1, 0x800B102C),
+ROUTES = ((34, 1, 0x800B1F20),
+          (12, 0, 0x800B0F68), (12, 1, 0x800B102C),
           (35, 0, 0x800B2194), (36, 0, 0x800B22F0))
 LIMIT = 16384
 
@@ -76,7 +77,7 @@ def main():
     packed = extract(args.overlay.read_bytes())
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(packed)
-    print(f'HELP ASSET 40FCC pointer routes -> {args.output}; records=4 bytes={len(packed)} local-only')
+    print(f'HELP ASSET 40FCC pointer routes -> {args.output}; records={len(ROUTES)} bytes={len(packed)} local-only')
 
 
 if __name__ == '__main__':

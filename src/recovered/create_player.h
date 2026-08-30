@@ -119,6 +119,24 @@ typedef struct Nba97CreateEditor {
     uint16_t college_count;
 } Nba97CreateEditor;
 
+typedef enum Nba97CreateNameCommand {
+    NBA97_CREATE_NAME_NEXT_CHARACTER = 1,
+    NBA97_CREATE_NAME_PREVIOUS_CHARACTER,
+    NBA97_CREATE_NAME_CURSOR_LEFT,
+    NBA97_CREATE_NAME_CURSOR_RIGHT,
+    NBA97_CREATE_NAME_ADD,
+    NBA97_CREATE_NAME_DELETE,
+    NBA97_CREATE_NAME_BACKSPACE
+} Nba97CreateNameCommand;
+
+typedef struct Nba97CreateNameEditor {
+    char original[13];
+    uint8_t field;
+    uint8_t cursor;
+    uint8_t length;
+    uint8_t active;
+} Nba97CreateNameEditor;
+
 typedef struct Nba97CreatedPlayerPicker {
     int16_t slots[NBA97_CREATED_PLAYER_CAPACITY];
     uint8_t count;
@@ -169,12 +187,32 @@ void nba97_create_editor_set_college_count(Nba97CreateEditor* editor,
 void nba97_create_editor_tick(Nba97CreateEditor* editor);
 int nba97_create_editor_append_letter(Nba97CreateEditor* editor, char letter);
 int nba97_create_editor_backspace(Nba97CreateEditor* editor);
+int nba97_create_name_begin(Nba97CreateEditor* editor,
+                            Nba97CreateNameEditor* name_editor);
+/* Returns the retail FUN_8002F124 sound id, or zero if the input is blocked. */
+int nba97_create_name_input(Nba97CreateEditor* editor,
+                            Nba97CreateNameEditor* name_editor,
+                            Nba97CreateNameCommand command);
+int nba97_create_name_set_character(Nba97CreateEditor* editor,
+                                    Nba97CreateNameEditor* name_editor,
+                                    char character);
+int nba97_create_name_accept(Nba97CreateEditor* editor,
+                             Nba97CreateNameEditor* name_editor);
+int nba97_create_name_cancel(Nba97CreateEditor* editor,
+                             Nba97CreateNameEditor* name_editor);
 int nba97_create_editor_valid(const Nba97CreateEditor* editor);
 int nba97_create_editor_save(Nba97CreateEditor* editor,
                              Nba97CreatedPlayerCatalog* catalog);
 const char* nba97_create_field_name(uint8_t field);
 int nba97_create_editor_value(const Nba97CreateEditor* editor,
                               char* output, size_t output_size);
+/* FUN_800355A0: settled appearance-camera root Y after the original
+   thirteen-presentation height-relative close-up adjustment. */
+int16_t nba97_create_appearance_root_y(uint8_t height_inches);
+/* FUN_800626D0's two independent ZDOMHAIR lookup families. Values are the
+   authored record indices; zero means no overlay. */
+uint8_t nba97_create_hair_style_record(uint8_t value);
+uint8_t nba97_create_facial_hair_record(uint8_t value);
 int nba97_created_picker_open(Nba97CreatedPlayerPicker* picker,
                               const Nba97CreatedPlayerCatalog* catalog,
                               uint8_t frontend_state);

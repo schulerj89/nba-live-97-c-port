@@ -605,33 +605,49 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
         name_letter_indices_[letter]=glyph.indices;
         name_letter_widths_[letter]=static_cast<std::uint8_t>(glyph.width);
     }
-    // FUN_8006240C's exact SHPP record maps. Hair overlays use 0xAF as
-    // transparent; facial-hair overlays use the distinct 0xBF marker.
-    constexpr std::array<std::uint32_t,8> hair_records{{15,16,17,18,19,20,21,22}};
-    constexpr std::array<std::uint32_t,12> facial_records{{2,3,4,5,6,7,8,9,10,11,13,14}};
-    constexpr std::array<std::uint32_t,3> hair_palette_a{{35,37,36}};
-    constexpr std::array<std::uint32_t,3> hair_palette_b{{38,40,39}};
+    // FUN_800626D0's exact SHPP record maps. The apparently reversed record
+    // order is intentional: the Hair Style control drives the 0xBF scalp
+    // family at record/context +0x27, while Facial Hair drives the 0xAF face
+    // family at +0x0C.
+    // The AF facial family consumes palette A, while the BF scalp family
+    // consumes palette B. These selectors look counter-intuitive beside the
+    // record order, but are the literal FUN_8006240C pointer tables.
+    constexpr std::array<std::uint32_t,3> hair_palette_a{{38,40,39}};
+    constexpr std::array<std::uint32_t,3> hair_palette_b{{35,37,36}};
     constexpr std::array<std::uint32_t,18> hair_skin_palette_a{{
-        41,42,43,44,45,46,53,54,55,56,57,58,47,48,49,50,51,52}};
-    constexpr std::array<std::uint32_t,18> hair_skin_palette_b{{
         59,60,61,62,63,64,71,72,73,74,75,76,65,66,67,68,69,70}};
+    constexpr std::array<std::uint32_t,18> hair_skin_palette_b{{
+        41,42,43,44,45,46,53,54,55,56,57,58,47,48,49,50,51,52}};
+    const auto facial_a0=hair_textures[hair_palette_a[0]].palette.at(0xa2);
+    const auto facial_a1=hair_textures[hair_palette_a[1]].palette.at(0xa2);
+    const auto scalp_b0=hair_textures[hair_palette_b[0]].palette.at(0xb1);
+    const auto scalp_b1=hair_textures[hair_palette_b[1]].palette.at(0xb1);
+    if(facial_a0==facial_a1||scalp_b0==scalp_b1)
+        throw std::runtime_error(
+            "FUN_800626D0 Hair Color proof samples did not recolor both overlay bands");
+    std::cout<<"[CREATE-HAIR-PALETTE] shared-control=Hair Color"
+             <<" facial-A2="<<facial_a0<<"->"<<facial_a1
+             <<" scalp-B1="<<scalp_b0<<"->"<<scalp_b1
+             <<" indices=stable style/facial masks independent of color\n";
     constexpr std::size_t head_variant_count=8*9*13;
     std::array<IndexedTexture,head_variant_count> head_textures{};
     for(std::uint8_t skin=0;skin<8;++skin)
-        for(std::uint8_t hair=0;hair<=8;++hair)
-            for(std::uint8_t facial=0;facial<=12;++facial) {
+        for(std::uint8_t facial=0;facial<=8;++facial)
+            for(std::uint8_t hair=0;hair<=12;++hair) {
                 auto head=hair_textures[skin&1];
-                if(hair) {
-                    const auto& overlay=hair_textures[hair_records[hair-1]];
+                if(facial) {
+                    const auto& overlay=hair_textures[
+                        nba97_create_facial_hair_record(facial)];
                     for(std::size_t pixel=0;pixel<head.indices.size();++pixel)
                         if(overlay.indices[pixel]!=0xaf)head.indices[pixel]=overlay.indices[pixel];
                 }
-                if(facial) {
-                    const auto& overlay=hair_textures[facial_records[facial-1]];
+                if(hair) {
+                    const auto& overlay=hair_textures[
+                        nba97_create_hair_style_record(hair)];
                     for(std::size_t pixel=0;pixel<head.indices.size();++pixel)
                         if(overlay.indices[pixel]!=0xbf)head.indices[pixel]=overlay.indices[pixel];
                 }
-                head_textures[(skin*9+hair)*13+facial]=std::move(head);
+                head_textures[(skin*9+facial)*13+hair]=std::move(head);
             }
     for(const auto& path:team_paths) {
         Ps1VramTextureAtlas atlas;
@@ -687,6 +703,20 @@ CreatePlayerPreview::CreatePlayerPreview(const std::filesystem::path& asset_root
                         std::copy_n(patch_bs.begin()+0xbd,3,palette.begin()+0xbd);
                     }
                     normalize_runtime_clut(palette);
+                    if(path==team_paths.front()&&variant==0&&decorated) {
+                        constexpr std::array<std::uint16_t,3> expected_a2{{
+                            0x8422,0x8d0a,0x94c8}};
+                        constexpr std::array<std::uint16_t,3> expected_b2{{
+                            0x8821,0x8ce9,0x8844}};
+                        if(palette.at(0xa2)!=expected_a2[hair_color]||
+                           palette.at(0xb2)!=expected_b2[hair_color])
+                            throw std::runtime_error(
+                                "FUN_800626D0 shared Hair Color CLUT fixture mismatch");
+                        std::cout<<"[CREATE-HAIR-CLUT] color="<<int(hair_color)
+                                 <<" facial-A2=0x"<<std::hex<<palette.at(0xa2)
+                                 <<" scalp-B2=0x"<<palette.at(0xb2)<<std::dec
+                                 <<" texture-variant=independent\n";
+                    }
                     const auto palette_variant=static_cast<std::uint16_t>(
                         (variant*3+hair_color)*2+decorated);
                     atlas.uploadClut(std::move(palette),512,501,palette_variant);
@@ -844,8 +874,13 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
     // while locking context+0xA8 to 0x3F0. A live no$psx capture after only
     // forcing context+0x4E=0 confirms raw +8/+C/+10 =
     // 4240/33792/-2496, or {132,-78,1056} after the runtime's >>5 boundary.
+    // The Y component is not constant: FUN_800355A0 subtracts
+    // 0xC0 + ((recordHeight << 8) / 0x18) on each of those 13 presentations.
+    // Keep that recovered fixed-point relationship so taller players retain
+    // the same retail head framing instead of growing out of the close-up.
     runtime_config.root_position=appearance_field?
-        ZdomfWorldVec3{132,-78,1056}:ZdomfWorldVec3{256,0,640};
+        ZdomfWorldVec3{132,nba97_create_appearance_root_y(editor.height_inches),1056}:
+        ZdomfWorldVec3{256,0,640};
     runtime_config.root_yaw=appearance_field?0x3f0:
         static_cast<std::int16_t>(motion.root_yaw);
     runtime_config.apply_frontend_view=true;
@@ -954,16 +989,16 @@ void CreatePlayerPreview::draw(PshImage& image,const Nba97CreateEditor& editor,
     const auto skin_variant=static_cast<std::uint16_t>(
         std::min<std::size_t>(editor.skin_tone,7));
     const auto hair_variant=static_cast<std::uint16_t>(
-        std::min<std::size_t>(editor.hair_style,8));
+        std::min<std::size_t>(editor.hair_style,12));
     const auto facial_variant=static_cast<std::uint16_t>(
-        std::min<std::size_t>(editor.facial_hair,12));
+        std::min<std::size_t>(editor.facial_hair,8));
     const auto hair_color_variant=static_cast<std::uint16_t>(
         std::min<std::size_t>(editor.hair_color,2));
     const auto decorated=static_cast<std::uint16_t>(hair_variant||facial_variant);
     const auto palette_variant=static_cast<std::uint16_t>(
         (skin_variant*3+hair_color_variant)*2+decorated);
     const auto texture_variant=static_cast<std::uint16_t>(
-        (skin_variant*9+hair_variant)*13+facial_variant);
+        (skin_variant*9+facial_variant)*13+hair_variant);
     const bool run_texture_audit=!texture_audit_logged_&&!appearance_field&&
         elapsed_ms==0&&team==0&&
         skin_variant==1&&hair_variant==1&&hair_color_variant==1&&facial_variant==1;

@@ -6,7 +6,8 @@ from extract_frontend_help import BASE, TABLE, ROUTES, extract, record_at
 
 def fixture():
     data = bytearray(0xc0000)
-    tables = {12: BASE+0x100, 35: BASE+0x120, 36: BASE+0x140}
+    tables = {12: BASE+0x100, 34: BASE+0x120,
+              35: BASE+0x140, 36: BASE+0x160}
     for state, index, address in ROUTES:
         struct.pack_into('<I', data, TABLE-BASE+state*4, tables[state])
         struct.pack_into('<I', data, tables[state]-BASE+index*4, address)
@@ -20,9 +21,9 @@ class HelpExtractionTests(unittest.TestCase):
     def test_routes_and_encoded_payload(self):
         data = fixture()
         result = extract(data)
-        self.assertEqual(result[:8], b'N97H\x01\0\x04\0')
+        self.assertEqual(result[:8], b'N97H\x01\0\x05\0')
         self.assertIn(b'\x9a\x9b\x1f\x12test', result)
-        self.assertEqual(result.count(b'SYNTHETIC'), 4)
+        self.assertEqual(result.count(b'SYNTHETIC'), 5)
 
     def test_pointer_bounds_and_wrong_route(self):
         for pointer in (0, 0xffffffff, BASE+1):

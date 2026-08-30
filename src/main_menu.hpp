@@ -408,7 +408,8 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const PshFont& font,
                                   const MenuSpritePack& sprites,
                                   std::uint32_t elapsed_ms,
-                                  const CreatePlayerPreview* preview = nullptr);
+                                  const CreatePlayerPreview* preview = nullptr,
+                                  const Nba97CreateNameEditor* name_editor = nullptr);
 
 PshImage renderCreatedPlayerPicker(const Nba97CreatedPlayerPicker& picker,
                                    const Nba97CreatedPlayerCatalog& catalog,

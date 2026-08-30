@@ -327,9 +327,9 @@ int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
     }
     case NBA97_CREATE_YEARS_PRO: editor->years_pro = clamp_u8((int)editor->years_pro + step, 0, 25); break;
     case NBA97_CREATE_SKIN_TONE: editor->skin_tone = clamp_u8((int)editor->skin_tone + step, 0, 7); break;
-    case NBA97_CREATE_HAIR_STYLE: editor->hair_style = clamp_u8((int)editor->hair_style + step, 0, 15); break;
-    case NBA97_CREATE_HAIR_COLOR: editor->hair_color = clamp_u8((int)editor->hair_color + step, 0, 7); break;
-    case NBA97_CREATE_FACIAL_HAIR: editor->facial_hair = clamp_u8((int)editor->facial_hair + step, 0, 15); break;
+    case NBA97_CREATE_HAIR_STYLE: editor->hair_style = clamp_u8((int)editor->hair_style + step, 0, 12); break;
+    case NBA97_CREATE_HAIR_COLOR: editor->hair_color = clamp_u8((int)editor->hair_color + step, 0, 2); break;
+    case NBA97_CREATE_FACIAL_HAIR: editor->facial_hair = clamp_u8((int)editor->facial_hair + step, 0, 8); break;
     case NBA97_CREATE_SHOOTING_RANGE: editor->shooting_range_feet = clamp_u8((int)editor->shooting_range_feet + step, 8, 35); break;
     default:
         if (editor->selected_field < NBA97_CREATE_ENDURANCE ||
@@ -339,6 +339,35 @@ int nba97_create_editor_adjust(Nba97CreateEditor* editor, int direction) {
         break;
     }
     return 1;
+}
+
+int16_t nba97_create_appearance_root_y(uint8_t height_inches) {
+    int height_offset;
+    int per_presentation;
+    int raw_y;
+
+    /* The retail player record stores height as 0..27 and the display path
+       adds 0x3F. Keep the MIPS integer operation order: divide the 8.8 height
+       term first, apply the correction for 13 presentations, then perform the
+       runtime's arithmetic >>5 boundary. */
+    if (height_inches < 63) height_inches = 63;
+    if (height_inches > 90) height_inches = 90;
+    height_offset = (int)height_inches - 63;
+    per_presentation = 0xc0 + ((height_offset << 8) / 0x18);
+    raw_y = -13 * per_presentation;
+    return (int16_t)(-((-raw_y + 31) / 32));
+}
+
+uint8_t nba97_create_hair_style_record(uint8_t value) {
+    static const uint8_t records[12] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14};
+    if (value == 0 || value > 12) return 0;
+    return records[value - 1];
+}
+
+uint8_t nba97_create_facial_hair_record(uint8_t value) {
+    static const uint8_t records[8] = {15, 16, 17, 18, 19, 20, 21, 22};
+    if (value == 0 || value > 8) return 0;
+    return records[value - 1];
 }
 
 static char* selected_name(Nba97CreateEditor* editor, size_t* capacity) {
@@ -378,6 +407,138 @@ int nba97_create_editor_backspace(Nba97CreateEditor* editor) {
     if (length == 0) return 0;
     name[length - 1] = '\0';
     return 1;
+}
+
+static char* active_name(Nba97CreateEditor* editor, uint8_t field) {
+    if (editor == NULL) return NULL;
+    if (field == NBA97_CREATE_FIRST_NAME) return editor->first_name;
+    if (field == NBA97_CREATE_LAST_NAME) return editor->last_name;
+    return NULL;
+}
+
+static int name_alphabet_index(char character) {
+    static const char alphabet[] =
+        "abcdefghijklmnopqrstuvwxyz.-'_ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const char* found = strchr(alphabet, character);
+    return found == NULL ? 0 : (int)(found - alphabet);
+}
+
+int nba97_create_name_begin(Nba97CreateEditor* editor,
+                            Nba97CreateNameEditor* name_editor) {
+    char* name;
+    size_t index;
+    if (editor == NULL || name_editor == NULL) return 0;
+    name = active_name(editor, editor->selected_field);
+    if (name == NULL) return 0;
+    memset(name_editor, 0, sizeof(*name_editor));
+    memcpy(name_editor->original, name, sizeof(name_editor->original));
+    name_editor->field = editor->selected_field;
+    name_editor->active = 1;
+    for (index = 0; index < 12 && name[index] != '\0'; ++index)
+        if (name[index] == ' ') name[index] = '_';
+    if (index == 0 || name[0] == '_') {
+        name[0] = 'A';
+        name[1] = '\0';
+        index = 1;
+    }
+    name_editor->length = (uint8_t)index;
+    name_editor->cursor = 0;
+    return 6;
+}
+
+int nba97_create_name_input(Nba97CreateEditor* editor,
+                            Nba97CreateNameEditor* name_editor,
+                            Nba97CreateNameCommand command) {
+    static const char alphabet[] =
+        "abcdefghijklmnopqrstuvwxyz.-'_ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    char* name;
+    int alphabet_index;
+    if (name_editor == NULL || !name_editor->active) return 0;
+    name = active_name(editor, name_editor->field);
+    if (name == NULL || name_editor->length == 0) return 0;
+    alphabet_index = name_alphabet_index(name[name_editor->cursor]);
+    switch (command) {
+    case NBA97_CREATE_NAME_NEXT_CHARACTER:
+        alphabet_index = (alphabet_index + 1) % 56;
+        name[name_editor->cursor] = alphabet[alphabet_index];
+        return 3;
+    case NBA97_CREATE_NAME_PREVIOUS_CHARACTER:
+        alphabet_index = (alphabet_index + 55) % 56;
+        name[name_editor->cursor] = alphabet[alphabet_index];
+        return 4;
+    case NBA97_CREATE_NAME_CURSOR_LEFT:
+        if (name_editor->length < 2) return 0;
+        name_editor->cursor = name_editor->cursor == 0 ?
+            (uint8_t)(name_editor->length - 1) : (uint8_t)(name_editor->cursor - 1);
+        return 2;
+    case NBA97_CREATE_NAME_CURSOR_RIGHT:
+        if (name_editor->length < 2) return 0;
+        name_editor->cursor = (uint8_t)((name_editor->cursor + 1) % name_editor->length);
+        return 4;
+    case NBA97_CREATE_NAME_ADD:
+        if (name_editor->cursor == 11) return 0;
+        ++name_editor->cursor;
+        if (name_editor->cursor == name_editor->length) {
+            name[name_editor->cursor] = 'a';
+            ++name_editor->length;
+            name[name_editor->length] = '\0';
+        }
+        return 6;
+    case NBA97_CREATE_NAME_DELETE:
+        if (name_editor->length < 2) return 0;
+        memmove(name + name_editor->cursor, name + name_editor->cursor + 1,
+                (size_t)(name_editor->length - name_editor->cursor));
+        --name_editor->length;
+        if (name_editor->cursor == name_editor->length) --name_editor->cursor;
+        return 5;
+    case NBA97_CREATE_NAME_BACKSPACE:
+        if (name_editor->cursor == 0) return 0;
+        memmove(name + name_editor->cursor - 1, name + name_editor->cursor,
+                (size_t)(name_editor->length - name_editor->cursor + 1));
+        --name_editor->cursor;
+        --name_editor->length;
+        return 5;
+    default:
+        return 0;
+    }
+}
+
+int nba97_create_name_set_character(Nba97CreateEditor* editor,
+                                    Nba97CreateNameEditor* name_editor,
+                                    char character) {
+    char* name;
+    if (name_editor == NULL || !name_editor->active ||
+        !isalpha((unsigned char)character)) return 0;
+    name = active_name(editor, name_editor->field);
+    if (name == NULL) return 0;
+    name[name_editor->cursor] = (char)toupper((unsigned char)character);
+    if (name_editor->cursor < 11)
+        nba97_create_name_input(editor, name_editor, NBA97_CREATE_NAME_ADD);
+    return 6;
+}
+
+int nba97_create_name_accept(Nba97CreateEditor* editor,
+                             Nba97CreateNameEditor* name_editor) {
+    char* name;
+    uint8_t index;
+    if (name_editor == NULL || !name_editor->active) return 0;
+    name = active_name(editor, name_editor->field);
+    if (name == NULL) return 0;
+    for (index = 0; index < name_editor->length; ++index)
+        if (name[index] == '_' || name[index] == '=') name[index] = ' ';
+    name_editor->active = 0;
+    return 9;
+}
+
+int nba97_create_name_cancel(Nba97CreateEditor* editor,
+                             Nba97CreateNameEditor* name_editor) {
+    char* name;
+    if (name_editor == NULL || !name_editor->active) return 0;
+    name = active_name(editor, name_editor->field);
+    if (name == NULL) return 0;
+    memcpy(name, name_editor->original, sizeof(name_editor->original));
+    name_editor->active = 0;
+    return 10;
 }
 
 int nba97_create_editor_valid(const Nba97CreateEditor* editor) {

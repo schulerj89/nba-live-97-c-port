@@ -104,7 +104,12 @@ try {
         'empty-title-phase.ppm',
         'editor-first-required.ppm',
         'editor-selector-gold.ppm',
+        'editor-name-inline-open.ppm',
+        'editor-name-inline-cycle.ppm',
+        'editor-name-help-modal.ppm',
         'editor-appearance-layer.ppm',
+        'editor-appearance-height-64.ppm',
+        'editor-appearance-height-90.ppm',
         'editor-model-motion-phase.ppm',
         'editor-layer-scroll-enter.ppm',
         'editor-layer-scroll-mid.ppm',
@@ -136,7 +141,7 @@ try {
 
     python (Join-Path $repo 'tools\verify_create_player_frames.py') $first
     if ($LASTEXITCODE -ne 0) { throw 'Create Player localized frame checks failed.' }
-    Write-Host "CREATE PLAYER: PASS - 16/16 scenarios reproduced byte-identically across two runs; selector pulse, model motion, and three scroll phases are pixel-distinct."
+    Write-Host "CREATE PLAYER: PASS - 21/21 scenarios reproduced byte-identically across two runs; inline name entry and its authored Help modal, height-relative appearance framing, selector pulse, model motion, and three scroll phases are deterministic."
     Write-Host 'CREATE PLAYER MODEL: PASS - retail NCLIP selection and merged 251-primary/81-part FT3 streams reproduce the live ordering-table path.'
     Write-Host 'CREATE PLAYER TEXTURE: PASS - packet-selected shared/team/head/number/name/shoe VRAM uploads have zero missing samples; exact face-1 palette trace matches live RAM.'
     Write-Host "Evidence: $root"

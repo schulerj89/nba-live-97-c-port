@@ -106,6 +106,7 @@ verified [no$psx keyboard mappings](docs/nopsx_controls.md).
 | Re-order | Arrows browse rows/teams; `C`/`Space` picks; `X`/`Escape` cancels; `Enter` accepts from first selection |
 | Trade Players | Arrows browse the active list; `C`/`Space` picks/trades; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
 | Sign Free Agent | `Up/Down` browses the active list; `Left/Right` changes receiver; `C` picks/signs into an empty slot; `X` cancels; `Enter` saves from first selection; `D` View, `S` Compare, `F` Help |
+| Create Player name | `C` enters/adds; `Up/Down` cycles the retail alphabet; `Left/Right` moves the cursor; `D` deletes; `S` backspaces; `Enter` accepts; `V`, `X`, or `Escape` cancels and restores the prior name. `Ctrl+A`..`Ctrl+Z` is an optional host typing convenience. |
 | Cool Facts | `Enter` plays; `S` stops |
 | Help | `H` or `F1` |
 

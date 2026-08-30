@@ -1592,7 +1592,8 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
                                   const PshFont& font,
                                   const MenuSpritePack& sprites,
                                   std::uint32_t elapsed_ms,
-                                  const CreatePlayerPreview* preview) {
+                                  const CreatePlayerPreview* preview,
+                                  const Nba97CreateNameEditor* name_editor) {
     PshImage image;
     image.width = kWidth;
     image.height = kHeight;
@@ -1607,12 +1608,12 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
     // the bottom border and HELP strip even when every model packet matched.
     if (preview != nullptr) preview->draw(image, editor, elapsed_ms);
     for (const auto& border : std::array<std::tuple<const char*, int, int>, 10>{{
-        {"brte",0,5},{"brtf",128,5},{"brtg",256,5},{"brth",384,5},
+        {"brta",0,5},{"brtb",128,5},{"brtc",256,5},{"brtd",384,5},
         {"brle",0,65},{"brri",476,65},{"brbe",0,185},{"brbf",128,185},
         {"brbg",256,185},{"brbh",384,185}}})
         blitBlueBorder(image, sprites, std::get<0>(border),
                        std::get<1>(border), std::get<2>(border));
-    blitJumbledTitleSprite(image, sprites, "ba05", 35, 10, elapsed_ms);
+    blitJumbledTitleSprite(image, sprites, "ba05", 30, 10, elapsed_ms);
     blitAt(image, sprites, "help", 235, 217);
 
     /* FUN_8004DE08/FUN_8004DEC4 start a 20-vblank transition from the
@@ -1662,12 +1663,27 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
         if (selected) drawText(image, font, ">", label_x - 17, y, 1, red, green, blue);
         drawText(image, font, std::string(nba97_create_field_name(field)) + ":",
                  label_x, y, 1, red, green, blue);
-        drawText(image, font, valueFor(field), value_x, y, 1,
-                 red, green, blue);
+        const auto row_value=valueFor(field);
+        if (name_editor != nullptr && name_editor->active &&
+            name_editor->field == field && name_editor->cursor < row_value.size()) {
+            // FUN_8004C488 does not open a child sprite or draw a caret. It
+            // styles one character in the existing value text object and
+            // temporarily renders the authored blank '_' as '='.
+            const auto prefix=row_value.substr(0,name_editor->cursor);
+            auto active=row_value.substr(name_editor->cursor,1);
+            if(active=="_")active="=";
+            const auto suffix=row_value.substr(name_editor->cursor+1);
+            drawText(image,font,prefix,value_x,y,1,225,225,225);
+            const int active_x=value_x+font.textWidth(prefix);
+            drawText(image,font,active,active_x,y,1,red,green,blue);
+            drawText(image,font,suffix,active_x+font.textWidth(active),y,1,225,225,225);
+        } else {
+            drawText(image, font, row_value, value_x, y, 1, red, green, blue);
+        }
     };
 
-    drawRow(NBA97_CREATE_FIRST_NAME, 88);
-    drawRow(NBA97_CREATE_LAST_NAME, 103);
+    drawRow(NBA97_CREATE_FIRST_NAME, 90, 60, 210);
+    drawRow(NBA97_CREATE_LAST_NAME, 106, 60, 210);
     const auto drawBank = [&](int first, int offset_y) {
         for (int row = 0; row < 4; ++row) {
             const int y = 133 + row * 15 + offset_y;
@@ -1701,6 +1717,19 @@ PshImage renderCreatePlayerEditor(const Nba97CreateEditor& editor,
             drawText(image, font, std::to_string(average(1 + row * 4)), 428,
                      133 + row * 15, 1, 225, 225, 225);
         }
+    }
+    const bool editing_name=name_editor!=nullptr&&name_editor->active;
+    if(editing_name||editor.selected_field==NBA97_CREATE_FIRST_NAME||
+       editor.selected_field==NBA97_CREATE_LAST_NAME) {
+        const auto field=editing_name?name_editor->field:editor.selected_field;
+        const auto* value=field==NBA97_CREATE_FIRST_NAME?
+            editor.first_name:editor.last_name;
+        drawCenteredText(image,font,
+            editing_name ? std::string("press START to accept ")+
+                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name."
+            : std::string("press C to ")+(value[0]?"edit ":"enter ")+
+                (field==NBA97_CREATE_FIRST_NAME?"first":"last")+" name.",
+            256,196,1,225,225,225,false,elapsed_ms,100);
     }
     return image;
 }
