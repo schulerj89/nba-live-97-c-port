@@ -11,6 +11,13 @@ MATCH_FUNCTIONS = {("gameonly", "0x80063D58"):97, ("gameonly", "0x800655B0"):156
                    ("feonly", "0x8003E7A8"):45, ("feonly", "0x8003E698"):31,
                    ("feonly", "0x8003E714"):37, ("feonly", "0x8003E620"):15,
                    ("feonly", "0x8003A0D8"):20}
+INPUT_FUNCTIONS = {("feonly", "0x8003B194"):("0x8003B1E8",21),
+                   ("feonly", "0x8003F7C8"):("0x80040A1C",1173)}
+INPUT_REFERENCES = {("team_select.json", "0x8003AE4C"):210,
+                    ("team_select.json", "0x8003D930"):828,
+                    ("team_select.json", "0x8004F934"):41,
+                    ("user_setup.json", "0x80037010"):1716,
+                    ("user_setup.json", "0x80036CA0"):42}
 
 
 def read(path):
@@ -60,6 +67,32 @@ def metadata():
     require(seen == MATCH_FUNCTIONS and totals == match["instruction_denominators"] ==
             {"roster_dependency":253, "rules_dependency":148}, "match setup denominator drift")
     require(match["evidence"]["original_runtime"] == "pending", "match original evidence needs explicit review")
+    inputs = read(ROOT / "config/decomp/frontend_input.json")
+    seen, totals = {}, {}
+    for f in inputs["functions"]:
+        key = (f["binary"], f["address"])
+        require(key not in seen, "frontend input double-counted function")
+        seen[key] = (f["end_exclusive"], f["instructions_total"])
+        require(f["instructions_accounted"] == 0 and f["native_owner"] and
+                f["remaining_uncertainty"] and f["tests_evidence"], "frontend input ownership/credit drift")
+        require(int(f["end_exclusive"],16)-int(f["address"],16) == 4*f["instructions_total"],
+                "frontend input full source extent drift")
+        totals[f["scope"]] = totals.get(f["scope"],0)+f["instructions_total"]
+    require(seen == INPUT_FUNCTIONS and totals == inputs["instruction_denominators"] ==
+            {"shared_caller":1194}, "frontend input full-function denominator drift")
+    references = {}
+    inventories = {"team_select.json":ledger, "user_setup.json":user}
+    for ref in inputs["shared_inventory_references"]:
+        key = (ref["ledger"], ref["address"])
+        require(ref["binary"] == "feonly" and key in INPUT_REFERENCES and key not in references,
+                "frontend input duplicate/unknown shared reference")
+        owner = next((f for f in inventories[ref["ledger"]]["functions"] if f["address"] == ref["address"]),None)
+        require(owner and owner["instructions_total"] == ref["instructions_total"], "shared owner denominator drift")
+        references[key] = ref["instructions_total"]
+    require(references == INPUT_REFERENCES, "frontend input shared references drifted")
+    require(all(inputs["evidence"][key] == "pending" for key in
+                ("original_runtime","original_visual_timing_audio","live_physical_walkthrough")),
+            "frontend input original evidence needs explicit review")
     scenarios = read(ROOT / "config/decomp/team_select_scenarios.json")
     ids = [s["id"] for s in scenarios["native_frames"]]
     require(len(ids) == len(set(ids)), "duplicate scenario")
@@ -172,6 +205,8 @@ def capture(first, second, contract, fixture):
         print("TEAM HISTORICAL RANK CACHE PENDING: pass --original-ranks with independently captured private fixture")
     for root in (first, second):
         trace = (root.parent / "trace.log").read_text()
+        require(trace.count("role=setup-selector") == 2 and trace.count("SETUP-EXIT-WAIT") == 2 and
+                trace.count("USER-EXIT-WAIT") == 5, "Setup/Cancel sound and dispatcher barriers")
         require(trace.count("role=team-help-open") == 2 and trace.count("role=team-help-close") == 2, "Help tick/handler sound events")
         require(trace.count("role=user-help-open")==2 and trace.count("role=user-help-close")==2,"User Help sound events")
         require(trace.count("role=user-dialog-confirm")==2 and trace.count("role=user-dialog-close")==6,
@@ -183,7 +218,7 @@ def capture(first, second, contract, fixture):
         require("TEAM-HANDOFF" in trace and "USER-ENTRY" in trace and
                 "MATCH-HANDOFF-PENDING" in trace and "TEAM-CAPTURE PASS:" in trace, "missing boundary/pass trace")
     print(f"TEAM NATIVE PASS: {len(states)}/{len(states)} deterministic frames + host state + isolated saved-roster adapter")
-    print("PENDING: original state3/5 runtime, visuals/timing/audio, physical controls, topology debounce and gameplay")
+    print("PENDING: original state3/5 runtime, visuals/timing/audio, physical controls, text/arrow lifecycle, topology rebuild visibility and gameplay")
 
 
 def main():

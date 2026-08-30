@@ -20,8 +20,9 @@ struct UserSetupAction {
 class UserSetupSession {
 public:
     void open(const std::array<uint8_t,8>& initial_assignments,
-              const std::vector<UserProfile>& profiles,int32_t clock,uint16_t prior_mask=0x80);
+              const std::vector<UserProfile>& profiles,int32_t clock,uint16_t prior_mask=0x80,uint8_t prior_controller=0);
     void setControllers(unsigned topology,uint8_t connected);
+    void primeEntryTopology(); // Prepare only the first outer observation for initial rendering.
     void key(unsigned controller,uint16_t mask,bool down);
     void releaseKeys() noexcept {masks_={};}
     void configureEditor(const std::array<char,68>& alphabet,std::function<int(const char*)> width);
@@ -39,7 +40,11 @@ public:
     const Nba97UserNames& names() const {return names_;}
     const Nba97HelpModal& help() const {return help_;}
     unsigned helpIndex() const {return help_index_;}
-    unsigned topology() const {return topology_;}
+    unsigned topology() const {return topology_.active;}
+    int topologyCountdown() const {return topology_.countdown;}
+    uint16_t priorMask() const {return prior_mask_;}
+    uint8_t priorController() const {return prior_controller_;}
+    bool cancelReady() const {return nba97_user_setup_cancel_ready(&state_,masks_.data(),connected_)!=0;}
     uint8_t connected() const {return connected_;}
     uint16_t raw(unsigned controller) const {return masks_.at(controller);}
     const std::array<uint64_t,20>& profileIds() const {return ids_;}
@@ -55,11 +60,13 @@ private:
     std::array<Nba97UserRepeat,8> repeat_{};
     std::array<uint16_t,8> masks_{};
     Nba97HelpModal help_{};
-    unsigned topology_=0,help_index_=0,help_controller_=0;
+    Nba97UserTopology topology_{99,-1};
+    unsigned observed_topology_=0,help_index_=0,help_controller_=0;
     uint8_t connected_=1;
     int32_t last_pass_=0;
     bool initialized_=false;
     bool continuing_pass_=false;
+    bool entry_topology_primed_=false;
     unsigned next_row_=0;
     std::array<char,68> editor_alphabet_{};
     std::function<int(const char*)> editor_width_;
@@ -67,6 +74,7 @@ private:
     Nba97ResetPrompt dialog_{};
     unsigned dialog_controller_=0;
     uint16_t prior_mask_=0x80;
+    uint8_t prior_controller_=0;
     std::array<Nba97ReorderTint,8> editor_tints_{};
 };
 }

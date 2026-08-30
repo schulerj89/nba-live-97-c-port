@@ -32,7 +32,7 @@
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
     "native_unit": "tests/match_snapshot_test.cpp and tests/match_controls_test.cpp",
-    "host_integration": "62 isolated Team Select/User Setup frames, two owned snapshot artifacts and explicit unsupported special-team refusal",
+    "host_integration": "76 isolated Team Select/User Setup frames, two owned snapshot artifacts and explicit unsupported special-team refusal",
     "original_isolated_instructions": "private raw-MIPS source oracle;544 roster and768 rule comparisons,1272 guard/alias checks,13 option mapping checks; no mismatches",
     "original_runtime": "pending",
     "original_visual_timing_audio": "pending",

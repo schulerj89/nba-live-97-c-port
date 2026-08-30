@@ -10,11 +10,11 @@
   },
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
-    "native_unit": "tests/team_select_test.cpp and tests/team_ratings_test.cpp",
+    "native_unit": "tests/team_select_test.cpp, tests/team_select_poll_test.cpp and tests/team_ratings_test.cpp",
     "host_integration": "scripts/verify_team_select.ps1; synthetic handler input, isolated saves",
     "original_team_select_runtime": "pending",
     "original_historical_rank_cache": "145/145 scores and145/145 ranks match cached original FEONLY RAM; not a state3 capture",
-    "native_rendering": "62 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
+    "native_rendering": "76 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "state5_confirmation": "assignment/editor/Help/warnings/delete, v2 transactions and owned partial snapshot implemented; see user_setup.json and match_setup.json; original runtime and gameplay pending"
@@ -130,12 +130,13 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 210,
-      "native_owner": "pending raw pad polling/repeat/chord owner",
+      "native_owner": "nba97_team_poll_prepare/presented; bounded physical-pad history/repeat path",
       "shared_dependencies": [],
       "tests_evidence": [
-        "docs/team_select_workflow.md"
+        "tests/team_select_poll_test.cpp",
+        "docs/frontend_input_workflow.md"
       ],
-      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+      "remaining_uncertainty": "Queued tokens, complete state0 polling/history, actual selected-text movement, driver/cache refresh and original phase remain pending; full210 denominator and zero credit retained."
     },
     {
       "address": "0x8003D434",
@@ -169,12 +170,14 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 828,
-      "native_owner": "handleTeamSelectKey adapter; full descriptor loop pending",
+      "native_owner": "dispatchTeamSelect/updateTeamSelect; nba97_team_poll_caller_wait/finish_callback/exit; exact state0 Start fragment",
       "shared_dependencies": [],
       "tests_evidence": [
-        "docs/team_select_workflow.md"
+        "tests/team_select_poll_test.cpp",
+        "config/decomp/team_select_scenarios.json",
+        "docs/frontend_input_workflow.md"
       ],
-      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+      "remaining_uncertainty": "Other descriptor routes, complete state0 loop, text/arrow allocation and cleanup, GPU/absolute presentation phase and original runtime remain pending; full828 denominator and zero credit retained."
     },
     {
       "address": "0x8003F36C",
@@ -378,7 +381,7 @@
       "scope": "team_select_owner",
       "instructions_accounted": 0,
       "instructions_total": 25,
-      "native_owner": "nba97_team_select_input / handleTeamSelectKey",
+      "native_owner": "nba97_team_select_input / dispatchTeamSelect",
       "shared_dependencies": [
         "0x8003D930",
         "0x80039574"

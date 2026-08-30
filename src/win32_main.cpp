@@ -16,6 +16,7 @@
 #include "user_setup_session.hpp"
 #include "match_assets.hpp"
 #include "match_snapshot.hpp"
+#include "recovered/team_select_poll.h"
 #include "png_image.hpp"
 #include "player_photo_loader.hpp"
 #include "frontend_title.hpp"
@@ -793,26 +794,59 @@ private:
                 ",\"dialog_choice\":"<<unsigned(user_setup_.dialogState().choice)<<
                 ",\"profile_count\":"<<profile_store_.profiles().size()<<
                 ",\"profile_generation\":"<<profile_store_.generation()<<
-                ",\"match_revision\":"<<match_session_.revision()<<"}";
+                ",\"match_revision\":"<<match_session_.revision()<<
+                ",\"poll_phase\":"<<unsigned(team_select_poll_.phase)<<
+                ",\"poll_wait\":"<<team_select_poll_.post_remaining<<
+                ",\"poll_repeat\":"<<team_select_poll_.pad.repeat_counter<<
+                ",\"raw_mask\":"<<team_select_held_<<
+                ",\"topology_countdown\":"<<user_setup_.topologyCountdown()<<
+                ",\"user_prior_mask\":"<<user_setup_.priorMask()<<
+                ",\"user_prior_controller\":"<<unsigned(user_setup_.priorController())<<"}";
             require(roster_database_.slotTable()==(expected_roster ? *expected_roster:slots) && roster_database_.baseIdentity()==identity,
                 "Team Select mutated accepted roster/identity");
             require(settings_.rule(3)==retained_rule && !std::memcmp(&created,&created_players_,sizeof(created)),
                 "Team Select lost settings/created catalogue");
         };
-        auto key=[&](WPARAM k) {
-            handleMenuKey(k);team_select_held_=0;frontend_transition_active_=false;
-            if(team_select_exit_wait_) {updateTeamSelect();frontend_transition_active_=false;}
-        };
-        auto ticks=[&](unsigned n) {for(unsigned i=0;i<n;++i) {
+        auto ticks=[&](unsigned n) {for(unsigned i=0;i<n && frontend_page_==nba97::FrontendPage::TeamSelect;++i) {
             menu_elapsed_ms_=static_cast<uint32_t>(((team_select_tick_+1)*1001+29)/30);updateTeamSelect();
         }rebuildMenuFrame();};
+        auto pollReady=[&] {
+            releaseFrontendPadKeys();
+            for(unsigned i=0;i<8 && team_select_poll_.phase==NBA97_TEAM_POST_WAIT;++i)ticks(1);
+            if(team_select_poll_.phase==NBA97_TEAM_SETTLE || team_select_poll_.phase==NBA97_TEAM_POLL)ticks(1);
+        };
+        auto setupTicks=[&](unsigned n) {for(unsigned i=0;i<n && setup_start_pending_;++i) {
+            menu_elapsed_ms_=static_cast<uint32_t>(((setup_start_tick_+1)*1001+29)/30);updateSetupStart();
+        }rebuildMenuFrame();};
+        auto key=[&](WPARAM k) {
+            if(frontend_page_==nba97::FrontendPage::TeamSelect) {
+                if(team_select_help_.phase==NBA97_HELP_CLOSED && !nba97_team_random_busy(&team_select_random_) && !team_select_exit_wait_)
+                    pollReady();
+                handleMenuKey(k);ticks(1);releaseFrontendPadKeys();
+                if(team_select_exit_wait_)ticks(2);
+            } else {handleMenuKey(k);releaseFrontendPadKeys();}
+            if(setup_start_pending_)setupTicks(2);
+            frontend_transition_active_=false;
+        };
         frame("setup");key('D');require(menu_.setupChoice(0)==3,"quarter previous wrap");frame("setup-quarter-wrap");
         key('C');require(menu_.setupChoice(0)==0,"quarter next wrap");
         key(VK_RIGHT);key('C');key(VK_RETURN);
         require(frontend_page_==nba97::FrontendPage::GameSetup && menu_.setupChoice(1)==1,
             "season must not enter exhibition Team Select");frame("setup-mode-pending");
         key('D');key(VK_LEFT);
-        key(VK_RETURN);require(frontend_page_==nba97::FrontendPage::TeamSelect,"actual Setup Start route failed");
+        handleMenuKey(VK_RETURN);setupTicks(3);
+        const auto pending_focus=menu_.selection();const auto pending_row=menu_.row();
+        const auto pending_mouse_x=last_mouse_x_,pending_mouse_y=last_mouse_y_;
+        const std::array<int,4> pending_choices{menu_.setupChoice(0),menu_.setupChoice(1),menu_.setupChoice(2),menu_.setupChoice(3)};
+        handleMessage(WM_MOUSEMOVE,0,MAKELPARAM(600,60));handleMessage(WM_LBUTTONDOWN,0,MAKELPARAM(600,60));
+        activateMenuSelection();adjustSetupChoice(1); // Direct adapters must respect the same modal boundary.
+        for(unsigned i=0;i<4;++i)require(menu_.setupChoice(i)==pending_choices[i],"Setup Start wait freezes all card choices");
+        require(menu_.selection()==pending_focus && menu_.row()==pending_row &&
+            last_mouse_x_==pending_mouse_x && last_mouse_y_==pending_mouse_y,"Setup Start wait ignores mouse hover/focus");
+        require(frontend_page_==nba97::FrontendPage::GameSetup && setup_start_pending_ &&
+            team_select_poll_.phase==NBA97_TEAM_EXIT_CHANGE,"Setup held Start stays behind source change barrier");frame("setup-held-start");
+        releaseFrontendPadKeys();setupTicks(2);frontend_transition_active_=false;
+        require(frontend_page_==nba97::FrontendPage::TeamSelect,"actual Setup Start route failed");
         require(team_select_.team[0]==3 && team_select_.team[1]==24,"retail first-boot defaults");frame("entry");
         uint16_t scores[5][29];team_select_assets_->ranks(roster_database_,scores);
         std::ofstream numbers(output/"rank_cache.json");numbers<<"{\"scores\":[";
@@ -834,8 +868,18 @@ private:
         for(unsigned c=0;c<5;++c) {if(c)modified_numbers<<',';modified_numbers<<'[';for(unsigned t=0;t<29;++t) {if(t)modified_numbers<<',';modified_numbers<<modified_scores[c][t];}modified_numbers<<']';}
         modified_numbers<<"],\"ranks\":[";
         for(unsigned c=0;c<5;++c) {if(c)modified_numbers<<',';modified_numbers<<'[';for(unsigned t=0;t<31;++t) {if(t)modified_numbers<<',';modified_numbers<<unsigned(modified_ranks.value[c][t]);}modified_numbers<<']';}modified_numbers<<"]}";
-        key(VK_LEFT);require(team_select_.team[0]==2 && team_select_.team[1]==24,"home left ID scan");frame("home-left");
-        key(VK_RIGHT);require(team_select_.team[0]==3,"home right ID scan");frame("home-right");
+        frontend_transition_active_=true;handleMenuKey(VK_LEFT);
+        handleMessage(WM_KEYDOWN,VK_LEFT,static_cast<LPARAM>(1u<<30)); // Repeated message still updates raw state.
+        require(team_select_.team[0]==3 && team_select_held_==8,"fade/repeated keydown must capture without dispatch");
+        frame("left-before-poll");frontend_transition_active_=false;ticks(1);
+        require(team_select_.team[0]==2 && team_select_.team[1]==24 && team_select_poll_.post_remaining==7,
+            "first home Left sampled after presentation");frame("home-left");
+        const auto before_wait=team_select_presentations_;ticks(7);
+        require(team_select_.team[0]==2 && team_select_poll_.phase==NBA97_TEAM_SETTLE,"Left seven-presentation postwait");frame("left-post-wait");
+        ticks(1);require(team_select_.team[0]==1 && team_select_poll_.pad.repeat_counter==2 &&
+            team_select_presentations_-before_wait==8,"held Left repeats only after7+1");frame("left-held-repeat");
+        releaseFrontendPadKeys();key(VK_RIGHT);key(VK_RIGHT);
+        require(team_select_.team[0]==3,"home right ID scan");frame("home-right");
         key(VK_UP);require(team_select_.criterion==5,"criterion up wrap");frame("criterion-up-wrap");
         key(VK_DOWN);require(team_select_.criterion==0,"criterion down wrap");frame("criterion-down-wrap");
         key('C');require(team_select_.side==1,"Cross switches active side");frame("away-active");
@@ -850,23 +894,39 @@ private:
             "Help changed selected team/state");frame("help-return");
         key('F');handleMenuKey('C');ticks(14);
         require(team_select_help_.phase==NBA97_HELP_SHRINKING,"changed held key must dismiss Help after growth");
-        team_select_held_=0;ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"early Help dismissal return barrier");
+        releaseFrontendPadKeys();ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"early Help dismissal return barrier");
         frame("help-early-close");
         key('D');require(team_select_.team[0]==before_help.team[0] && team_select_.team[1]==before_help.team[1],"invalid Square changed teams");frame("invalid-square");
-        const auto saved=team_select_;key(VK_RSHIFT);require(frontend_page_==nba97::FrontendPage::GameSetup,"Select did not return to Setup");frame("setup-return");
+        pollReady();handleMenuKey('X');handleMenuKey(VK_RETURN);ticks(1);
+        require(team_select_held_==0x2080 && !team_select_.result && team_select_poll_.post_remaining==5,
+            "Start+R2 is an ignored whole action chord with caller5");frame("team-shoulder-chord");
+        releaseFrontendPadKeys();pollReady();handleMenuKey('C');handleMenuKey(VK_SPACE);
+        handleMessage(WM_KEYUP,'C',0);require(team_select_held_==0x800,"alias keyup cannot clear held Space");
+        handleMessage(WM_KILLFOCUS,0,0);require(!team_select_held_,"focus loss clears raw keys");
+        const auto saved=team_select_;pollReady();handleMenuKey(VK_RSHIFT);ticks(2);
+        require(team_select_exit_wait_ && team_select_poll_.phase==NBA97_TEAM_EXIT_CHANGE &&
+            frontend_page_==nba97::FrontendPage::TeamSelect,"held Select waits on initiating mask");frame("select-held-exit");
+        releaseFrontendPadKeys();ticks(1);
+        require(team_select_poll_.phase==NBA97_TEAM_EXIT_FINAL && frontend_page_==nba97::FrontendPage::TeamSelect,
+            "Select change precedes separate cleanup");frame("select-cleanup");
+        ticks(1);frontend_transition_active_=false;
+        require(frontend_page_==nba97::FrontendPage::GameSetup,"Select did not return to Setup");frame("setup-return");
         key(VK_RETURN);require(team_select_.team[0]==saved.team[0] && team_select_.team[1]==saved.team[1] &&
             team_select_.side==saved.side && team_select_.criterion==saved.criterion,"reentry lost focus/teams");frame("reentry");
         handleMenuKey(VK_RETURN);
+        require(!team_select_exit_wait_,"keydown cannot bypass initial Start poll");ticks(1);
         require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_exit_wait_,
             "Start must wait for changed input before state5");
-        updateTeamSelect();require(frontend_page_==nba97::FrontendPage::TeamSelect,"held Start bypassed exit barrier");
-        team_select_held_=0;updateTeamSelect();frontend_transition_active_=false;
+        ticks(1);require(frontend_page_==nba97::FrontendPage::TeamSelect,"held Start bypassed exit barrier");frame("start-held-exit");
+        releaseFrontendPadKeys();ticks(1);
+        require(team_select_poll_.phase==NBA97_TEAM_EXIT_FINAL,"Start changed input beforecleanup");frame("start-cleanup");
+        ticks(1);frontend_transition_active_=false;
         require(frontend_page_==nba97::FrontendPage::UserSetup,"state5 route did not enter original User Setup");frame("user-setup-entry");
         auto userTicks=[&](unsigned n) {for(unsigned i=0;i<n && frontend_page_==nba97::FrontendPage::UserSetup;++i) {
             menu_elapsed_ms_=static_cast<uint32_t>(((user_setup_tick_+1)*1001+29)/30);updateUserSetup();
         }rebuildMenuFrame();};
         auto userKey=[&](WPARAM k) {
-            handleMenuKey(k);userTicks(2);user_setup_.releaseKeys();userTicks(2);frontend_transition_active_=false;
+            handleMenuKey(k);userTicks(2);releaseFrontendPadKeys();user_setup_.releaseKeys();userTicks(2);frontend_transition_active_=false;
         };
         userKey(VK_RIGHT);require(user_setup_.state().side[0]==2,"controller0 home assignment");frame("user-home");
         userKey(VK_LEFT);require(user_setup_.state().side[0]==1,"controller0 neutral assignment");frame("user-neutral");
@@ -941,14 +1001,18 @@ private:
         userTicks(30);
         require(user_setup_.dialogState().modal.phase==NBA97_HELP_RETURN_BARRIER && profile_store_.atSlot(1),
             "held Cross keeps deletion behind return barrier");frame("user-delete-barrier");
-        user_setup_.releaseKeys();userTicks(2);
+        releaseFrontendPadKeys();user_setup_.releaseKeys();userTicks(2);
         require(!profile_store_.atSlot(1) && profile_store_.atSlot(0)->id==first_id &&
             profile_store_.generation()==4 && user_setup_.state().profile[0]==-2,"delete exact slot and retain other IDs");
         frame("user-delete-accepted");
         nba97::UserProfileStore restarted;restarted.load(options_.profiles_path);
         require(restarted.atSlot(0) && restarted.atSlot(0)->id==first_id && !restarted.atSlot(1),
             "accepted profile and deletion hole survive restart");
-        userKey(VK_UP);userKey('C');userKey(VK_UP);userKey(VK_RSHIFT);
+        userKey(VK_UP);userKey('C');userKey(VK_UP);handleMenuKey(VK_RSHIFT);userTicks(2);
+        require(frontend_page_==nba97::FrontendPage::UserSetup && user_setup_.state().result==-1 &&
+            user_setup_.priorController()==8 && user_setup_.priorMask()==0x100,
+            "state5 Select waits on aggregate100 after clearing editor");frame("user-held-cancel");
+        releaseFrontendPadKeys();user_setup_.releaseKeys();userTicks(1);frontend_transition_active_=false;
         require(frontend_page_==nba97::FrontendPage::TeamSelect && profile_store_.generation()==4,
             "Select abandons editing draft without saving");frame("user-editor-abandon");
         key(VK_RETURN);require(user_setup_.state().profile[0]==-2 && user_setup_.names().name[0][0]=='C',
@@ -966,17 +1030,21 @@ private:
             user_setup_.state().profile[0]==-2,"User Help changed assignment/profile");frame("user-help-return");
         handleMenuKey(VK_RIGHT);handleMenuKey(VK_RETURN);userTicks(2);
         require(user_setup_.state().side[0]==0 && user_setup_.state().assignment[0]==2,"raw chord changed state");
-        user_setup_.releaseKeys();userTicks(2);frame("user-invalid-chord");
+        releaseFrontendPadKeys();user_setup_.releaseKeys();userTicks(2);frame("user-invalid-chord");
         for(WPARAM shoulder:{WPARAM('A'),WPARAM('Z'),WPARAM('S'),WPARAM('X')}) {
             handleMenuKey(shoulder);handleMenuKey(VK_RETURN);userTicks(2);
             require(!user_setup_.state().start_latch && user_setup_.state().assignment[0]==2,
                 "Start plus any shoulder is not exact Start");
-            user_setup_.releaseKeys();userTicks(2);
+            releaseFrontendPadKeys();user_setup_.releaseKeys();userTicks(2);
         }
         frame("user-shoulder-chords");
-        user_setup_.setControllers(3,0xff);userTicks(2);frame("user-eight-controllers");
-        user_setup_.setControllers(2,0xf1);userTicks(2);frame("user-port2-multitap");
-        user_setup_.setControllers(0,1);userTicks(2);
+        user_setup_.setControllers(3,0xff);userTicks(4);
+        require(user_setup_.topology()==0 && user_setup_.topologyCountdown()==-1,"four topology observations retain old layout");frame("user-topology-3-pending");
+        userTicks(1);require(user_setup_.topology()==3,"fifth topology observation adopts8rows");frame("user-eight-controllers");
+        user_setup_.setControllers(2,0xf1);userTicks(4);
+        require(user_setup_.topology()==3 && user_setup_.topologyCountdown()==-1,"second topology debounce");frame("user-topology-2-pending");
+        userTicks(1);require(user_setup_.topology()==2,"fifth adopts port2tap");frame("user-port2-multitap");
+        user_setup_.setControllers(0,1);userTicks(5);
         userKey(VK_RIGHT);userKey(VK_RIGHT);
         require(user_setup_.state().side[0]==2 && user_setup_.state().assignment[0]==2,"local draft must not publish");frame("user-unaccepted-home");
         userKey(VK_RSHIFT);
@@ -987,12 +1055,19 @@ private:
             user_setup_.state().side[0]==0 && user_setup_.state().profile[0]==-2,
             "User Setup reentry lost committed assignment or retained cancelled profile");frame("user-reentry");
         userKey(VK_RSHIFT);require(frontend_page_==nba97::FrontendPage::TeamSelect,"User Setup second cancel");
-        key('V');ticks(66);require(team_select_random_.remaining==0 && team_select_random_.wait==18,"last candidate wait boundary");
-        const auto last_random=team_select_;key(VK_RSHIFT);key('C');
+        key('V');const auto random_begin=team_select_presentations_;ticks(66);
+        require(team_select_random_.remaining==0 && team_select_random_.wait==12,"last candidate wait boundary");
+        const auto last_random=team_select_;handleMenuKey(VK_RSHIFT);handleMenuKey('C');
         require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_.side==last_random.side,
             "random callback accepted input during final wait");frame("random-last-wait");
-        ticks(17);require(nba97_team_random_busy(&team_select_random_),"random poll barrier ended early");
-        ticks(1);require(!nba97_team_random_busy(&team_select_random_) && team_select_.team[1]<29,"random regular-team domain");frame("random-complete");
+        updateFrontendPadKey(VK_RSHIFT,false);ticks(12);
+        require(!nba97_team_random_busy(&team_select_random_) && team_select_poll_.post_remaining==5 &&
+            team_select_.side==last_random.side,"random owner78 then caller5");frame("random-caller-wait");
+        ticks(5);require(team_select_.side==last_random.side,"no raw sampling inside caller wait");
+        ticks(1);require(team_select_.side==(last_random.side^1) && team_select_presentations_-random_begin==84,
+            "Cross held in random dispatches at next poll84");frame("random-held-cross");
+        releaseFrontendPadKeys();key('C');
+        require(team_select_.side==last_random.side && team_select_.team[1]<29,"random regular-team domain");frame("random-complete");
         // Fresh host fixtures exercise rare modal routes without touching saves
         // outside the capture's already validated isolated run directory.
         frontend_page_=nba97::FrontendPage::UserSetup;user_setup_=nba97::UserSetupSession{};
@@ -4966,6 +5041,7 @@ private:
         if (message == WM_KEYDOWN || message == WM_KEYUP)
             wparam = nba97::normalizeWin32Shift(static_cast<std::uint32_t>(wparam),
                                                static_cast<std::uintptr_t>(lparam));
+        if(message==WM_KEYDOWN || message==WM_KEYUP) updateFrontendPadKey(wparam,message==WM_KEYDOWN);
         if(message==WM_KEYDOWN && frontend_page_==nba97::FrontendPage::CreatePlayers &&
            (static_cast<std::uintptr_t>(lparam)&(1u<<30))==0) {
             char input[160]{};
@@ -5042,11 +5118,6 @@ private:
                 flow_.requestAdvance(options_.transition_ms);
             return 0;
         case WM_KEYUP:
-            if(frontend_page_==nba97::FrontendPage::UserSetup)
-                user_setup_.key(0,nba97::userSetupKeyMask(static_cast<uint32_t>(wparam)),false);
-            if(frontend_page_==nba97::FrontendPage::TeamSelect &&
-               nba97::frontendSelectorKeyMask(static_cast<uint32_t>(wparam))==team_select_held_)
-                team_select_held_=0;
             if ((wparam == VK_UP && held_roster_direction_ < 0) ||
                 (wparam == VK_DOWN && held_roster_direction_ > 0)) {
                 held_roster_direction_ = 0;
@@ -5055,7 +5126,7 @@ private:
             }
             return 0;
         case WM_KILLFOCUS:
-            user_setup_.releaseKeys();team_select_held_=0;
+            user_setup_.releaseKeys();releaseFrontendPadKeys();
             return 0;
         case WM_CHAR:
             if (flow_.screen() == nba97::BootScreen::MainMenu &&
@@ -5071,6 +5142,7 @@ private:
                 handleMenuHover(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
             return 0;
         case WM_LBUTTONDOWN:
+            if(setup_start_pending_) return 0;
             if(frontend_page_==nba97::FrontendPage::TeamSelect ||
                frontend_page_==nba97::FrontendPage::UserSetup) return 0;
             if(cool_fact_flash_.remaining) return 0;
@@ -5198,6 +5270,7 @@ private:
             updateReset();
             updateCreatePlayerDelete();
             updateCreatePlayerHelp();
+            updateSetupStart();
             updateTeamSelect();
             updateUserSetup();
             if (bottom_select_pending_ &&
@@ -5317,6 +5390,7 @@ private:
         }
         EndPaint(window_, &paint);
         if(flow_.screen()==nba97::BootScreen::MainMenu && frontend_title_.active()) frontend_title_painted_=true;
+        if(flow_.screen()==nba97::BootScreen::MainMenu && frontend_page_==nba97::FrontendPage::GameSetup) setup_start_painted_=true;
         if(native_record_) {
             try {
                 if(flow_.screen()!=nba97::BootScreen::MainMenu) {
@@ -5528,7 +5602,12 @@ private:
             nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
             nba97_frontend_palette_begin(&team_select_palette_,team_select_assets_->backgrounds().bank(),33,
                 team_select_.team[1],team_select_.team[0]);
-            team_select_help_={};team_select_held_=0;team_select_exit_wait_=false;
+            if(frontend_page_==nba97::FrontendPage::UserSetup) {
+                team_select_poll_.pad.prior_mask=user_setup_.priorMask();
+                team_select_poll_.pad.prior_controller=user_setup_.priorController();
+            }
+            nba97_team_poll_open(&team_select_poll_); // Shared history survives page opens.
+            team_select_help_={};team_select_exit_wait_=false;
             team_select_random_={};team_select_tick_=uint64_t(menu_elapsed_ms_)*30/1001;
             trace_.log("TEAM-ENTRY","owner8004FCD8 state3 packZSET1/LOGO titleba08; home="+
                 std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
@@ -5547,72 +5626,119 @@ private:
             nba97_frontend_palette_request(&team_select_palette_,side,team_select_.team[side^1],33);
     }
 
-    void handleTeamSelectKey(WPARAM key) {
-        const auto token=nba97::frontendSelectorKeyMask(static_cast<uint32_t>(key));
-        team_select_held_=token;
-        if(team_select_exit_wait_) return; // 3B194 exit barrier completes in the presentation pump.
-        if(team_select_help_.phase!=NBA97_HELP_CLOSED) {
-            if(nba97_help_input(&team_select_help_,token)==NBA97_HELP_CLOSE_SOUND)
-                playBottomMenuSound(8,"team-help-close");
-        } else if(!nba97_team_random_busy(&team_select_random_)) {
+    void releaseFrontendPadKeys() noexcept {
+        team_select_keys_={};team_select_held_=0;user_setup_.key(0,0xffff,false);
+    }
+    void updateFrontendPadKey(WPARAM key,bool down=true) {
+        // WM repeat only updates held state. Alias releases cannot clear another
+        // held key for the same normalized button (for example C and Space).
+        if(key<team_select_keys_.size()) team_select_keys_[key]=down;
+        team_select_held_=0;
+        for(unsigned k=0;k<team_select_keys_.size();++k)
+            if(team_select_keys_[k]) team_select_held_|=nba97::userSetupKeyMask(k);
+        if(frontend_page_==nba97::FrontendPage::UserSetup) {
+            user_setup_.key(0,0xffff,false);user_setup_.key(0,team_select_held_,true);
+        }
+    }
+    void updateSetupStart() {
+        if(!setup_start_pending_ || frontend_page_!=nba97::FrontendPage::GameSetup || frontend_transition_active_) return;
+        const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
+        if(setup_start_tick_>=now || (window_ && !setup_start_painted_)) return;
+        setup_start_tick_=now;setup_start_painted_=false;
+        const uint16_t pads[8]={team_select_held_};Nba97TeamSample sample{};
+        if(nba97_team_poll_prepare(&team_select_poll_,0) &&
+           nba97_team_poll_presented(&team_select_poll_,pads,&sample)==NBA97_TEAM_POLL_EXITED) {
+            setup_start_pending_=false;
+            beginFrontendTransition(nba97::FrontendPage::TeamSelect,
+                "Start80; state0 exit3B194 changed input and cleanup -> state3/8004FCD8");
+        }
+    }
+    void dispatchTeamSelect(const Nba97TeamSample& sample) {
+            const auto token=sample.token;
             const auto before=team_select_;
             const auto old_focus=unsigned(before.side)*6+before.criterion;
             const auto event=nba97_team_select_input(&team_select_,&team_select_ranks_,token);
+            const auto wait=nba97_team_poll_caller_wait(token,sample.delay);
             team_select_focus_=team_select_.side*6+team_select_.criterion;
-            if(event==NBA97_SELECT_CONTINUE) {
+            if(event==NBA97_SELECT_CONTINUE || event==NBA97_SELECT_RETURN) {
                 team_select_exit_wait_=true;
-                playBottomMenuSound(team_select_.sound,"team-selector");
+                nba97_team_poll_exit(&team_select_poll_);
+            }
+            if(event==NBA97_SELECT_CONTINUE) {
                 trace_.log("TEAM-HANDOFF","state3 result1 -> state5 owner80037010 after3B194 input-change barrier; home="+
                     std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
                     "; teams/focus retained; next screen is User Setup");
-            } else if(team_select_.sound) playBottomMenuSound(team_select_.sound,"team-selector");
+            }
+            if(team_select_.sound) playBottomMenuSound(team_select_.sound,"team-selector");
             if(event==NBA97_SELECT_HELP) {
                 nba97_help_open(&team_select_help_,team_select_assets_->help().descriptor(3,0).rect,token);
+                nba97_help_tick(&team_select_help_,team_select_held_); // First growth precedes modal submission.
                 playBottomMenuSound(7,"team-help-open");
             }
             if(event==NBA97_SELECT_RANDOM) {
                 nba97_team_random_begin(&team_select_random_,&team_select_,team_select_rng_.data());
                 trace_.log("TEAM-RANDOM","owner8004F934 candidate1; 78 presentations + caller5 + next-poll1; held input blocked");
             }
+            if(event!=NBA97_SELECT_HELP && event!=NBA97_SELECT_RANDOM && !team_select_exit_wait_)
+                nba97_team_poll_finish_callback(&team_select_poll_,wait);
             if(old_focus!=team_select_focus_) {
                 nba97_reorder_tint_unpulse(&team_select_tints_[old_focus]);
                 nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
             }
             teamSelectPalette();
-            trace_.log("TEAM-INPUT","owner8003D930/8004F9D8 token="+std::to_string(token)+
+            if(event!=NBA97_SELECT_NONE || !team_select_poll_.pad.repeat_counter)
+                trace_.log("TEAM-INPUT","owner8003AE4C/8003D930/8004F9D8 token="+std::to_string(token)+
+                " controller="+std::to_string(sample.controller)+" repeat="+std::to_string(team_select_poll_.pad.repeat_counter)+
+                " caller-wait="+std::to_string(wait)+
                 " event="+std::to_string(event)+" home="+std::to_string(before.team[0])+"->"+
                 std::to_string(team_select_.team[0])+" away="+std::to_string(before.team[1])+"->"+
                 std::to_string(team_select_.team[1])+" focus="+std::to_string(old_focus)+"->"+
                 std::to_string(team_select_focus_)+" sound="+std::to_string(team_select_.sound));
-            if(event==NBA97_SELECT_RETURN) {
-                beginFrontendTransition(nba97::FrontendPage::GameSetup,"Select100; owner8004FC80; scanned teams retained");return;
-            }
-        }
-        rebuildMenuFrame();if(window_) InvalidateRect(window_,nullptr,FALSE);
     }
 
     void updateTeamSelect() {
         if(frontend_page_!=nba97::FrontendPage::TeamSelect || frontend_transition_active_) return;
-        if(team_select_exit_wait_ && team_select_held_!=0x80) {
-            team_select_exit_wait_=false;
-            beginFrontendTransition(nba97::FrontendPage::UserSetup,"state3 result1; 3B194 input changed; owner80037010");
-            if(frontend_page_!=nba97::FrontendPage::UserSetup) team_select_.result=0;
-            return;
-        }
         const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
         if(team_select_tick_<now && (!window_ || frontend_title_painted_)) {
+            const bool help=team_select_help_.phase!=NBA97_HELP_CLOSED;
+            const bool random=nba97_team_random_busy(&team_select_random_)!=0;
+            // Native composition has no queued text movement. The C settle
+            // gate is tested, but original text-list movement remains pending.
+            if(!help && !random && !nba97_team_poll_prepare(&team_select_poll_,0)) return;
             team_select_tick_=now; // Stall stretches time; never skip unseen presentations.
+            ++team_select_presentations_;
             prepareFrontendTitle();presentFrontendTitle();frontend_title_painted_=false;
-            if(nba97_help_tick(&team_select_help_,team_select_held_)==NBA97_HELP_CLOSE_SOUND)
-                playBottomMenuSound(8,"team-help-close");
             for(auto& tint:team_select_tints_) nba97_reorder_tint_tick(&tint);
             nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
-            if(nba97_team_random_tick(&team_select_random_,&team_select_,team_select_rng_.data())) {
-                teamSelectPalette();
-                trace_.log("TEAM-RANDOM","owner8004F934/8007A538 accepted="+
-                    std::to_string(12-team_select_random_.remaining)+" team="+
-                    std::to_string(team_select_.team[team_select_.side])+
-                    "; original runtime seed history pending");
+            if(help) {
+                const auto event=nba97_help_tick(&team_select_help_,team_select_held_);
+                if(event==NBA97_HELP_CLOSE_SOUND) {
+                    team_select_poll_.pad.prior_mask=team_select_help_.held;
+                    playBottomMenuSound(8,"team-help-close");
+                }
+                if(event==NBA97_HELP_RETURNED) nba97_team_poll_finish_callback(&team_select_poll_,0);
+            } else if(random) {
+                if(nba97_team_random_tick(&team_select_random_,&team_select_,team_select_rng_.data())) {
+                    teamSelectPalette();
+                    trace_.log("TEAM-RANDOM","owner8004F934/8007A538 accepted="+
+                        std::to_string(12-team_select_random_.remaining)+" team="+
+                        std::to_string(team_select_.team[team_select_.side])+
+                        "; original runtime seed history pending");
+                }
+                if(!nba97_team_random_busy(&team_select_random_)) nba97_team_poll_finish_callback(&team_select_poll_,5);
+            } else {
+                const uint16_t pads[8]={team_select_held_};Nba97TeamSample sample{};
+                const auto event=nba97_team_poll_presented(&team_select_poll_,pads,&sample);
+                if(event==NBA97_TEAM_POLL_INPUT) dispatchTeamSelect(sample);
+                if(event==NBA97_TEAM_POLL_EXITED) {
+                    team_select_exit_wait_=false;
+                    const auto target=team_select_.result==1 ? nba97::FrontendPage::UserSetup:nba97::FrontendPage::GameSetup;
+                    beginFrontendTransition(target,"state3 exit;3B194 changed initiating input then39574(0,1) cleanup; teams/focus retained");
+                    if(frontend_page_==nba97::FrontendPage::TeamSelect) {
+                        team_select_.result=0;nba97_team_poll_open(&team_select_poll_);
+                    }
+                    return;
+                }
             }
         }
     }
@@ -5632,9 +5758,12 @@ private:
                 trace_.log("MATCH-CONTROLS-INIT","28800 cold branch ->61674(1);8 default maps; once per fresh native process; warm overlay paths pending");
             }
             user_setup_.open(user_setup_assets_->initialAssignments(),profile_store_.profiles(),
-                static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000));
+                static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000),
+                team_select_poll_.pad.prior_mask,team_select_poll_.pad.prior_controller);
             user_setup_.configureEditor(user_setup_assets_->alphabet(),[this](const char* text){return menu_font_.textWidth(text);});
             user_setup_.setControllers(0,1); // Native keyboard is physical port1; no invented second-player keys.
+            user_setup_.primeEntryTopology(); // First observation belongs to the first later input pass.
+            user_setup_.key(0,team_select_held_,true); // Preserve the changed nonzero exit mask across pages.
             user_setup_tick_=uint64_t(menu_elapsed_ms_)*30/1001;user_setup_refusal_logged_=false;
             trace_.log("USER-ENTRY","owner80037010 state5 titleba39 ZSET1/Pal0; home="+
                 std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
@@ -5678,6 +5807,13 @@ private:
         const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
         if(user_setup_tick_>=now || (window_ && !frontend_title_painted_)) return;
         user_setup_tick_=now;
+        if(user_setup_.state().result==-1) {
+            prepareFrontendTitle();presentFrontendTitle();frontend_title_painted_=false;
+            nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
+            if(user_setup_.cancelReady()) beginFrontendTransition(nba97::FrontendPage::TeamSelect,
+                "state5 Select100 result-1; dispatcher3FD10/3B194 aggregate input changed; accepted assignments retained");
+            return;
+        }
         const auto dialog=user_setup_.dialogKind();
         const bool modal=user_setup_.help().phase!=NBA97_HELP_CLOSED || dialog!=nba97::UserSetupDialog::None;
         bool resume_pass=!modal;
@@ -5743,8 +5879,8 @@ private:
                         openUserDialog(nba97::UserSetupDialog::SaveFailure,action.controller);
                     }
                 } else if(action.event==NBA97_USER_CANCELLED) {
-                    beginFrontendTransition(nba97::FrontendPage::TeamSelect,"state5 Select100 result-1; profiles cleared, accepted assignments and team focus retained");
-                    return;
+                    trace_.log("USER-EXIT-WAIT","state5 Select100 result-1;3FD10/3B194 awaits changed aggregate; no further controller pass");
+                    break;
                 } else if(action.event==NBA97_USER_CONFIRMED) {
                     captureMatchSnapshot();
                     trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed; bounded snapshot attempted; presentation/extension settings and gameplay initialization pending; no gameplay launched");
@@ -5763,21 +5899,20 @@ private:
         }
         prepareFrontendTitle();
         user_setup_.tickPresentation();
-        presentFrontendTitle(user_setup_.help().phase==NBA97_HELP_CLOSED &&
+        presentFrontendTitle(user_setup_.state().result!=-1 && user_setup_.help().phase==NBA97_HELP_CLOSED &&
             user_setup_.dialogKind()==nba97::UserSetupDialog::None); // 36898 direct; modal39574 predraw.
         frontend_title_painted_=false;
         nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
     }
 
     void handleMenuKey(WPARAM key) {
+        updateFrontendPadKey(key); // Preserve input during fades and message-dispatch waits.
         if(cool_fact_flash_.remaining) return;
         if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) {handleResetKey(key);return;}
         if (frontend_transition_active_) return;
         if (bottom_select_pending_) return;
-        if(frontend_page_==nba97::FrontendPage::TeamSelect) {handleTeamSelectKey(key);return;}
-        if(frontend_page_==nba97::FrontendPage::UserSetup) {
-            user_setup_.key(0,nba97::userSetupKeyMask(static_cast<uint32_t>(key)),true);return;
-        }
+        if(setup_start_pending_) return;
+        if(frontend_page_==nba97::FrontendPage::TeamSelect || frontend_page_==nba97::FrontendPage::UserSetup) return;
         if(isRosterEditor()){handleTradeKey(key);return;}
         if (frontend_page_ == nba97::FrontendPage::ReorderRosters) {
             handleReorderKey(key);
@@ -5859,12 +5994,15 @@ private:
         else if (key == VK_UP) changed = menu_.moveVertical(-1);
         else if (key == VK_DOWN) changed = menu_.moveVertical(1);
         else if (key == VK_RETURN) {
+            if(team_select_held_!=0x80) return; // Whole raw chord is not exact Start.
             if(menu_.setupChoice(1)!=0) {
                 trace_.log("SETUP-ROUTE-PENDING","8003F7C8 mode="+std::to_string(menu_.setupChoice(1))+
                     "; season/playoff route not implemented; no exhibition fallback");return;
             }
-            beginFrontendTransition(nba97::FrontendPage::TeamSelect,
-                "Start80; 8003F7C8 mode0 -> state3/8004FCD8");
+            nba97_team_poll_setup_start(&team_select_poll_,0);setup_start_pending_=true;
+            setup_start_tick_=uint64_t(menu_elapsed_ms_)*30/1001;
+            playBottomMenuSound(9,"setup-selector"); // 3E484 precedes3B194.
+            trace_.log("SETUP-EXIT-WAIT","exact Start80; state0 shared history then3B194 input-change/cleanup beforeTeamSelect");
             return;
         }
         else if (key == VK_SPACE || key == 'C') {
@@ -6993,6 +7131,7 @@ private:
     }
 
     void handleMenuHover(int client_x, int client_y) {
+        if(setup_start_pending_) return;
         if(frontend_page_==nba97::FrontendPage::TeamSelect ||
            frontend_page_==nba97::FrontendPage::UserSetup) return;
         if(cool_fact_flash_.remaining) return;
@@ -7150,6 +7289,7 @@ private:
     }
 
     void activateMenuSelection() {
+        if(setup_start_pending_) return;
         if (menu_.row() == nba97::MenuRow::FrontendButtons) {
             static constexpr std::array<nba97::FrontendPage, 5> pages{
                 nba97::FrontendPage::Rules, nba97::FrontendPage::Options,
@@ -7167,6 +7307,7 @@ private:
     }
 
     void adjustSetupChoice(int direction) {
+        if(setup_start_pending_) return;
         menu_.syncStyle(settings_.style());
         const auto card=static_cast<unsigned>(menu_.selection());
         const auto before=menu_.setupChoice(card);
@@ -7179,7 +7320,7 @@ private:
     }
 
     void beginFrontendTransition(nba97::FrontendPage target, const std::string& reason) {
-        if (frontend_transition_active_ || target == frontend_page_) return;
+        if (frontend_transition_active_ || setup_start_pending_ || target == frontend_page_) return;
         if(target==nba97::FrontendPage::TeamSelect && !openTeamSelect()) return;
         if(target==nba97::FrontendPage::UserSetup && !openUserSetup()) return;
         transition_source_ = menu_frame_;
@@ -7328,6 +7469,12 @@ private:
     unsigned team_select_focus_=0;
     Nba97TeamRandom team_select_random_{};
     uint64_t team_select_tick_=0;
+    bool setup_start_pending_=false;
+    bool setup_start_painted_=false;
+    uint64_t setup_start_tick_=0;
+    uint64_t team_select_presentations_=0;
+    Nba97TeamPoll team_select_poll_{};
+    std::array<bool,256> team_select_keys_{};
     uint16_t team_select_held_=0;
     bool team_select_exit_wait_=false;
     std::unique_ptr<nba97::UserSetupAssets> user_setup_assets_;

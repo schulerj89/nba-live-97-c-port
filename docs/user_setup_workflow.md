@@ -51,8 +51,9 @@ UserSetupAssets reads private descriptors, text, sprites, alphabet and preferenc
 Rendering uses original fonts; only the selected editor character pulses, and
 underscore displays as equals at the cursor with unchanged advance.
 
-State5 calls40FCC/40A1C directly and inherits context+724 rather than storing the
-invoking key there. The ordinary Team Select Start path supplies80. A different
+State5 calls40FCC/40A1C directly and inherits context+724 and+71B rather than
+resetting them or storing the invoking key there. The ordinary Team Select
+Start path supplies80. A different
 held key can therefore dismiss Help/notices after growth without a zero release.
 Prior0 is also supported. Only the invoking controller acknowledges the modal.
 Notices open with sound5 and close with8. Delete opens12, Up/Down emit3/4, and
@@ -71,8 +72,18 @@ The120Hz clock comes from IRQ6 callback80078628. The controller pass uses signed
 wrapping elapsed >6; global Start/Select runs first. Repeat36B80 waits60 then12
 ticks and retains history across entry. Disconnected visible controllers clear
 when reached; excluded slots clear after the pass. This ordering affects capacity.
-Topology-change debounce (four deferred iterations, rebuild on fifth) is audited
-but not implemented; injected topologies currently change immediately.
+Topology-change debounce now follows the source: entry99/-1, exact8000 driver
+words, four deferred observations and adoption on the fifth. Observation occurs
+before global input and the row clock gate; modal continuations retain the old
+row order while connectivity stays live. Entry composition primes one observation
+that the first step consumes without querying twice. Exact rebuild hide/restore
+visibility is still pending; see frontend_input_workflow.md.
+
+Select stores shared controller8/mask100 and returns to dispatcher3FD10. The host
+presents, then waits for the complete physically connected aggregate to differ
+from100 before returning to Team Select. It neither polls another row pass nor
+adds a second cleanup presentation. A changed nonzero mask may satisfy the
+barrier. Global accepted Start leaves shared history unchanged.
 
 ## Native save boundary
 
@@ -93,7 +104,8 @@ power-loss and ambiguous OS replacement outcomes remain unverified.
 Extract with tools/extract_user_setup.py after Team Select extraction. Run
 scripts/verify_team_select.ps1 with fresh isolated settings/profile/created/roster
 paths. It rejects unsafe defaults and fingerprints all real save/config files.
-The62 capture scenarios include both Help pages, editor controls, duplicate/full/
+The76 capture scenarios include held input, exit barriers, topology changes,
+both Help pages, editor controls, duplicate/full/
 capacity warnings, failed-save retry, rename/no-op, delete cancel/invalid input/
 eight-update delay/final barrier, restart, abandonment, shoulder chords and
 owned ordinary-exhibition snapshots with retained controls/current saved rosters.

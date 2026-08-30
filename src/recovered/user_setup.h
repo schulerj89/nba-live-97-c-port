@@ -11,6 +11,11 @@ typedef struct Nba97UserRepeat {
     uint16_t last;
     int32_t clock, remaining;
 } Nba97UserRepeat;
+typedef struct Nba97UserTopology {uint8_t active;int8_t countdown;} Nba97UserTopology;
+/* 37010 outer pass, before global/time gates. Entry active99/countdown-1.
+ * Driver word exactly8000 means multitap; connectivity remains independent.
+ * Returns1 on layout adoption. Never call inside a modal/suspended pass. */
+int nba97_user_setup_topology_observe(Nba97UserTopology*,uint16_t port0,uint16_t port1);
 typedef struct Nba97UserSetup {
     uint8_t side[8];              /* 0 away,1 neutral,2 home */
     uint8_t assignment[8];        /* accepted:0 neutral,1 home,2 away */
@@ -36,6 +41,9 @@ int nba97_user_setup_physical(unsigned topology,unsigned row);
 uint8_t nba97_user_setup_topology_mask(unsigned topology);
 /* 36CA0 global gate runs BEFORE the timed disconnect/controller pass. */
 Nba97UserEvent nba97_user_setup_global(Nba97UserSetup*,const uint16_t masks[8],uint8_t connected);
+/* Dispatcher3FD10 ->3B194 after Select: call only AFTER a presentation.
+ * cancel_origin8 waits on the aggregate mask changing from100; no cleanup1. */
+int nba97_user_setup_cancel_ready(const Nba97UserSetup*,const uint16_t masks[8],uint8_t connected);
 /* Call after global gate, at the original timed controller-update boundary. */
 int nba97_user_setup_connections(Nba97UserSetup*,uint8_t connected,unsigned topology);
 /* The owner visits visible rows in order, clearing each disconnected row when

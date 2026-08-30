@@ -34,7 +34,7 @@ void UserSetupSession::importProfiles(const std::vector<UserProfile>& profiles,b
     ids_=ids;names_=names;
 }
 void UserSetupSession::open(const std::array<uint8_t,8>& initial,
-                            const std::vector<UserProfile>& profiles,int32_t clock,uint16_t prior_mask) {
+                            const std::vector<UserProfile>& profiles,int32_t clock,uint16_t prior_mask,uint8_t prior_controller) {
     importProfiles(profiles);
     std::array<int8_t,8> selectors;selectors.fill(-2); // 80035D80 initial frontend path.
     std::array<uint8_t,8> assignments=initial;
@@ -48,10 +48,16 @@ void UserSetupSession::open(const std::array<uint8_t,8>& initial,
     if(!initialized_) for(auto& r:repeat_) r.clock=clock;
     initialized_=true;masks_={};help_={};last_pass_=clock;continuing_pass_=false;next_row_=0;
     dialog_kind_=UserSetupDialog::None;dialog_={};prior_mask_=prior_mask;editor_tints_={};
+    prior_controller_=prior_controller;topology_={99,-1};entry_topology_primed_=false;
 }
 void UserSetupSession::setControllers(unsigned topology,uint8_t connected) {
     if(topology>3) throw std::runtime_error("User Setup invalid topology");
-    topology_=topology;connected_=connected;
+    observed_topology_=topology;connected_=connected;
+}
+void UserSetupSession::primeEntryTopology() {
+    if(!initialized_ || topology_.active!=99) return;
+    nba97_user_setup_topology_observe(&topology_,observed_topology_&1 ? 0x8000:0,observed_topology_&2 ? 0x8000:0);
+    entry_topology_primed_=true;
 }
 void UserSetupSession::key(unsigned controller,uint16_t mask,bool down) {
     if(controller>=8) throw std::runtime_error("User Setup invalid physical controller");
@@ -60,7 +66,13 @@ void UserSetupSession::key(unsigned controller,uint16_t mask,bool down) {
 }
 std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
     std::vector<UserSetupAction> actions;
-    if(help_.phase!=NBA97_HELP_CLOSED || dialog_kind_!=UserSetupDialog::None) return actions;
+    if(state_.result || help_.phase!=NBA97_HELP_CLOSED || dialog_kind_!=UserSetupDialog::None) return actions;
+    if(!continuing_pass_) {
+        if(!entry_topology_primed_)
+            nba97_user_setup_topology_observe(&topology_,observed_topology_&1 ? 0x8000:0,
+                                                       observed_topology_&2 ? 0x8000:0);
+        entry_topology_primed_=false;
+    }
     auto before=state_;
     auto event=continuing_pass_ ? NBA97_USER_NONE:
         nba97_user_setup_global(&state_,masks_.data(),connected_);
@@ -70,6 +82,7 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
     };
     if(event!=NBA97_USER_NONE) {
         record(event,event==NBA97_USER_CANCELLED?0x100:0x80,before);
+        if(event==NBA97_USER_CANCELLED) {prior_controller_=8;prior_mask_=0x100;}
         if(state_.result) return actions;
     }
     const auto elapsed=static_cast<uint32_t>(clock)-static_cast<uint32_t>(last_pass_);
@@ -79,8 +92,8 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
         last_pass_=clock;next_row_=0;
     }
     continuing_pass_=false;
-    for(unsigned row=next_row_;row<nba97_user_setup_row_count(topology_);++row) {
-        const auto c=unsigned(nba97_user_setup_physical(topology_,row));
+    for(unsigned row=next_row_;row<nba97_user_setup_row_count(topology_.active);++row) {
+        const auto c=unsigned(nba97_user_setup_physical(topology_.active,row));
         if(!(connected_&(1u<<c))) {nba97_user_setup_disconnect(&state_,c);continue;}
         before=state_;
         const auto token=nba97_user_setup_repeat(&repeat_[c],masks_[c],clock);
@@ -105,12 +118,13 @@ std::vector<UserSetupAction> UserSetupSession::step(int32_t clock) {
             continuing_pass_=true;next_row_=row+1;return actions;
         }
     }
-    const auto included=nba97_user_setup_topology_mask(topology_);
+    const auto included=nba97_user_setup_topology_mask(topology_.active);
     for(unsigned c=0;c<8;++c) if(!(included&(1u<<c))) nba97_user_setup_disconnect(&state_,c);
     return actions;
 }
 void UserSetupSession::openHelp(Nba97HelpRect rect,unsigned index) {
-    help_index_=index;help_controller_=state_.controller;nba97_modal_open_prior(&help_,rect,prior_mask_);
+    help_index_=index;help_controller_=state_.controller;prior_controller_=state_.controller;
+    nba97_modal_open_prior(&help_,rect,prior_mask_);
 }
 Nba97HelpEvent UserSetupSession::tickHelp() {
     const auto event=nba97_help_tick(&help_,masks_[help_controller_]);
@@ -120,7 +134,7 @@ Nba97HelpEvent UserSetupSession::tickHelp() {
 void UserSetupSession::openDialog(UserSetupDialog kind,Nba97HelpRect rect,unsigned c,int preference) {
     if(c>=8 || kind==UserSetupDialog::None || dialog_kind_!=UserSetupDialog::None)
         throw std::runtime_error("invalid User Setup modal request");
-    dialog_={};dialog_kind_=kind;dialog_controller_=c;
+    dialog_={};dialog_kind_=kind;dialog_controller_=c;prior_controller_=static_cast<uint8_t>(c);
     if(kind==UserSetupDialog::Delete) nba97_reset_open_deferred(&dialog_,rect,prior_mask_,preference);
     else nba97_modal_open_prior(&dialog_.modal,rect,prior_mask_);
 }

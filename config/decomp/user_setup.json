@@ -9,7 +9,7 @@
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
     "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
-    "host_integration": "62 combined Team Select/User Setup isolated capture scenarios with partial match snapshots",
+    "host_integration": "76 combined isolated scenarios including topology debounce, shared history, Cancel barrier and partial match snapshots",
     "original_runtime": "pending",
     "native_rendering": "two-run deterministic frames; original asset layout plus original-font inline baseline pixel test",
     "original_visual_timing_audio": "pending",
@@ -25,7 +25,7 @@
       "scope": "user_setup_owner",
       "instructions_accounted": 0,
       "instructions_total": 1716,
-      "native_owner": "nba97_user_setup_open/input/global/edit_begin/edit_input/edit_accept/deleted; UserSetupSession; Win32 updateUserSetup",
+      "native_owner": "nba97_user_setup_open/input/global/edit_begin/edit_input/edit_accept/deleted/topology_observe; UserSetupSession; Win32 updateUserSetup",
       "shared_dependencies": [
         "0x80036CA0",
         "0x80036B80",
@@ -39,7 +39,7 @@
         "tests/user_setup_session_test.cpp",
         "config/decomp/team_select_scenarios.json"
       ],
-      "remaining_uncertainty": "Topology debounce, absolute loop/presentation timing, malformed fallback/raw unused tail, text-node lifecycle and original runtime remain pending; full owner retained."
+      "remaining_uncertainty": "Topology rebuild hide/restore visibility, absolute loop/presentation timing, malformed fallback/raw unused tail, text-node lifecycle and original runtime remain pending; full owner retained."
     },
     {
       "address": "0x80036CA0",

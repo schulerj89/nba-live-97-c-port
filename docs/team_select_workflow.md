@@ -33,14 +33,16 @@ eight-controller assignment logic, optional profile selection, readiness,
 name editing, both Help pages, warning/delete modals and Select return.
 Its exact-name transactions are separate from normalized native profile CRUD.
 See user_setup_workflow.md for this bounded implementation and its remaining
-runtime and topology boundaries. A successful readiness gate now prepares an
+runtime and presentation boundaries. A successful readiness gate now prepares an
 owned ordinary-exhibition snapshot; unsupported fields remain explicit. See
 match_snapshot_workflow.md. MATCH-HANDOFF-PENDING still blocks gameplay launch.
 
 ## Architecture and data safety
 
 - recovered/team_select.c owns selector behavior, six-word RNG and bounded
-  random presentation schedule. recovered/team_ratings.c owns weighted scores
+  random presentation schedule. recovered/team_select_poll.c owns whole-mask
+  polling, repeat waits, callback continuations and changed-input exits.
+  recovered/team_ratings.c owns weighted scores
   and stable rank ordering. recovered/game_setup.c owns card choice wrapping.
 - TeamSelectAssets loads a bounded private pack and derives ranks from the
   CURRENT RosterDatabase::resolveTeamSlots result. Immutable team metadata and
@@ -83,12 +85,29 @@ This session's fixture is
 Absent original evidence prints PENDING, not PASS. Native output is never
 automatically adopted as an expected retail fixture.
 
-There are62 capture checkpoints in config/decomp/team_select_scenarios.json.
+There are76 capture checkpoints in config/decomp/team_select_scenarios.json.
 Two fresh processes must reproduce identical state and512x240 PPM frames.
 Localized logo/tint/Help changes, Help sound events (including a changed held
 key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
+
+Input checkpoint validation on2026-08-30:42/42 CTest tests pass in Debug and
+RelWithDebInfo. All76 state/frame scenarios and owned snapshot artifacts repeat
+within each configuration and match across them. Create Player retains27/27
+deterministic scenarios,753/753 projected vertices,251/251 primary packet/order
+records and zero missing sampled texels. Historical145-score/145-rank and
+existing metadata checks pass with unchanged credit. Real saves/configuration
+remain byte-identical with unchanged timestamps. Release and the desktop
+shortcut are refreshed. New presentation boundaries intentionally change prior
+Team Select frame phases; those older hashes are not a retail oracle.
+
+Private input evidence: Team Select Debug run20260830-181950-752b1d20, release
+run20260830-182053-2eafaf77; Create Player run20260830-182038. Logs use
+.local/logs/team_poll_final_*. Source comparisons pass55,588 pure-C assertions,
+7,985 barrier assertions and60 extracted-host/Session assertions; the independent
+verifier accepts one valid capture and rejects57 mutations. See
+frontend_input_workflow.md for their scope and full caller denominators.
 
 Prior editor checkpoint:39/39 CTest tests passed in Debug and RelWithDebInfo;
 57/57 combined scenarios repeat in each configuration and match across them.
@@ -126,7 +145,7 @@ private audit evidence, not original modified-roster runtime equivalence.
 | Source structure |14 Team Select owners,637 instructions; separate34 Setup callback instructions,2596 targeted shared-helper instructions,524 rating-helper instructions |
 | Instruction accounting |0 credited here: per-block semantic annotation/review remains pending; denominators are retained in team_select.json |
 | Native state tests |Both sides, all31 teams, six criteria, both directions, boundaries, ignored tokens, exit persistence, RNG carry and random barrier; signed rating arithmetic/ties/saturation |
-| Host integration |62 checkpoints; actual native Setup/TeamSelect/UserSetup handlers, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
+| Host integration |76 checkpoints; native Setup/TeamSelect/UserSetup polling, held input/chords/exits, debounced topology, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
 | Historical original numerical boundary |145/145 stock scores and145/145 ranks agree with cached original FEONLY RAM; not a live Team Select capture |
 | Modified roster arithmetic |Independent oracle checks reorder, cross-team swap and count-changing transfer; no original modified-roster runtime claim |
 | Native rendering |Two-run equality; regression stability only |
@@ -150,11 +169,13 @@ are allowed. Native scheduling uses the nominal1001/30ms presentation cadence
 and does not skip unpainted states after a stall. Actual timing, seed history
 and frame alignment remain pending. Title uses the separate shared16-bit RNG.
 
-Known remaining input/presentation boundaries: generic poll/repeat/chord logic,
-Up/Down postwait4, Left/Right repeat-dependent waits7/5/3/1, Cross postwait5,
-directional-arrow flash, and focus-loss/held-state behavior. The native host
-currently uses key messages for those actions. Do not call its OS repeat cadence
-retail-equivalent. Source Help open/close selects sounds7/8; callback sound IDs
+The bounded physical-pad poll/repeat/chord path, postwaits, both Team Select
+exit barriers, exact Setup Start history, User Cancel barrier, and topology
+debounce are now implemented. See frontend_input_workflow.md and its separate
+full-caller ledger. Key messages update held masks before fade/repeat guards;
+they no longer directly dispatch Team Select actions. Complete state0 polling,
+queued text movement, directional-arrow flash/history and topology rebuild
+visibility remain pending. Source Help open/close selects sounds7/8; callback sound IDs
 are proven, but state3 bank/program/tone/sample/pitch/event-time comparisons
 remain pending.
 

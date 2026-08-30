@@ -99,11 +99,11 @@ int main() {
     Nba97TeamRandom random{};uint32_t rng[6]={1,2,3,4,5,6};
     CHECK(nba97_team_random_begin(&random,&s,rng));CHECK(random.remaining==11 && random.wait==1);
     unsigned changes=1;
-    for(unsigned tick=1;tick<=84;++tick) {
+    for(unsigned tick=1;tick<=78;++tick) {
         CHECK(nba97_team_random_busy(&random));
         changes+=nba97_team_random_tick(&random,&s,rng);
-        if(tick==66) CHECK(changes==12 && random.wait==18 && !random.remaining);
-        CHECK(nba97_team_random_busy(&random)==(tick<84));
+        if(tick==66) CHECK(changes==12 && random.wait==12 && !random.remaining);
+        CHECK(nba97_team_random_busy(&random)==(tick<78));
     }
     CHECK(changes==12 && s.team[0]<29 && s.team[1]==24);
     /* Callback input domain, not a claim of simultaneous-pad precedence. */

@@ -38,7 +38,8 @@ int nba97_team_select_random_candidate(Nba97TeamSelect*, uint16_t random_word);
 uint32_t nba97_team_select_rng_step(uint32_t state[6]); /* 8007A538 */
 typedef struct Nba97TeamRandom { uint8_t remaining, wait; } Nba97TeamRandom;
 /* 4F934 applies candidate1 immediately, then waits1..12 presentations.
- * The caller3D930 adds5; 3AE4C pumps1 before its next poll. No cancel inside.
+ * This owner stops after78. Caller3D930 adds5 and3AE4C pumps1 before its next
+ * poll through team_select_poll; do not bundle those6 here. No cancel inside.
  * Each tick means a completed39574 presentation, not a millisecond or vblank. */
 int nba97_team_random_begin(Nba97TeamRandom*, Nba97TeamSelect*, uint32_t rng[6]);
 int nba97_team_random_tick(Nba97TeamRandom*, Nba97TeamSelect*, uint32_t rng[6]);

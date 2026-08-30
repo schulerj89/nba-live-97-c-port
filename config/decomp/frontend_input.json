@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "milestone": "Bounded state3 polling, exact state0 Start fragment, state5 topology and Cancel barrier; original runtime pending",
+  "instruction_policy": "Full caller denominators retained even where only one branch is implemented. All instruction credit is zero. Existing polling, descriptor, random and state5 owners are references, not newly counted instructions. This is not a complete transitive inventory or a game-completion score.",
+  "instruction_denominators": {
+    "shared_caller": 1194
+  },
+  "shared_inventory_references": [
+    {"ledger":"team_select.json", "binary":"feonly", "address":"0x8003AE4C", "instructions_total":210},
+    {"ledger":"team_select.json", "binary":"feonly", "address":"0x8003D930", "instructions_total":828},
+    {"ledger":"team_select.json", "binary":"feonly", "address":"0x8004F934", "instructions_total":41},
+    {"ledger":"user_setup.json", "binary":"feonly", "address":"0x80037010", "instructions_total":1716},
+    {"ledger":"user_setup.json", "binary":"feonly", "address":"0x80036CA0", "instructions_total":42}
+  ],
+  "evidence": {
+    "source_comparison": "Private compiled C vs original-MIPS fixtures: 55588 polling/topology/random assertions; separate 7985 exact Setup Start/aggregate Cancel assertions. Controlled fixtures, not a live original run.",
+    "instruction_accounting": "pending per-block assignment; zero credit",
+    "native_unit": "tests/team_select_poll_test.cpp, tests/team_select_test.cpp, tests/user_setup_session_test.cpp",
+    "host_integration": "76 explicit combined scenarios; first/second process state, frame and owned-snapshot comparisons",
+    "native_rendering": "deterministic regression only; source presentation boundaries change earlier frame phases",
+    "original_runtime": "pending",
+    "original_visual_timing_audio": "pending",
+    "live_physical_walkthrough": "pending"
+  },
+  "functions": [
+    {
+      "binary": "feonly",
+      "address": "0x8003B194",
+      "end_exclusive": "0x8003B1E8",
+      "name": "Shared changed-input presentation barrier",
+      "scope": "shared_caller",
+      "instructions_accounted": 0,
+      "instructions_total": 21,
+      "native_owner": "nba97_team_poll_exit/presented; nba97_user_setup_cancel_ready after updateUserSetup presentation",
+      "shared_dependencies": ["0x80039574", "0x80076198"],
+      "tests_evidence": ["tests/team_select_poll_test.cpp", "tests/user_setup_session_test.cpp", "config/decomp/team_select_scenarios.json", "docs/frontend_input_workflow.md"],
+      "remaining_uncertainty": "Controlled normalized-pad fixtures cover the changed-mask decision and mandatory presentation. Original pad-cache/driver refresh, shared GPU/text presentation, absolute timing and physical delivery remain pending."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003F7C8",
+      "end_exclusive": "0x80040A1C",
+      "name": "Frontend state dispatcher",
+      "scope": "shared_caller",
+      "instructions_accounted": 0,
+      "instructions_total": 1173,
+      "native_owner": "bounded Setup -> Team Select -> User Setup transitions and state5 Cancel branch at3FCF4..3FD18",
+      "shared_dependencies": ["0x8003D930", "0x8004FCD8", "0x80037010", "0x8003B194", "0x80061674"],
+      "tests_evidence": ["tests/user_setup_session_test.cpp", "config/decomp/team_select_scenarios.json", "docs/frontend_input_workflow.md", "docs/match_snapshot_workflow.md"],
+      "remaining_uncertainty": "Only bounded exhibition transitions and Cancel barrier are implemented; the full1173-instruction dispatcher remains in the denominator. Other modes, complete return/cleanup stack, original runtime and gameplay launch are pending."
+    }
+  ]
+}

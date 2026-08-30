@@ -108,7 +108,7 @@ uint32_t nba97_team_select_rng_step(uint32_t state[6]) {
 static int random_next(Nba97TeamRandom* animation, Nba97TeamSelect* state, uint32_t rng[6]) {
     do {} while (!nba97_team_select_random_candidate(state,(uint16_t)nba97_team_select_rng_step(rng)));
     animation->wait=(uint8_t)(13-animation->remaining);
-    if (!--animation->remaining) animation->wait+=6; /* caller wait5 + next poll1 */
+    --animation->remaining; /* Caller wait5 and the next poll1 belong to3D930/3AE4C. */
     return 1;
 }
 int nba97_team_random_busy(const Nba97TeamRandom* animation) {

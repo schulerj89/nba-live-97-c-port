@@ -85,7 +85,7 @@ all source catalogue owners are destroyed, settings backup semantics, control
 retention/deletion/defaults and atomic failure. Created metadata.roster_slot=5
 does not cause a guessed insertion.
 
-The62 combined host scenarios include four successful publications, refusal
+The76 combined host scenarios include four successful publications, refusal
 before readiness, cancellation, disabled saved controls, FE retention, special
 refusal and a saved/reopened roster. Two processes must produce identical
 snapshot JSON as well as states/frames. The verifier independently checks
@@ -106,7 +106,7 @@ zero credited. Only projections of these functions are implemented. Controller
 owner61674 and rating helpers reference their existing inventories, and the
 existing Rules records share ownership rather than adding global credit.
 
-Checkpoint validation on2026-08-30:41/41 CTest tests pass in Debug and
+Snapshot checkpoint validation on2026-08-30:41/41 CTest tests pass in Debug and
 RelWithDebInfo;62/62 host states/frames and both snapshot artifacts repeat in
 each configuration and match across configurations. All preceding57 frames
 remain unchanged. Create Player retains27/27 deterministic scenarios and its
@@ -119,6 +119,11 @@ run20260830-175041-ca3a8470; Create Player run20260830-174953. Logs use
 .local/logs/match_snapshot_*. Independent verifier mutation checks accept two
 valid fixtures and reject39 altered receipts/ledgers. These artifacts remain
 ignored and are not included in checkpoint commits.
+
+Later input/polling changes expand the combined suite to76 scenarios and alter
+presentation phases. See frontend_input_workflow.md and team_select_workflow.md
+for that checkpoint; the unchanged-frame claim above belongs to the snapshot
+checkpoint only.
 
 ## Remaining dependencies
 

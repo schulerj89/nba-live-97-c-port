@@ -2,6 +2,13 @@
 #include <string.h>
 #include <limits.h>
 
+int nba97_user_setup_topology_observe(Nba97UserTopology* s,uint16_t port0,uint16_t port1) {
+    uint8_t next=(uint8_t)((port0==0x8000u)+2*(port1==0x8000u));
+    if(!s) return 0;
+    if(next==s->active) {s->countdown=3;return 0;}
+    if(s->countdown>=0) {--s->countdown;return 0;}
+    s->active=next;s->countdown=3;return 1;
+}
 int nba97_user_setup_open(Nba97UserSetup* out,const uint8_t assignment[8],const int8_t profile[8]) {
     Nba97UserSetup s;
     unsigned i;
@@ -35,6 +42,12 @@ int nba97_user_setup_busy(const Nba97UserSetup* s) {
     if(!s) return 1;
     for(i=0;i<8;++i) if(s->alphabet[i]!=-1 || (s->side[i]!=1 && s->profile[i]==-1)) return 1;
     return 0;
+}
+int nba97_user_setup_cancel_ready(const Nba97UserSetup* s,const uint16_t masks[8],uint8_t connected) {
+    unsigned i;uint16_t aggregate=0;
+    if(!s || !masks || s->result!=-1) return 0;
+    for(i=0;i<8;++i) if(connected&(1u<<i)) aggregate|=masks[i];
+    return aggregate!=0x100;
 }
 Nba97UserEvent nba97_user_setup_global(Nba97UserSetup* s,const uint16_t masks[8],uint8_t connected) {
     unsigned i;uint16_t aggregate=0;
