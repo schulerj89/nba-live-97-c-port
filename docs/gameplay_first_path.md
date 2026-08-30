@@ -103,6 +103,20 @@ Acceptance probes:801E13B0(before save),801E13B8(after save),
 entry words, code signatures and intended lifetimes. Derive and validate RAM
 and separate1MiB VRAM signatures; never reuse an ASLR-dependent host address.
 
+The next independent resource boundary is GAMEONLY640D8's ZMOCAP directory
+resolver. See gameplay_mocap_workflow.md for its full132-instruction denominator,
+signed/header-relative offsets, two84-entry optional directories, normalization
+and resource lifetime. Its standalone parser can be verified before any gameplay
+camera or clock is implemented; the existing frontend six-clip parser is not a
+compatible substitute.
+
+A later original automatic-demo observation confirms the motion resource's
+bounded relocation result:200,044 resource bytes,145 headers, five backward
+references and both84-entry directories agree with the original owner in two
+dumps. The launch flag is1 rather than the native exhibition subset's0. This is
+resource evidence only, not proof of the native handoff, full loader lifecycle,
+camera, sampling, frame timing or a playable possession.
+
 ## 3. Deterministic court/player/camera scene
 
 Recovered order:8002D8D4 ->8002DB90 initialization;8002DB68 ->80048D5C

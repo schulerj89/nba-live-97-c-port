@@ -131,3 +131,9 @@ behavior. Break at3D534 and its2ADEC call, dump the actual node including offset
 field before changing rendering. Full text/arrow allocation and source topology
 rebuild visibility remain pending, as do synchronized visuals, sound bank/tone/
 pitch/sample timing, and a physical keyboard/controller walkthrough.
+
+The first original pre-selector RAM observation found200 free text slots, each
+with stored start RGB0/0/0. This narrows the cold heap observation only: Game Setup
+and transitions can reuse slots before Team Select creates its arrows. It does
+not justify initializing every native arrow to zero or declaring its tint history
+recovered. Capture the actual selected arrow nodes before the first direction.

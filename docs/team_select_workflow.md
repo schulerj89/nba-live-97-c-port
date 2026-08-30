@@ -195,9 +195,19 @@ remain pending.
 
 ## Original capture needed next
 
-The emulator was not running during this milestone. Start it with the original
-game and stop at Game Setup. Ask the user for ONE Enter press, then verify the
-result before asking for another input; no$psx injection is unreliable.
+The emulator was not running during the implementation checkpoint. The later
+runtime preparation launched the existing reference installation with the local
+disc. A fresh FEONLY code signature found one2MiB backing; eight full independent
+functions matched14,764 source bytes. This initial dump precedes a live selector
+presentation: context800214F0, shared history0/0/0, teams3/24. It is not a state3
+runtime comparison. The title later entered its automatic gameplay demo without
+game-key injection, replacing FEONLY; the FE probe correctly refused that state.
+
+Reach Game Setup with ONE physical input at a time, then verify before continuing;
+no$psx game-key injection remains unverified. Initial preparation artifacts are
+under .local/verification/team_select/runtime-20260830/. The title screenshot
+has no paired title RAM dump: the attempted later dump encountered the overlay
+change and was refused, not accepted as a synchronized pair.
 
 First probes: break8004FCD8 and the state3 invocation of8003D930. Dump resident
 80021D70 length0x20, remembered descriptor800EDCA4[3], and current frontend
