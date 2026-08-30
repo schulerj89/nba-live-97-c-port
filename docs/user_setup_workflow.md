@@ -113,7 +113,7 @@ team_select_workflow.md.
 
 ## Next boundary and original probes
 
-Next recover the77-instruction61674 controller-map finalizer and a semantic
+Next integrate the recovered77-instruction61674 controller-map finalizer and a semantic
 ordinary-exhibition match snapshot. Preserve FE/FF live controls, fixed profile
 controls, current saved roster order, ranks and settings. See gameplay_first_path.md.
 Special/created membership and raw unused roster bytes require separate evidence.

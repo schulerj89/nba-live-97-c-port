@@ -32,12 +32,13 @@ Success returns6. Dispatcher calls80061674,80046D24,8003E7A8 and finishes the
 frontend.80061674(0) retains previous control settings for FE/FF profile
 sentinels; it does not always install defaults.
 
-The next independent owner is61674 (77 instructions): clear36 statistic bytes
+The independent owner61674 (77 instructions) now has a pure C implementation
+and read-only fixed-slot adapter; see match_controls_workflow.md. It clears36 statistic bytes
 per controller; retain all59 live control bytes for FE/FF; copy saved controls
 when validity is nonzero, otherwise defaults. A force-default bootstrap path
 also exists. Current UserProfile v2 provides fixed slots,59 controls and raw
-validity; live controller-map lifetime and the private default59-byte pack remain
-to implement. A neutral controller can retain a selector to a deleted profile;
+validity; live host controller-map lifetime and the private default59-byte pack
+remain to implement. A neutral controller can retain a selector to a deleted profile;
 the cleared record selects defaults, so missing atSlot must not invent refusal.
 Then build an atomic ordinary-exhibition snapshot before enabling any gameplay.
 

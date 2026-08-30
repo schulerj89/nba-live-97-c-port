@@ -195,12 +195,16 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 77,
-      "native_owner": "pending semantic match snapshot",
-      "shared_dependencies": [],
-      "tests_evidence": [
-        "docs/gameplay_first_path.md"
+      "native_owner": "nba97_match_controls_finalize; finalizeMatchControls read-only fixed-slot adapter",
+      "shared_dependencies": [
+        "0x8008A944"
       ],
-      "remaining_uncertainty": "0x24-byte clear and conditional59-byte controls copy not implemented; FE/FF must retain current controls."
+      "tests_evidence": [
+        "tests/match_controls_test.cpp",
+        "docs/match_controls_workflow.md",
+        "private raw-MIPS570-case comparison; native864-case invalid-selector atomic guards; not live runtime"
+      ],
+      "remaining_uncertainty": "Pure semantic36-byte clear and59-byte copy/retain implemented; host live-map lifetime, private defaults, cold-boundary integration and original runtime pending. Raw record gaps unmodeled; positive out-of-table selector reads refused natively."
     },
     {
       "address": "0x80031F48",
