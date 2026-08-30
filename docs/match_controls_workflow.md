@@ -1,8 +1,8 @@
 # Bounded controller-map handoff
 
 This implements FEONLY80061674 as a pure C function and a read-only C++ fixed-slot
-adapter. It is a prerequisite for a match snapshot, not a gameplay launch or an
-integrated live-controller lifetime. No original data, memory-card I/O, overlay
+adapter. MatchSession now integrates its owned live maps and partial match
+snapshot; see match_snapshot_workflow.md. No original data, memory-card I/O, overlay
 execution or model/rendering changes belong to this boundary.
 
 ## Source contract
@@ -40,7 +40,7 @@ another controller deletes that profile. Duplicate IDs/slots and unmapped legacy
 slot255 refuse; the existing v1 store reader assigns fixed slots before this API.
 The adapter does not read assets, write saves or mutate source objects.
 
-## Verification and remaining integration
+## Verification and bounded host integration
 
 The asset-free match_controls_core CTest covers196,608 signed-selector/validity/
 force combinations, all eight distinct maps/statistic prefixes, last-slot atomic
@@ -63,17 +63,17 @@ release173108-1aafafe6 on2026-08-30. Logs use .local/logs/match_controls_*.
 Create Player rendering and persistence code are unchanged from the preceding
 27/27-capture checkpoint. Existing metadata credit stays unchanged.
 
-Before wiring the host, establish live maps across cold entry, User Setup return
-and successive matches. The source28800 calls61674(1) only when resident word
+The host now retains live maps across User Setup return and successive snapshots.
+The source28800 calls61674(1) only when resident word
 80021EE4 is zero; resetting on every User Setup entry would erase valid live
 maps. Fresh FEONLY data contains zero, and360D4 later writes one; no direct reset
-writer was found in the FEONLY/GAMEONLY cross-reference audit. Extract the59
-default bytes into a private purpose-specific pack and use the proven cold-entry
-boundary. Other control editors and indirect mutation paths require their own
-ownership audit.
+writer was found in the FEONLY/GAMEONLY cross-reference audit. The private59-byte
+pack initializes MatchSession once per fresh native process, lazily before its
+first consumer. Other control editors, warm/indirect paths and exact original
+initialization timing require their own audit.
 
-Then create a semantic ordinary-exhibition match snapshot from current rosters,
-settings, selected teams/profiles and these maps, preserving unsupported fields
-as explicit pending dependencies. Original probes at61674 entry/return compare
+The semantic ordinary-exhibition snapshot owns current rosters, settings,
+selected teams/profiles and these maps, with unsupported fields explicitly
+pending. It does not launch gameplay. Original probes at61674 entry/return compare
 8001EF7C length0x3c0, selectors80021DDE length8 and profile controls at
 80020C1C length0x870. Validate backing before reading. Gameplay remains disabled.

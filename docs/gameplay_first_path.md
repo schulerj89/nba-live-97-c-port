@@ -1,7 +1,8 @@
 # Smallest evidence-backed path after Team Select
 
-2026-08-30 source audit with native Team Select and partial User Setup.
-No gameplay function is implemented by this checkpoint.
+2026-08-30 source audit with native Team Select, User Setup and an owned partial
+ordinary-exhibition snapshot. Only small GAMEONLY index/count projections are
+implemented; there is no gameplay scene or loop.
 Original dumps, disassembly, art and raw tables remain private.
 This is a sequence of bounded dependencies, not a broad gameplay rewrite.
 
@@ -37,10 +38,11 @@ and read-only fixed-slot adapter; see match_controls_workflow.md. It clears36 st
 per controller; retain all59 live control bytes for FE/FF; copy saved controls
 when validity is nonzero, otherwise defaults. A force-default bootstrap path
 also exists. Current UserProfile v2 provides fixed slots,59 controls and raw
-validity; live host controller-map lifetime and the private default59-byte pack
-remain to implement. A neutral controller can retain a selector to a deleted profile;
+validity. MatchSession now owns the live maps, initializes the private defaults
+once and atomically publishes partial snapshots; see match_snapshot_workflow.md.
+A neutral controller can retain a selector to a deleted profile;
 the cleared record selects defaults, so missing atSlot must not invent refusal.
-Then build an atomic ordinary-exhibition snapshot before enabling any gameplay.
+Unsupported snapshot fields remain explicit; no gameplay is enabled.
 
 Roster copies at80040900(home) and80040964(away) are12 records of0x6E bytes into
 8002208C and800225B4. Sources are mutable team slot tables, not a stock database
@@ -59,8 +61,8 @@ first-null index, not an arbitrary count of nonempty holes.
 
 GAMEONLY800655B0 also consumes team bytes+54/+57 as AI thresholds. The private
 database pack's source_metadata[0..4] contains stock ranks; never mutate that
-immutable save identity. A future match snapshot must overlay the freshly
-derived Team Select ranks in its own copy before those consumers run.
+immutable save identity. The match snapshot now overlays freshly derived ranks
+in its own copy before any future gameplay consumer can use it.
 
 Settings must be copied by meaning, not a guessed contiguous options block.
 The11 native option indices map to resident bytes21D86,21D7C,21D7D,21D7E,

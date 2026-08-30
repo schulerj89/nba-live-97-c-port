@@ -35,6 +35,8 @@ public:
     [[nodiscard]] std::uint8_t rule(int index) const noexcept;
     [[nodiscard]] std::uint8_t option(int index) const noexcept;
     [[nodiscard]] std::uint8_t style() const noexcept { return style_; }
+    [[nodiscard]] const std::array<std::uint8_t,14>& customRules() const noexcept { return custom_rules_; }
+    [[nodiscard]] std::array<std::uint8_t,14> effectiveRules() const noexcept;
     [[nodiscard]] std::string ruleValue(int index) const;
     [[nodiscard]] std::string optionValue(int index) const;
     bool adjustRule(int index, int direction) noexcept;

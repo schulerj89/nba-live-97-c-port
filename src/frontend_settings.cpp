@@ -1,4 +1,5 @@
 #include "frontend_settings.hpp"
+#include "recovered/match_setup.h"
 
 #include <algorithm>
 #include <fstream>
@@ -153,17 +154,13 @@ bool FrontendSettings::adjustOption(int index, int direction) noexcept {
 
 void FrontendSettings::applyStyle(std::uint8_t style) noexcept {
     style_ = std::min<std::uint8_t>(style, 2);
-    if (style_ == 0) {
-        rules_.fill(0);
-        rules_[11] = 1;
-    } else if (style_ == 1) {
-        for (std::size_t i = 0; i < rules_.size(); ++i) rules_[i] = kRuleMaximums[i];
-        rules_[0] = 4;
-        rules_[1] = 4;
-        rules_[2] = 5;
-    } else {
-        rules_ = custom_rules_;
-    }
+    nba97_match_effective_rules(rules_.data(),style_,custom_rules_.data());
+}
+
+std::array<std::uint8_t,14> FrontendSettings::effectiveRules() const noexcept {
+    std::array<std::uint8_t,14> result{};
+    nba97_match_effective_rules(result.data(),style_,custom_rules_.data());
+    return result;
 }
 
 void FrontendSettings::classifyRules() noexcept {

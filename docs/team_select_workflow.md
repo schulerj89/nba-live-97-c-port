@@ -33,8 +33,9 @@ eight-controller assignment logic, optional profile selection, readiness,
 name editing, both Help pages, warning/delete modals and Select return.
 Its exact-name transactions are separate from normalized native profile CRUD.
 See user_setup_workflow.md for this bounded implementation and its remaining
-runtime, topology and match boundaries. A successful readiness gate
-logs MATCH-HANDOFF-PENDING; it does not launch a substitute gameplay screen.
+runtime and topology boundaries. A successful readiness gate now prepares an
+owned ordinary-exhibition snapshot; unsupported fields remain explicit. See
+match_snapshot_workflow.md. MATCH-HANDOFF-PENDING still blocks gameplay launch.
 
 ## Architecture and data safety
 
@@ -64,6 +65,7 @@ Run from the repository root after extracting the existing private packs:
 ~~~powershell
 python tools/extract_team_select.py
 python tools/extract_user_setup.py
+python tools/extract_match_setup.py
 pwsh -NoProfile -File scripts/build.ps1 -Configuration Debug -AllTargets
 pwsh -NoProfile -File scripts/verify_team_select.ps1 -SkipBuild
 ~~~
@@ -81,14 +83,14 @@ This session's fixture is
 Absent original evidence prints PENDING, not PASS. Native output is never
 automatically adopted as an expected retail fixture.
 
-There are57 capture checkpoints in config/decomp/team_select_scenarios.json.
+There are62 capture checkpoints in config/decomp/team_select_scenarios.json.
 Two fresh processes must reproduce identical state and512x240 PPM frames.
 Localized logo/tint/Help changes, Help sound events (including a changed held
 key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
 
-Current editor checkpoint:39/39 CTest tests pass in Debug and RelWithDebInfo;
+Prior editor checkpoint:39/39 CTest tests passed in Debug and RelWithDebInfo;
 57/57 combined scenarios repeat in each configuration and match across them.
 Create Player retains27/27 repeated captures,753/753 projected vertices,
 251/251 primary packet/order records and zero missing sampled texels.
@@ -124,7 +126,7 @@ private audit evidence, not original modified-roster runtime equivalence.
 | Source structure |14 Team Select owners,637 instructions; separate34 Setup callback instructions,2596 targeted shared-helper instructions,524 rating-helper instructions |
 | Instruction accounting |0 credited here: per-block semantic annotation/review remains pending; denominators are retained in team_select.json |
 | Native state tests |Both sides, all31 teams, six criteria, both directions, boundaries, ignored tokens, exit persistence, RNG carry and random barrier; signed rating arithmetic/ties/saturation |
-| Host integration |57 checkpoints; actual native Setup/TeamSelect/UserSetup handlers, editor/modals, failed-save retry and isolated restart; match handoff pending |
+| Host integration |62 checkpoints; actual native Setup/TeamSelect/UserSetup handlers, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
 | Historical original numerical boundary |145/145 stock scores and145/145 ranks agree with cached original FEONLY RAM; not a live Team Select capture |
 | Modified roster arithmetic |Independent oracle checks reorder, cross-team swap and count-changing transfer; no original modified-roster runtime claim |
 | Native rendering |Two-run equality; regression stability only |

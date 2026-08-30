@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "milestone": "State5 assignment/editor/Help/warnings/delete and native v2 profile transactions; original runtime and match snapshot pending",
+  "milestone": "State5 assignment/editor/Help/warnings/delete, native v2 transactions and owned partial match snapshot; original runtime and gameplay pending",
   "instruction_policy": "Bounded inventory, not a transitive graph. Zero credit until per-block ownership review. Shared scopes are not additive whole-game progress. Full1716 owner denominator retains all inline editor branches.",
   "instruction_denominators": {
     "user_setup_owner": 2194,
@@ -9,14 +9,14 @@
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
     "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
-    "host_integration": "57 combined Team Select/User Setup isolated capture scenarios",
+    "host_integration": "62 combined Team Select/User Setup isolated capture scenarios with partial match snapshots",
     "original_runtime": "pending",
     "native_rendering": "two-run deterministic frames; original asset layout plus original-font inline baseline pixel test",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "editor": "implemented; private independent MIPS comparison4554 valid,17 legacy,33 boundaries; malformed fallback unclaimed",
     "persistence": "v1 readable, v2 fixed slots/control bytes; native exact-name transactions, rollback/CAS/backup tests; not retail memory-card scheduling",
-    "gameplay": "pending match snapshot and dependencies in docs/gameplay_first_path.md"
+    "gameplay": "partial owned ordinary snapshot implemented; remaining dependencies in docs/gameplay_first_path.md"
   },
   "functions": [
     {
@@ -195,7 +195,7 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 77,
-      "native_owner": "nba97_match_controls_finalize; finalizeMatchControls read-only fixed-slot adapter",
+      "native_owner": "nba97_match_controls_finalize; finalizeMatchControls fixed-slot adapter; MatchSession owned live maps",
       "shared_dependencies": [
         "0x8008A944"
       ],
@@ -204,7 +204,7 @@
         "docs/match_controls_workflow.md",
         "private raw-MIPS570-case comparison; native864-case invalid-selector atomic guards; not live runtime"
       ],
-      "remaining_uncertainty": "Pure semantic36-byte clear and59-byte copy/retain implemented; host live-map lifetime, private defaults, cold-boundary integration and original runtime pending. Raw record gaps unmodeled; positive out-of-table selector reads refused natively."
+      "remaining_uncertainty": "Semantic36-byte clear and59-byte copy/retain integrated with private defaults once per fresh host. Warm/indirect lifetimes, exact cold timing and original runtime pending. Raw gaps unmodeled; positive out-of-table selectors refused natively."
     },
     {
       "address": "0x80031F48",

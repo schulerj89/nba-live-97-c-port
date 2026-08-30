@@ -14,6 +14,8 @@
 #include "team_select_assets.hpp"
 #include "user_setup_assets.hpp"
 #include "user_setup_session.hpp"
+#include "match_assets.hpp"
+#include "match_snapshot.hpp"
 #include "png_image.hpp"
 #include "player_photo_loader.hpp"
 #include "frontend_title.hpp"
@@ -766,7 +768,7 @@ private:
         frontend_page_=nba97::FrontendPage::GameSetup;frontend_transition_active_=false;menu_elapsed_ms_=0;
         std::ofstream states(output/"states.json");states<<"[\n";unsigned count=0;
         auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
-        auto frame=[&](const char* name) {
+        auto frame=[&](const char* name,const nba97::RosterDatabase::SlotTable* expected_roster=nullptr) {
             rebuildMenuFrame();
             PshImage pixels;pixels.width=static_cast<uint16_t>(menu_frame_.width);pixels.height=static_cast<uint16_t>(menu_frame_.height);
             pixels.rgba=menu_frame_.bgra;
@@ -790,8 +792,9 @@ private:
                 ",\"dialog_phase\":"<<unsigned(user_setup_.dialogState().modal.phase)<<
                 ",\"dialog_choice\":"<<unsigned(user_setup_.dialogState().choice)<<
                 ",\"profile_count\":"<<profile_store_.profiles().size()<<
-                ",\"profile_generation\":"<<profile_store_.generation()<<"}";
-            require(roster_database_.slotTable()==slots && roster_database_.baseIdentity()==identity,
+                ",\"profile_generation\":"<<profile_store_.generation()<<
+                ",\"match_revision\":"<<match_session_.revision()<<"}";
+            require(roster_database_.slotTable()==(expected_roster ? *expected_roster:slots) && roster_database_.baseIdentity()==identity,
                 "Team Select mutated accepted roster/identity");
             require(settings_.rule(3)==retained_rule && !std::memcmp(&created,&created_players_,sizeof(created)),
                 "Team Select lost settings/created catalogue");
@@ -872,6 +875,7 @@ private:
         userKey(VK_UP);require(user_setup_.state().profile[0]==-1,"Start New profile cycle");frame("user-new-profile");
         userKey(VK_RETURN);require(user_setup_.state().result==0 && user_setup_.state().assignment[0]==0,
             "unresolved active Start New must refuse readiness");frame("user-readiness-refused");
+        require(!match_session_.snapshot() && !match_session_.revision(),"refused readiness captured a match");
         userKey('C');require(user_setup_.state().profile[0]==0 && user_setup_.state().alphabet[0]==0 &&
             !std::strcmp(user_setup_.state().draft[0],"A") && profile_store_.profiles().empty(),
             "editor claims first empty slot without saving");frame("user-editor-new");
@@ -951,6 +955,10 @@ private:
             "reentry retains accepted profile only");
         userKey(VK_LEFT); // Abandoned pre-confirmation assignment was neutral.
         userKey(VK_RETURN);require(user_setup_.state().assignment[0]==2,"state5 acceptance maps away to2");frame("match-handoff-pending");
+        require(match_session_.revision()==1 && match_session_.snapshot() &&
+            match_session_.snapshot()->accepted_slots==slots && match_session_.snapshot()->request.teams[0]==team_select_.team[0] &&
+            match_session_.snapshot()->rules==settings_.effectiveRules(),"actual result6 captures accepted roster/settings");
+        std::ofstream(output/"match_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
         userKey('C');userTicks(20);
@@ -1004,6 +1012,36 @@ private:
         require(user_setup_.dialogKind()==nba97::UserSetupDialog::Full && user_setup_.state().profile[0]==-1 &&
             profile_store_.profiles().size()==20,"full catalogue cannot claim a draft slot");frame("user-full-warning");
         userKey('C');userTicks(20);
+        userKey(VK_UP); // From unresolved FF to the first saved fixed slot.
+        require(user_setup_.state().profile[0]==0,"full catalogue saved selector");
+        userKey(VK_RETURN);
+        require(match_session_.revision()==2 && match_session_.snapshot()->controls.profile_ids[0]==first_id &&
+            match_session_.snapshot()->controls.provenance[0]==NBA97_CONTROLS_DEFAULT,
+            "saved profile with disabled controls selects defaults");frame("match-profile-snapshot");
+        const auto retained_maps=match_session_.liveControls();
+        userKey(VK_DOWN);userKey(VK_DOWN);userKey(VK_RETURN);
+        require(match_session_.revision()==3 && match_session_.snapshot()->controls.provenance[0]==NBA97_CONTROLS_RETAINED &&
+            !std::memcmp(retained_maps.map,match_session_.liveControls().map,sizeof(retained_maps.map)),
+            "FE handoff retains live controller maps");frame("match-no-profile-retains");
+        userKey(VK_RSHIFT);
+        require(match_session_.revision()==3,"cancel changed frozen match");frame("match-cancel-preserved");
+        for(unsigned i=0;i<31 && team_select_.team[team_select_.side]!=29;++i)key(VK_RIGHT);
+        require(team_select_.team[team_select_.side]==29,"special-team source navigation");
+        key(VK_RETURN);userKey(VK_RETURN);
+        require(match_session_.revision()==3,"unsupported special team replaced prior snapshot");frame("match-special-pending");
+        userKey(VK_RSHIFT);key(VK_RIGHT);key(VK_RIGHT); // special29 ->30 -> next regular rank
+        auto prior_store=std::move(roster_store_);
+        roster_database_.swap(reopened);
+        roster_store_=std::make_unique<nba97::RosterSaveStore>(output.parent_path()/"propagation.n97rst");
+        roster_store_->load(roster_database_);
+        key(VK_RETURN);userKey(VK_RETURN);
+        require(match_session_.revision()==4 && match_session_.snapshot()->accepted_slots==modified_slots &&
+            match_session_.snapshot()->roster_generation==1 &&
+            !std::memcmp(&match_session_.snapshot()->ranks,&modified_ranks,sizeof(modified_ranks)),
+            "host handoff must use accepted reopened roster and fresh ranks");
+        frame("match-modified-roster",&modified_slots);
+        std::ofstream(output/"match_modified_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
+        roster_database_.swap(reopened);roster_store_=std::move(prior_store);
         states<<"\n]\n";
         trace_.log("TEAM-CAPTURE","PASS: "+std::to_string(count)+" original-asset native frames; host Team Select/User Setup/editor/modal/transaction/restart scenarios; match handoff pending; no real saves");
         return 0;
@@ -5589,6 +5627,10 @@ private:
                     if(!team_select_sprites_.count(tag)) team_select_sprites_.emplace(tag,load_png_image(root/(std::string(tag)+".png")));
                 user_setup_assets_=std::move(assets);
             }
+            if(!match_session_.initialized()) {
+                match_session_.initialize(nba97::loadMatchControlDefaults(options_.asset_root/"match_setup/controls.n97ctl"));
+                trace_.log("MATCH-CONTROLS-INIT","28800 cold branch ->61674(1);8 default maps; once per fresh native process; warm overlay paths pending");
+            }
             user_setup_.open(user_setup_assets_->initialAssignments(),profile_store_.profiles(),
                 static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000));
             user_setup_.configureEditor(user_setup_assets_->alphabet(),[this](const char* text){return menu_font_.textWidth(text);});
@@ -5613,6 +5655,23 @@ private:
     void updateUserProfileCount() {
         active_user_profiles_=static_cast<int>(profile_store_.profiles().size());
         menu_.setActiveUserProfiles(active_user_profiles_);
+    }
+    void captureMatchSnapshot() {
+        nba97::MatchRequest request;request.users=user_setup_.state();
+        for(unsigned side=0;side<2;++side)request.teams[side]=team_select_.team[side];
+        for(unsigned card=0;card<4;++card)request.setup[card]=menu_.setupChoice(card);
+        const nba97::MatchSnapshot* snapshot=nullptr;
+        try {
+            snapshot=&match_session_.capture(request,{roster_database_,settings_,profile_store_.profiles(),
+                created_players_,team_select_assets_->ratingAdjustments(),roster_store_ ? roster_store_->accepted().generation:0,
+                profile_store_.generation(),created_player_store_.generation()});
+        } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-PENDING",e.what());return;}
+        // Publication succeeded. A diagnostic allocation failure cannot relabel
+        // it as a refused snapshot with an unchanged revision/live map.
+        try {
+            trace_.log("MATCH-SNAPSHOT","revision="+std::to_string(match_session_.revision())+
+                " source61674/63D58/655B0 subset; "+nba97::matchSnapshotReceipt(*snapshot));
+        } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-LOG-FAILED",std::string("snapshot retained; ")+e.what());}
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
@@ -5687,7 +5746,8 @@ private:
                     beginFrontendTransition(nba97::FrontendPage::TeamSelect,"state5 Select100 result-1; profiles cleared, accepted assignments and team focus retained");
                     return;
                 } else if(action.event==NBA97_USER_CONFIRMED) {
-                    trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed in session; owner8003FCFC ->61674/46D24/3E7A8; match roster/control adapter pending; no gameplay launched");
+                    captureMatchSnapshot();
+                    trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed; bounded snapshot attempted; presentation/extension settings and gameplay initialization pending; no gameplay launched");
                     user_setup_.deferMatch();
                 } else if(action.event==NBA97_USER_CAPACITY || action.event==NBA97_USER_PROFILE_FULL ||
                           action.event==NBA97_USER_NAME_DUPLICATE || action.event==NBA97_USER_DELETE_REQUEST) {
@@ -7316,6 +7376,7 @@ private:
     int reorder_modal_frame_ = 0;
     bool reorder_discard_yes_ = false;
     nba97::UserProfileStore profile_store_;
+    nba97::MatchSession match_session_;
     nba97::CreatedPlayerStore created_player_store_;
     std::unique_ptr<nba97::CreatePlayerDeleteAssets> create_player_delete_assets_;
     std::unique_ptr<nba97::FrontendHelpPack> create_player_help_pack_;

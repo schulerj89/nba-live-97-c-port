@@ -3,6 +3,7 @@
 #include "frontend_palette_assets.hpp"
 #include "roster_database.hpp"
 #include "recovered/team_ratings.h"
+#include "roster_ratings.hpp"
 #include <array>
 
 namespace nba97 {
@@ -19,6 +20,7 @@ public:
     const FrontendPaletteAssets& backgrounds() const { return backgrounds_; }
     const FrontendHelpPack& help() const { return help_; }
     const std::array<uint32_t,6>& initialRng() const { return rng_; }
+    const std::array<int16_t,29>& ratingAdjustments() const { return adjustments_; }
 private:
     std::array<uint32_t,6> rng_{};
     std::array<int16_t,29> adjustments_{};

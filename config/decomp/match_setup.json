@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "milestone": "Owned partial ordinary-exhibition match snapshot; no gameplay launch",
+  "instruction_policy": "Bounded full-function inventory for projections, not a transitive graph or additive whole-game progress. All credit remains zero. Previously inventoried controller/rating helpers are referenced, not counted again; existing rule-function records share ownership.",
+  "instruction_denominators": {
+    "roster_dependency": 253,
+    "rules_dependency": 148
+  },
+  "shared_inventory_references": [
+    {
+      "ledger": "user_setup.json",
+      "binary": "feonly",
+      "address": "0x80061674",
+      "instructions_total": 77
+    },
+    {
+      "ledger": "team_select.json",
+      "scope": "ratings_dependency",
+      "instructions_total": 524
+    },
+    {
+      "ledger": "recovered_functions.json",
+      "binary": "feonly",
+      "addresses": [
+        "0x8003E620",
+        "0x8003E698",
+        "0x8003E714"
+      ],
+      "note": "Same rules owners, no additional credited instructions"
+    }
+  ],
+  "evidence": {
+    "instruction_accounting": "pending per-block assignment",
+    "native_unit": "tests/match_snapshot_test.cpp and tests/match_controls_test.cpp",
+    "host_integration": "62 isolated Team Select/User Setup frames, two owned snapshot artifacts and explicit unsupported special-team refusal",
+    "original_isolated_instructions": "private raw-MIPS source oracle;544 roster and768 rule comparisons,1272 guard/alias checks,13 option mapping checks; no mismatches",
+    "original_runtime": "pending",
+    "original_visual_timing_audio": "pending",
+    "live_physical_walkthrough": "pending",
+    "gameplay": "pending extension/presentation settings, special/created membership, gameplay side/overlay/scene initialization"
+  },
+  "functions": [
+    {
+      "binary": "gameonly",
+      "address": "0x80063D58",
+      "name": "Match player reference aliases",
+      "scope": "roster_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 97,
+      "native_owner": "nba97_match_roster_indices (alias and initial lineup subset)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Semantic alias indices and initial lineup0..11 are reconstructed. Original pointer relocation, remaining destination arrays and live GAMEONLY execution remain pending."
+    },
+    {
+      "binary": "gameonly",
+      "address": "0x800655B0",
+      "name": "Match side/header initialization",
+      "scope": "roster_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 156,
+      "native_owner": "nba97_match_roster_indices (active count clamp subset)",
+      "shared_dependencies": [
+        "0x80063D58"
+      ],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Only count clamp is implemented. Header clearing, first-five lineup copies, difficulty/rank AI scalars, special branches and other side fields remain pending; full156 denominator retained."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003E7A8",
+      "name": "Finalize rule style",
+      "scope": "rules_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 45,
+      "native_owner": "nba97_match_effective_rules",
+      "shared_dependencies": [
+        "0x8003E698",
+        "0x8003E714",
+        "0x8003E620"
+      ],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Accepted-match path only. Descriptor mutation and Rules-screen cancellation exception are outside the pure projector; native rejects style>2."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003E698",
+      "name": "Apply arcade rules",
+      "scope": "rules_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 31,
+      "native_owner": "nba97_match_effective_rules (arcade)",
+      "shared_dependencies": [
+        "0x8003A0D8"
+      ],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Semantic rule values tested; original descriptor side effects and live timing remain pending. Shared with recovered_functions.json Rules_ApplyArcade, not additional global credit."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003E714",
+      "name": "Apply simulation rules",
+      "scope": "rules_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 37,
+      "native_owner": "nba97_match_effective_rules (simulation)",
+      "shared_dependencies": [
+        "0x8003A0D8"
+      ],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Semantic rule values tested; original descriptor side effects and live timing remain pending. Shared with recovered_functions.json Rules_ApplySimulation, not additional global credit."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003E620",
+      "name": "Restore custom-rule backup",
+      "scope": "rules_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 15,
+      "native_owner": "nba97_match_effective_rules (custom)",
+      "shared_dependencies": [
+        "0x8003A0D8"
+      ],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Uses saved backup, not active rules. Descriptor ownership/runtime pending. Shared with recovered_functions.json Rules_RestoreCustom, not additional global credit."
+    },
+    {
+      "binary": "feonly",
+      "address": "0x8003A0D8",
+      "name": "Descriptor value writer",
+      "scope": "rules_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 20,
+      "native_owner": "semantic byte projection only",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/match_snapshot_test.cpp",
+        "docs/match_snapshot_workflow.md",
+        "private independent snapshot projection oracle; not live runtime"
+      ],
+      "remaining_uncertainty": "Byte-address mappings checked; generic descriptor modes and full helper behavior are unimplemented."
+    }
+  ]
+}

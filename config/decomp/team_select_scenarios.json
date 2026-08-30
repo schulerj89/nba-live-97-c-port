@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "scope": "Setup -> Team Select -> navigation/Help/random -> User Setup assignment/editor/Help/warnings/delete/native transactions/cancel. Original runtime comparisons, topology debounce and match handoff remain pending.",
+  "scope": "Setup -> Team Select -> navigation/Help/random -> User Setup assignment/editor/Help/warnings/delete/native transactions/cancel -> partial owned ordinary-exhibition snapshot. Original runtime comparisons, topology debounce and gameplay launch remain pending.",
   "expectation_source": "Independent FEONLY callback/descriptor audit. Rank navigation relation is derived from the rank cache; compare that cache separately against historical original RAM.",
   "native_frames": [
     {"id":"setup","expect":{"page":"Game Setup","quarter":0,"mode":0}},
@@ -27,7 +27,7 @@
     {"id":"user-away","expect":{"user_side":0,"user_profile":-2,"assignment":0}},
     {"id":"user-away-boundary","expect":{"user_side":0,"user_profile":-2,"assignment":0}},
     {"id":"user-new-profile","expect":{"user_side":0,"user_profile":-1,"assignment":0}},
-    {"id":"user-readiness-refused","expect":{"user_side":0,"user_profile":-1,"assignment":0}},
+    {"id":"user-readiness-refused","expect":{"user_side":0,"user_profile":-1,"assignment":0,"match_revision":0}},
     {"id":"user-editor-new","expect":{"user_side":0,"user_profile":0,"assignment":0,"editor":0,"cursor":0,"draft":"A","profile_count":0}},
     {"id":"user-editor-append","expect":{"editor":0,"cursor":1,"draft":"BA","profile_count":0}},
     {"id":"user-editor-delete-char","expect":{"editor":2,"cursor":0,"draft":"C","profile_count":0}},
@@ -46,7 +46,7 @@
     {"id":"user-delete-barrier","expect":{"dialog":4,"dialog_phase":5,"dialog_choice":0,"profile_count":2,"profile_generation":3}},
     {"id":"user-delete-accepted","expect":{"dialog":0,"user_profile":-2,"profile_count":1,"profile_generation":4}},
     {"id":"user-editor-abandon","expect":{"page":"Team Select","editor":-1,"user_profile":-2,"profile_count":1,"profile_generation":4}},
-    {"id":"match-handoff-pending","expect":{"page":"User Setup","user_side":0,"user_profile":-2,"assignment":2},"retail_equivalence":"pending; result6 logged and native return-to-selection barrier retained instead of gameplay"},
+    {"id":"match-handoff-pending","expect":{"page":"User Setup","user_side":0,"user_profile":-2,"assignment":2,"match_revision":1},"retail_equivalence":"partial snapshot from accepted result6; original runtime and complete launch pending"},
     {"id":"user-help","expect":{"user_side":0,"user_profile":-2,"assignment":2,"user_help":3}},
     {"id":"user-help-return","expect":{"user_side":0,"user_profile":-2,"assignment":2,"user_help":0}},
     {"id":"user-invalid-chord","expect":{"user_side":0,"user_profile":-2,"assignment":2}},
@@ -59,7 +59,12 @@
     {"id":"random-last-wait","expect":{"random_wait":18,"home":3,"side":1}},
     {"id":"random-complete","expect":{"random_wait":0,"home":3,"side":1}},
     {"id":"user-capacity-warning","expect":{"page":"User Setup","dialog":1,"dialog_phase":3,"user_side":1,"profile_count":1,"profile_generation":4}},
-    {"id":"user-full-warning","expect":{"dialog":2,"dialog_phase":3,"user_profile":-1,"editor":-1,"profile_count":20,"profile_generation":23}}
+    {"id":"user-full-warning","expect":{"dialog":2,"dialog_phase":3,"user_profile":-1,"editor":-1,"profile_count":20,"profile_generation":23}},
+    {"id":"match-profile-snapshot","expect":{"page":"User Setup","user_side":0,"user_profile":0,"assignment":2,"match_revision":2,"profile_count":20,"profile_generation":23}},
+    {"id":"match-no-profile-retains","expect":{"page":"User Setup","user_profile":-2,"assignment":2,"match_revision":3}},
+    {"id":"match-cancel-preserved","expect":{"page":"Team Select","user_profile":-2,"assignment":2,"match_revision":3}},
+    {"id":"match-special-pending","expect":{"page":"User Setup","home":3,"away":29,"user_profile":-2,"assignment":2,"match_revision":3},"retail_equivalence":"native explicit refusal; special-team construction is not yet implemented"},
+    {"id":"match-modified-roster","expect":{"page":"User Setup","home":3,"user_profile":-2,"assignment":2,"match_revision":4,"profile_count":20,"profile_generation":23}}
   ],
   "unit_scenarios": [
     "both sides / six criteria / both directions / every team / endpoint wraps",
@@ -75,14 +80,19 @@
     "fixed persisted profile slots keyed by stable IDs, no writes on import, invalid IDs rejected",
     "editor alphabet wrap, width95/96 and105/106, 13-character cap, cursor movement, delete/backspace and exact duplicates",
     "inherited modal acknowledgment, prior0, controller isolation, eight-presentation Cross delay and final return barrier",
-    "independent v1/v2 profile wire fixtures, all statistics/control bytes, fixed holes, recovery, no-op, CAS and failed-write rollback"
+    "independent v1/v2 profile wire fixtures, all statistics/control bytes, fixed holes, recovery, no-op, CAS and failed-write rollback",
+    "owned match inputs after source destruction; current reorder/ranks, counts8/11/12/15, aliases and lineup",
+    "saved/retained/default maps across successful snapshots; atomic invalid-source refusal; once-per-process defaults",
+    "effective arcade/simulation/custom rules from inconsistent loaded settings; created catalogue retained with explicit membership pending"
   ],
   "host_invariants": [
     "all four save paths isolated before assets/stores load",
     "real save/config files unchanged",
     "selected teams, focus, settings and created catalogue survive round trip",
     "accepted roster and base identity never mutated by Team Select",
-    "reopened isolated roster changes derived scores without changing immutable metadata"
+    "reopened isolated roster changes derived scores without changing immutable metadata",
+    "accepted Start publishes owned current rosters/settings/controls; refused readiness and cancel preserve the prior snapshot",
+    "special-team snapshot refusal does not substitute a regular team or replace previous live controls"
   ],
   "pending_retail_scenarios": [
     "synchronized state3 entry, Left, Down, Cross, Help, Select and reentry RAM/frames",

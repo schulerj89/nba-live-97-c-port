@@ -14,10 +14,10 @@
     "host_integration": "scripts/verify_team_select.ps1; synthetic handler input, isolated saves",
     "original_team_select_runtime": "pending",
     "original_historical_rank_cache": "145/145 scores and145/145 ranks match cached original FEONLY RAM; not a state3 capture",
-    "native_rendering": "57 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
+    "native_rendering": "62 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
-    "state5_confirmation": "assignment/editor/Help/warnings/delete and v2 native transactions implemented; see user_setup.json; original runtime and match snapshot pending"
+    "state5_confirmation": "assignment/editor/Help/warnings/delete, v2 transactions and owned partial snapshot implemented; see user_setup.json and match_setup.json; original runtime and gameplay pending"
   },
   "functions": [
     {

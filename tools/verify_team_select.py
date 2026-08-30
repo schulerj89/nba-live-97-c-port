@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 # Frozen bounded audit denominators, not a transitive graph or completion score.
 DENOMINATORS = {"team_select_owner":637, "setup_callback":34,
                 "shared_dependency":2596, "ratings_dependency":524}
+MATCH_FUNCTIONS = {("gameonly", "0x80063D58"):97, ("gameonly", "0x800655B0"):156,
+                   ("feonly", "0x8003E7A8"):45, ("feonly", "0x8003E698"):31,
+                   ("feonly", "0x8003E714"):37, ("feonly", "0x8003E620"):15,
+                   ("feonly", "0x8003A0D8"):20}
 
 
 def read(path):
@@ -44,6 +48,18 @@ def metadata():
     require(totals == user["instruction_denominators"] ==
             {"user_setup_owner":2194, "shared_dependency":1270} and len(seen)==13, "User Setup denominator drift")
     require(user["evidence"]["original_runtime"]=="pending", "User Setup original evidence needs explicit review")
+    match = read(ROOT / "config/decomp/match_setup.json")
+    seen, totals = {}, {}
+    for f in match["functions"]:
+        key = (f["binary"], f["address"])
+        require(key not in seen, "match setup double-counted function")
+        seen[key] = f["instructions_total"]
+        require(f["instructions_accounted"] == 0 and f["native_owner"] and
+                f["remaining_uncertainty"] and f["tests_evidence"], "match setup ownership/credit drift")
+        totals[f["scope"]] = totals.get(f["scope"], 0) + f["instructions_total"]
+    require(seen == MATCH_FUNCTIONS and totals == match["instruction_denominators"] ==
+            {"roster_dependency":253, "rules_dependency":148}, "match setup denominator drift")
+    require(match["evidence"]["original_runtime"] == "pending", "match original evidence needs explicit review")
     scenarios = read(ROOT / "config/decomp/team_select_scenarios.json")
     ids = [s["id"] for s in scenarios["native_frames"]]
     require(len(ids) == len(set(ids)), "duplicate scenario")
@@ -56,6 +72,56 @@ def ppm(path):
     require(len(parts) == 4 and parts[:3] == [b"P6", b"512 240", b"255"], f"bad image header {path}")
     require(len(parts[3]) == 512*240*3, f"bad image extent {path}")
     return parts[3]
+
+
+def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
+    # Independent field relations from the bounded source contract. Native
+    # artifacts are regression inputs, never newly adopted retail fixtures.
+    option_addresses = [0x80021D86,0x80021D7C,0x80021D7D,0x80021D7E,0x80021D7F,
+                        0x80021D95,0x80021D81,0x80021D82,0x80021D83,0x80021D84,0x80021D99]
+    options = [1,9,9,9,9,5,0,0,3,0,1]  # unchanged first-boot settings in this fixture
+    rules = [0,0,0,1,0,0,0,0,0,0,0,1,0,0]  # arcade + the fixture's out-of-bounds edit
+    receipts = []
+    for name, frame_id, ranks, roster_generation, profile_generation in (
+            ("match_snapshot.json", "match-handoff-pending", stock_ranks, 0, 4),
+            ("match_modified_snapshot.json", "match-modified-roster", modified_ranks, 1, 23)):
+        s = read(first / name)
+        require(s == read(second / name), f"snapshot nondeterminism {name}")
+        require(s["scope"] == "partial ordinary exhibition snapshot" and s["pending"] == 3,
+                f"unowned launch fields silently accepted {name}")
+        require(s["setup"] == [0,0,2,0] and s["venue"] == s["launch_control"] == 0,
+                f"Setup/exhibition projection {name}")
+        require(s["assignments"] == [2,0,0,0,0,0,0,0] and s["selectors"] == [-2]*8 and
+                s["controls_source"] == [0]*8 and s["profile_ids"] == [0]*8, f"controller projection {name}")
+        require(s["rules"] == s["custom_rules"] == rules, f"effective custom-rule backup {name}")
+        require(s["options"] == [{"address":a,"value":v} for a,v in zip(option_addresses,options)],
+                f"noncontiguous option mapping {name}")
+        require(s["roster_generation"] == roster_generation and s["profile_generation"] == profile_generation and
+                s["created_generation"] == s["created_count"] == 0, f"source generations {name}")
+        require(len(s["base_identity"]) == 32 and len(s["teams"]) == 2, f"snapshot shape {name}")
+        frame = by_id[frame_id]
+        require([t["id"] for t in s["teams"]] == [frame["home"],frame["away"]], f"selected teams {name}")
+        for team in s["teams"]:
+            ids, count = team["ids"], team["count"]
+            require(len(ids) == 15 and 8 <= count <= 15 and all(0 <= n < 493 for n in ids[:count]) and
+                    ids[count:] == [65535]*(15-count), f"ordered occupied roster prefix {name}")
+            require(len(set(ids[:count])) == count and team["active"] == min(count,12) and
+                    team["aliases"] == [i if i < count else 0 for i in range(12)] and
+                    team["lineup"] == list(range(12)), f"roster index projection {name}")
+            require(len(team["metadata"]) == 20 and
+                    team["metadata"][:5] == [category[team["id"]] for category in ranks],
+                    f"current rank metadata {name}")
+        receipts.append(s)
+    before, after = receipts
+    require(before["base_identity"] == after["base_identity"], "accepted reorder changed base identity")
+    home = list(before["teams"][0]["ids"])
+    home[0], home[8] = home[8], home[0]
+    require(after["teams"][0]["ids"] == home and
+            after["teams"][0]["metadata"][5:] == before["teams"][0]["metadata"][5:],
+            "owned match snapshot lost accepted reorder or immutable metadata")
+    require(stock_ranks[0][by_id["match-modified-roster"]["away"]] == 1,
+            "special29 ->30 -> rank1 navigation changed")
+    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh saved-roster ranks, controls lifetime and pending guards")
 
 
 def capture(first, second, contract, fixture):
@@ -76,6 +142,7 @@ def capture(first, second, contract, fixture):
     stock = read(first / "rank_cache.json")
     changed = read(first / "modified_rank_cache.json")
     require(stock != changed, "saved/reopened reordered roster did not affect derived cache")
+    match_snapshots(first, second, by_id, stock["ranks"], changed["ranks"])
     rank = stock["ranks"][0]
     require(rank[by_id["away-scoring-next"]["away"]] == rank[25] % 31 + 1, "rank scan mismatch")
     for name in ("selector-gold","help","help-return","help-early-close","invalid-square","setup-return","reentry",
@@ -111,6 +178,8 @@ def capture(first, second, contract, fixture):
                 "delete confirmation/notice close sounds")
         require(trace.count("USER-SAVE-FAILED")==1 and trace.count("USER-DELETE ")==1,
                 "failed-save retry and accepted deletion traces")
+        require(trace.count("MATCH-CONTROLS-INIT ") == 1 and trace.count("MATCH-SNAPSHOT revision=") == 4 and
+                trace.count("MATCH-SNAPSHOT-PENDING ") == 1, "cold controls/snapshot publication/refusal traces")
         require("TEAM-HANDOFF" in trace and "USER-ENTRY" in trace and
                 "MATCH-HANDOFF-PENDING" in trace and "TEAM-CAPTURE PASS:" in trace, "missing boundary/pass trace")
     print(f"TEAM NATIVE PASS: {len(states)}/{len(states)} deterministic frames + host state + isolated saved-roster adapter")

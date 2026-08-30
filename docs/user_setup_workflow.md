@@ -24,8 +24,8 @@ Start aggregates complete normalized masks across connected controllers. Only
 exact80 confirms. A/Z/S/X retain shoulder bits, so Start+shoulder cannot confirm.
 Any editor or joined FF blocks readiness; all-neutral and joined FE are allowed.
 Select clears selectors/editors and abandons unaccepted sides, retaining accepted
-assignments and Team Select focus. Result6 currently logs the pending match
-boundary and latches Start; it does not launch gameplay.
+assignments and Team Select focus. Result6 prepares an owned partial match
+snapshot and latches Start; it does not launch gameplay.
 
 Cross on FF claims the first eligible empty slot and starts draft A. Existing
 profiles copy their exact names. Up/Down cycle the extracted68-character alphabet.
@@ -93,9 +93,10 @@ power-loss and ambiguous OS replacement outcomes remain unverified.
 Extract with tools/extract_user_setup.py after Team Select extraction. Run
 scripts/verify_team_select.ps1 with fresh isolated settings/profile/created/roster
 paths. It rejects unsafe defaults and fingerprints all real save/config files.
-The57 capture scenarios include both Help pages, editor controls, duplicate/full/
+The62 capture scenarios include both Help pages, editor controls, duplicate/full/
 capacity warnings, failed-save retry, rename/no-op, delete cancel/invalid input/
-eight-update delay/final barrier, restart, abandonment and shoulder chords.
+eight-update delay/final barrier, restart, abandonment, shoulder chords and
+owned ordinary-exhibition snapshots with retained controls/current saved rosters.
 Repeated native frames measure regression stability, not original GPU equivalence.
 
 Public tests cover all6,561 assignments, eligibility, repeat/clock ordering,
@@ -113,10 +114,11 @@ team_select_workflow.md.
 
 ## Next boundary and original probes
 
-Next integrate the recovered77-instruction61674 controller-map finalizer and a semantic
-ordinary-exhibition match snapshot. Preserve FE/FF live controls, fixed profile
-controls, current saved roster order, ranks and settings. See gameplay_first_path.md.
-Special/created membership and raw unused roster bytes require separate evidence.
+The recovered77-instruction61674 finalizer now feeds a semantic owned snapshot,
+preserving FE/FF live controls, fixed profile controls, current saved roster order,
+ranks and settings. See match_snapshot_workflow.md and gameplay_first_path.md.
+Extension/presentation settings, special/created membership, raw unused roster
+bytes and the gameplay consumers remain separate boundaries.
 
 Original stops:800373B4 initialization,800374E4 aggregate input,
 800375EC/800375F4 readiness,8003768C accepted return. Dump80021EA6 length8,
