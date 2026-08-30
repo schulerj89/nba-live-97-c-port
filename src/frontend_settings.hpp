@@ -20,7 +20,9 @@ enum class FrontendPage : std::uint8_t {
     TradePlayers,
     SignFreeAgent,
     ReleasePlayers,
-    CreatePlayers
+    CreatePlayers,
+    TeamSelect,
+    UserSetup
 };
 
 class FrontendSettings final {

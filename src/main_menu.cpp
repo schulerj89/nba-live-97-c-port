@@ -1,6 +1,8 @@
 #include "main_menu.hpp"
 #include "create_player_preview.hpp"
 #include "frontend_title.hpp"
+#include "team_select_assets.hpp"
+#include "user_setup_assets.hpp"
 #include "recovered/semantic_trace.h"
 
 #include <algorithm>
@@ -17,8 +19,9 @@ constexpr int kWidth = 512;
 constexpr int kHeight = 240;
 constexpr std::array<const char*, 4> kOptionNames{
     "quarter", "mode", "style", "level"};
-constexpr std::array<const char*, 4> kOptionValues{
-    "3 min", "exhibition", "arcade", "rookie"};
+constexpr const char* kOptionValues[4][4] = {
+    {"3 min","5 min","8 min","12 min"}, {"exhibition","season","playoffs",nullptr},
+    {"arcade","simulation","custom",nullptr}, {"rookie","starter","all-star",nullptr}};
 constexpr std::array<const char*, 5> kButtonNames{
     "rules", "options", "rosters", "users", "card"};
 constexpr std::array<int, 4> kCardCenters{86, 200, 314, 428};
@@ -576,7 +579,7 @@ bool MainMenu::moveHorizontal(int direction) noexcept {
     if (!direction) return false;
     if (row_ == MenuRow::GameOptions) {
         const int previous = option_;
-        option_ = std::clamp(option_ + (direction < 0 ? -1 : 1), 0, 3);
+        option_ = (option_ + (direction < 0 ? 3 : 1)) % 4;
         return option_ != previous;
     }
     const int previous = button_;
@@ -626,6 +629,106 @@ int MainMenu::selection() const noexcept {
 
 const char* MainMenu::selectedLabel() const noexcept {
     return row_ == MenuRow::GameOptions ? kOptionNames[option_] : kButtonNames[button_];
+}
+
+PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ranks,
+                         const TeamSelectAssets& assets, const MenuSpritePack& sprites,
+                         const PshFont& font, const PshFont& small,
+                         const Nba97FrontendPalette& palette,
+                         const std::array<Nba97ReorderTint,12>& tint,
+                         const int16_t* title_corners) {
+    PshImage image;image.width=512;image.height=240;image.tag="TSEL";
+    image.rgba.resize(512*240*4);
+    assets.backgrounds().draw(image,palette);
+    for(int z=4;z>=1;--z) {
+        for(unsigned i=4;i<18;++i) {
+            const auto& item=assets.layout()[i];if(item.z!=z) continue;
+            const auto& texture=sprites.at(item.tag);
+            if(i==5 && title_corners) drawFrontendTitle(image,texture,title_corners);
+            else blitAt(image,sprites,item.tag.c_str(),item.x,item.y);
+        }
+        if(z==3) {
+            blitReorderPlate(image,sprites.at(assets.team(state.team[0]).logo),370,16,1);
+            blitReorderPlate(image,sprites.at(assets.team(state.team[1]).logo),40,16,0);
+        }
+    }
+    draw_psh_text_centered(image,small,assets.heading(),258,66);
+    const auto text=[&](const std::string& value,int x,int y,unsigned object) {
+        const auto& rgb=tint.at(object).rgb;
+        drawCenteredText(image,font,value,x,y,1,
+            static_cast<uint8_t>(std::min(255,int(rgb[0])*255/128)),
+            static_cast<uint8_t>(std::min(255,int(rgb[1])*255/128)),
+            static_cast<uint8_t>(std::min(255,int(rgb[2])*255/128)));
+    };
+    for(unsigned side=0;side<2;++side) {
+        const auto& name=assets.team(state.team[side]);const int x=side ? 112:388;
+        text(name.city,x,86,side*6);text(name.nickname,x,102,side*6);
+        for(unsigned category=0;category<5;++category) {
+            const auto rank=ranks.value[category][state.team[side]];
+            std::string value="--";
+            if(rank<=29) {
+                const char* suffix=(rank%100>=11 && rank%100<=13) ? "th":
+                    rank%10==1 ? "st":rank%10==2 ? "nd":rank%10==3 ? "rd":"th";
+                value=std::to_string(rank)+suffix;
+            }
+            text(value,x,122+int(category)*16,side*6+category+1);
+        }
+    }
+    for(unsigned c=0;c<5;++c) text(assets.criterion(c),248,122+int(c)*16,state.side*6+c+1);
+    // 3D434 uses font0 glyphs 8D/8A, no generic arrows or keyboard captions.
+    draw_psh_text_centered(image,font,"\x8d",state.side ? 42:320,96);
+    draw_psh_text_centered(image,font,"\x8a",state.side ? 182:460,96);
+    return image;
+}
+
+PshImage renderUserSetup(const Nba97UserSetup& state,const Nba97UserNames& names,
+                        unsigned topology,uint8_t connected,int home,int away,
+                        const UserSetupAssets& assets,const TeamSelectAssets& teams,
+                        const MenuSpritePack& sprites,const PshFont& font,const Nba97FrontendPalette& palette,
+                        const int16_t* title_corners,const std::array<Nba97ReorderTint,8>* editor_tints,bool edit_help) {
+    PshImage image;image.width=512;image.height=240;image.tag="USER";image.rgba.resize(512*240*4);
+    teams.backgrounds().draw(image,palette);
+    for(int z=4;z>=1;--z) {
+        for(unsigned i=4;i<18;++i) {
+            const auto& item=assets.layout()[i];if(item.z!=z) continue;
+            if(i==5 && title_corners) drawFrontendTitle(image,sprites.at(item.tag),title_corners);
+            else blitAt(image,sprites,i==4 && edit_help ? "hel2":item.tag.c_str(),item.x,item.y);
+        }
+        if(z==3) {
+            blitReorderPlate(image,sprites.at(teams.team(home).logo),370,16,1);
+            blitReorderPlate(image,sprites.at(teams.team(away).logo),40,16,0);
+        }
+    }
+    const unsigned count=nba97_user_setup_row_count(topology);
+    static constexpr int xs[4][3]={{50,180,318},{80,216,350},{80,216,350},{106,230,380}};
+    static constexpr int stride[4]={75,27,27,17},name_y[4]={88,78,78,73},base[4]={18,20,20,25};
+    for(unsigned row=0;row<count;++row) {
+        const auto p=static_cast<unsigned>(nba97_user_setup_physical(topology,row));
+        if(!(connected&(1u<<p))) continue;
+        const auto& marker=assets.layout()[base[topology]+row];
+        if(!state.hide_marker[p]) blitAt(image,sprites,marker.tag.c_str(),xs[topology][state.side[p]],73+int(row)*stride[topology]);
+        if(state.side[p]==1) continue;
+        const int selected=state.profile[p];
+        const int y=name_y[topology]+int(row)*stride[topology];
+        if(state.alphabet[p]>=0) {
+            std::string name=state.draft[p];const auto cursor=state.cursor[p];
+            if(cursor<name.size() && name[cursor]=='_')name[cursor]='=';
+            draw_psh_text_centered(image,font,name,256,y);
+            if(editor_tints && cursor<name.size()) {
+                const std::string ch(1,name[cursor]);
+                const int x=256-font.textWidth(name)/2+font.textWidth(name.substr(0,cursor));
+                draw_psh_text_centered(image,font,ch,x+font.textWidth(ch)/2,y,(*editor_tints)[p].rgb);
+            }
+            continue;
+        }
+        const std::string name=selected==-2 ? assets.playerLabel(row):selected==-1 ? assets.newLabel():names.name[selected];
+        const auto rgb=assets.colors()[p];
+        drawCenteredText(image,font,name,256,y,1,
+            static_cast<uint8_t>(std::min(255,int(rgb>>24)*255/128)),
+            static_cast<uint8_t>(std::min(255,int((rgb>>16)&255)*255/128)),
+            static_cast<uint8_t>(std::min(255,int((rgb>>8)&255)*255/128)));
+    }
+    return image;
 }
 
 PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
@@ -682,8 +785,9 @@ PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
     if (!sprites.empty()) {
         constexpr std::array<int, 4> card_x{50, 150, 260, 350};
         constexpr std::array<int, 4> card_y{85, 80, 80, 85};
-        constexpr std::array<const char*, 4> initial_cards{
-            "c00a", "c05a", "c09a", "c13a"};
+        constexpr const char* choice_cards[4][4] = {
+            {"c00a","c01a","c02a","c03a"}, {"c05a","c06a","c07a",nullptr},
+            {"c09a","c10a","c11a",nullptr}, {"c13a","c14a","c15a",nullptr}};
         constexpr std::array<const char*, 4> selected_overlays{
             "c04a", "c08a", "c12a", "c17a"};
         constexpr std::array<int, 4> portrait_x{61, 156, 272, 363};
@@ -697,7 +801,7 @@ PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
                 blitScaled(image, cards[static_cast<std::size_t>(i)],
                            0, 0, 69, 63,
                            portrait_x[i], portrait_y[i], 69, 63);
-            blitAt(image, sprites, initial_cards[i], card_x[i], card_y[i]);
+            blitAt(image, sprites, choice_cards[i][menu.setupChoice(i)], card_x[i], card_y[i]);
             if (menu.row() == MenuRow::GameOptions && menu.selection() == i)
                 blitAt(image, sprites, selected_overlays[i], card_x[i], card_y[i]);
         }
@@ -729,7 +833,7 @@ PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
         drawCenteredText(image, font, kOptionNames[i], center, 83, 1,
                          selected ? 255 : 235, selected ? 235 : 235,
                          selected ? 120 : 235, false, 0, 86);
-        drawCenteredText(image, font, kOptionValues[i], center, 174, 1,
+        drawCenteredText(image, font, kOptionValues[i][menu.setupChoice(i)], center, 174, 1,
                          245, 245, 245, false, 0, 82);
     }
 

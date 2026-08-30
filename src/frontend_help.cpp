@@ -20,9 +20,11 @@ std::vector<std::uint8_t> readPack(const std::filesystem::path& file) {
 int encodedWidth(const PshFont& font, const std::string& text) {
     int width = 0;
     for (std::size_t i=0; i<text.size(); ++i) {
-        if (static_cast<unsigned char>(text[i]) == 0x1f) {
-            if (i+1 == text.size()) throw std::runtime_error("truncated Help spacing command");
-            width += static_cast<unsigned char>(text[++i]);
+        const auto command=static_cast<unsigned char>(text[i]);
+        if (command == 0x1f || command == 0x1c) {
+            if (i+1 == text.size()) throw std::runtime_error("truncated Help position command");
+            const auto delta=static_cast<unsigned char>(text[++i]);
+            if(command==0x1f) width += delta; // 2A4E8:1C consumes operand without width.
         }
         else {
             if (text[i] != ' ' && !font.glyph(text[i])) throw std::runtime_error("missing original Help glyph");
@@ -40,7 +42,7 @@ FrontendHelpPack::FrontendHelpPack(const std::vector<std::uint8_t>& b) {
     auto half = [&](std::size_t at) { return unsigned(b[at]) | (unsigned(b[at+1])<<8); };
     auto word = [&](std::size_t at) { return std::uint32_t(half(at)) | (std::uint32_t(half(at+2))<<16); };
     const unsigned count=half(6);
-    if (half(4) != 1 || (count!=9 && count!=4 && count!=3)) fail();
+    if (half(4) != 1 || (count!=9 && count!=4 && count!=3 && count!=2 && count!=1)) fail();
     std::size_t at=8;
     for (unsigned record=0;record<count;++record) {
         if (b.size()-at < 18) fail();
@@ -52,7 +54,9 @@ FrontendHelpPack::FrontendHelpPack(const std::vector<std::uint8_t>& b) {
         const unsigned x=half(at), y=half(at+2), w=half(at+4), h=b[at+6], lines=b[at+8];
         if (x>246 || y>110 || w<20 || x+w>512 || h<10 || y+h>240 ||
             b[at+7] || b[at+9] || !lines || lines>16 || y+10+16*(lines-1)>y+h) fail();
-        if (!(((d.state==12 || d.state==13 || d.state==14) && d.index<2 && (count==4 || count==9)) ||
+        if (!((d.state==3 && d.index==0 && count==1) ||
+              (d.state==5 && d.index<2 && count==2) ||
+              ((d.state==12 || d.state==13 || d.state==14) && d.index<2 && (count==4 || count==9)) ||
               (d.state==34 && d.index<5 && count==9) ||
               (d.state==17 && d.index==0 && count==3) || ((d.state==35 || d.state==36) && d.index==0))) fail();
         for (const auto& prior : descriptors_) if (prior.state==d.state && prior.index==d.index) fail();
@@ -69,7 +73,7 @@ FrontendHelpPack::FrontendHelpPack(const std::vector<std::uint8_t>& b) {
             while (at<end && b[at]) {
                 const auto ch=b[at++];
                 line.encoded+=static_cast<char>(ch);
-                if (ch==0x1f) {
+                if (ch==0x1f || ch==0x1c) {
                     if (at>=end || !b[at]) fail();
                     line.encoded+=static_cast<char>(b[at++]);
                 } else if (ch<32) fail();
@@ -114,20 +118,27 @@ void FrontendHelpPack::draw(PshImage& image, const PshFont& font,
         image.rgba[at+3]=255;
     }
     if (!nba97_help_text_visible(&m)) return;
-    int y=d.rect.y+(d.style ? 15 : 10); // 40B5C no-choice warning offset.
+    int y=d.rect.y+(d.text_top ? d.text_top:d.style ? 15 : 10); // 40B5C no-choice warning offset.
     for (const auto& line : d.lines) {
         y+=line.extra_before;
         int x=line.centered ? 256-encodedWidth(font,line.encoded)/2 : d.rect.x+line.offset;
         // Validate every glyph even for left-aligned rows. 2C6B0's 1F byte
         // advances the cursor by its following unsigned byte; it isn't text.
         (void)encodedWidth(font,line.encoded);
+        int baseline=y;
         for (std::size_t i=0;i<line.encoded.size();++i) {
-            if (static_cast<unsigned char>(line.encoded[i])==0x1f) {
+            const auto command=static_cast<unsigned char>(line.encoded[i]);
+            if (command==0x1c) {
+                const unsigned delta=static_cast<unsigned char>(line.encoded[++i]);
+                baseline+=delta<128 ? int(delta):int(delta)-256; // 2C6B0 signed baseline delta.
+                continue;
+            }
+            if (command==0x1f) {
                 x+=static_cast<unsigned char>(line.encoded[++i]); continue;
             }
             const auto glyph=line.encoded.substr(i,1);
             const int width=font.textWidth(glyph);
-            draw_psh_text_centered(image,font,glyph,x+width/2,y);
+            draw_psh_text_centered(image,font,glyph,x+width/2,baseline);
             x+=width;
         }
         y+=d.style ? 12 : 16; // 40CA4/40CB8: only Help adds extra4.

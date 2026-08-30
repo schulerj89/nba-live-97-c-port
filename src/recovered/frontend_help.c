@@ -36,6 +36,12 @@ Nba97HelpEvent nba97_help_input(Nba97HelpModal *m, uint16_t raw) {
     return NBA97_HELP_NO_EVENT;
 }
 
+Nba97HelpEvent nba97_modal_open_prior(Nba97HelpModal* m,Nba97HelpRect rect,uint16_t prior) {
+    const Nba97HelpEvent event=nba97_help_open(m,rect,prior ? prior:1);
+    if(event==NBA97_HELP_OPEN_SOUND) m->held=prior;
+    return event;
+}
+
 Nba97HelpEvent nba97_help_tick(Nba97HelpModal *m, uint16_t raw) {
     if (!m) return NBA97_HELP_NO_EVENT;
     if (m->phase == NBA97_HELP_GROWING) {

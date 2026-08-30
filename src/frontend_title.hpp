@@ -34,6 +34,7 @@ public:
     int present(uint16_t& rng, bool suppressed=false) {
         return nba97_title_selector_step(&state_,&rng,suppressed);
     }
+    int presentDirect(uint16_t& rng) {return nba97_title_step(&state_,&rng);}
 private:
     Nba97TitleMotion state_{};
     std::string tag_;

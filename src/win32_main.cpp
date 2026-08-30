@@ -11,6 +11,9 @@
 #include "recovered/semantic_trace.h"
 #include "intro_player.hpp"
 #include "main_menu.hpp"
+#include "team_select_assets.hpp"
+#include "user_setup_assets.hpp"
+#include "user_setup_session.hpp"
 #include "png_image.hpp"
 #include "player_photo_loader.hpp"
 #include "frontend_title.hpp"
@@ -43,6 +46,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <memory>
 #include <optional>
 #include <random>
@@ -97,6 +101,7 @@ struct Options {
     std::filesystem::path reorder_save_capture_dir;
     std::filesystem::path rosters_menu_capture_dir;
     std::filesystem::path create_player_capture_dir;
+    std::filesystem::path team_select_capture_dir;
     std::filesystem::path view_rosters_capture_dir;
     std::filesystem::path reorder_capture_dir;
     std::filesystem::path trade_capture_dir;
@@ -221,6 +226,8 @@ Options parseOptions(int argc, char** argv) {
             options.rosters_menu_capture_dir = argv[++i];
         else if (arg == "--capture-create-player" && i + 1 < argc)
             options.create_player_capture_dir = argv[++i];
+        else if (arg == "--capture-team-select" && i + 1 < argc)
+            options.team_select_capture_dir = argv[++i];
         else if (arg == "--capture-view-rosters" && i + 1 < argc)
             options.view_rosters_capture_dir = argv[++i];
         else if (arg == "--capture-reorder" && i + 1 < argc)
@@ -250,10 +257,20 @@ Options parseOptions(int argc, char** argv) {
         throw std::runtime_error("save verification requires explicit --roster-save and --capture-reorder-save paths");
     if(options.native_record_audio && options.native_record_dir.empty())
         throw std::runtime_error("--record-native-audio requires --record-native-frames");
+    if(!options.team_select_capture_dir.empty()) {
+        const auto root=std::filesystem::weakly_canonical(options.team_select_capture_dir).parent_path();
+        const auto private_root=std::filesystem::weakly_canonical(".local/verification/team_select");
+        const auto relative=root.lexically_relative(private_root);
+        if(relative.empty() || relative=="." || *relative.begin()==".." || !options.roster_save_explicit)
+            throw std::runtime_error("Team Select capture requires an isolated run directory and explicit saves");
+        for(const auto& path:{options.settings_path,options.profiles_path,options.created_players_path,options.roster_save_path})
+            if(std::filesystem::weakly_canonical(path).parent_path()!=root)
+                throw std::runtime_error("Team Select capture settings/profile/created/roster paths must all be isolated beside its frame directory");
+    }
     if(!options.native_record_dir.empty() && (options.self_test || !options.verify_reorder_save.empty() ||
        !options.reorder_capture_dir.empty() || !options.trade_capture_dir.empty() || !options.sign_capture_dir.empty() || !options.view_rosters_capture_dir.empty() ||
        !options.rosters_menu_capture_dir.empty() || !options.create_player_capture_dir.empty() ||
-       !options.release_capture_dir.empty()))
+       !options.release_capture_dir.empty() || !options.team_select_capture_dir.empty()))
         throw std::runtime_error("native recording requires the live window, not checkpoint/self-test mode");
     return options;
 }
@@ -316,6 +333,7 @@ public:
             return captureRostersMenu();
         if (!options_.create_player_capture_dir.empty())
             return captureCreatePlayer();
+        if (!options_.team_select_capture_dir.empty()) return captureTeamSelect();
         if (!options_.view_rosters_capture_dir.empty())
             return captureViewRosters();
         if (!options_.reorder_capture_dir.empty()) return captureReorder();
@@ -734,6 +752,260 @@ private:
         handleTradeKey('X');settle();commitRosterReset();
         require(roster_database_.slotTable()==expected,"final isolated Reset");
         trace_.log("SIGN-HOST-VERIFY","PASS 26 checkpoints: original assets/Help/View/Compare/100-row tail/refusals/signing/save failure/restart/discard/Reset/retained-child-undo; isolated save only");
+        return 0;
+    }
+
+    int captureTeamSelect() {
+        const auto output=options_.team_select_capture_dir;
+        if(std::filesystem::exists(output)) throw std::runtime_error("Team Select capture needs a fresh frame directory");
+        std::filesystem::create_directories(output);
+        const auto slots=roster_database_.slotTable();
+        const auto identity=roster_database_.baseIdentity();
+        const auto created=created_players_;
+        settings_.adjustRule(3,1);const auto retained_rule=settings_.rule(3);
+        frontend_page_=nba97::FrontendPage::GameSetup;frontend_transition_active_=false;menu_elapsed_ms_=0;
+        std::ofstream states(output/"states.json");states<<"[\n";unsigned count=0;
+        auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        auto frame=[&](const char* name) {
+            rebuildMenuFrame();
+            PshImage pixels;pixels.width=static_cast<uint16_t>(menu_frame_.width);pixels.height=static_cast<uint16_t>(menu_frame_.height);
+            pixels.rgba=menu_frame_.bgra;
+            for(std::size_t i=0;i<pixels.rgba.size();i+=4) std::swap(pixels.rgba[i],pixels.rgba[i+2]);
+            writePpm(pixels,output/(std::string(name)+".ppm"));
+            if(count++) states<<",\n";
+            states<<"{\"id\":\""<<name<<"\",\"page\":\""<<frontendPageName(frontend_page_)<<
+                "\",\"home\":"<<team_select_.team[0]<<",\"away\":"<<team_select_.team[1]<<
+                ",\"criterion\":"<<unsigned(team_select_.criterion)<<",\"side\":"<<unsigned(team_select_.side)<<
+                ",\"help\":"<<int(team_select_help_.phase)<<",\"random_wait\":"<<unsigned(team_select_random_.wait)<<
+                ",\"quarter\":"<<unsigned(menu_.setupChoice(0))<<",\"mode\":"<<unsigned(menu_.setupChoice(1))<<
+                ",\"user_side\":"<<unsigned(user_setup_.state().side[0])<<
+                ",\"user_profile\":"<<int(user_setup_.state().profile[0])<<
+                ",\"assignment\":"<<unsigned(user_setup_.state().assignment[0])<<
+                ",\"user_help\":"<<unsigned(user_setup_.help().phase)<<
+                ",\"user_topology\":"<<user_setup_.topology()<<
+                ",\"editor\":"<<int(user_setup_.state().alphabet[0])<<
+                ",\"cursor\":"<<unsigned(user_setup_.state().cursor[0])<<
+                ",\"draft\":"<<std::quoted(user_setup_.state().draft[0])<<
+                ",\"dialog\":"<<unsigned(user_setup_.dialogKind())<<
+                ",\"dialog_phase\":"<<unsigned(user_setup_.dialogState().modal.phase)<<
+                ",\"dialog_choice\":"<<unsigned(user_setup_.dialogState().choice)<<
+                ",\"profile_count\":"<<profile_store_.profiles().size()<<
+                ",\"profile_generation\":"<<profile_store_.generation()<<"}";
+            require(roster_database_.slotTable()==slots && roster_database_.baseIdentity()==identity,
+                "Team Select mutated accepted roster/identity");
+            require(settings_.rule(3)==retained_rule && !std::memcmp(&created,&created_players_,sizeof(created)),
+                "Team Select lost settings/created catalogue");
+        };
+        auto key=[&](WPARAM k) {
+            handleMenuKey(k);team_select_held_=0;frontend_transition_active_=false;
+            if(team_select_exit_wait_) {updateTeamSelect();frontend_transition_active_=false;}
+        };
+        auto ticks=[&](unsigned n) {for(unsigned i=0;i<n;++i) {
+            menu_elapsed_ms_=static_cast<uint32_t>(((team_select_tick_+1)*1001+29)/30);updateTeamSelect();
+        }rebuildMenuFrame();};
+        frame("setup");key('D');require(menu_.setupChoice(0)==3,"quarter previous wrap");frame("setup-quarter-wrap");
+        key('C');require(menu_.setupChoice(0)==0,"quarter next wrap");
+        key(VK_RIGHT);key('C');key(VK_RETURN);
+        require(frontend_page_==nba97::FrontendPage::GameSetup && menu_.setupChoice(1)==1,
+            "season must not enter exhibition Team Select");frame("setup-mode-pending");
+        key('D');key(VK_LEFT);
+        key(VK_RETURN);require(frontend_page_==nba97::FrontendPage::TeamSelect,"actual Setup Start route failed");
+        require(team_select_.team[0]==3 && team_select_.team[1]==24,"retail first-boot defaults");frame("entry");
+        uint16_t scores[5][29];team_select_assets_->ranks(roster_database_,scores);
+        std::ofstream numbers(output/"rank_cache.json");numbers<<"{\"scores\":[";
+        for(unsigned c=0;c<5;++c) {if(c)numbers<<',';numbers<<'[';for(unsigned t=0;t<29;++t) {if(t)numbers<<',';numbers<<scores[c][t];}numbers<<']';}
+        numbers<<"],\"ranks\":[";
+        for(unsigned c=0;c<5;++c) {if(c)numbers<<',';numbers<<'[';for(unsigned t=0;t<31;++t) {if(t)numbers<<',';numbers<<unsigned(team_select_ranks_.value[c][t]);}numbers<<']';}numbers<<"]}";
+        // Exercise the C++ adapter with an accepted/reopened isolated save.
+        // The original score fixture remains separate from these native outputs.
+        auto modified_slots=slots;std::swap(modified_slots[3*15],modified_slots[3*15+8]);
+        auto modified=roster_database_.prepareSlotTable(slots);
+        nba97::RosterSaveStore isolated(output.parent_path()/"propagation.n97rst");isolated.load(modified);
+        require(isolated.commit(modified,modified_slots).changed,"isolated roster commit");
+        auto reopened=roster_database_.prepareSlotTable(slots);
+        nba97::RosterSaveStore restart(output.parent_path()/"propagation.n97rst");restart.load(reopened);
+        require(reopened.slotTable()==modified_slots && reopened.baseIdentity()==identity,"saved roster restart/identity");
+        uint16_t modified_scores[5][29];const auto modified_ranks=team_select_assets_->ranks(reopened,modified_scores);
+        require(std::memcmp(scores,modified_scores,sizeof(scores))!=0,"ratings adapter ignored accepted modified slots");
+        std::ofstream modified_numbers(output/"modified_rank_cache.json");modified_numbers<<"{\"scores\":[";
+        for(unsigned c=0;c<5;++c) {if(c)modified_numbers<<',';modified_numbers<<'[';for(unsigned t=0;t<29;++t) {if(t)modified_numbers<<',';modified_numbers<<modified_scores[c][t];}modified_numbers<<']';}
+        modified_numbers<<"],\"ranks\":[";
+        for(unsigned c=0;c<5;++c) {if(c)modified_numbers<<',';modified_numbers<<'[';for(unsigned t=0;t<31;++t) {if(t)modified_numbers<<',';modified_numbers<<unsigned(modified_ranks.value[c][t]);}modified_numbers<<']';}modified_numbers<<"]}";
+        key(VK_LEFT);require(team_select_.team[0]==2 && team_select_.team[1]==24,"home left ID scan");frame("home-left");
+        key(VK_RIGHT);require(team_select_.team[0]==3,"home right ID scan");frame("home-right");
+        key(VK_UP);require(team_select_.criterion==5,"criterion up wrap");frame("criterion-up-wrap");
+        key(VK_DOWN);require(team_select_.criterion==0,"criterion down wrap");frame("criterion-down-wrap");
+        key('C');require(team_select_.side==1,"Cross switches active side");frame("away-active");
+        key(VK_RIGHT);require(team_select_.team[1]==25,"away scan");frame("away-right");
+        key(VK_DOWN);key(VK_RIGHT);frame("away-scoring-next");
+        ticks(20);frame("selector-gold");
+        const auto before_help=team_select_;key('F');ticks(24);frame("help");
+        require(team_select_help_.phase==NBA97_HELP_READY,"Help did not reach ready");
+        key('C');ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"Help did not close");
+        require(before_help.team[0]==team_select_.team[0] && before_help.team[1]==team_select_.team[1] &&
+            before_help.side==team_select_.side && before_help.criterion==team_select_.criterion && !team_select_.result,
+            "Help changed selected team/state");frame("help-return");
+        key('F');handleMenuKey('C');ticks(14);
+        require(team_select_help_.phase==NBA97_HELP_SHRINKING,"changed held key must dismiss Help after growth");
+        team_select_held_=0;ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"early Help dismissal return barrier");
+        frame("help-early-close");
+        key('D');require(team_select_.team[0]==before_help.team[0] && team_select_.team[1]==before_help.team[1],"invalid Square changed teams");frame("invalid-square");
+        const auto saved=team_select_;key(VK_RSHIFT);require(frontend_page_==nba97::FrontendPage::GameSetup,"Select did not return to Setup");frame("setup-return");
+        key(VK_RETURN);require(team_select_.team[0]==saved.team[0] && team_select_.team[1]==saved.team[1] &&
+            team_select_.side==saved.side && team_select_.criterion==saved.criterion,"reentry lost focus/teams");frame("reentry");
+        handleMenuKey(VK_RETURN);
+        require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_exit_wait_,
+            "Start must wait for changed input before state5");
+        updateTeamSelect();require(frontend_page_==nba97::FrontendPage::TeamSelect,"held Start bypassed exit barrier");
+        team_select_held_=0;updateTeamSelect();frontend_transition_active_=false;
+        require(frontend_page_==nba97::FrontendPage::UserSetup,"state5 route did not enter original User Setup");frame("user-setup-entry");
+        auto userTicks=[&](unsigned n) {for(unsigned i=0;i<n && frontend_page_==nba97::FrontendPage::UserSetup;++i) {
+            menu_elapsed_ms_=static_cast<uint32_t>(((user_setup_tick_+1)*1001+29)/30);updateUserSetup();
+        }rebuildMenuFrame();};
+        auto userKey=[&](WPARAM k) {
+            handleMenuKey(k);userTicks(2);user_setup_.releaseKeys();userTicks(2);frontend_transition_active_=false;
+        };
+        userKey(VK_RIGHT);require(user_setup_.state().side[0]==2,"controller0 home assignment");frame("user-home");
+        userKey(VK_LEFT);require(user_setup_.state().side[0]==1,"controller0 neutral assignment");frame("user-neutral");
+        userKey(VK_LEFT);require(user_setup_.state().side[0]==0,"controller0 away assignment");frame("user-away");
+        userKey(VK_LEFT);require(user_setup_.state().side[0]==0,"away endpoint clamp");frame("user-away-boundary");
+        userKey(VK_UP);require(user_setup_.state().profile[0]==-1,"Start New profile cycle");frame("user-new-profile");
+        userKey(VK_RETURN);require(user_setup_.state().result==0 && user_setup_.state().assignment[0]==0,
+            "unresolved active Start New must refuse readiness");frame("user-readiness-refused");
+        userKey('C');require(user_setup_.state().profile[0]==0 && user_setup_.state().alphabet[0]==0 &&
+            !std::strcmp(user_setup_.state().draft[0],"A") && profile_store_.profiles().empty(),
+            "editor claims first empty slot without saving");frame("user-editor-new");
+        userKey('V');userKey('D');userKey(VK_UP);userKey('C');userKey(VK_DOWN);
+        require(!std::strcmp(user_setup_.state().draft[0],"BA") && user_setup_.state().cursor[0]==1,
+            "Cross duplicates current character, Down changes appended character");frame("user-editor-append");
+        userKey(VK_LEFT);userKey(VK_UP);userKey(VK_RIGHT);userKey('D');
+        require(!std::strcmp(user_setup_.state().draft[0],"C") && user_setup_.state().cursor[0]==0,
+            "cursor navigation and Square delete");frame("user-editor-delete-char");
+        userKey('F');userTicks(20);
+        require(user_setup_.helpIndex()==1 && user_setup_.help().phase==NBA97_HELP_READY,"editing Help descriptor");
+        frame("user-editor-help");userKey('C');userTicks(20);
+        require(user_setup_.help().phase==NBA97_HELP_CLOSED && !std::strcmp(user_setup_.state().draft[0],"C"),
+            "editing Help retains draft");frame("user-editor-help-return");
+        userKey(VK_DOWN); // C -> B, exact case preserved by the save adapter.
+        auto fail_path=options_.profiles_path;fail_path+=L".tmp";
+        require(std::filesystem::create_directory(fail_path),"fresh isolated temporary write-failure fixture");
+        userKey(VK_RETURN);userTicks(20);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::SaveFailure &&
+            profile_store_.profiles().empty() && !profile_store_.generation() && user_setup_.state().alphabet[0]>=0,
+            "failed write must retain draft and refuse acceptance");frame("user-save-failure");
+        userKey('C');userTicks(20);
+        require(std::filesystem::remove(fail_path),"remove only the empty isolated failure fixture");
+        userKey(VK_RETURN);
+        require(profile_store_.profiles().size()==1 && profile_store_.atSlot(0)->name=="B" &&
+            user_setup_.state().alphabet[0]==-1 && !user_setup_.state().assignment[0],
+            "retry accepts durable name without accepting match");frame("user-save-new");
+        const auto first_id=profile_store_.atSlot(0)->id;
+        const auto first_created=profile_store_.atSlot(0)->created_unix_seconds;
+        userKey('C');userKey(VK_UP);userKey(VK_RETURN);
+        require(profile_store_.atSlot(0)->name=="C" && profile_store_.atSlot(0)->id==first_id &&
+            profile_store_.atSlot(0)->created_unix_seconds==first_created,"existing rename preserves identity/time");
+        frame("user-save-rename");
+        userKey('C');userKey(VK_RETURN);
+        require(profile_store_.generation()==2,"no-op name must not write");frame("user-save-noop");
+        userKey(VK_DOWN);userKey('C');userKey(VK_UP);userKey(VK_UP);userKey(VK_RETURN);userTicks(20);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::Duplicate &&
+            user_setup_.state().profile[0]==1 && profile_store_.generation()==2,
+            "duplicate exact name opens original warning without saving");frame("user-name-duplicate");
+        userKey('C');userTicks(20);userKey(VK_DOWN);userKey(VK_RETURN);
+        require(profile_store_.atSlot(1)->name=="B" && profile_store_.generation()==3,"second profile accepted");
+        frame("user-save-second");
+        userKey('D');userTicks(20);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::Delete &&
+            user_setup_.dialogState().choice==1,"Delete uses source preference cancel");
+        frame("user-delete-cancel-choice");
+        userKey(VK_RETURN);userTicks(8);userKey(VK_RSHIFT);userTicks(8);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::Delete && profile_store_.generation()==3,
+            "Start/Select cannot choose or cancel delete");frame("user-delete-invalid");
+        userKey('C');userTicks(30);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::None && profile_store_.atSlot(1) &&
+            profile_store_.generation()==3,"cancel delete must not write");frame("user-delete-cancelled");
+        userKey('D');userTicks(20);userKey(VK_UP);userTicks(8);
+        require(user_setup_.dialogState().choice==0,"delete choice up");
+        handleMenuKey('C');userTicks(1);
+        require(user_setup_.dialogState().confirm_pending && profile_store_.atSlot(1),
+            "delete Cross starts delayed confirmation");frame("user-delete-delay");
+        userTicks(7);
+        require(nba97_help_text_visible(&user_setup_.dialogState().modal) && profile_store_.generation()==3,
+            "choice text and saved profile persist through seven delayed updates");
+        userTicks(1);require(user_setup_.dialogState().modal.phase==NBA97_HELP_SHRINKING &&
+            profile_store_.atSlot(1),"confirmation shrinks before deletion");
+        userTicks(30);
+        require(user_setup_.dialogState().modal.phase==NBA97_HELP_RETURN_BARRIER && profile_store_.atSlot(1),
+            "held Cross keeps deletion behind return barrier");frame("user-delete-barrier");
+        user_setup_.releaseKeys();userTicks(2);
+        require(!profile_store_.atSlot(1) && profile_store_.atSlot(0)->id==first_id &&
+            profile_store_.generation()==4 && user_setup_.state().profile[0]==-2,"delete exact slot and retain other IDs");
+        frame("user-delete-accepted");
+        nba97::UserProfileStore restarted;restarted.load(options_.profiles_path);
+        require(restarted.atSlot(0) && restarted.atSlot(0)->id==first_id && !restarted.atSlot(1),
+            "accepted profile and deletion hole survive restart");
+        userKey(VK_UP);userKey('C');userKey(VK_UP);userKey(VK_RSHIFT);
+        require(frontend_page_==nba97::FrontendPage::TeamSelect && profile_store_.generation()==4,
+            "Select abandons editing draft without saving");frame("user-editor-abandon");
+        key(VK_RETURN);require(user_setup_.state().profile[0]==-2 && user_setup_.names().name[0][0]=='C',
+            "reentry retains accepted profile only");
+        userKey(VK_LEFT); // Abandoned pre-confirmation assignment was neutral.
+        userKey(VK_RETURN);require(user_setup_.state().assignment[0]==2,"state5 acceptance maps away to2");frame("match-handoff-pending");
+        userKey('F');userTicks(20);
+        require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
+        userKey('C');userTicks(20);
+        require(user_setup_.help().phase==NBA97_HELP_CLOSED && user_setup_.state().side[0]==0 &&
+            user_setup_.state().profile[0]==-2,"User Help changed assignment/profile");frame("user-help-return");
+        handleMenuKey(VK_RIGHT);handleMenuKey(VK_RETURN);userTicks(2);
+        require(user_setup_.state().side[0]==0 && user_setup_.state().assignment[0]==2,"raw chord changed state");
+        user_setup_.releaseKeys();userTicks(2);frame("user-invalid-chord");
+        for(WPARAM shoulder:{WPARAM('A'),WPARAM('Z'),WPARAM('S'),WPARAM('X')}) {
+            handleMenuKey(shoulder);handleMenuKey(VK_RETURN);userTicks(2);
+            require(!user_setup_.state().start_latch && user_setup_.state().assignment[0]==2,
+                "Start plus any shoulder is not exact Start");
+            user_setup_.releaseKeys();userTicks(2);
+        }
+        frame("user-shoulder-chords");
+        user_setup_.setControllers(3,0xff);userTicks(2);frame("user-eight-controllers");
+        user_setup_.setControllers(2,0xf1);userTicks(2);frame("user-port2-multitap");
+        user_setup_.setControllers(0,1);userTicks(2);
+        userKey(VK_RIGHT);userKey(VK_RIGHT);
+        require(user_setup_.state().side[0]==2 && user_setup_.state().assignment[0]==2,"local draft must not publish");frame("user-unaccepted-home");
+        userKey(VK_RSHIFT);
+        require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_.team[0]==saved.team[0] &&
+            team_select_.team[1]==saved.team[1] && team_select_.side==saved.side && team_select_.criterion==saved.criterion,
+            "state5 cancellation lost Team Select state");frame("user-setup-return");
+        key(VK_RETURN);require(frontend_page_==nba97::FrontendPage::UserSetup &&
+            user_setup_.state().side[0]==0 && user_setup_.state().profile[0]==-2,
+            "User Setup reentry lost committed assignment or retained cancelled profile");frame("user-reentry");
+        userKey(VK_RSHIFT);require(frontend_page_==nba97::FrontendPage::TeamSelect,"User Setup second cancel");
+        key('V');ticks(66);require(team_select_random_.remaining==0 && team_select_random_.wait==18,"last candidate wait boundary");
+        const auto last_random=team_select_;key(VK_RSHIFT);key('C');
+        require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_.side==last_random.side,
+            "random callback accepted input during final wait");frame("random-last-wait");
+        ticks(17);require(nba97_team_random_busy(&team_select_random_),"random poll barrier ended early");
+        ticks(1);require(!nba97_team_random_busy(&team_select_random_) && team_select_.team[1]<29,"random regular-team domain");frame("random-complete");
+        // Fresh host fixtures exercise rare modal routes without touching saves
+        // outside the capture's already validated isolated run directory.
+        frontend_page_=nba97::FrontendPage::UserSetup;user_setup_=nba97::UserSetupSession{};
+        const auto userClock=static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000);
+        user_setup_.open({0,1,1,1,1,1,0,0},profile_store_.profiles(),userClock);
+        user_setup_tick_=uint64_t(menu_elapsed_ms_)*30/1001;
+        user_setup_.setControllers(1,1);userKey(VK_RIGHT);userTicks(20);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::Capacity &&
+            user_setup_.state().side[0]==1,"sixth player opens capacity warning");frame("user-capacity-warning");
+        userKey('C');userTicks(20);
+        for(unsigned slot=1;slot<20;++slot)
+            require(profile_store_.acceptExact(uint8_t(slot),0,"Fixture"+std::to_string(slot),true),"isolated full catalogue");
+        user_setup_=nba97::UserSetupSession{};
+        user_setup_.open({},profile_store_.profiles(),static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000));
+        user_setup_.configureEditor(user_setup_assets_->alphabet(),[&](const char* name){return menu_font_.textWidth(name);});
+        userKey(VK_LEFT);userKey(VK_UP);userKey('C');userTicks(20);
+        require(user_setup_.dialogKind()==nba97::UserSetupDialog::Full && user_setup_.state().profile[0]==-1 &&
+            profile_store_.profiles().size()==20,"full catalogue cannot claim a draft slot");frame("user-full-warning");
+        userKey('C');userTicks(20);
+        states<<"\n]\n";
+        trace_.log("TEAM-CAPTURE","PASS: "+std::to_string(count)+" original-asset native frames; host Team Select/User Setup/editor/modal/transaction/restart scenarios; match handoff pending; no real saves");
         return 0;
     }
 
@@ -1495,7 +1767,9 @@ private:
     void prepareFrontendTitle() {
         const char* tag=nullptr; int x=0,y=0;
         const nba97::MenuSpritePack* pack=&roster_sprites_;
-        if(frontend_page_==nba97::FrontendPage::ReorderRosters || isRosterEditor()) {
+        if(frontend_page_==nba97::FrontendPage::TeamSelect) {tag="ba08";x=160;y=10;pack=&team_select_sprites_;}
+        else if(frontend_page_==nba97::FrontendPage::UserSetup) {tag="ba39";x=155;y=10;pack=&team_select_sprites_;}
+        else if(frontend_page_==nba97::FrontendPage::ReorderRosters || isRosterEditor()) {
             if(reorder_child_.state==0x24) {tag="ba41";x=40;y=18;pack=&player_sprites_;}
             else if(reorder_child_.state==0x23) {tag="ba02";x=170;y=15;}
             else {const bool trade=isRosterEditor();tag=isRelease()?"ba23":isSign()?"ba30":trade?"ba38":"ba22";x=isRelease()?140:trade&&!isSign()?155:156;y=10;}
@@ -1515,11 +1789,11 @@ private:
         }
     }
 
-    void presentFrontendTitle() {
+    void presentFrontendTitle(bool direct=false) {
         const auto seed=frontend_rng_;
         const auto phase=frontend_title_.state().next;
-        const auto changed=frontend_title_.present(frontend_rng_);
-        frontend_rng_draws_+=phase==0 ? 9 : 1;
+        const auto changed=direct ? frontend_title_.presentDirect(frontend_rng_):frontend_title_.present(frontend_rng_);
+        frontend_rng_draws_+=(phase==0 ? 8 : 0)+(direct ? 0:1);
         ++frontend_title_presents_;
         if(frontend_title_presents_<=8 || frontend_title_presents_%30==0 || native_record_) {
             std::string vertices;
@@ -1533,6 +1807,8 @@ private:
 
     void updateFrontendTitle() {
         prepareFrontendTitle();
+        if(frontend_page_==nba97::FrontendPage::TeamSelect ||
+           frontend_page_==nba97::FrontendPage::UserSetup) return; // Screen-specific frame owners.
         const auto tick=std::uint64_t(menu_elapsed_ms_)*30/1000;
         if(frontend_title_.active() && frontend_title_painted_ && tick>frontend_title_tick_) {
             presentFrontendTitle();
@@ -3200,7 +3476,8 @@ private:
 
     void loadMenuCards(const std::filesystem::path& root) {
         const bool deterministic_capture = !options_.rosters_menu_capture_dir.empty() ||
-                                           !options_.create_player_capture_dir.empty();
+                                           !options_.create_player_capture_dir.empty() ||
+                                           !options_.team_select_capture_dir.empty();
         const auto random_seed = !deterministic_capture
             ? static_cast<std::mt19937::result_type>(
                   std::chrono::high_resolution_clock::now().time_since_epoch().count() ^
@@ -4701,6 +4978,8 @@ private:
                 frontend_page_ != nba97::FrontendPage::ViewRosters &&
                 frontend_page_ != nba97::FrontendPage::ReorderRosters &&
                 frontend_page_ != nba97::FrontendPage::CreatePlayers &&
+                frontend_page_ != nba97::FrontendPage::TeamSelect &&
+                frontend_page_ != nba97::FrontendPage::UserSetup &&
                 !isRosterEditor())
                 beginFrontendTransition(nba97::FrontendPage::GameSetup, "back input");
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
@@ -4708,6 +4987,8 @@ private:
                 handleMenuKey(wparam);
             else if (wparam == VK_ESCAPE && flow_.screen() == nba97::BootScreen::MainMenu &&
                      (frontend_page_ == nba97::FrontendPage::ViewRosters ||
+                      frontend_page_ == nba97::FrontendPage::TeamSelect ||
+                      frontend_page_ == nba97::FrontendPage::UserSetup ||
                       frontend_page_ == nba97::FrontendPage::CreatePlayers ||
                       frontend_page_ == nba97::FrontendPage::ReorderRosters || isRosterEditor()))
                 handleMenuKey(wparam);
@@ -4723,12 +5004,20 @@ private:
                 flow_.requestAdvance(options_.transition_ms);
             return 0;
         case WM_KEYUP:
+            if(frontend_page_==nba97::FrontendPage::UserSetup)
+                user_setup_.key(0,nba97::userSetupKeyMask(static_cast<uint32_t>(wparam)),false);
+            if(frontend_page_==nba97::FrontendPage::TeamSelect &&
+               nba97::frontendSelectorKeyMask(static_cast<uint32_t>(wparam))==team_select_held_)
+                team_select_held_=0;
             if ((wparam == VK_UP && held_roster_direction_ < 0) ||
                 (wparam == VK_DOWN && held_roster_direction_ > 0)) {
                 held_roster_direction_ = 0;
                 held_roster_counter_ = 0;
                 held_roster_ticks_since_repeat_ = 0;
             }
+            return 0;
+        case WM_KILLFOCUS:
+            user_setup_.releaseKeys();team_select_held_=0;
             return 0;
         case WM_CHAR:
             if (flow_.screen() == nba97::BootScreen::MainMenu &&
@@ -4744,6 +5033,8 @@ private:
                 handleMenuHover(GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam));
             return 0;
         case WM_LBUTTONDOWN:
+            if(frontend_page_==nba97::FrontendPage::TeamSelect ||
+               frontend_page_==nba97::FrontendPage::UserSetup) return 0;
             if(cool_fact_flash_.remaining) return 0;
             if(player_notice_.phase!=NBA97_HELP_CLOSED) {
                 playerNoticeEvent(nba97_help_input(&player_notice_,0x800));
@@ -4869,6 +5160,8 @@ private:
             updateReset();
             updateCreatePlayerDelete();
             updateCreatePlayerHelp();
+            updateTeamSelect();
+            updateUserSetup();
             if (bottom_select_pending_ &&
                 menu_elapsed_ms_ - bottom_select_flash_start_ms_ >= kBottomSelectFlashMs) {
                 bottom_select_pending_ = false;
@@ -5174,11 +5467,257 @@ private:
         InvalidateRect(window_, nullptr, FALSE);
     }
 
+    bool openTeamSelect() {
+        try {
+            if(!roster_load_error_.empty()) throw std::runtime_error("accepted roster unavailable: "+roster_load_error_);
+            const auto root=options_.asset_root/"team_select";
+            if(!team_select_assets_) {
+                auto assets=std::make_unique<nba97::TeamSelectAssets>(root);
+                nba97::MenuSpritePack sprites;
+                auto load=[&](const std::string& tag) {
+                    if(!sprites.count(tag)) sprites.emplace(tag,load_png_image(root/(tag+".png")));
+                };
+                for(unsigned i=4;i<18;++i) load(assets->layout()[i].tag);
+                for(unsigned id=0;id<31;++id) load(assets->team(id).logo);
+                team_select_rng_=assets->initialRng();
+                team_select_sprites_=std::move(sprites);team_select_assets_=std::move(assets);
+            }
+            team_select_ranks_=team_select_assets_->ranks(roster_database_);
+            nba97_team_select_open(&team_select_,team_select_.team[0],team_select_.team[1],
+                team_select_.remembered_regular[0],team_select_.remembered_regular[1]);
+            nba97_team_select_restore_focus(&team_select_,team_select_focus_);
+            for(auto& tint:team_select_tints_) {tint={};std::fill_n(tint.rgb,3,uint8_t(128));}
+            nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
+            nba97_frontend_palette_begin(&team_select_palette_,team_select_assets_->backgrounds().bank(),33,
+                team_select_.team[1],team_select_.team[0]);
+            team_select_help_={};team_select_held_=0;team_select_exit_wait_=false;
+            team_select_random_={};team_select_tick_=uint64_t(menu_elapsed_ms_)*30/1001;
+            trace_.log("TEAM-ENTRY","owner8004FCD8 state3 packZSET1/LOGO titleba08; home="+
+                std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
+                " focus="+std::to_string(team_select_focus_)+" roster-generation="+
+                std::to_string(roster_store_ ? roster_store_->accepted().generation:0)+
+                " modified="+std::to_string(roster_database_.differsFromOriginal())+
+                "; current roster ranks8005DB34; settings/catalogue retained; native clock/seed history unverified");
+            return true;
+        } catch(const std::exception& error) {
+            trace_.log("TEAM-ENTRY-REFUSED",error.what());return false;
+        }
+    }
+
+    void teamSelectPalette() {
+        for(unsigned side=0;side<2;++side)
+            nba97_frontend_palette_request(&team_select_palette_,side,team_select_.team[side^1],33);
+    }
+
+    void handleTeamSelectKey(WPARAM key) {
+        const auto token=nba97::frontendSelectorKeyMask(static_cast<uint32_t>(key));
+        team_select_held_=token;
+        if(team_select_exit_wait_) return; // 3B194 exit barrier completes in the presentation pump.
+        if(team_select_help_.phase!=NBA97_HELP_CLOSED) {
+            if(nba97_help_input(&team_select_help_,token)==NBA97_HELP_CLOSE_SOUND)
+                playBottomMenuSound(8,"team-help-close");
+        } else if(!nba97_team_random_busy(&team_select_random_)) {
+            const auto before=team_select_;
+            const auto old_focus=unsigned(before.side)*6+before.criterion;
+            const auto event=nba97_team_select_input(&team_select_,&team_select_ranks_,token);
+            team_select_focus_=team_select_.side*6+team_select_.criterion;
+            if(event==NBA97_SELECT_CONTINUE) {
+                team_select_exit_wait_=true;
+                playBottomMenuSound(team_select_.sound,"team-selector");
+                trace_.log("TEAM-HANDOFF","state3 result1 -> state5 owner80037010 after3B194 input-change barrier; home="+
+                    std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
+                    "; teams/focus retained; next screen is User Setup");
+            } else if(team_select_.sound) playBottomMenuSound(team_select_.sound,"team-selector");
+            if(event==NBA97_SELECT_HELP) {
+                nba97_help_open(&team_select_help_,team_select_assets_->help().descriptor(3,0).rect,token);
+                playBottomMenuSound(7,"team-help-open");
+            }
+            if(event==NBA97_SELECT_RANDOM) {
+                nba97_team_random_begin(&team_select_random_,&team_select_,team_select_rng_.data());
+                trace_.log("TEAM-RANDOM","owner8004F934 candidate1; 78 presentations + caller5 + next-poll1; held input blocked");
+            }
+            if(old_focus!=team_select_focus_) {
+                nba97_reorder_tint_unpulse(&team_select_tints_[old_focus]);
+                nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
+            }
+            teamSelectPalette();
+            trace_.log("TEAM-INPUT","owner8003D930/8004F9D8 token="+std::to_string(token)+
+                " event="+std::to_string(event)+" home="+std::to_string(before.team[0])+"->"+
+                std::to_string(team_select_.team[0])+" away="+std::to_string(before.team[1])+"->"+
+                std::to_string(team_select_.team[1])+" focus="+std::to_string(old_focus)+"->"+
+                std::to_string(team_select_focus_)+" sound="+std::to_string(team_select_.sound));
+            if(event==NBA97_SELECT_RETURN) {
+                beginFrontendTransition(nba97::FrontendPage::GameSetup,"Select100; owner8004FC80; scanned teams retained");return;
+            }
+        }
+        rebuildMenuFrame();if(window_) InvalidateRect(window_,nullptr,FALSE);
+    }
+
+    void updateTeamSelect() {
+        if(frontend_page_!=nba97::FrontendPage::TeamSelect || frontend_transition_active_) return;
+        if(team_select_exit_wait_ && team_select_held_!=0x80) {
+            team_select_exit_wait_=false;
+            beginFrontendTransition(nba97::FrontendPage::UserSetup,"state3 result1; 3B194 input changed; owner80037010");
+            if(frontend_page_!=nba97::FrontendPage::UserSetup) team_select_.result=0;
+            return;
+        }
+        const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
+        if(team_select_tick_<now && (!window_ || frontend_title_painted_)) {
+            team_select_tick_=now; // Stall stretches time; never skip unseen presentations.
+            prepareFrontendTitle();presentFrontendTitle();frontend_title_painted_=false;
+            if(nba97_help_tick(&team_select_help_,team_select_held_)==NBA97_HELP_CLOSE_SOUND)
+                playBottomMenuSound(8,"team-help-close");
+            for(auto& tint:team_select_tints_) nba97_reorder_tint_tick(&tint);
+            nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
+            if(nba97_team_random_tick(&team_select_random_,&team_select_,team_select_rng_.data())) {
+                teamSelectPalette();
+                trace_.log("TEAM-RANDOM","owner8004F934/8007A538 accepted="+
+                    std::to_string(12-team_select_random_.remaining)+" team="+
+                    std::to_string(team_select_.team[team_select_.side])+
+                    "; original runtime seed history pending");
+            }
+        }
+    }
+
+    bool openUserSetup() {
+        try {
+            if(!team_select_assets_) throw std::runtime_error("User Setup requires selected teams/assets");
+            if(!user_setup_assets_) {
+                const auto root=options_.asset_root/"user_setup";
+                auto assets=std::make_unique<nba97::UserSetupAssets>(root);
+                for(const auto* tag:{"hel1","hel2","ba39","cnt3","cnt2","cnt1"})
+                    if(!team_select_sprites_.count(tag)) team_select_sprites_.emplace(tag,load_png_image(root/(std::string(tag)+".png")));
+                user_setup_assets_=std::move(assets);
+            }
+            user_setup_.open(user_setup_assets_->initialAssignments(),profile_store_.profiles(),
+                static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000));
+            user_setup_.configureEditor(user_setup_assets_->alphabet(),[this](const char* text){return menu_font_.textWidth(text);});
+            user_setup_.setControllers(0,1); // Native keyboard is physical port1; no invented second-player keys.
+            user_setup_tick_=uint64_t(menu_elapsed_ms_)*30/1001;user_setup_refusal_logged_=false;
+            trace_.log("USER-ENTRY","owner80037010 state5 titleba39 ZSET1/Pal0; home="+
+                std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
+                "; 8 assignments, fixed20-slot exact-name profile editor; keyboard physical0; input clock120Hz; commit flush is native policy");
+            return true;
+        } catch(const std::exception& e) {trace_.log("USER-ENTRY-REFUSED",e.what());return false;}
+    }
+
+    void openUserDialog(nba97::UserSetupDialog kind,unsigned controller,const std::string& name={}) {
+        user_dialog_name_=name;
+        user_setup_.openDialog(kind,user_setup_assets_->dialogRect(kind),controller,user_setup_assets_->deletePreference());
+        // First39574 calls30C0C/30784 before submitting the modal rectangle.
+        user_setup_.tickDialog();
+        playBottomMenuSound(kind==nba97::UserSetupDialog::Delete ? 12:5,"user-dialog-open");
+        trace_.log("USER-DIALOG","owner80040A1C kind="+std::to_string(unsigned(kind))+
+            " controller="+std::to_string(controller)+" prior-mask="+std::to_string(user_setup_.dialogState().modal.held));
+    }
+    void updateUserProfileCount() {
+        active_user_profiles_=static_cast<int>(profile_store_.profiles().size());
+        menu_.setActiveUserProfiles(active_user_profiles_);
+    }
+    void updateUserSetup() {
+        if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
+        const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
+        if(user_setup_tick_>=now || (window_ && !frontend_title_painted_)) return;
+        user_setup_tick_=now;
+        const auto dialog=user_setup_.dialogKind();
+        const bool modal=user_setup_.help().phase!=NBA97_HELP_CLOSED || dialog!=nba97::UserSetupDialog::None;
+        bool resume_pass=!modal;
+        if(dialog!=nba97::UserSetupDialog::None) {
+            const auto event=user_setup_.tickDialog();
+            if(event&NBA97_RESET_UP)playBottomMenuSound(3,"user-dialog-up");
+            if(event&NBA97_RESET_DOWN)playBottomMenuSound(4,"user-dialog-down");
+            if(event&NBA97_RESET_CHOSEN)playBottomMenuSound(6,"user-dialog-confirm");
+            if(event&32)playBottomMenuSound(8,"user-dialog-close");
+            if(event&NBA97_RESET_RETURN) {
+                const auto controller=user_setup_.dialogController();
+                const bool erase=dialog==nba97::UserSetupDialog::Delete && user_setup_.dialogState().choice==0;
+                user_setup_.finishDialog();
+                if(erase) {
+                    try {
+                        if(!user_setup_.deleteProfile(controller,profile_store_))throw std::runtime_error(profile_store_.lastError());
+                        updateUserProfileCount();
+                        trace_.log("USER-DELETE","original3573C choice0; fixed slot cleared; native profile generation="+std::to_string(profile_store_.generation()));
+                    } catch(const std::exception& e) {
+                        trace_.log("USER-SAVE-FAILED",std::string(e.what())+"; deletion not accepted");
+                        openUserDialog(nba97::UserSetupDialog::SaveFailure,controller);
+                    }
+                }
+                resume_pass=user_setup_.dialogKind()==nba97::UserSetupDialog::None;
+            }
+        } else if(modal) {
+            const auto event=user_setup_.tickHelp();
+            if(event==NBA97_HELP_CLOSE_SOUND) playBottomMenuSound(8,"user-help-close");
+            resume_pass=event==NBA97_HELP_RETURNED;
+        }
+        // 3B194 returns to the suspended controller pass, then36898. Do not
+        // insert an extra39574/RNG presentation between child and caller.
+        if(resume_pass) {
+            uint16_t aggregate=0;
+            for(unsigned c=0;c<8;++c) if(user_setup_.connected()&(1u<<c)) aggregate|=user_setup_.raw(c);
+            if(aggregate!=0x80) user_setup_refusal_logged_=false;
+            for(const auto& action:user_setup_.step(static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000))) {
+                if(action.sound) playBottomMenuSound(action.sound,"user-setup");
+                if(action.event==NBA97_USER_REFUSED && user_setup_refusal_logged_) continue;
+                if(action.event==NBA97_USER_REFUSED) user_setup_refusal_logged_=true;
+                const bool global=action.event==NBA97_USER_CONFIRMED || action.event==NBA97_USER_REFUSED;
+                trace_.log("USER-INPUT","owner80037010/36B80/36CA0 token="+std::to_string(action.token)+
+                    " event="+std::to_string(action.event)+(global ? " scope=global":
+                    " controller="+std::to_string(action.controller)+
+                    " side="+std::to_string(action.old_side)+"->"+std::to_string(action.new_side)+
+                    " profile="+std::to_string(action.old_profile)+"->"+std::to_string(action.new_profile))+
+                    " sound="+std::to_string(action.sound)+
+                    (action.event==NBA97_USER_REFUSED ? " reason=active-editor-or-unresolved-Start-New":"")+
+                    (action.event==NBA97_USER_CANCELLED ? " original-cancel-context-origin=8":""));
+                if(action.event==NBA97_USER_HELP) {
+                    const unsigned index=user_setup_.state().alphabet[action.controller]>=0 ? 1:0;
+                    user_setup_.openHelp(user_setup_assets_->help().descriptor(5,static_cast<uint8_t>(index)).rect,index);
+                    user_setup_.tickHelp(); // First modal presentation advances growth.
+                    playBottomMenuSound(7,"user-help-open");
+                } else if(action.event==NBA97_USER_SAVE_REQUEST) {
+                    try {
+                        if(!user_setup_.saveEditor(action.controller,profile_store_))throw std::runtime_error(profile_store_.lastError());
+                        playBottomMenuSound(9,"user-name-accepted");updateUserProfileCount();
+                        trace_.log("USER-SAVE","owner80037E90..80037F50; exact name accepted; native profile generation="+
+                            std::to_string(profile_store_.generation())+"; Start latched; no match launch");
+                    } catch(const std::exception& e) {
+                        trace_.log("USER-SAVE-FAILED",std::string(e.what())+"; editor draft retained");
+                        openUserDialog(nba97::UserSetupDialog::SaveFailure,action.controller);
+                    }
+                } else if(action.event==NBA97_USER_CANCELLED) {
+                    beginFrontendTransition(nba97::FrontendPage::TeamSelect,"state5 Select100 result-1; profiles cleared, accepted assignments and team focus retained");
+                    return;
+                } else if(action.event==NBA97_USER_CONFIRMED) {
+                    trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed in session; owner8003FCFC ->61674/46D24/3E7A8; match roster/control adapter pending; no gameplay launched");
+                    user_setup_.deferMatch();
+                } else if(action.event==NBA97_USER_CAPACITY || action.event==NBA97_USER_PROFILE_FULL ||
+                          action.event==NBA97_USER_NAME_DUPLICATE || action.event==NBA97_USER_DELETE_REQUEST) {
+                    const auto kind=action.event==NBA97_USER_CAPACITY ? nba97::UserSetupDialog::Capacity:
+                        action.event==NBA97_USER_PROFILE_FULL ? nba97::UserSetupDialog::Full:
+                        action.event==NBA97_USER_NAME_DUPLICATE ? nba97::UserSetupDialog::Duplicate:nba97::UserSetupDialog::Delete;
+                    std::string name;
+                    if(kind==nba97::UserSetupDialog::Duplicate)name=user_setup_.state().draft[action.controller];
+                    if(kind==nba97::UserSetupDialog::Delete)name=user_setup_.names().name[user_setup_.state().profile[action.controller]];
+                    openUserDialog(kind,action.controller,name);
+                }
+            }
+        }
+        prepareFrontendTitle();
+        user_setup_.tickPresentation();
+        presentFrontendTitle(user_setup_.help().phase==NBA97_HELP_CLOSED &&
+            user_setup_.dialogKind()==nba97::UserSetupDialog::None); // 36898 direct; modal39574 predraw.
+        frontend_title_painted_=false;
+        nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
+    }
+
     void handleMenuKey(WPARAM key) {
         if(cool_fact_flash_.remaining) return;
         if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) {handleResetKey(key);return;}
         if (frontend_transition_active_) return;
         if (bottom_select_pending_) return;
+        if(frontend_page_==nba97::FrontendPage::TeamSelect) {handleTeamSelectKey(key);return;}
+        if(frontend_page_==nba97::FrontendPage::UserSetup) {
+            user_setup_.key(0,nba97::userSetupKeyMask(static_cast<uint32_t>(key)),true);return;
+        }
         if(isRosterEditor()){handleTradeKey(key);return;}
         if (frontend_page_ == nba97::FrontendPage::ReorderRosters) {
             handleReorderKey(key);
@@ -5259,9 +5798,21 @@ private:
         else if (key == VK_RIGHT) changed = menu_.moveHorizontal(1);
         else if (key == VK_UP) changed = menu_.moveVertical(-1);
         else if (key == VK_DOWN) changed = menu_.moveVertical(1);
-        else if (key == VK_RETURN || key == VK_SPACE || key == 'C') {
+        else if (key == VK_RETURN) {
+            if(menu_.setupChoice(1)!=0) {
+                trace_.log("SETUP-ROUTE-PENDING","8003F7C8 mode="+std::to_string(menu_.setupChoice(1))+
+                    "; season/playoff route not implemented; no exhibition fallback");return;
+            }
+            beginFrontendTransition(nba97::FrontendPage::TeamSelect,
+                "Start80; 8003F7C8 mode0 -> state3/8004FCD8");
+            return;
+        }
+        else if (key == VK_SPACE || key == 'C') {
             activateMenuSelection();
             return;
+        }
+        else if (key == 'D' && menu_.row()==nba97::MenuRow::GameOptions) {
+            adjustSetupChoice(-1);return;
         }
         if (changed) {
             trace_.log("MENU-HOVER", std::string(menu_.row() == nba97::MenuRow::GameOptions
@@ -6382,6 +6933,8 @@ private:
     }
 
     void handleMenuHover(int client_x, int client_y) {
+        if(frontend_page_==nba97::FrontendPage::TeamSelect ||
+           frontend_page_==nba97::FrontendPage::UserSetup) return;
         if(cool_fact_flash_.remaining) return;
         if(player_notice_.phase!=NBA97_HELP_CLOSED) return;
         if(reset_prompt_.modal.phase!=NBA97_HELP_CLOSED || reset_notice_) return;
@@ -6442,7 +6995,28 @@ private:
     }
 
     void rebuildMenuFrame() {
-        if(isRosterEditor())menu_frame_=makeFrame(renderTrade());
+        menu_.syncStyle(settings_.style());
+        if(frontend_page_==nba97::FrontendPage::TeamSelect) {
+            prepareFrontendTitle();
+            auto image=nba97::renderTeamSelect(team_select_,team_select_ranks_,*team_select_assets_,
+                team_select_sprites_,menu_font_,control_font_,team_select_palette_,team_select_tints_,frontend_title_.corners());
+            if(nba97_help_visible(&team_select_help_)) team_select_assets_->help().draw(image,control_font_,
+                team_select_assets_->help().descriptor(3,0),team_select_help_);
+            menu_frame_=makeFrame(image);
+        }
+        else if(frontend_page_==nba97::FrontendPage::UserSetup) {
+            prepareFrontendTitle();
+            auto image=nba97::renderUserSetup(user_setup_.state(),user_setup_.names(),user_setup_.topology(),
+                user_setup_.connected(),team_select_.team[0],team_select_.team[1],*user_setup_assets_,
+                *team_select_assets_,team_select_sprites_,menu_font_,team_select_palette_,frontend_title_.corners(),
+                &user_setup_.editorTints(),user_setup_.help().phase!=NBA97_HELP_CLOSED && user_setup_.helpIndex()==1);
+            if(nba97_help_visible(&user_setup_.help())) user_setup_assets_->help().draw(image,control_font_,
+                user_setup_assets_->help().descriptor(5,static_cast<uint8_t>(user_setup_.helpIndex())),user_setup_.help());
+            if(user_setup_.dialogKind()!=nba97::UserSetupDialog::None)
+                user_setup_assets_->drawDialog(image,control_font_,user_setup_.dialogKind(),user_setup_.dialogState(),user_dialog_name_);
+            menu_frame_=makeFrame(image);
+        }
+        else if(isRosterEditor())menu_frame_=makeFrame(renderTrade());
         else if (frontend_page_ == nba97::FrontendPage::ReorderRosters)
             menu_frame_ = makeFrame(renderReorder());
         else if (frontend_page_ == nba97::FrontendPage::GameSetup)
@@ -6498,6 +7072,8 @@ private:
     }
 
     static std::string frontendPageName(nba97::FrontendPage page) {
+        if (page == nba97::FrontendPage::UserSetup) return "User Setup";
+        if (page == nba97::FrontendPage::TeamSelect) return "Team Select";
         if (page == nba97::FrontendPage::Rules) return "Rules";
         if (page == nba97::FrontendPage::ProfileSetup) return "User Setup";
         if (page == nba97::FrontendPage::Options) return "Options";
@@ -6527,17 +7103,30 @@ private:
                                     std::string(menu_.selectedLabel()) + " selected");
             return;
         }
-        beginFrontendTransition(nba97::FrontendPage::ProfileSetup,
-            std::string(menu_.selectedLabel()) +
-            " accepted; FUN_80037010 recovered user assignment/profile stage");
+        adjustSetupChoice(1);
+    }
+
+    void adjustSetupChoice(int direction) {
+        menu_.syncStyle(settings_.style());
+        const auto card=static_cast<unsigned>(menu_.selection());
+        const auto before=menu_.setupChoice(card);
+        if(!menu_.adjustSetupChoice(direction)) return;
+        if(card==2) {settings_.adjustRule(14,direction);menu_.syncStyle(settings_.style());}
+        playBottomMenuSound(6,"setup-choice");
+        trace_.log("SETUP-CHOICE","8003EC1C/8003F43C card="+std::to_string(card)+" value="+
+            std::to_string(before)+"->"+std::to_string(menu_.setupChoice(card))+"; quarter/mode/level session-local; style shares Rules");
+        rebuildMenuFrame();if(window_) InvalidateRect(window_,nullptr,FALSE);
     }
 
     void beginFrontendTransition(nba97::FrontendPage target, const std::string& reason) {
         if (frontend_transition_active_ || target == frontend_page_) return;
+        if(target==nba97::FrontendPage::TeamSelect && !openTeamSelect()) return;
+        if(target==nba97::FrontendPage::UserSetup && !openUserSetup()) return;
         transition_source_ = menu_frame_;
         const auto previous_page = frontend_page_;
         frontend_page_ = target;
-        if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent || target==nba97::FrontendPage::ReleasePlayers)openTrade();
+        if(target==nba97::FrontendPage::TeamSelect || target==nba97::FrontendPage::UserSetup) {}
+        else if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent || target==nba97::FrontendPage::ReleasePlayers)openTrade();
         else if (target == nba97::FrontendPage::ReorderRosters) openReorder();
         else if (target == nba97::FrontendPage::ProfileSetup)
             profile_menu_.open(profile_store_.profiles().size());
@@ -6588,7 +7177,9 @@ private:
         frontend_transition_active_ = true;
         transition_frame_ = transition_source_;
         trace_.log("TRANSITION", reason + "; recovered FE state=" +
-            std::to_string(target == nba97::FrontendPage::ProfileSetup ? 0x37010 :
+            std::to_string(target == nba97::FrontendPage::TeamSelect ? 3 :
+                           target == nba97::FrontendPage::UserSetup ? 5 :
+                           target == nba97::FrontendPage::ProfileSetup ? -1 :
                            target == nba97::FrontendPage::ViewRosters ? 0x10 :
                            target == nba97::FrontendPage::ReorderRosters ? 0x0C :
                            target == nba97::FrontendPage::TradePlayers ? 0x0D :
@@ -6666,6 +7257,24 @@ private:
     std::optional<nba97::FrontendHelpDescriptor> reorder_notice_;
     bool reorder_exit_after_notice_=false;
     Nba97ReorderScreen reorder_screen_{};
+    std::unique_ptr<nba97::TeamSelectAssets> team_select_assets_;
+    nba97::MenuSpritePack team_select_sprites_;
+    Nba97TeamSelect team_select_{{3,24},{3,24},0,0,0,0};
+    Nba97TeamRanks team_select_ranks_{};
+    Nba97FrontendPalette team_select_palette_{};
+    Nba97HelpModal team_select_help_{};
+    std::array<Nba97ReorderTint,12> team_select_tints_{};
+    std::array<uint32_t,6> team_select_rng_{};
+    unsigned team_select_focus_=0;
+    Nba97TeamRandom team_select_random_{};
+    uint64_t team_select_tick_=0;
+    uint16_t team_select_held_=0;
+    bool team_select_exit_wait_=false;
+    std::unique_ptr<nba97::UserSetupAssets> user_setup_assets_;
+    nba97::UserSetupSession user_setup_;
+    uint64_t user_setup_tick_=0;
+    bool user_setup_refusal_logged_=false;
+    std::string user_dialog_name_;
     std::unique_ptr<nba97::ReorderLabelPreview> reorder_labels_;
     std::unique_ptr<nba97::FrontendHelpPack> reorder_help_pack_;
     Nba97HelpModal reorder_help_{};

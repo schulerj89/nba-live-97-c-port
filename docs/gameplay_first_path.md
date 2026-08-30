@@ -1,0 +1,137 @@
+# Smallest evidence-backed path after Team Select
+
+2026-08-30 source audit with native Team Select and partial User Setup.
+No gameplay function is implemented by this checkpoint.
+Original dumps, disassembly, art and raw tables remain private.
+This is a sequence of bounded dependencies, not a broad gameplay rewrite.
+
+## 1. Original User Setup, then a valid match snapshot
+
+Team Select state3 returns1 to dispatcher8003F7C8, which invokes state5 owner
+80037010. Retain its full1716-instruction denominator, including inline editing.
+Its art is ZSET1/ba39 with cnt3/cnt2/cnt1 controller markers; do not use the
+unrelated existing native profile-management page.
+
+Eight physical controllers have local sides0 away /1 neutral /2 home.
+Confirmed resident bytes80021EA6 encode2 away /0 neutral /1 home. No-tap display
+uses physical slots0 and4, not0 and1. Left/Right change assignment, max5 per side.
+Up/Down on joined controllers cycle optional profiles while skipping empty or
+already claimed saved slots. Cross edits names; it is not a ready toggle.
+Start succeeds with no active editor and no joined unresolved Start New profile.
+There is no minimum-human or same-team prohibition in this gate. Select clears
+profile choices and returns-1 without committing local side changes.
+
+Implemented bounded tranche: recovered/user_setup C assignment/readiness/editor,
+UserSetupSession ordered polling, original Help/warning/delete descriptors and
+v2 fixed-slot profile transactions. Inline control1C is a signed vertical
+baseline adjustment with zero width. The shared renderer has independent
+original-font pixel checks. Original runtime comparisons remain pending.
+Do not clear an unresolved profile to force readiness.
+
+Success returns6. Dispatcher calls80061674,80046D24,8003E7A8 and finishes the
+frontend.80061674(0) retains previous control settings for FE/FF profile
+sentinels; it does not always install defaults.
+
+The next independent owner is61674 (77 instructions): clear36 statistic bytes
+per controller; retain all59 live control bytes for FE/FF; copy saved controls
+when validity is nonzero, otherwise defaults. A force-default bootstrap path
+also exists. Current UserProfile v2 provides fixed slots,59 controls and raw
+validity; live controller-map lifetime and the private default59-byte pack remain
+to implement. A neutral controller can retain a selector to a deleted profile;
+the cleared record selects defaults, so missing atSlot must not invent refusal.
+Then build an atomic ordinary-exhibition snapshot before enabling any gameplay.
+
+Roster copies at80040900(home) and80040964(away) are12 records of0x6E bytes into
+8002208C and800225B4. Sources are mutable team slot tables, not a stock database
+reload. Special teams29/30 use8004E9D8. Player IDs>=493 route through8005FE14
+to0x44-byte created records. The native created-player catalogue is currently
+separate from roster membership: that boundary must be implemented or explicitly
+refused, never silently dropped.
+
+Short-roster boundary: the frontend copy helper does not guard null pointers
+among its first12 records. Do not synthesize zero-filled original records and
+call them equivalent. GAMEONLY80063D58 uses the resident roster count and aliases
+remaining player references to record0;800655B0 clamps active count to12.
+Preserve all15 current slot IDs/order, validate contiguous membership, and keep
+unused raw copy bytes explicitly pending. The later FE8005DB34 count is the
+first-null index, not an arbitrary count of nonempty holes.
+
+GAMEONLY800655B0 also consumes team bytes+54/+57 as AI thresholds. The private
+database pack's source_metadata[0..4] contains stock ranks; never mutate that
+immutable save identity. A future match snapshot must overlay the freshly
+derived Team Select ranks in its own copy before those consumers run.
+
+Settings must be copied by meaning, not a guessed contiguous options block.
+The11 native option indices map to resident bytes21D86,21D7C,21D7D,21D7E,
+21D7F,21D95,21D81,21D82,21D83,21D84,21D99. Rules occupy21D87..21D94;
+custom-rule backup is21DA3..21DB0. Unknown bytes21D80/85 remain unknown.
+
+Seven additional home/away setting pairs at21DE6..21DF3 feed GAMEONLY80065820.
+The cold source values per side are1,1,0,7,5,0,0; their full UI meanings and
+mutation history remain pending. They are not represented by FrontendSettings.
+The controller handoff clears0x24 bytes per0x78-byte slot, then conditionally
+copies59 control bytes; FE/FF skips that copy and requires retained live controls.
+
+Acceptance: deterministic snapshots from current saved lineups/ratings, special
+teams and a created player; all eight assignments and profile/control propagation;
+cancel at each stage; synchronized original probes. First original stops:
+800373B4 after state5 initialization,800374E4 after input aggregation,
+800375EC/800375F4 readiness,8003768C successful return,80040900/964 copy boundary
+and800409D8 after both snapshots. Dump80021D70 length0x170,80021EA6 length8,
+80021DDE length8,8002208C length0xA50,80023AB0 length0xD00. Record registers and
+source/destination fields before comparing.
+
+## 2. Prove the gameplay overlay and asset lifetime
+
+FEONLY loads GAMELOAD at801E0000; its entry word is801E1410. Loader801E136C saves
+the resident block starting80015008, length from80015004 (0xF7A8), into801B0000.
+It loads GAMEONLY at **80015000**, restores that resident block, then calls the
+new entry word,80094828. No relocation table is used along this loader route.
+The autogenerated overlay base800F9800 is not this execution mapping.
+
+GAMEONLY clears BSS800D7BB8..8010B61B and enters80029994. FEONLY code is no longer
+resident or callable merely because a same-valued address existed there.
+GAMELOAD subsequently leaves too. Preserve portable data ownership explicitly;
+do not embed overlay execution. Model/mocap relocation is a later, separate
+format boundary.
+
+Acceptance probes:801E13B0(before save),801E13B8(after save),
+801E13CC(after load),801E13E8(after restore),80094828. Compare resident bytes,
+entry words, code signatures and intended lifetimes. Derive and validate RAM
+and separate1MiB VRAM signatures; never reuse an ASLR-dependent host address.
+
+## 3. Deterministic court/player/camera scene
+
+Recovered order:8002D8D4 ->8002DB90 initialization;8002DB68 ->80048D5C
+->80052C20 scene/assets; later8002DC38 ->80068BF8 game loop. Asset orchestration
+loads ZMOCAP.BIN, ZDOMTLST.BIN, home D/V and away E/W model resources, both S
+resources, and home X/Y court resources. Court owner800479B8 constructs packet
+and runtime arrays;800504A8 builds ten player instances with stride0xBCC.
+
+Before reuse of the frontend model libraries, compare counts, offsets, strides,
+relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
+packets at each boundary. Keep the existing verified Create Player path intact.
+A first static scene acceptance needs numerical vertex/runtime/packet comparison,
+deterministic camera and asset ownership, then matched frames. Appearance alone
+does not establish compatibility.
+
+## 4. Period initialization and tip-off
+
+Period initializer80065DB0 sets phase800FDB90=0x81, delay0x78 and ball height0x5C00,
+centers the players and selects animation0x27. Player entities start800FDCEC at
+stride0xF4; entity10 is the ball at800FE674. Which phase consumer and tip-input
+path lead to possession remain untraced.
+
+Break after8002DB68,80048D5C,80052C20 and80067468. Dump8001EDF4 length0x188,
+8001EF7C length0x3C0,80020B8C length0xA0 and800FDB4C length0xE7C. Watch phase,
+quarter/clocks, ball-owner pointer800FDC48 and player/ball state. Distinguish
+multiple calls to80065DB0 instead of assuming every one starts the same event.
+
+## 5. One input, then the first playable possession
+
+Only after the phase consumer is identified: capture one precise original input,
+compare its first changed controller/entity/ball variable, implement that
+bounded action and test it independently. Recover the exact first-possession
+transition before adding shooting, passing, rules or broad AI. The controlling
+button and first differing simulation field are currently unknown; do not infer
+them from frontend controls or a different basketball game.

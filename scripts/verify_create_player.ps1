@@ -86,7 +86,8 @@ try {
     foreach ($run in @(@($first, 'first.log'), @($second, 'second.log'))) {
         $capture = $run[0]
         $trace = Join-Path $root $run[1]
-        $output = & $exe --asset-root $assetRoot --capture-create-player $capture --trace $trace 2>&1
+        # Keep every store isolated, including the roster lock acquired at startup.
+        $output = & $exe --asset-root $assetRoot --capture-create-player $capture --trace $trace --settings (Join-Path $capture 'settings.ini') --profiles (Join-Path $capture 'profiles.n97sav') --created-players (Join-Path $capture 'created.n97cpl') --roster-save (Join-Path $capture 'rosters.n97rst') 2>&1
         $output | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) { throw "Create Player capture failed: $capture" }
         if (-not (($output -join "`n") -match 'CREATE-CAPTURE\s+PASS:')) {

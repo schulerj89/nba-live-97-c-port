@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "milestone": "State5 assignment/editor/Help/warnings/delete and native v2 profile transactions; original runtime and match snapshot pending",
+  "instruction_policy": "Bounded inventory, not a transitive graph. Zero credit until per-block ownership review. Shared scopes are not additive whole-game progress. Full1716 owner denominator retains all inline editor branches.",
+  "instruction_denominators": {
+    "user_setup_owner": 2194,
+    "shared_dependency": 1270
+  },
+  "evidence": {
+    "instruction_accounting": "pending per-block assignment",
+    "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
+    "host_integration": "57 combined Team Select/User Setup isolated capture scenarios",
+    "original_runtime": "pending",
+    "native_rendering": "two-run deterministic frames; original asset layout plus original-font inline baseline pixel test",
+    "original_visual_timing_audio": "pending",
+    "live_physical_walkthrough": "pending",
+    "editor": "implemented; private independent MIPS comparison4554 valid,17 legacy,33 boundaries; malformed fallback unclaimed",
+    "persistence": "v1 readable, v2 fixed slots/control bytes; native exact-name transactions, rollback/CAS/backup tests; not retail memory-card scheduling",
+    "gameplay": "pending match snapshot and dependencies in docs/gameplay_first_path.md"
+  },
+  "functions": [
+    {
+      "address": "0x80037010",
+      "name": "User Setup owner",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 1716,
+      "native_owner": "nba97_user_setup_open/input/global/edit_begin/edit_input/edit_accept/deleted; UserSetupSession; Win32 updateUserSetup",
+      "shared_dependencies": [
+        "0x80036CA0",
+        "0x80036B80",
+        "0x80036D88",
+        "0x80036898",
+        "0x80040FCC",
+        "0x80040A1C"
+      ],
+      "tests_evidence": [
+        "tests/user_setup_test.cpp",
+        "tests/user_setup_session_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Topology debounce, absolute loop/presentation timing, malformed fallback/raw unused tail, text-node lifecycle and original runtime remain pending; full owner retained."
+    },
+    {
+      "address": "0x80036CA0",
+      "name": "Global Start/Select aggregation",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 42,
+      "native_owner": "nba97_user_setup_global",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/user_setup_test.cpp",
+        "tests/user_setup_session_test.cpp"
+      ],
+      "remaining_uncertainty": "Source Start has no controller-origin field; runtime/input delivery and block accounting pending."
+    },
+    {
+      "address": "0x80036B80",
+      "name": "Per-controller repeat filter",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 72,
+      "native_owner": "nba97_user_setup_repeat",
+      "shared_dependencies": [
+        "0x8008DA5C"
+      ],
+      "tests_evidence": [
+        "tests/user_setup_test.cpp",
+        "tests/user_setup_session_test.cpp"
+      ],
+      "remaining_uncertainty": "Signed arithmetic tested; clock phase and synchronized physical repeat trace pending."
+    },
+    {
+      "address": "0x80036D88",
+      "name": "Profile and editor label placement",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 162,
+      "native_owner": "renderUserSetup; selected-character pulse and underscore substitution",
+      "shared_dependencies": [
+        "0x8002C004",
+        "0x8002C6B0"
+      ],
+      "tests_evidence": [
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Source-derived placement/pulse subset; original queued text lifecycle and synchronized GPU placement/timing pending."
+    },
+    {
+      "address": "0x80036898",
+      "name": "User Setup frame owner",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 186,
+      "native_owner": "updateUserSetup; FrontendTitlePresentation::presentDirect",
+      "shared_dependencies": [
+        "0x80032BF0",
+        "0x8002FF70",
+        "0x8002D348"
+      ],
+      "tests_evidence": [
+        "tests/frontend_title_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Native nominal cadence; full text-list, GPU synchronization and original timing comparison pending."
+    },
+    {
+      "address": "0x80036D48",
+      "name": "Clear fixed profile record",
+      "scope": "user_setup_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 16,
+      "native_owner": "UserProfileStore::acceptExact/eraseExact; UserSetupSession save/delete",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/user_profiles_test.cpp",
+        "tests/user_setup_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Semantic clear/preserve honors stale existing-editor flag; unknown raw retail prefix and unused tail bytes unclaimed. Native file flush is not memory-card schedule."
+    },
+    {
+      "address": "0x8002C004",
+      "name": "Shared text-chain clear",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 31,
+      "native_owner": "native ephemeral composition; source text-chain release pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Original traversal/node clearing/head sentinel lifecycle not reconstructed; no helper-wide credit."
+    },
+    {
+      "address": "0x8002C6B0",
+      "name": "Shared text command renderer",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 515,
+      "native_owner": "FrontendHelpPack::draw; PshFont subset",
+      "shared_dependencies": [
+        "0x8002A4E8"
+      ],
+      "tests_evidence": [
+        "tests/frontend_help_test.cpp"
+      ],
+      "remaining_uncertainty": "1C signed baseline and1F spacing tested; remaining commands, primitive generation and raster parity pending."
+    },
+    {
+      "address": "0x8002B830",
+      "name": "Shared queued text reposition",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 28,
+      "native_owner": "renderUserSetup direct placement; queued text movement pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/user_setup_workflow.md"
+      ],
+      "remaining_uncertainty": "Node target coordinates and queued movement flags not implemented as original text-list state."
+    },
+    {
+      "address": "0x80031A0C",
+      "name": "Shared sprite position helper",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 31,
+      "native_owner": "renderUserSetup marker placement",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Coordinates source-derived; original primitive updates and timing pending."
+    },
+    {
+      "address": "0x8003573C",
+      "name": "Delete confirmation wrapper",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 19,
+      "native_owner": "UserSetupAssets delete descriptor; nba97_reset_open_deferred; UserSetupSession::deleteProfile",
+      "shared_dependencies": [
+        "0x80040A1C"
+      ],
+      "tests_evidence": [
+        "docs/user_setup_workflow.md"
+      ],
+      "remaining_uncertainty": "Choice0/delete and preference0/cancel source-derived; source preference mutation history, absolute presentation phase and original runtime pending."
+    },
+    {
+      "address": "0x80061674",
+      "name": "Match controller/profile handoff",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 77,
+      "native_owner": "pending semantic match snapshot",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/gameplay_first_path.md"
+      ],
+      "remaining_uncertainty": "0x24-byte clear and conditional59-byte controls copy not implemented; FE/FF must retain current controls."
+    },
+    {
+      "address": "0x80031F48",
+      "name": "Shared screen layout construction",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 569,
+      "native_owner": "UserSetupAssets; renderUserSetup",
+      "shared_dependencies": [
+        "0x80031A0C",
+        "0x80032BF0"
+      ],
+      "tests_evidence": [
+        "tools/extract_user_setup.py",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Audited state5 subset only; object registration, other layouts and complete lifecycle not credited."
+    }
+  ]
+}

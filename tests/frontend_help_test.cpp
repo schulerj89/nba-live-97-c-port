@@ -28,6 +28,21 @@ void packTests() {
     check(d.rect.width==270 && d.lines.size()==1 && !d.lines[0].centered &&
           d.lines[0].offset==21 && d.lines[0].encoded==std::string("A\x1f\x12" "B"), "encoded line preservation");
     pass("pack_routes_and_inline_spacing");
+    auto team=bytes;team.resize(33);team[6]=1;team[8]=3;
+    nba97::FrontendHelpPack teamPack(team);
+    check(teamPack.descriptor(3,0).lines.size()==1,"Team Select bounded single Help route");
+    auto user=bytes;user.resize(58);user[6]=2;user[8]=5;user[33]=5;
+    user[29]=0x1c;user[30]=8;user[54]=0x1c;user[55]=0xf8;
+    nba97::FrontendHelpPack userPack(user);
+    check(userPack.descriptor(5,0).lines[0].encoded==std::string("A\x1c\x08" "B") &&
+          userPack.descriptor(5,1).lines[0].encoded==std::string("A\x1c\xf8" "B"),
+          "User Setup signed baseline commands preserved");
+    for(std::size_t n=0;n<user.size();++n) {
+        bool rejected=false;
+        try {nba97::FrontendHelpPack partial(std::vector<uint8_t>(user.begin(),user.begin()+n));}
+        catch(const std::runtime_error&) {rejected=true;}
+        check(rejected,"truncated User Setup Help accepted");
+    }
     auto sign=bytes;sign[8]=14;sign[33]=14;
     nba97::FrontendHelpPack signPack(sign);
     check(signPack.descriptor(14,0).rect.width==270&&signPack.descriptor(14,1).rect.height==140,
@@ -150,6 +165,26 @@ int main(int argc,char** argv) {
             const std::filesystem::path root=argv[1];
             nba97::FrontendHelpPack pack(root/"reorder/help.n97ui");
             const auto font=nba97::load_psh_font(root/"fonts/ZFONT1.PSH",10,1);
+            // Independent manual glyph placement catches signedness, accidental
+            // width advances and baseline leakage between lines for1C.
+            nba97::FrontendHelpDescriptor vertical{5,0,0,{111,70,290,140},
+                {{true,0,std::string("A\x1c\x08" "B\x1c\xf8" "C\x1c\x08")},
+                 {true,0,"D"}}};
+            Nba97HelpModal modal{};nba97_help_open(&modal,vertical.rect,0x20);
+            for(int i=0;i<20;++i) nba97_help_tick(&modal,0);
+            PshImage actual;actual.width=512;actual.height=240;actual.rgba.resize(512*240*4);
+            auto expected=actual;
+            auto background=modal;background.phase=NBA97_HELP_GROWING;
+            nba97::FrontendHelpPack::draw(expected,font,vertical,background);
+            int x=256-(font.textWidth("A")+font.textWidth("B")+font.textWidth("C"))/2;
+            for(int i=0;i<3;++i) {
+                const std::string glyph(1,char('A'+i));const int width=font.textWidth(glyph);
+                nba97::draw_psh_text_centered(expected,font,glyph,x+width/2,i==1?88:80);x+=width;
+            }
+            nba97::draw_psh_text_centered(expected,font,"D",256,96);
+            nba97::FrontendHelpPack::draw(actual,font,vertical,modal);
+            check(actual.rgba==expected.rgba,"signed baseline/zero width/per-line reset pixel mismatch");
+            pass("signed_inline_baseline_original_font_pixels");
             for(const auto route : std::array<std::array<std::uint8_t,2>,9>{{
                     {{34,0}},{{34,1}},{{34,2}},{{34,3}},{{34,4}},
                     {{12,0}},{{12,1}},{{35,0}},{{36,0}}}}) {

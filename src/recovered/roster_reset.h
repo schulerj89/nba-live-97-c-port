@@ -21,6 +21,7 @@ typedef struct Nba97ResetPrompt {
     uint8_t choice; /* 0 restore, 1 cancel */
     uint8_t initial_choice;
     Nba97ReorderTint tint[2];
+    uint8_t defer_cross,confirm_pending;
 } Nba97ResetPrompt;
 enum {
     NBA97_RESET_NONE=0, NBA97_RESET_OPEN=1, NBA97_RESET_UP=2,
@@ -32,6 +33,9 @@ enum {
 int nba97_reset_open(Nba97ResetPrompt*, Nba97HelpRect, uint16_t held, int preference);
 int nba97_reset_input(Nba97ResetPrompt*, uint16_t raw);
 int nba97_reset_tick(Nba97ResetPrompt*, uint16_t raw);
+/* Audited state5 direct40A1C path: inherited724 and eight presentations BEFORE
+ * Cross confirmation. Existing Reset callers retain their current behavior. */
+int nba97_reset_open_deferred(Nba97ResetPrompt*,Nba97HelpRect,uint16_t prior,int preference);
 #ifdef __cplusplus
 }
 #endif

@@ -167,7 +167,7 @@ PshFont load_psh_font(const std::filesystem::path& path,
 }
 
 void draw_psh_text_centered(PshImage& destination, const PshFont& font,
-                            const std::string& text, int center_x, int y) {
+                            const std::string& text, int center_x, int y,const std::uint8_t* tint) {
     int x = center_x - font.textWidth(text) / 2;
     for (char character : text) {
         if (character == ' ') {
@@ -193,6 +193,8 @@ void draw_psh_text_centered(PshImage& destination, const PshFont& font,
                     (static_cast<std::size_t>(target_y) * destination.width + target_x) * 4;
                 std::copy_n(glyph->rgba.data() + source, 4,
                             destination.rgba.data() + target);
+                if(tint) for(unsigned c=0;c<3;++c) destination.rgba[target+c]=
+                    static_cast<std::uint8_t>(std::min(255u,unsigned(glyph->rgba[source+c])*tint[c]/128));
             }
         }
         x += std::max(0, static_cast<int>(glyph->width) - font.kerning());

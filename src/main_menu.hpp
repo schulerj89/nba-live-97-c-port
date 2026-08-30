@@ -9,6 +9,9 @@
 #include "frontend_palette_assets.hpp"
 #include "recovered/roster_compare.h"
 #include "recovered/create_player.h"
+#include "recovered/team_select.h"
+#include "recovered/game_setup.h"
+#include "recovered/user_setup.h"
 
 #include <cstdint>
 #include <array>
@@ -19,6 +22,8 @@
 namespace nba97 {
 
 class CreatePlayerPreview;
+class TeamSelectAssets;
+class UserSetupAssets;
 
 enum class MenuRow : std::uint8_t { GameOptions, FrontendButtons };
 
@@ -30,6 +35,12 @@ public:
     bool moveVertical(int direction) noexcept;
     bool hover(int psx_x, int psx_y) noexcept;
 
+    bool adjustSetupChoice(int direction) noexcept {
+        return row_ == MenuRow::GameOptions && nba97_setup_step(setup_choices_.data(), option_, direction);
+    }
+    void syncStyle(std::uint8_t style) noexcept { if(style<3) setup_choices_[2]=style; }
+    [[nodiscard]] std::uint8_t setupChoice(unsigned card) const noexcept { return card<4 ? setup_choices_[card]:0; }
+
     [[nodiscard]] MenuRow row() const noexcept { return row_; }
     [[nodiscard]] int selection() const noexcept;
     [[nodiscard]] const char* selectedLabel() const noexcept;
@@ -40,6 +51,9 @@ private:
     int option_ = 0;
     int button_ = 0;
     int active_user_profiles_ = 0;
+    // Session settings: existing settings file still owns rules/options/style.
+    // Do not change its format or write new fields into the user's saves.
+    std::array<std::uint8_t,4> setup_choices_{};
 };
 
 class RecoveredBottomMenu final {
@@ -376,6 +390,18 @@ PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
     const std::array<PshImage, 2>& portraits, const PshImage& text_layer,
     std::uint32_t elapsed_ms, const int16_t* title_corners = nullptr);
 
+PshImage renderTeamSelect(const Nba97TeamSelect&, const Nba97TeamRanks&,
+                         const TeamSelectAssets&, const MenuSpritePack&,
+                         const PshFont&, const PshFont&,
+                         const Nba97FrontendPalette&,
+                         const std::array<Nba97ReorderTint,12>&,
+                         const int16_t* title_corners=nullptr);
+PshImage renderUserSetup(const Nba97UserSetup&,const Nba97UserNames&,
+                        unsigned topology,uint8_t connected,int home,int away,
+                        const UserSetupAssets&,const TeamSelectAssets&,
+                        const MenuSpritePack&,const PshFont&,const Nba97FrontendPalette&,
+                        const int16_t* title_corners=nullptr,
+                        const std::array<Nba97ReorderTint,8>* editor_tints=nullptr,bool edit_help=false);
 PshImage renderGameSetupMenu(const MainMenu& menu, const PshImage& title_source,
                              const PshFont& font, const MenuSpritePack& sprites,
                              const MenuCardPack& cards,

@@ -13,9 +13,9 @@ constexpr std::uint32_t normalizeWin32Shift(std::uint32_t key,
     return key;
 }
 
-// Recovered Create Player callback tokens, NOT raw PS1 pad bit positions.
-// ZFONT1 Help page 2 identifies 0x40 as Circle/backspace (not R1).
-constexpr std::uint16_t createPlayerNameKeyMask(std::uint32_t key) noexcept {
+// Shared recovered frontend callback tokens, NOT raw PS1 pad bit positions.
+// Meaning belongs to the active descriptor; X/R2 is not Cross or Cancel.
+constexpr std::uint16_t frontendSelectorKeyMask(std::uint32_t key) noexcept {
     switch (key) {
     case 0x26: return 1; // Up
     case 0x28: return 2; // Down
@@ -28,6 +28,21 @@ constexpr std::uint16_t createPlayerNameKeyMask(std::uint32_t key) noexcept {
     case 0xa1: case 0x1b: return 0x100;
     case 'C': case 0x20: return 0x800;
     default: return 0;
+    }
+}
+// Keep the verified Create Player API and its context-specific interpretation.
+constexpr std::uint16_t createPlayerNameKeyMask(std::uint32_t key) noexcept {
+    return frontendSelectorKeyMask(key);
+}
+// State5 consumes76198's whole normalized mask. Shoulder buttons have no
+// individual callback here, but must survive chords with Start/Select.
+constexpr std::uint16_t userSetupKeyMask(std::uint32_t key) noexcept {
+    switch(key) {
+    case 'A': return 0x200; // L1
+    case 'Z': return 0x1000; // L2
+    case 'S': return 0x400; // R1
+    case 'X': return 0x2000; // R2
+    default: return frontendSelectorKeyMask(key);
     }
 }
 }

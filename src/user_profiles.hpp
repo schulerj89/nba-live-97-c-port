@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -38,6 +39,9 @@ struct UserProfile {
     std::uint64_t updated_unix_seconds = 0;
     std::string name;
     UserCareerStats stats;
+    std::uint8_t slot = 255; // v1 imports PROF order; v2 persists fixed runtime slot.
+    std::array<std::uint8_t,59> controls{};
+    std::uint8_t controls_valid = 0;
 };
 
 enum class ProfileLoadStatus {
@@ -59,6 +63,11 @@ public:
     bool create(std::string_view name, std::size_t* created_index = nullptr);
     bool rename(std::size_t index, std::string_view name);
     bool erase(std::size_t index);
+    // Exact state5 transactions. expected_id==0 requires an empty slot.
+    // Changed mutations flush as a native policy; no-op/entry/cancel never write.
+    bool acceptExact(std::uint8_t slot,std::uint64_t expected_id,std::string_view name,bool clear_other_fields);
+    bool eraseExact(std::uint8_t slot,std::uint64_t expected_id);
+    [[nodiscard]] const UserProfile* atSlot(std::uint8_t slot) const noexcept;
 
     static bool isAllowedNameCharacter(char value) noexcept;
     static std::string normalizeName(std::string_view name);
@@ -73,6 +82,10 @@ private:
     std::vector<UserProfile> profiles_;
     std::uint64_t generation_ = 0;
     std::string last_error_;
+    std::vector<std::uint8_t> primary_bytes_;
+    bool loaded_=false,primary_exists_=false,unsupported_=false;
+    std::vector<std::uint8_t> backup_bytes_;
+    bool backup_exists_=false,backup_protected_=false,recovered_backup_=false;
 };
 
 class UserProfileMenu final {

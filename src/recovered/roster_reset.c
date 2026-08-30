@@ -21,6 +21,7 @@ int nba97_reset_open(Nba97ResetPrompt *p, Nba97HelpRect rect, uint16_t held, int
     memset(p->tint,0,sizeof(p->tint));
     memset(p->tint[0].rgb,128,3);memset(p->tint[1].rgb,128,3);
     p->cooldown=0;
+    p->defer_cross=0;p->confirm_pending=0;
     return NBA97_RESET_OPEN; /* 40A1C style1, choice dialog: sound12 */
 }
 int nba97_reset_input(Nba97ResetPrompt *p, uint16_t raw) {
@@ -43,6 +44,7 @@ int nba97_reset_input(Nba97ResetPrompt *p, uint16_t raw) {
     p->cooldown=8;
     if (raw==0x800) {
         p->modal.held=raw;
+        if(p->defer_cross) {p->confirm_pending=1;return event;}
         p->modal.phase=NBA97_HELP_SHRINKING;
         event=NBA97_RESET_CHOSEN; /* sound6, remove text, sound8 */
     }
@@ -62,5 +64,15 @@ int nba97_reset_tick(Nba97ResetPrompt *p, uint16_t raw) {
         nba97_reorder_tint_tick(&p->tint[0]);nba97_reorder_tint_tick(&p->tint[1]);
     }
     if (p->cooldown) --p->cooldown;
+    if(p->confirm_pending) {
+        if(p->cooldown) return 0;
+        p->confirm_pending=0;p->modal.phase=NBA97_HELP_SHRINKING;
+        return NBA97_RESET_CHOSEN;
+    }
     return nba97_reset_input(p,raw);
+}
+int nba97_reset_open_deferred(Nba97ResetPrompt* p,Nba97HelpRect rect,uint16_t prior,int preference) {
+    const int event=nba97_reset_open(p,rect,prior ? prior:1,preference);
+    if(event) {p->modal.held=prior;p->defer_cross=1;}
+    return event;
 }

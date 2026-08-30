@@ -25,4 +25,8 @@ int main() {
     assert(createPlayerNameKeyMask('S')==0); // R1 is not Circle
     assert(createPlayerNameKeyMask('X')==0); // R2 is not Select
     assert(createPlayerNameKeyMask(0x0d)==0x80);
+    for(auto key:{'A','Z','S','X'})
+        assert((nba97::userSetupKeyMask(key)|nba97::userSetupKeyMask(0x0d))!=0x80);
+    assert(nba97::userSetupKeyMask('A')==0x200 && nba97::userSetupKeyMask('Z')==0x1000);
+    assert(nba97::userSetupKeyMask('S')==0x400 && nba97::userSetupKeyMask('X')==0x2000);
 }

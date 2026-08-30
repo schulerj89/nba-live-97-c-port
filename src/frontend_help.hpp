@@ -10,6 +10,7 @@ struct FrontendHelpDescriptor {
     Nba97HelpRect rect;
     std::vector<FrontendHelpLine> lines;
     std::uint8_t style = 0; // 0=Help, 1=no-choice warning (40A1C).
+    std::uint8_t text_top = 0; // zero uses source style default; choices use10.
 };
 // Bounded private descriptor data, shared by parent and child Help. No copied
 // game strings, invented icons, keyboard captions, or embedded screenshots.

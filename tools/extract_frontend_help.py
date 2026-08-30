@@ -37,10 +37,10 @@ def record_at(data, address):
             raise ValueError('unterminated/oversized Help line')
         cursor = end
         while cursor < text_end:
-            if data[cursor] == 0x1f:
+            if data[cursor] in (0x1c, 0x1f):
                 cursor += 1
                 if cursor == text_end:
-                    raise ValueError('truncated inline spacing')
+                    raise ValueError('truncated inline text position command')
             elif data[cursor] < 32:
                 raise ValueError('unsupported inline control')
             cursor += 1

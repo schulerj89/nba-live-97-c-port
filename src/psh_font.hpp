@@ -37,6 +37,7 @@ private:
 PshFont load_psh_font(const std::filesystem::path& path,
                       int space_width, int kerning);
 void draw_psh_text_centered(PshImage& destination, const PshFont& font,
-                            const std::string& text, int center_x, int y);
+                            const std::string& text, int center_x, int y,
+                            const std::uint8_t* tint = nullptr);
 
 } // namespace nba97

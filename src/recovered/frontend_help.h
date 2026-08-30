@@ -25,6 +25,9 @@ typedef enum Nba97HelpEvent {
  * not a timer timeout or a mandatory all-buttons-up condition. The host
  * supplies logical UI ticks and sound playback; no PSX frame emulation. */
 Nba97HelpEvent nba97_help_open(Nba97HelpModal*, Nba97HelpRect, uint16_t invoking_mask);
+/* Direct40A1C callers retain context+724, including zero, rather than replacing
+ * it with the requesting key. Geometry/lifecycle are otherwise shared. */
+Nba97HelpEvent nba97_modal_open_prior(Nba97HelpModal*,Nba97HelpRect,uint16_t prior_mask);
 Nba97HelpEvent nba97_help_input(Nba97HelpModal*, uint16_t raw_mask);
 Nba97HelpEvent nba97_help_tick(Nba97HelpModal*, uint16_t raw_mask);
 int nba97_help_visible(const Nba97HelpModal*);

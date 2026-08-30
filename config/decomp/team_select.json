@@ -1,0 +1,513 @@
+{
+  "schema_version": 1,
+  "milestone": "Team Select vertical slice; end-to-end confirmation pending",
+  "instruction_policy": "Zero instruction credit assigned in this tranche until per-block semantic annotations are reviewed. Native tested behavior is implemented; zero credit is not zero functional progress. Shared functions are not re-credited to Team Select. Inventory is bounded, not the complete transitive graph.",
+  "instruction_denominators": {
+    "team_select_owner": 637,
+    "setup_callback": 34,
+    "shared_dependency": 2596,
+    "ratings_dependency": 524
+  },
+  "evidence": {
+    "instruction_accounting": "pending per-block assignment",
+    "native_unit": "tests/team_select_test.cpp and tests/team_ratings_test.cpp",
+    "host_integration": "scripts/verify_team_select.ps1; synthetic handler input, isolated saves",
+    "original_team_select_runtime": "pending",
+    "original_historical_rank_cache": "145/145 scores and145/145 ranks match cached original FEONLY RAM; not a state3 capture",
+    "native_rendering": "57 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
+    "original_visual_timing_audio": "pending",
+    "live_physical_walkthrough": "pending",
+    "state5_confirmation": "assignment/editor/Help/warnings/delete and v2 native transactions implemented; see user_setup.json; original runtime and match snapshot pending"
+  },
+  "functions": [
+    {
+      "address": "0x80029B20",
+      "name": "Shared frontend 16-bit RNG",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 17,
+      "native_owner": "nba97_title_selector_step (existing shared dependency)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8002D348",
+      "name": "Shared text animation/draw list pump",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 171,
+      "native_owner": "nba97_reorder_tint_tick; remaining text-list work pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8002FE58",
+      "name": "Shared initial background palette copy",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 58,
+      "native_owner": "nba97_frontend_palette_begin (existing shared dependency)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8002FF70",
+      "name": "Shared team background palette fade",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 230,
+      "native_owner": "nba97_frontend_palette_tick (existing shared dependency)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x80030308",
+      "name": "Shared background palette asset initialization",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 74,
+      "native_owner": "FrontendPaletteAssets (existing shared dependency)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x80032BF0",
+      "name": "Shared title animation update",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 541,
+      "native_owner": "FrontendTitlePresentation (existing shared dependency)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x80039574",
+      "name": "Shared selector presentation pump",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 276,
+      "native_owner": "updateTeamSelect native presentation adapter; remaining pump pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x80039BA8",
+      "name": "Shared arrow group horizontal movement",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 28,
+      "native_owner": "renderTeamSelect side-dependent arrow placement",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003AE4C",
+      "name": "Shared input polling and repeat cadence",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 210,
+      "native_owner": "pending raw pad polling/repeat/chord owner",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003D434",
+      "name": "Shared arrow visibility and construction",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 64,
+      "native_owner": "renderTeamSelect fixed arrows; construction/visibility pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003D534",
+      "name": "Shared directional arrow flash",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 47,
+      "native_owner": "pending directional flash",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003D930",
+      "name": "Shared descriptor screen loop",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 828,
+      "native_owner": "handleTeamSelectKey adapter; full descriptor loop pending",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003F36C",
+      "name": "Setup card action callback",
+      "scope": "setup_callback",
+      "instructions_accounted": 0,
+      "instructions_total": 17,
+      "native_owner": "nba97_setup_step / adjustSetupChoice",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8003F3B0",
+      "name": "Setup bottom-button action callback",
+      "scope": "setup_callback",
+      "instructions_accounted": 0,
+      "instructions_total": 17,
+      "native_owner": "activateMenuSelection (existing bottom menu)",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004EB94",
+      "name": "Select criterion rank table",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 35,
+      "native_owner": "Nba97TeamRanks::value / nba97_team_select_input",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004EC20",
+      "name": "Refresh active side rank values",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 22,
+      "native_owner": "renderTeamSelect rank text",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004EE7C",
+      "name": "Copy rank tables and selected teams",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 31,
+      "native_owner": "TeamSelectAssets::ranks / nba97_team_select_open",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004EF40",
+      "name": "Publish selected teams and refresh objects",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 56,
+      "native_owner": "nba97_team_select_input / teamSelectPalette / renderTeamSelect",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F020",
+      "name": "Find team by rank",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 14,
+      "native_owner": "nba97_team_select_input inverse-rank scan",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F058",
+      "name": "Previous team in rank order",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 37,
+      "native_owner": "nba97_team_select_input previous rank",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F0EC",
+      "name": "Next team in rank order",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 36,
+      "native_owner": "nba97_team_select_input next rank",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F17C",
+      "name": "Change team by numeric ID",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 10,
+      "native_owner": "nba97_team_select_input numeric-ID scan",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F7B8",
+      "name": "Switch active side",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 95,
+      "native_owner": "nba97_team_select_input side switch / renderTeamSelect",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F934",
+      "name": "Randomize active team with presentation delays",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 41,
+      "native_owner": "nba97_team_random_begin / nba97_team_random_tick",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004F9D8",
+      "name": "Team Select action callback",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 25,
+      "native_owner": "nba97_team_select_input / handleTeamSelectKey",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004FA3C",
+      "name": "Initialize Team Select object placement",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 145,
+      "native_owner": "renderTeamSelect / TeamSelectAssets",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004FC80",
+      "name": "Persist regular-team selections on exit",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 22,
+      "native_owner": "finish / remembered_regular",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8004FCD8",
+      "name": "Construct and run Team Select",
+      "scope": "team_select_owner",
+      "instructions_accounted": 0,
+      "instructions_total": 68,
+      "native_owner": "openTeamSelect / beginFrontendTransition",
+      "shared_dependencies": [
+        "0x8003D930",
+        "0x80039574"
+      ],
+      "tests_evidence": [
+        "tests/team_select_test.cpp",
+        "config/decomp/team_select_scenarios.json"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    },
+    {
+      "address": "0x8005D8C8",
+      "name": "Weighted rating tier sum",
+      "scope": "ratings_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 25,
+      "native_owner": "nba97_team_ratings / TeamSelectAssets::ranks",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/team_ratings_test.cpp",
+        "historical original RAM scores/ranks:145+145 matched"
+      ],
+      "remaining_uncertainty": "Per-block accounting and original modified-roster runtime pending; eight-player minimum is a native adapter guard, not a recovered arithmetic restriction."
+    },
+    {
+      "address": "0x8005D92C",
+      "name": "Weighted team score",
+      "scope": "ratings_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 83,
+      "native_owner": "nba97_team_ratings / TeamSelectAssets::ranks",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/team_ratings_test.cpp",
+        "historical original RAM scores/ranks:145+145 matched"
+      ],
+      "remaining_uncertainty": "Per-block accounting and original modified-roster runtime pending; eight-player minimum is a native adapter guard, not a recovered arithmetic restriction."
+    },
+    {
+      "address": "0x8005DA78",
+      "name": "Stable unsigned rank ordering",
+      "scope": "ratings_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 47,
+      "native_owner": "nba97_team_ratings / TeamSelectAssets::ranks",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/team_ratings_test.cpp",
+        "historical original RAM scores/ranks:145+145 matched"
+      ],
+      "remaining_uncertainty": "Per-block accounting and original modified-roster runtime pending; eight-player minimum is a native adapter guard, not a recovered arithmetic restriction."
+    },
+    {
+      "address": "0x8005DB34",
+      "name": "Refresh team ratings",
+      "scope": "ratings_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 369,
+      "native_owner": "nba97_team_ratings / TeamSelectAssets::ranks",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "tests/team_ratings_test.cpp",
+        "historical original RAM scores/ranks:145+145 matched"
+      ],
+      "remaining_uncertainty": "Per-block accounting and original modified-roster runtime pending; eight-player minimum is a native adapter guard, not a recovered arithmetic restriction."
+    },
+    {
+      "address": "0x8007A538",
+      "name": "Shared six-word RNG",
+      "scope": "shared_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 52,
+      "native_owner": "nba97_team_select_rng_step",
+      "shared_dependencies": [],
+      "tests_evidence": [
+        "docs/team_select_workflow.md"
+      ],
+      "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
+    }
+  ]
+}
