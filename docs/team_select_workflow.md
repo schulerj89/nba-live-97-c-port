@@ -262,9 +262,10 @@ and live event-time comparison remain pending; see cursor_audio_workflow.md.
 The subsequent [arrow flash checkpoint](team_select_arrow_flash_workflow.md)
 adds retained text-color history and native directional flashes. It preserves
 unknown inherited channels explicitly and does not establish a universal entry
-color. Original first-Left scheduling and stable completion are observed;
-intermediate original flash presentations and the complete scenario set remain
-separate evidence requirements. No instruction or whole-game credit is added.
+color. Original first-Left scheduling/stable completion and one complete
+21-update Right flash are observed. Other flashes, retriggers and the complete
+scenario set remain separate evidence requirements. No instruction or
+whole-game credit is added.
 
 The emulator was not running during the implementation checkpoint. The later
 runtime preparation launched the existing reference installation with the local

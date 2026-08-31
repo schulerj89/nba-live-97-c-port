@@ -110,14 +110,42 @@ creation; exit's final cleanup frame contains no retired text.
 | A independent retirement comparison | 6,189 checks /9 snapshots | Help detachment versus layer/value retirement, including same-group recreation before old slots are freed |
 | Original first physical Left, post-setter | 109 checks | Runtime descriptor/callback fields, setter state/pages and seven new-slot observations |
 | Original later post-Left state | 76 checks | Stable terminal fields/pages of all four arrows; **not an elapsed-update count or live-cycle timing proof** |
+| Original first Right flash | 2,884 checks /21 consecutive arrow-update return-site stops | All four arrows' stored tint fields, both primitive RGB pages and alternating manager buffer match original-MIPS and compiled-C predictions from the captured post-setter state |
+| B independent original Right comparison | 2,859 assertions /22 snapshots | Scheduled baseline plus all21 updates versus freshly compiled current C; separate extractor, no A imports or generated fields/expected vectors |
 
-**Full original Right flash capture: PENDING.** Replace this status only with
-validated stops/receipts; source predictions and later stable states do not
-substitute for its complete update sequence.
+**One complete original Right flash is observed.** Starting from home2/away24,
+one physical Right changed home to3. The post-setter stop at `8003D5D8` records
+S0=1 and A0=A3=`801FA1D8`, with a neutral visible glyph and zero inherited start.
+The source callback allocated seven values, advancing hint35 to42. Twenty-one
+subsequent stops at `8002B1D8` each record T2=`801FA1D8` in a private screenshot
+paired with fresh2MiB RAM. The intervening selected-name stops have a different
+T2 and are not counted as arrow updates. Only debugger Run commands occurred
+between these stops; no additional game input was requested or injected.
+
+The capture field extractor verifies eight FE anchors totaling14,764 bytes in
+each RAM snapshot; the cycle checker separately verifies seven regions totaling
+7,304 bytes. The sequence
+reaches gold at4, enters hold at5, begins return at16, reaches neutral at20,
+then clears animation and retains stored start `(120,128,128)` at21. The other
+three arrows keep their identities and tint state. The checker also rejects
+corrupted phase, opposite-buffer color, other-arrow history, manager buffer,
+FE code and skipped-update fixtures. Its T2 parameter records caller-supplied
+register provenance; a RAM file alone cannot prove the debugger observation.
+
+B independently compares 1,008 stored tint bytes and 504 primitive RGB bytes
+across the21 updates, as well as identities, static node fields and buffer
+selection. Its nine immutable FE regions total13,628 bytes per snapshot, and
+nine mutation/truncation guards reject invalid private fixtures. These are
+separate audits of the same observations, not additional observed scenarios.
+
+`8002B1D8` precedes the return epilogue and later `8002D5B4` GPU submission.
+This establishes a sampled text-state sequence, not PS1 GPU pixels, wall-clock
+cadence, retriggers, other entry histories or complete Team Select equivalence.
+The emulator remains paused after update21 with the temporary breakpoint removed.
 
 The first register-based debugger condition was accepted but did not stop;
 the subsequent memory-mask expression was rejected by the actual UI. Neither
-is a working capture procedure. Continue with plain address breakpoints:
+is a working capture procedure. The successful capture used plain breakpoints:
 `8003D5D8` after Right scheduling, then `8002B1D8` after animated text updates.
 At the latter, inspect T2 to distinguish the arrow from the selected text;
 the captured right-arrow pointer is `801FA1D8`. Revalidate identities and FE
@@ -144,6 +172,11 @@ results; A's `team_select/audit_a/arrow_flash_runtime/` holds source vectors and
 the scheduled/post-Left comparisons. C's `team_select/audit_c/team_arrow_flash/`
 holds `native_history_diff.json` and the source adapter. Original RAM, reference media and oracle
 implementations remain private. Public fixtures use invented premises.
+The original Right sequence is `team_select/runtime-flash-20260830/`:
+`right-scheduled-*` and `right-01-*` through `right-21-*`. A's independent
+`analyze_right.py` and `right_capture_report.json` preserve its field comparisons.
+B's separate receipt is
+`gameplay/audit_b/team_arrow_flash/runtime_right_independent/result.json`.
 
 ## Ownership and remaining limits
 
@@ -164,7 +197,7 @@ new whole-game denominator. Every row retains zero new credit.
 |8004FCD8|8004FDE8|68|
 
 Still pending: complete heap/frontend producer history, arbitrary text/primitive
-states, full original Left/Right/retrigger/Help/Cross scenarios, synchronized
+states, other original Left/Right/retrigger/Help/Cross scenarios, synchronized
 GPU pixels and physical timing, broader audio equivalence and physical input
 coverage. The metadata/renderer tests do not establish SPU output, original
 wall-clock cadence, all Team Select behavior, or a playable gameplay handoff.
