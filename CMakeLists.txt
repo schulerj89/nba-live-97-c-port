@@ -492,12 +492,25 @@ if(BUILD_TESTING)
         target_link_libraries(nba97_process_audio_capture_tests PRIVATE ole32 uuid mmdevapi winmm)
         add_test(NAME process_audio_capture_guards COMMAND nba97_process_audio_capture_tests)
         add_executable(nba97_recovered_audio_tests tests/recovered_audio_test.cpp
-            src/recovered_audio.cpp src/psx_adpcm.cpp src/recovered/frontend_audio.c)
+            src/recovered_audio.cpp src/recovered_wave_output.cpp src/psx_adpcm.cpp src/recovered/frontend_audio.c)
         target_compile_features(nba97_recovered_audio_tests PRIVATE c_std_99 cxx_std_17)
         target_include_directories(nba97_recovered_audio_tests PRIVATE src)
         target_compile_definitions(nba97_recovered_audio_tests PRIVATE NOMINMAX)
         target_link_libraries(nba97_recovered_audio_tests PRIVATE winmm)
         add_test(NAME recovered_audio_gain COMMAND nba97_recovered_audio_tests)
+        add_executable(nba97_recovered_wave_output_tests tests/recovered_wave_output_tests.cpp src/recovered_wave_output.cpp)
+        target_compile_features(nba97_recovered_wave_output_tests PRIVATE cxx_std_17)
+        target_include_directories(nba97_recovered_wave_output_tests PRIVATE src)
+        target_compile_definitions(nba97_recovered_wave_output_tests PRIVATE NOMINMAX)
+        target_link_libraries(nba97_recovered_wave_output_tests PRIVATE winmm)
+        add_test(NAME recovered_wave_output_lifetime COMMAND nba97_recovered_wave_output_tests)
+        add_executable(nba97_recovered_audio_lifetime_tests tests/recovered_audio_lifetime_tests.cpp
+            src/recovered_audio.cpp src/recovered_wave_output.cpp src/psx_adpcm.cpp src/recovered/frontend_audio.c)
+        target_compile_features(nba97_recovered_audio_lifetime_tests PRIVATE c_std_99 cxx_std_17)
+        target_include_directories(nba97_recovered_audio_lifetime_tests PRIVATE src)
+        target_compile_definitions(nba97_recovered_audio_lifetime_tests PRIVATE NOMINMAX)
+        target_link_libraries(nba97_recovered_audio_lifetime_tests PRIVATE winmm)
+        add_test(NAME recovered_audio_lifetime COMMAND nba97_recovered_audio_lifetime_tests)
     endif()
 endif()
 if(NBA97_RECOVERED_TESTS_ONLY)
@@ -532,6 +545,7 @@ if(WIN32)
         src/ea_schl.cpp
         src/psx_adpcm.cpp
         src/recovered_audio.cpp
+        src/recovered_wave_output.cpp
         src/recovered/frontend_audio.c
         src/recovered/semantic_trace.c
         src/boot_flow.cpp

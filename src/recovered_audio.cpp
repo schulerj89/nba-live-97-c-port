@@ -1,4 +1,5 @@
 #include "recovered_audio.hpp"
+#include "recovered_wave_output.hpp"
 
 #include "psx_adpcm.hpp"
 #include "cool_fact_index.hpp"
@@ -97,53 +98,18 @@ void writePcmWav(const std::filesystem::path& path,
 }
 }
 
+RecoveredAudioPlayer::RecoveredAudioPlayer()
+    : output_(std::make_unique<RecoveredWaveOutput>()) {}
+RecoveredAudioPlayer::RecoveredAudioPlayer(std::shared_ptr<RecoveredWaveApi> api)
+    : output_(std::make_unique<RecoveredWaveOutput>(std::move(api))) {}
 RecoveredAudioPlayer::~RecoveredAudioPlayer() { stop(); }
 
 void RecoveredAudioPlayer::playPcm(std::vector<std::int16_t> pcm,
                                    std::uint32_t sample_rate) {
-    // All ZCURSOR programs are 22.05 kHz. Reusing the WinMM device prevents
-    // close/open transients from making identical repeated cursor cues sound
-    // different. A new format still takes the full close/open path.
-    if (wave_out_ && wave_sample_rate_ == sample_rate) {
-        if (!(header_.dwFlags & WHDR_DONE)) waveOutReset(wave_out_);
-        if (header_.dwFlags & WHDR_PREPARED)
-            waveOutUnprepareHeader(wave_out_, &header_, sizeof(header_));
-        header_ = {};
-        pcm_.clear();
-    } else {
-        stop();
-    }
-    pcm_ = std::move(pcm);
-    WAVEFORMATEX format{};
-    format.wFormatTag = WAVE_FORMAT_PCM;
-    format.nChannels = 1;
-    format.nSamplesPerSec = sample_rate;
-    format.wBitsPerSample = 16;
-    format.nBlockAlign = 2;
-    format.nAvgBytesPerSec = sample_rate * 2;
-    MMRESULT result = MMSYSERR_NOERROR;
-    if (!wave_out_) {
-        result = waveOutOpen(&wave_out_, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL);
-        if (result != MMSYSERR_NOERROR) {
-            wave_out_ = nullptr;
-            pcm_.clear();
-            throw std::runtime_error("waveOutOpen recovered clip failed: " + std::to_string(result));
-        }
-        wave_sample_rate_ = sample_rate;
-    }
-    header_ = {};
-    header_.lpData = reinterpret_cast<LPSTR>(pcm_.data());
-    header_.dwBufferLength = static_cast<DWORD>(pcm_.size() * sizeof(std::int16_t));
-    result = waveOutPrepareHeader(wave_out_, &header_, sizeof(header_));
-    if (result != MMSYSERR_NOERROR) {
-        stop();
-        throw std::runtime_error("waveOutPrepareHeader recovered clip failed: " + std::to_string(result));
-    }
-    result = waveOutWrite(wave_out_, &header_, sizeof(header_));
-    if (result != MMSYSERR_NOERROR) {
-        stop();
-        throw std::runtime_error("waveOutWrite recovered clip failed: " + std::to_string(result));
-    }
+    // PORT fix: same-rate reuse must first release the old borrowed header and
+    // PCM successfully. The stable generation owner retains both on a driver
+    // failure; it does not change original cue/gain/pitch/accepted-call policy.
+    output_->play(std::move(pcm), sample_rate);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
@@ -412,20 +378,11 @@ PreparedCoolFact RecoveredAudioPlayer::prepareCoolFact(
 }
 
 void RecoveredAudioPlayer::stop() noexcept {
-    if (wave_out_) {
-        waveOutReset(wave_out_);
-        if (header_.dwFlags & WHDR_PREPARED)
-            waveOutUnprepareHeader(wave_out_, &header_, sizeof(header_));
-        waveOutClose(wave_out_);
-    }
-    wave_out_ = nullptr;
-    wave_sample_rate_ = 0;
-    header_ = {};
-    pcm_.clear();
+    output_->stop();
 }
 
 bool RecoveredAudioPlayer::isPlaying() const noexcept {
-    return wave_out_ && !(header_.dwFlags & WHDR_DONE);
+    return output_->isPlaying();
 }
 
 } // namespace nba97

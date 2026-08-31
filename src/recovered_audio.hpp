@@ -3,12 +3,16 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <windows.h>
 #include <mmsystem.h>
 
 namespace nba97 {
+
+class RecoveredWaveApi;
+class RecoveredWaveOutput;
 
 struct RecoveredClipInfo {
     std::uint32_t record = 0;
@@ -44,7 +48,10 @@ public:
     ~RecoveredAudioPlayer();
     RecoveredAudioPlayer(const RecoveredAudioPlayer&) = delete;
     RecoveredAudioPlayer& operator=(const RecoveredAudioPlayer&) = delete;
-    RecoveredAudioPlayer() = default;
+    RecoveredAudioPlayer();
+    // Native driver injection for ownership/failure tests; no source voice
+    // handle, cue selection, or RNG state lives in this backend.
+    explicit RecoveredAudioPlayer(std::shared_ptr<RecoveredWaveApi>);
 
     // accepted runs once after validated PCM preparation, before any device
     // submission/failure. It models the native accepted-cue boundary, not the
@@ -97,10 +104,7 @@ private:
                                       const std::function<void()>& accepted = {});
     static void applyCoolFactPlayback(PreparedCoolFact&, std::uint8_t speech_setting);
     void playPcm(std::vector<std::int16_t> pcm, std::uint32_t sample_rate);
-    HWAVEOUT wave_out_ = nullptr;
-    WAVEHDR header_{};
-    std::vector<std::int16_t> pcm_;
-    std::uint32_t wave_sample_rate_ = 0;
+    std::unique_ptr<RecoveredWaveOutput> output_;
     RecoveredClipInfo info_{};
 };
 
