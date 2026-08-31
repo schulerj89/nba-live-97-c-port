@@ -10,6 +10,24 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_team_roles_tests tests/game_team_roles_tests.cpp src/recovered/game_team_roles.c)
+    target_compile_features(nba97_game_team_roles_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_team_roles_tests PRIVATE src)
+    add_test(NAME game_team_roles COMMAND nba97_game_team_roles_tests)
+    add_executable(nba97_gameplay_setup_tests tests/gameplay_setup_tests.cpp src/gameplay_setup.cpp
+        src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c src/recovered/game_player_initialization.c)
+    target_compile_features(nba97_gameplay_setup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_gameplay_setup_tests PRIVATE src)
+    add_test(NAME gameplay_setup COMMAND nba97_gameplay_setup_tests)
+    add_executable(nba97_game_player_initialization_tests tests/game_player_initialization_tests.cpp
+        src/recovered/game_player_initialization.c)
+    target_compile_features(nba97_game_player_initialization_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_initialization_tests PRIVATE src)
+    add_test(NAME game_player_initialization COMMAND nba97_game_player_initialization_tests)
+    add_executable(nba97_music_voice_tests tests/music_voice_tests.cpp src/recovered/music_voice.c)
+    target_compile_features(nba97_music_voice_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_music_voice_tests PRIVATE src)
+    add_test(NAME music_voice COMMAND nba97_music_voice_tests)
     add_executable(nba97_game_lineup_recovery_tests tests/game_lineup_recovery_tests.cpp
         src/recovered/game_lineup_recovery.c)
     target_compile_features(nba97_game_lineup_recovery_tests PRIVATE c_std_99 cxx_std_17)
@@ -422,6 +440,8 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp
     src/recovered/game_controllers.c src/recovered/game_controller_selection.c
     src/recovered/game_player_bindings.c src/recovered/game_lineup_recovery.c
+    src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
+    src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)

@@ -81,3 +81,9 @@ The next checkpoint adds646A8 direct binding effects, including its observable
 divide-trap prefix, and65140/65070 lineup recovery with synchronous substitution
 boundaries. Both builds pass59/59 CTests. Tail helpers/substitution dependencies
 and host integration remain open; this does not advance the complete-match gate.
+
+The following checkpoint passes63/63 CTests in both configurations. It adds
+the actual646A8 role-helper chain,65B18 and its force1 animation dependencies,
+owned original setup resources, and recovered music voice timing/gain/completion
+boundaries. Resource-to-initializer composition is verified; the whole period,
+stream producer, hardware drain timing and native host gameplay remain open.

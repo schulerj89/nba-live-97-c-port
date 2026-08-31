@@ -109,4 +109,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Private View Player notice extraction failed.'
 python (Join-Path $repo 'tools\extract_create_player_dialogs.py') $feonly --output `
     (Join-Path $repo '.local\assetpacks\create_player\delete.n97ui')
 if ($LASTEXITCODE -ne 0) { throw 'Private Create Player dialog extraction failed.' }
-Write-Host 'Created local-only boot, frontend, font, menu, audio, and roster database packs from the original disc.'
+$gameonly = Join-Path $repo '.local\extracted\GAMEONLY.BIN'
+if (-not (Test-Path -LiteralPath $gameonly)) {
+    python $extractor $DiscImage $gameonly --lba 544 --size 1009196
+    if ($LASTEXITCODE -ne 0) { throw 'Private gameplay overlay extraction failed.' }
+}
+python (Join-Path $repo 'tools\extract_gameplay_setup.py') --disc $DiscImage --overlay $gameonly `
+    --output (Join-Path $repo '.local\assetpacks\gameplay')
+if ($LASTEXITCODE -ne 0) { throw 'Private gameplay motion/period extraction failed.' }
+Write-Host 'Created local-only boot, frontend, font, menu, audio, roster and gameplay setup packs from the original disc.'
