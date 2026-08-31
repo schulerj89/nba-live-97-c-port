@@ -54,6 +54,17 @@ if(BUILD_TESTING)
     target_compile_features(nba97_voice_patl_upload_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_voice_patl_upload_tests PRIVATE src)
     add_test(NAME voice_patl_upload COMMAND nba97_voice_patl_upload_tests)
+    add_executable(nba97_spu_heap_mapping_tests tests/spu_heap_mapping_tests.cpp
+        src/recovered/spu_heap_mapping.c src/recovered/spu_heap.c src/recovered/voice_mapping.c
+        src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
+    target_compile_features(nba97_spu_heap_mapping_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_spu_heap_mapping_tests PRIVATE src)
+    add_test(NAME spu_heap_mapping COMMAND nba97_spu_heap_mapping_tests)
+    add_executable(nba97_spu_heap_tests tests/spu_heap_tests.cpp src/recovered/spu_heap.c
+        src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
+    target_compile_features(nba97_spu_heap_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_spu_heap_tests PRIVATE src)
+    add_test(NAME spu_heap COMMAND nba97_spu_heap_tests)
     add_executable(nba97_voice_mapping_tests tests/voice_mapping_tests.cpp
         src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c
         src/recovered/voice_patl_upload.c src/recovered/voice_programs.c)
@@ -673,7 +684,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_jump.c src/recovered/game_player_input.c src/match_input_edges.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
-    src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c
+    src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c
     src/recovered/game_text_objects.c src/recovered/game_text_pools.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
     src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
     src/recovered/game_substitution_support.c
