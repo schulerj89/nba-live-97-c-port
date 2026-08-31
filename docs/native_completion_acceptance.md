@@ -19,9 +19,9 @@ See the growing [preserved-behavior index](preserved_original_bugs.md).
 | Boot, legal, movie, title, Setup | Implemented with scoped checks | Original transition, presentation and audio comparisons; repeated fresh/warm entry |
 | Team Select and User Setup | Implemented bounded frontend path | Complete original input/timing/visual comparison, all controller/profile variants |
 | Accepted current rosters/settings/controls | Owned snapshot and atomic65DB0 composition with actual reached dependencies on verified no-substitution routes | Close natural entry producers, actual substitution, extension/reference fields, created membership and special teams |
-| Gameplay assets and scene | Motion resolver implemented/source-compared; scene absent | Native motion sampling/model/court/camera lifetime and source numerical/frame comparison across teams/courts |
+| Gameplay assets and scene | Owned animation resources, per-entity animation and pose-request/sample bridges source-compared; scene absent | Natural entry, model/court/camera lifetime and source numerical/frame comparison across teams/courts |
 | Tipoff through first possession | Not implemented | Original phase/input trace and native deterministic possession with no substituted logic |
-| Player/ball simulation and CPU AI | Not implemented | Movement, animation, contact, ball ownership, passes/shots and CPU decisions against original owners/state |
+| Player/ball simulation and CPU AI | Player animation and bounded6CFE0 physics recovered; complete simulation absent | Whole player-update composition, input/AI, contact, ball ownership, passes/shots and source state comparisons |
 | CPU versus CPU full match | Not implemented | Full actual matches, regulation/overtime/end/results/return without human intervention or scripted outcome |
 | CPU versus user full match | Not implemented | Host input route controls movement, selection, passing, shooting and all recovered actions for a full match |
 | Rules and events | Frontend rule settings only | Scoring, clocks, fouls/free throws, violations, inbound changes, timeouts, substitutions and period/end logic |
@@ -111,3 +111,19 @@ render tails. Both Debug and RelWithDebInfo match512 additional original
 attribute executions each, including91 source traps per build. The separately
 recovered31A88 music-transition boundaries retain the original temporary-volume
 quirks but still require their real frontend resource-dispatch integration.
+
+The following checkpoint passes80/80 CTests in Debug and RelWithDebInfo.
+It adds owned animation lookup resources, real request/pose/foot resources,
+atomic animation/queue and pose bridges, bounded player physics, and frontend
+resource checksum/lifetime owners. Independent composed checks corrected two
+native adapter defects before acceptance: raw versus normalized timing and
+the separate57B18 request/530FC render spans. Existing original quirks remain.
+The portrait extractor's reserved-record count was also fixed: the missing
+physical493 portrait was decoded while all493 earlier PNGs stayed unchanged.
+
+Source comparisons include full queue/advance instruction coverage, player
+physics plus its actual direction helper, real-resource animation/physics
+sequences and composed native animation/pose bridges. These are bounded
+source-state experiments, not a working court, possession or completed match.
+Natural entry, renderer setup, full6801C composition, input/AI/ball/rules and
+the remaining music/resource host lifecycle still require integration.

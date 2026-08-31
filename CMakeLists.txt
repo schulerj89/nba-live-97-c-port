@@ -10,6 +10,42 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_player_physics_tests tests/game_player_physics_tests.cpp src/recovered/game_player_physics.c)
+    target_compile_features(nba97_game_player_physics_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_physics_tests PRIVATE src)
+    add_test(NAME game_player_physics COMMAND nba97_game_player_physics_tests)
+    add_executable(nba97_frontend_resource_tests tests/frontend_resource_tests.cpp src/recovered/frontend_resource.c)
+    target_compile_features(nba97_frontend_resource_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_tests PRIVATE src)
+    add_test(NAME frontend_resource COMMAND nba97_frontend_resource_tests)
+    add_executable(nba97_match_pose_tests tests/match_pose_tests.cpp src/match_pose.cpp src/gameplay_pose.cpp
+        src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c
+        src/recovered/game_pose_request.c src/recovered/game_pose_sample.c)
+    target_compile_features(nba97_match_pose_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_match_pose_tests PRIVATE src)
+    add_test(NAME match_pose COMMAND nba97_match_pose_tests)
+    add_executable(nba97_game_pose_sample_tests tests/game_pose_sample_tests.cpp src/recovered/game_pose_sample.c
+        src/gameplay_pose.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c)
+    target_compile_features(nba97_game_pose_sample_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_pose_sample_tests PRIVATE src)
+    add_test(NAME game_pose_sample COMMAND nba97_game_pose_sample_tests)
+    add_executable(nba97_game_pose_request_tests tests/game_pose_request_tests.cpp src/recovered/game_pose_request.c)
+    target_compile_features(nba97_game_pose_request_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_pose_request_tests PRIVATE src)
+    add_test(NAME game_pose_request COMMAND nba97_game_pose_request_tests)
+    add_executable(nba97_gameplay_animation_tests tests/gameplay_animation_tests.cpp src/gameplay_animation.cpp
+        src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c)
+    target_compile_features(nba97_gameplay_animation_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_gameplay_animation_tests PRIVATE src)
+    add_test(NAME gameplay_animation COMMAND nba97_gameplay_animation_tests)
+    add_executable(nba97_game_animation_advance_tests tests/game_animation_advance_tests.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c)
+    target_compile_features(nba97_game_animation_advance_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_animation_advance_tests PRIVATE src)
+    add_test(NAME game_animation_advance COMMAND nba97_game_animation_advance_tests)
+    add_executable(nba97_game_animation_queue_tests tests/game_animation_queue_tests.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c)
+    target_compile_features(nba97_game_animation_queue_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_animation_queue_tests PRIVATE src)
+    add_test(NAME game_animation_queue COMMAND nba97_game_animation_queue_tests)
     add_executable(nba97_music_transition_tests tests/music_transition_tests.cpp src/recovered/music_transition.c)
     target_compile_features(nba97_music_transition_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_music_transition_tests PRIVATE src)
@@ -28,6 +64,8 @@ if(BUILD_TESTING)
     target_include_directories(nba97_game_substitution_support_tests PRIVATE src)
     add_test(NAME game_substitution_support COMMAND nba97_game_substitution_support_tests)
     add_executable(nba97_match_runtime_tests tests/match_runtime_tests.cpp src/match_runtime.cpp
+        src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
+        src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
         src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c
         src/recovered/game_player_attributes.c
         src/recovered/game_period.c src/recovered/game_period_dependencies.c
@@ -487,8 +525,11 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_bindings.c src/recovered/game_lineup_recovery.c
     src/recovered/game_period.c src/recovered/game_substitution.c src/recovered/music_stream.c
     src/recovered/game_period_dependencies.c src/match_runtime.cpp
+    src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
+    src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
+    src/recovered/game_player_physics.c
     src/recovered/game_substitution_support.c
-    src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c
+    src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)

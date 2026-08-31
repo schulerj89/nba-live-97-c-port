@@ -22,12 +22,19 @@ defects should still be fixed.
 |GAME65DB0 lookup |A raw option outside the ordinary five still reads its original adjacent word |Private256-word lookup windows in `GameplaySetup`; no default duration |
 |GAME60EF8 |Already sorted entities keep stale render indices; only actual insertion moves update the index halfword |`game_period_dependencies.c`, exact ordered sort writes and tests |
 |GAME63EDC/51ED8 |Raw rating byte1E values23,24,25 or a zero FDB64 divisor trap after the height and attribute3A writes; raw entity IDs can alias height slots through the original shift wrap |`game_player_attributes.c`, exact trap prefixes and raw-ID source comparisons; no rating clamp |
+|GAME56CE0/572C0 |Full motion queues silently drop; channels can diverge; producer searches exactFFFF while consumer treats any negative head as empty |Animation queue/advance owners and whole-source comparisons |
+|GAME572C0 |Transitions discard remaining time; old primary header mode controls synchronization; blend promotion loses unrelated conversion bits |`game_animation_advance.c`, directed source and actual-resource replays |
+|GAME57B18 |Foot-lock counter overflow into8000..FFFF reenters the early cache branch; unused B fields stay stale |Pose request owner and composed foot-lock tests |
+|GAME55018 |Asymmetric Euler adjustment changes A even at weight0; full unsigned weights and unusual distance expressions remain |Gameplay pose sampler and raw-angle original comparisons |
+|GAME6CFE0 |Landing marker comparison reads the just-copied unchanged height, so its2C=FF store is unreachable; actor12 can clearA0 without recalculating9C |Physics owner, ordered-store proof and source invariant |
+|GAME706E4 |Wrapped INT_MIN negation can cause a source division trap or adjacent-table read |Direction helper; no square-root/atan2 replacement or index clamp |
 |FE2F36C/6B6A0 |Router retains a zero-status branch although the original BUSY helper cannot return zero |`music_routing.c`, source-quirk comment and lifecycle tests |
 |FE2F330 |The sixteen-slot music table permits repeats and includes the special track in ordinary selection |Music extractor/routing workflow; no guessed shuffle |
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |
 |FE72254/72954 |Only full1024-byte/channel staging blocks are submitted; all five tracks discard their partial final block |`music_stream.c`, all original track chunk comparisons and workflow |
 |FE7309C |Natural drain compares signed read index with write index minus one without modulo correction; ending at write index0 can miss key-off |Stream stop/advance helpers and full original IRQ comparisons |
 |FE31A88 music arm |Zero adjacent volume skips reduction; repeated View Player entry overwrites saved volume; exit restores the saved low byte even after intervening edits |`music_transition.c`, exact source state/callback comparisons; no extra gain call to cancel the original fade |
+|FE3122C/8ABF0 |Already-finished nonnegative announcer voice keeps its old value; CRCF validation ignores the trailer's length field |`frontend_resource.c`, actual lifetime/content comparisons; native callback obligations remain explicit |
 
 This is a growing index, not proof every original bug has been found. Callers
 and host adapters must preserve these outcomes when integrating the recovered

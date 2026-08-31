@@ -14,6 +14,7 @@ static void word(Bytes& b,unsigned offset,std::uint32_t v) {
 static GameplaySetupResource resources() {
     Bytes motion(0x400);word(motion,0,8);word(motion,4,0x158);
     for(unsigned base:{8u,0x158u}) {word(motion,base,0x300);word(motion,base+39*4,0x310);}
+    motion[0x303]=16;motion[0x313]=16; // Tick1 adds256; source threshold is step3*16.
     motion[0x307]=8;word(motion,0x308,12);motion[0x317]=8;word(motion,0x318,12);
     Bytes pack(2132);const char magic[]="NBA97PER";
     for(unsigned i=0;i<8;++i)pack[i]=std::uint8_t(magic[i]);
@@ -31,6 +32,16 @@ static GameplaySetupResource resources() {
         crc^=pack[i];for(unsigned bit=0;bit<8;++bit)crc=(crc>>1)^((0u-(crc&1u))&0xedb88320u);
     }
     word(pack,16,~crc);return decodeGameplaySetup(pack,decode_gameplay_mocap(std::move(motion)));
+}
+static Bytes animationPack() {
+    Bytes pack(20+0x30084);const char magic[]="NBA97ANI";
+    for(unsigned i=0;i<8;++i)pack[i]=std::uint8_t(magic[i]);
+    word(pack,8,1);word(pack,12,0x30084);
+    std::uint32_t crc=0xffffffffu;
+    for(unsigned i=20;i<pack.size();++i) {
+        crc^=pack[i];for(unsigned bit=0;bit<8;++bit)crc=(crc>>1)^((0u-(crc&1u))&0xedb88320u);
+    }
+    word(pack,16,~crc);return pack;
 }
 static MatchSnapshot snapshot(bool humans) {
     MatchSnapshot s;s.request.teams={0,1};s.request.setup={0,0,0,1};
@@ -68,7 +79,7 @@ static std::uint64_t fingerprint(const MatchRuntimeState& s) {
     for(const auto& r:s.team)record(r);for(const auto& r:s.status)record(r);for(const auto& r:s.controller)record(r);
     for(const auto& e:s.entity){record(e.record);field(e.player);field(e.status);field(e.opponent);}
     for(auto v:s.scalar)field(v);for(auto v:s.auxiliary)field(v);field(s.incoming_s6);
-    field(s.render_flag21498);for(auto v:s.player_height165f48)field(v);
+    field(s.render_flag21498);field(s.simulation_tick6c);for(auto v:s.player_height165f48)field(v);
     for(auto r:s.entity_table)ref(r);for(auto r:s.render_table)ref(r);for(auto r:s.controller_table)ref(r);
     for(auto v:s.active_player)field(v);for(auto v:s.active_status)field(v);ref(s.ball);ref(s.reference34);
     value(s.completed_period_initializations);return h;
@@ -188,6 +199,44 @@ int main() {
     check(attr.published && physical.entity[0].record.bytes==untouched.bytes &&
         physical.entity[0].record.known==untouched.known && physical.player_height165f48[10].word==70u*624,
         "explicit physical start1 writes through represented ball slot without visiting entity0");
+    auto animated=s;const auto motion_resources=decodeGameplayAnimation(animationPack(),s.setup);
+    before=fingerprint(animated);auto animation_result=advanceMatchRuntimeAnimation(animated,0,motion_resources);
+    check(!animation_result.published && animation_result.result==NBA97_ANIMATION_UNRESOLVED &&
+        fingerprint(animated)==before,"animation cannot invent simulation tick6C");
+    animated.simulation_tick6c={1,1};
+    const auto before_animation=animated;
+    animation_result=advanceMatchRuntimeAnimation(animated,0,motion_resources);
+    check(animation_result.result==NBA97_ANIMATION_OK && animation_result.published,
+        "actual animation owner composed with matching immutable resource generation");
+    check(animated.entity[0].record.read(0x50,2).word==1 && animated.entity[0].record.read(0x54,2).word==1,
+        "primary and secondary frames advance from original one-tick timing byte");
+    check(animated.entity[0].record.read(0x10,4).word==before_animation.entity[0].record.read(0x10,4).word &&
+        animated.entity[0].record.read(0x1a,1).word==before_animation.entity[0].record.read(0x1a,1).word,
+        "animation does not fabricate physics or actor transitions");
+    for(unsigned i=1;i<11;++i)check(animated.entity[i].record.bytes==before_animation.entity[i].record.bytes &&
+        animated.entity[i].record.known==before_animation.entity[i].record.known,"one-entity animation leaves other entities untouched");
+    before=fingerprint(animated);
+    animation_result=advanceMatchRuntimeAnimation(animated,0,decodeGameplayAnimation(animationPack(),resources()));
+    check(!animation_result.published && fingerprint(animated)==before,"different motion generation refused atomically");
+    auto queued=s;queued.entity[0].record.put(0x69,1,42);queued.entity[0].record.put(0x6d,1,43);
+    auto queue_result=queueMatchRuntimeAnimation(queued,0,0x10027,0x1ff);
+    check(queue_result.published && queued.entity[0].record.read(0x70,2).word==39 &&
+        queued.entity[0].record.read(0x78,2).word==39 && queued.entity[0].record.read(0x68,1).word==255 &&
+        queued.entity[0].record.read(0x6c,1).word==255,"queue keeps low16 motion and low8 blend on both channels");
+    check(queued.entity[0].record.read(0x72,2).word==65535 && queued.entity[0].record.read(0x7a,2).word==65535 &&
+        queued.entity[0].record.read(0x69,1).word==42 && queued.entity[0].record.read(0x6d,1).word==43,
+        "new queue sentinel leaves original stale auxiliary bytes intact");
+    for(unsigned i=0;i<3;++i)check(queueMatchRuntimeAnimation(queued,0,0,0).published,"fill original four-entry queues");
+    before=fingerprint(queued);queue_result=queueMatchRuntimeAnimation(queued,0,0xdeadbeef,0x12345678);
+    check(queue_result.published && queue_result.effects.store_count==0 && fingerprint(queued)==before,
+        "original full queues silently discard request without clip lookup");
+    queued=s;queued.entity[0].record.put(0x48,2,0);
+    queue_result=queueMatchRuntimeAnimation(queued,0,39,7);
+    check(queue_result.published && queued.entity[0].record.read(0x70,2).word==65535 &&
+        queued.entity[0].record.read(0x78,2).word==39,"locked primary and open secondary queues may diverge");
+    queued.entity[0].record.write(0x4c,2,{});before=fingerprint(queued);
+    queue_result=queueMatchRuntimeAnimation(queued,0,39,7);
+    check(!queue_result.published && fingerprint(queued)==before,"unknown required queue lock refuses publication");
     std::printf("MATCH RUNTIME PASS: %u checks; composed period, accepted ownership, preserved two-pass bindings, atomic failures\n",checks);
     return 0;
 }

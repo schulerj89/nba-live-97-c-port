@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Decode the original local-only View Player portrait archive.
 
-Z1PORT.IDX begins with a little-endian record count followed by `(size,
-offset)` pairs. Physical record zero is the original fallback image; FEONLY
-player id N uses physical record N+1. Each existing record in Z1PORT.BIG is a
+Z1PORT.IDX begins with a little-endian logical record count followed by
+`(size, offset)` pairs. The count excludes the reserved physical record zero,
+which is the original fallback image; FEONLY player id N below the count uses
+physical record N+1. Each existing record in Z1PORT.BIG is a
 standalone SHPP archive containing a 180x156 action photo.
 The source archive and generated PNGs remain under `.local/` and are never
 distributed by the port.
@@ -38,12 +39,15 @@ def main() -> int:
     if len(index) < 4:
         raise RuntimeError("Z1PORT index is truncated")
     count = struct.unpack_from("<I", index)[0]
-    if len(index) < 4 + count * 8:
+    # 800310D8: player<count selects player+1, otherwise reserved record0.
+    # The native extractor formerly omitted the last original physical record.
+    physical_count = count + 1
+    if len(index) < 4 + physical_count * 8:
         raise RuntimeError("Z1PORT index table is truncated")
     args.output.mkdir(parents=True, exist_ok=True)
 
     decoded = 0
-    for player_id in range(count):
+    for player_id in range(physical_count):
         size, offset = struct.unpack_from("<II", index, 4 + player_id * 8)
         if size == 0:
             continue
@@ -70,7 +74,7 @@ def main() -> int:
         image.save(args.output / f"player_{player_id:03d}.png")
         decoded += 1
 
-    print(f"decoded {decoded}/{count} original View Player portraits -> {args.output}")
+    print(f"decoded {decoded}/{physical_count} original View Player portraits -> {args.output}")
     return 0
 
 

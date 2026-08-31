@@ -295,6 +295,7 @@ MatchRuntimeState prepareMatchRuntime(const MatchSnapshot& snapshot,GameplaySetu
     MatchRuntimeState s{};s.accepted=std::make_shared<const MatchSnapshot>(snapshot);s.setup=std::move(setup);
     s.scalar=entry.scalar;s.auxiliary=entry.auxiliary;s.incoming_s6=entry.incoming_s6;
     s.render_flag21498=entry.render_flag21498;
+    s.simulation_tick6c=entry.simulation_tick6c;
     for(unsigned i=0;i<11;++i)s.entity[i].record=entry.entity[i];
     // Actual659F0 A3A74 clears cover bothC4 headers and24 status records.
     for(auto& t:s.team)t.clearFromSource();for(auto& status:s.status)status.clearFromSource();
@@ -413,6 +414,70 @@ MatchRuntimeAttributesResult initializeMatchRuntimeAttributes(MatchRuntimeState&
                 candidate.player_height165f48[i]={result.effects.height165f48[i],1};
         }
         live=std::move(candidate);result.published=true;
+    } catch(const std::exception& e) {result.detail=e.what();}
+    return result;
+}
+
+namespace {
+Nba97GameAnimationActor animationActor(const MatchRuntimeRecord<244>& record) {
+    Nba97GameAnimationActor actor{};actor.animation=animation(record);
+    for(unsigned i=0;i<NBA97_ANIM_EXTRA_COUNT;++i) {
+        const auto v=record.read(nba97_game_animation_extra_offset(i),2);
+        actor.extra[i]=std::uint16_t(v.word);actor.extra_known|=std::uint32_t(v.known)<<i;
+    }
+    for(unsigned channel=0;channel<2;++channel)for(unsigned slot=0;slot<4;++slot) {
+        const auto v=record.read(0x68+channel*4+slot,1);
+        actor.queue_blend[channel][slot]=std::uint8_t(v.word);
+        actor.queue_blend_known[channel]|=std::uint8_t(v.known<<slot);
+    }
+    actor.word00=record.read(0,4);actor.previous_height2c=record.read(0x2c,4);
+    actor.actor1a=record.read(0x1a,1);return actor;
+}
+void publishAnimation(MatchRuntimeRecord<244>& live,const Nba97GameAnimationEffects& effects) {
+    // Only the small entity record is staged in this per-player update; accepted
+    // rosters and immutable resources are never recopied on every animation tick.
+    auto candidate=live;const auto& actor=effects.state;
+    for(unsigned i=0;i<16;++i)if(effects.animation_written&(1u<<i))
+        candidate.write(animation_fields[i],2,{actor.animation.field[i],std::uint8_t((actor.animation.known>>i)&1)});
+    for(unsigned i=0;i<NBA97_ANIM_EXTRA_COUNT;++i)if(effects.extra_written&(1u<<i))
+        candidate.write(nba97_game_animation_extra_offset(i),2,{actor.extra[i],std::uint8_t((actor.extra_known>>i)&1)});
+    for(unsigned channel=0;channel<2;++channel)for(unsigned slot=0;slot<4;++slot)
+        if(effects.queue_blend_written[channel]&(1u<<slot))
+            candidate.write(0x68+channel*4+slot,1,{actor.queue_blend[channel][slot],
+                std::uint8_t((actor.queue_blend_known[channel]>>slot)&1)});
+    live=std::move(candidate);
+}
+}
+MatchRuntimeAnimationResult advanceMatchRuntimeAnimation(MatchRuntimeState& live,unsigned entity,
+                                                        const GameplayAnimationResource& resources) {
+    MatchRuntimeAnimationResult result;
+    try {
+        if(!live.accepted || entity>=11)throw std::runtime_error("animation needs an owned match entity");
+        if(!resources || resources->setup()!=live.setup)
+            throw std::runtime_error("animation resource generation differs from match setup");
+        Nba97GameAnimationAdvanceInput input{};
+        input.previous=animationActor(live.entity[entity].record);
+        input.tick_fdb6c=live.simulation_tick6c;
+        input.controlled_fdbcc=live.scalar[NBA97_PERIOD_FDBCC];input.resources=&resources->view();
+        result.result=nba97_game_animation_advance(&result.effects,&input);
+        if(result.result==NBA97_ANIMATION_OK) {
+            publishAnimation(live.entity[entity].record,result.effects);result.published=true;
+        } else result.detail="original animation needs known fields/resources or reaches a nonterminating source loop";
+    } catch(const std::exception& e) {result.detail=e.what();}
+    return result;
+}
+MatchRuntimeAnimationResult queueMatchRuntimeAnimation(MatchRuntimeState& live,unsigned entity,
+    std::uint32_t request,std::uint32_t blend,unsigned operation) {
+    MatchRuntimeAnimationResult result;
+    try {
+        if(!live.accepted || entity>=11 || operation>NBA97_ANIMATION_QUEUE_SECONDARY_56C84)
+            throw std::runtime_error("invalid owned animation queue target or operation");
+        Nba97GameAnimationQueueInput input{};input.previous=animationActor(live.entity[entity].record);
+        input.request=request;input.blend=blend;input.operation=std::uint8_t(operation);
+        result.result=nba97_game_animation_queue(&result.effects,&input);
+        if(result.result==NBA97_ANIMATION_OK) {
+            publishAnimation(live.entity[entity].record,result.effects);result.published=true;
+        } else result.detail="animation queue needs known source fields";
     } catch(const std::exception& e) {result.detail=e.what();}
     return result;
 }

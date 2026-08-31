@@ -1,6 +1,8 @@
 #pragma once
 #include "match_snapshot.hpp"
 #include "gameplay_setup.hpp"
+#include "gameplay_animation.hpp"
+#include "recovered/game_animation_queue.h"
 #include "recovered/game_period.h"
 #include "recovered/game_player_attributes.h"
 #include <stdexcept>
@@ -52,6 +54,7 @@ struct MatchRuntimeEntry {
     std::array<Nba97GamePeriodValue,MatchRuntimeAuxCount> auxiliary{};
     Nba97GamePeriodValue incoming_s6{};
     Nba97GamePeriodValue render_flag21498{};
+    Nba97GamePeriodValue simulation_tick6c{};
 };
 struct MatchRuntimeState {
     std::shared_ptr<const MatchSnapshot> accepted;
@@ -71,6 +74,7 @@ struct MatchRuntimeState {
     std::array<Nba97GamePeriodValue,MatchRuntimeAuxCount> auxiliary{};
     Nba97GamePeriodValue incoming_s6{};
     Nba97GamePeriodValue render_flag21498{};
+    Nba97GamePeriodValue simulation_tick6c{};
     std::array<Nba97GamePeriodValue,11> player_height165f48{};
     std::uint64_t completed_period_initializations=0;
 };
@@ -100,4 +104,17 @@ struct MatchRuntimeAttributesResult {
 // Publishes only the completed flag21498==0 route. Original traps retain their
 // diagnostic prefix; render tails remain explicit pending work, never skipped.
 MatchRuntimeAttributesResult initializeMatchRuntimeAttributes(MatchRuntimeState&);
+struct MatchRuntimeAnimationResult {
+    int result=NBA97_ANIMATION_ARGUMENT;
+    bool published=false;
+    std::string detail;
+    Nba97GameAnimationEffects effects{};
+};
+// These mutate one represented entity only. They do not run input, physics,
+// the whole6801C player loop, or pose sampling. Tick6C must be explicitly known.
+MatchRuntimeAnimationResult advanceMatchRuntimeAnimation(MatchRuntimeState&,unsigned entity,
+                                                        const GameplayAnimationResource&);
+MatchRuntimeAnimationResult queueMatchRuntimeAnimation(MatchRuntimeState&,unsigned entity,
+    std::uint32_t request,std::uint32_t blend,
+    unsigned operation=NBA97_ANIMATION_QUEUE_BOTH_56CE0);
 }

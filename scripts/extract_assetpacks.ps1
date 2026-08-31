@@ -117,4 +117,7 @@ if (-not (Test-Path -LiteralPath $gameonly)) {
 python (Join-Path $repo 'tools\extract_gameplay_setup.py') --disc $DiscImage --overlay $gameonly `
     --output (Join-Path $repo '.local\assetpacks\gameplay')
 if ($LASTEXITCODE -ne 0) { throw 'Private gameplay motion/period extraction failed.' }
+python (Join-Path $repo 'tools\extract_gameplay_motion_assets.py') --disc $DiscImage --overlay $gameonly `
+    --output (Join-Path $repo '.local\assetpacks\gameplay')
+if ($LASTEXITCODE -ne 0) { throw 'Private gameplay animation/foot resource extraction failed.' }
 Write-Host 'Created local-only boot, frontend, font, menu, audio, roster and gameplay setup packs from the original disc.'
