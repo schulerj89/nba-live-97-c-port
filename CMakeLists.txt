@@ -64,6 +64,11 @@ if(BUILD_TESTING)
     target_compile_features(nba97_game_page_offset_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_page_offset_tests PRIVATE src)
     add_test(NAME game_page_offset COMMAND nba97_game_page_offset_tests)
+    add_executable(nba97_game_gpu_sync_tests tests/game_gpu_sync_tests.cpp
+        src/recovered/game_gpu_sync.c)
+    target_compile_features(nba97_game_gpu_sync_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gpu_sync_tests PRIVATE src)
+    add_test(NAME game_gpu_sync COMMAND nba97_game_gpu_sync_tests)
     add_executable(nba97_game_ball_scoring_tests tests/game_ball_scoring_tests.cpp
         src/recovered/game_ball_scoring.c src/recovered/game_controller_selection.c)
     target_compile_features(nba97_game_ball_scoring_tests PRIVATE c_std_99 cxx_std_17)
@@ -971,6 +976,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp src/recovered/game_ball_simulation.c
     src/recovered/game_ball_scoring.c src/recovered/game_scoring_actor_ai.c
     src/recovered/game_net.c src/game_net.cpp src/recovered/game_net_transform.c src/recovered/game_page_offset.c
+    src/recovered/game_gpu_sync.c
     src/recovered/game_court_startup.c src/recovered/game_court_startup_services.c src/recovered/game_court_roster_startup.c
     src/recovered/game_court_interactive.c src/recovered/game_court_packet_startup.c src/recovered/game_court_startup_sequence.c
     src/game_court_frame_compose.cpp

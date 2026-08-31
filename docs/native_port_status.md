@@ -1,10 +1,10 @@
 # Native port status
 
-Checkpoint 32 local verification passes 155 Windows tests in Debug, RelWithDebInfo
-and Release and 151 Linux core tests locally. It adds the native gameplay-audio
-request, sequence-clock, lock and routing CPU owner.
-Checkpoint 31 (`710e9af`) passed 150 Linux core tests in
-[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33450661291).
+Checkpoint 33 local verification passes 156 Windows tests in Debug, RelWithDebInfo
+and Release and 152 Linux core tests locally. It adds the canonical native GPU
+synchronization/default-dispatch CPU owner and asynchronous backend contract.
+Checkpoint 32 (`988f9c2`) passed 151 Linux core tests in
+[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33451031121).
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -63,6 +63,7 @@ its frontend-to-match path.
 | Ball rendering | Complete ball/reflection `49300` and ground-shadow `49D34` use the existing player-frame adapter's retained buffers and geometry; `ball` and `ballShadow` have original/native component comparisons | Packet rendering does not implement ball simulation, attachment selection or possession. Natural entity/resource arrival, shared frame submission and a live match remain unconnected. See [ball pass](game_ball_frame_workflow.md). |
 | Ball/shadow/arrow resources | `4D490` through `4CAF4` initializes ball/reflection/shadow packets and arrow templates, copies palettes and requests real BALL/ASDW image uploads through the existing image/VRAM owners | Load, release and SDK synchronization remain required external operations. Packet XY and ordering links belong to later render passes; released image pointers are not retained resource owners. Source comparisons do not prove cold loader/heap execution or natural frame entry. See [marker resources](game_player_marker_resources_workflow.md). |
 | Court resource setup | A canonical source-order owner composes all `479B8..48D5C` child intervals; texture selection/upload and the after-load tail normalize court references and allocate edge storage. Exact `9BF98` page calculation and native heap release are reusable services | Real loader/GPU sync services, allocation-registry population and outer `52C20` producers remain unconnected. Allocation flags `0` do not imply zero-filled payload. See [startup sequence](game_court_startup_sequence_workflow.md), [startup bridge](game_court_startup_workflow.md), [packet startup](game_court_packet_startup_workflow.md), [page offset](game_page_offset_workflow.md), [court textures](game_court_textures_workflow.md) and [court resources](game_court_resources_workflow.md). |
+| GPU synchronization | Canonical `994F4/9B9B4/9BAFC/9B57C/9BB30` owner includes the reached `9BDB4(-1)` timer path and `986F8` halfword exchange, with exact queue, interrupt-mask, MMIO, callback and timeout/reset order | A physical/native graphics backend and natural startup caller are not connected. Backend synchronization status is deliberately separate from the original routine's return value. See [GPU synchronization](game_gpu_sync_workflow.md). |
 | Pixel rendering | Retained CPU/VRAM storage, court packet projection and native pixel drawing compose in fixtures. Packet reads permit unknown unused bytes while requiring consumed fields and preserving source-memory knowledge. Six initialized ball/reflection/shadow diagnostic views render | No live court or complete camera/render loop. Diagnostic renders use fixture camera, entity and ordering state, with no court or players in the ball views; they are not gameplay captures. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
 | Audio startup and transfers | Game sound entry point, common attributes, music reset, callback registration, SPU heap, PIO/DMA sample ownership, interrupt/controller and event composition | Natural host audio initialization, actual callback cadence, complete voices/synthesis, physical device timing or full-match sound. Some real resource transfers still stop where rounded source tails lack proven ownership. See [audio startup](audio_startup_workflow.md) and [sample backend](spu_sample_backend_workflow.md). |
 | Gameplay audio requests | Complete `29258/29590` CPU request routing with `29200/AB0B8/93D94/93DD4` leaves; `AC080` is proven equivalent to the frozen voice-program owner | The general `93734` scheduler remains a synchronous refusal boundary, and the chain is not reached from a natural match. Request routing does not prove a host device emitted audible sound. See [gameplay audio](game_gameplay_audio_workflow.md). |
@@ -110,10 +111,10 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-Checkpoint 32 local verification passes **155/155 CTests** in Windows Debug,
-RelWithDebInfo and Release and **151/151 core CTests** on Linux. Checkpoint 31 (`710e9af`)
-passed **150/150 core CTests** in
-[GitHub run 33450661291](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33450661291).
+Checkpoint 33 local verification passes **156/156 CTests** in Windows Debug,
+RelWithDebInfo and Release and **152/152 core CTests** on Linux. Checkpoint 32 (`988f9c2`)
+passed **151/151 core CTests** in
+[GitHub run 33451031121](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33451031121).
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured, nor that a full match was
 tested. Publication and the exact GitHub CI result are tracked separately from
@@ -157,6 +158,14 @@ configuration proves that the `AC080` frontier maps to the frozen native
 voice-program owner. The general scheduler remains an explicit synchronous
 boundary. These are routing and retained-state proofs, not audible playback,
 device timing, or a natural gameplay claim.
+
+Checkpoint 33 adds the canonical 437-instruction GPU synchronization closure.
+The original-CPU comparator passes 4,114 cases per configuration, reaches all
+437 claimed PCs, exhausts all 4,096 queue head/tail pairs, and compares 8,433
+device reads plus 26 writes in exact order. A separate 10,000-case native
+backend oracle per configuration covers delayed completion and rejects 228
+fake acknowledgements. This is component/source proof; it does not connect a
+physical GPU, render a match frame, or cross natural startup.
 
 Checkpoint 28's separate ball-rendering evidence
 includes 585 original/native C cases per build with 16,111 ordered stores and
