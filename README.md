@@ -70,10 +70,14 @@ coordinates and builds draw packets using native integer geometry. Its flat and
 textured test packets now reach a [native pixel renderer](docs/game_packet_renderer_workflow.md).
 The [actor-root owner](docs/game_player_root_workflow.md) composes with the
 [player part-matrix owner](docs/game_player_geometry_workflow.md) to produce hand
-endpoints under supplied camera/pose conditions. The new
+endpoints under supplied camera/pose conditions. The
 [body-projection owner](docs/game_player_projection_workflow.md) produces player
-draw packets from those matrices and normalized body data; the full player
-caller and live frame integration remain unfinished. The bounded
+draw packets from those matrices and normalized body data. The complete
+[player pass](docs/game_player_frame_workflow.md) now composes these owners with
+shadows and off-screen indicators. The recovered
+[camera/controller path](docs/game_camera_workflow.md) produces camera state
+under explicit inputs; timing, pad/device and monitor effects still require
+real providers. The bounded
 [court-texture loop](docs/game_court_textures_workflow.md) now uploads actual
 private XATL image data into retained VRAM. The separate
 [court-resource tail](docs/game_court_resources_workflow.md) normalizes loaded
@@ -159,14 +163,14 @@ ctest --test-dir build-core -C Debug --output-on-failure
 python tools/report_progress.py --check
 ```
 
-Checkpoint 26 passes all **131 Windows CTests** in both Debug and
-RelWithDebInfo and all **127 Linux core CTests** locally. The preceding
-checkpoint, 25 (`af8e8d7`), also passed its 125 Linux tests in
-[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33425384574).
+Checkpoint 27 passes all **133 Windows CTests** in both Debug and
+RelWithDebInfo, and all **129 Linux core CTests** locally. Its GitHub run is
+pending publication; the preceding checkpoint, 26 (`56a3f1e`), passed 127 core tests in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33428417857).
 The counts differ because four tests are Windows-specific. These are bounded
 regression results, not complete-game acceptance or new original-game captures.
-Checkpoint 26's body-projection and court-resource updates also have separate
-original-source component comparisons.
+The player-pass and camera/controller updates also have separate original-source
+component comparisons, with their limits documented above.
 
 ## Keyboard controls
 

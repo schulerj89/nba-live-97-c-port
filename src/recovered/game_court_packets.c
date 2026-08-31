@@ -33,7 +33,8 @@ static int math(Run* r,uint32_t pc,enum Nba97CourtMathKind kind,const uint32_t* 
     if(status!=NBA97_COURT_COMPLETE)return status;
     ++r->out->math_operations;
     if(word){if(value.known>1||(!value.known&&value.word))return NBA97_COURT_ARGUMENT;
-        if(!value.known)return NBA97_COURT_UNKNOWN;*word=value.word;}
+    if(!value.known)return NBA97_COURT_UNKNOWN;
+    *word=value.word;}
     return NBA97_COURT_COMPLETE;
 }
 static int screen_store(Run* r,uint32_t pc,uint32_t packet,unsigned offset,unsigned fifo){
