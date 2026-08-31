@@ -31,6 +31,18 @@ GameplayAnimationResource decodeGameplayAnimation(const std::vector<std::uint8_t
     next->setup_=std::move(setup);next->words_.resize(payload_size/2);
     for(std::size_t i=0;i<next->words_.size();++i)
         next->words_[i]=std::uint16_t(unsigned(bytes[20+i*2])|(unsigned(bytes[21+i*2])<<8));
+    //6CFE0/706E4 use separate byte tables within the same owned GAME window.
+    // Decode signed boundary bytes explicitly; never borrow host-endian words.
+    for(unsigned i=0;i<257;++i)next->direction_[i]=bytes[20+0xd72b4-0xa850c+i];
+    next->physics_.direction={next->direction_.data(),next->direction_.size()};
+    for(unsigned side=0;side<2;++side) {
+        for(unsigned i=0;i<8;++i) {
+            const unsigned value=bytes[20+0xb8a54-0xa850c+side*8+i];
+            next->boundary_[side][i]=std::int8_t(value<128?int(value):int(value)-256);
+        }
+        next->physics_.boundary[side]=next->boundary_[side].data();
+        next->physics_.boundary_count[side]=next->boundary_[side].size();
+    }
     constexpr unsigned source[]={0xb850c,0xb8538,0xb8564,0xb8590,0xb85bc,0xb85e8,0xb8614};
     for(unsigned i=0;i<7;++i) {
         const bool initial=i==2 || i==3;

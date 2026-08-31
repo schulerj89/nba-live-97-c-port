@@ -51,6 +51,10 @@ Recovered game behavior is moving into portable C modules under
 for rendering, input, movies, audio devices, and resource ownership. A recovered
 C function replaces its C++ approximation rather than creating a second copy.
 
+Confirmed original bugs are preserved and commented with their source owner;
+see the [preserved behavior index](docs/preserved_original_bugs.md). Defects
+introduced by the native port are still fixed.
+
 ## Assets and legal notice
 
 **No game assets are included.** You must provide your own lawfully obtained

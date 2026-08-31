@@ -296,6 +296,7 @@ MatchRuntimeState prepareMatchRuntime(const MatchSnapshot& snapshot,GameplaySetu
     s.scalar=entry.scalar;s.auxiliary=entry.auxiliary;s.incoming_s6=entry.incoming_s6;
     s.render_flag21498=entry.render_flag21498;
     s.simulation_tick6c=entry.simulation_tick6c;
+    s.flags_fe910=entry.flags_fe910;s.rule_three_seconds21d8f=entry.rule_three_seconds21d8f;
     for(unsigned i=0;i<11;++i)s.entity[i].record=entry.entity[i];
     // Actual659F0 A3A74 clears cover bothC4 headers and24 status records.
     for(auto& t:s.team)t.clearFromSource();for(auto& status:s.status)status.clearFromSource();

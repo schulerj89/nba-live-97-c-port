@@ -1,4 +1,5 @@
 #include "match_runtime.hpp"
+#include "match_player_update.hpp"
 #include <cstdio>
 #include <cstdlib>
 
@@ -80,6 +81,7 @@ static std::uint64_t fingerprint(const MatchRuntimeState& s) {
     for(const auto& e:s.entity){record(e.record);field(e.player);field(e.status);field(e.opponent);}
     for(auto v:s.scalar)field(v);for(auto v:s.auxiliary)field(v);field(s.incoming_s6);
     field(s.render_flag21498);field(s.simulation_tick6c);for(auto v:s.player_height165f48)field(v);
+    field(s.flags_fe910);field(s.rule_three_seconds21d8f);ref(s.current_fdc3c);ref(s.team_fdc40);
     for(auto r:s.entity_table)ref(r);for(auto r:s.render_table)ref(r);for(auto r:s.controller_table)ref(r);
     for(auto v:s.active_player)field(v);for(auto v:s.active_status)field(v);ref(s.ball);ref(s.reference34);
     value(s.completed_period_initializations);return h;
@@ -237,6 +239,71 @@ int main() {
     queued.entity[0].record.write(0x4c,2,{});before=fingerprint(queued);
     queue_result=queueMatchRuntimeAnimation(queued,0,39,7);
     check(!queue_result.published && fingerprint(queued)==before,"unknown required queue lock refuses publication");
-    std::printf("MATCH RUNTIME PASS: %u checks; composed period, accepted ownership, preserved two-pass bindings, atomic failures\n",checks);
+    auto moving=s;moving.simulation_tick6c={1,1};
+    moving.scalar[NBA97_PERIOD_FDBCC]={65535,1};moving.scalar[NBA97_PERIOD_FE8C4]={65535,1};
+    for(unsigned i=0;i<10;++i) {
+        auto& r=moving.entity[i].record;
+        r.put(8,4,0);r.put(12,4,0);r.put(16,4,0);r.put(0x2c,4,0);
+        r.put(0x14,2,100);r.put(0x16,2,0);r.put(0x18,2,0);r.put(0x1a,1,2);
+        r.put(0xc8,2,256);r.put(0xa6,2,0);r.put(0xa8,2,1);r.put(0x9a,2,0);
+    }
+    // A deliberately mixed-known field never consumed/written by the update.
+    moving.entity[0].record.put(0x30,1,123);moving.entity[0].record.write(0x31,1,{});
+    const auto before_moving=moving;auto update=updateMatchRuntimePlayers(moving,motion_resources);
+    check(update.published && update.receipt.completed,"full player loop composes actual animation and physics");
+    for(unsigned i=0;i<10;++i) {
+        check(moving.entity[i].record.read(8,4).word==100 && moving.entity[i].record.read(0x24,4).word==0,
+            "actual velocity integration and previous coordinate store");
+        check(moving.entity[i].record.read(0xea,2).word==4092,"original near-negative wrap EA bug survives adapter");
+        check(update.animation[i].published && update.physics[i].completed,"both actual child owners completed for each table entry");
+    }
+    check(moving.scalar[NBA97_PERIOD_FE8C4].word==65533 && moving.current_fdc3c.record==9 &&
+        moving.team_fdc40.record==1,"loop flag and actual current/team references published");
+    check(moving.entity[0].record.bytes[0x30]==123 && !moving.entity[0].record.known[0x31],
+        "unwritten partially known field preserved");
+    check(moving.entity[10].record.bytes==before_moving.entity[10].record.bytes,
+        "ordinary table does not update ball slot");
+    auto mirrored=before_moving;mirrored.entity[0].record.put(0x9a,2,2);
+    update=updateMatchRuntimePlayers(mirrored,motion_resources);
+    check(update.published && mirrored.entity[0].record.read(0xea,2).word==61444,
+        "original conversion bit negates the large modular angle delta");
+    auto aliased=before_moving;for(unsigned i=0;i<10;++i)aliased.entity_table[i]={0,1};
+    update=updateMatchRuntimePlayers(aliased,motion_resources);
+    check(update.published && aliased.entity[0].record.read(8,4).word==1000 &&
+        aliased.entity[1].record.bytes==before_moving.entity[1].record.bytes && aliased.current_fdc3c.record==0,
+        "ten pointer-table entries preserve aliases instead of physical stride");
+    auto landing=before_moving;landing.entity[0].record.put(16,4,1);landing.entity[0].record.put(0x18,2,0);
+    update=updateMatchRuntimePlayers(landing,motion_resources);
+    check(update.published && landing.entity[0].record.read(16,4).word==0 &&
+        landing.entity[0].record.read(0x2c,4).word==1,"unreachable original FF landing marker remains unfixed");
+    auto stale_speed=before_moving;stale_speed.flags_fe910={2,1};stale_speed.entity[0].record.put(0x1a,1,12);
+    update=updateMatchRuntimePlayers(stale_speed,motion_resources);
+    check(update.published && stale_speed.entity[0].record.read(0xa0,2).word==0 &&
+        stale_speed.entity[0].record.read(0x9c,2).word==100,"actor12 retains stale9C after clearing speedA0");
+    for(unsigned failure:{0u,1u,2u}) {
+        auto refused=before_moving;
+        if(failure==0)refused.simulation_tick6c={};
+        else if(failure==1)refused.entity_table[9]={};
+        else refused.entity_table[9]={11,1};
+        before=fingerprint(refused);update=updateMatchRuntimePlayers(refused,motion_resources);
+        check(!update.published && fingerprint(refused)==before,"unknown or unowned entry refuses whole update publication");
+    }
+    for(unsigned malformed:{0u,1u}) {
+        auto refused=before_moving;auto& record=refused.entity[0].record;
+        record.write(0xa2,1,{});record.known[0xa3]=malformed?0:2;record.bytes[0xa3]=malformed?17:0;
+        before=fingerprint(refused);update=updateMatchRuntimePlayers(refused,motion_resources);
+        check(!update.published && update.result==NBA97_PLAYER_UPDATE_ARGUMENT &&
+            fingerprint(refused)==before,"unknown low byte cannot hide invalid knownness/payload in later byte");
+    }
+    auto violation=before_moving;auto& offender=violation.entity[0].record;
+    offender.put(8,4,0xd900);offender.put(0x14,2,0);offender.put(0x1a,1,1);offender.put(0xee,2,299);
+    violation.team[0].put(0x10,4,1);violation.rule_three_seconds21d8f={1,1};
+    violation.scalar[NBA97_PERIOD_FE8E0]={1,1};violation.scalar[NBA97_PERIOD_FDB90]={1,1};
+    violation.scalar[NBA97_PERIOD_FE8C4]={0,1};before=fingerprint(violation);
+    update=updateMatchRuntimePlayers(violation,motion_resources);
+    check(!update.published && update.result==NBA97_PLAYER_UPDATE_PENDING &&
+        update.dependency_result==NBA97_PHYSICS_CALLBACK_PENDING && update.pending_owner==NBA97_PHYSICS_CALL_29590 &&
+        fingerprint(violation)==before,"actual rule/audio callback remains pending with atomic live state");
+    std::printf("MATCH RUNTIME PASS: %u checks; period, animation, full player update, source bugs and atomic failures\n",checks);
     return 0;
 }

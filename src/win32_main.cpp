@@ -3755,7 +3755,21 @@ private:
 
     void updatePlayerPhoto(bool wait_for_capture = false) {
         do {
-            auto result = player_photo_loader_.poll(wait_for_capture);
+            auto result = player_photo_loader_.poll(wait_for_capture,
+                [this](const nba97::PlayerPhotoLoader::Result& accepted) {
+                    // Loader has discarded cancelled generations. This is the
+                    // actual30EFC raw-checksum gate on the SAME inputs consumed
+                    // by music routing, before photo/city visibility publication.
+                    const auto previous_block = frontend_music_inputs_.selection_blocked;
+                    if (!accepted.archive || accepted.archive->acceptChecksum(
+                            static_cast<std::uint32_t>(accepted.record),
+                            &frontend_music_inputs_.selection_blocked) != 1)
+                        throw std::runtime_error("portrait completion lost its validated raw archive");
+                    trace_.log("PLAYER-PHOTO-CHECKSUM", "accepted raw record=" + std::to_string(accepted.record) +
+                        "; 80030EFC F9720=" + std::to_string(previous_block) + "->0 before publication; PNG=" +
+                        (accepted.event == nba97::PlayerPhotoLoader::Event::Ready ? "ready" : "failed") +
+                        "; source checksum acceptance retained independently of PNG outcome");
+                });
             if (result.event == nba97::PlayerPhotoLoader::Event::None) break;
             if (result.event == nba97::PlayerPhotoLoader::Event::Stale) {
                 trace_.log("PLAYER-PHOTO", "discard stale completion record=" + std::to_string(result.record) +
@@ -3782,21 +3796,18 @@ private:
         roster_cool_facts_available_ = false;
         if (!player) return;
         const auto root = options_.asset_root / "menu";
-        // Z1PORT physical record zero is the original fallback.  Player n's
-        // direct portrait is physical record n+1 (Longley id37 -> record38).
+        // F9418/Z1PORT ownership is separate from F84C8/Z1COOL. Keep immutable
+        // source bytes alive across pending worker jobs; validate the requested
+        // raw slice before decoding a PNG. No render-complete music unblock.
+        if (!roster_portrait_archive_)
+            roster_portrait_archive_ = nba97::PlayerPortraitArchive::load(root / "Z1PORT.IDX", root / "Z1PORT.BIG");
         const auto portrait_root = root / "Z1PORT-decoded";
-        const auto portrait_path_for = [&portrait_root](std::uint32_t record) {
-            wchar_t name[32]{};
-            swprintf_s(name, L"player_%03u.png", record);
-            return portrait_root / name;
-        };
-        auto portrait_path = portrait_path_for(static_cast<std::uint32_t>(player->id) + 1);
-        if (!std::filesystem::exists(portrait_path)) portrait_path = portrait_path_for(0);
-        const auto record = portrait_path == portrait_path_for(0) ? 0 : static_cast<int>(player->id) + 1;
-        if (player_photo_loader_.request(record, portrait_path)) {
+        const auto record = roster_portrait_archive_->physicalRecord(player->id);
+        //310D8 uses the original count, never PNG existence, to choose fallback0.
+        if (player_photo_loader_.request(roster_portrait_archive_, player->id, portrait_root)) {
             roster_portrait_loaded_ = false;
             trace_.log("PLAYER-PHOTO", "request player=" + std::to_string(player->id) + " record=" +
-                std::to_string(record) + " source=" + portrait_path.string() +
+                std::to_string(record) + " source=owned Z1PORT.IDX/BIG; PNG-root=" + portrait_root.string() +
                 "; 800310D8 photo=off wait=visible city=" +
                 (player_photo_loader_.state().city_enabled ? "retained" : "hidden") + "; latest-request bounded queue");
         }
@@ -3812,7 +3823,7 @@ private:
         resolveCoolFactChoice("refresh-593F0");
         trace_.log("PLAYER-CARD", "state=0x24 player=" + player->displayName() +
             " id=" + std::to_string(player->id) + " portrait-record=" +
-            std::to_string(static_cast<unsigned>(player->id) + 1) + " 180x156 cool-facts=" +
+            std::to_string(record) + " 180x156 cool-facts=" +
             (roster_cool_facts_available_ ? "enabled" : "disabled"));
     }
 
@@ -5865,7 +5876,11 @@ private:
 
     void updateFrontendMusic() {
         if(music_error_logged_)return;
-        Nba97MusicInputs input{};
+        // Persistent source inputs shared with the raw portrait callback. The
+        // subsequent31A88 composition must write this SAME F9720/ED2AC state.
+        auto& input=frontend_music_inputs_;
+        // Volume still follows configuration until31A88 saved/reduced-volume
+        // composition is integrated; persistent ducking is not claimed here.
         input.volume=settings_.option(1);
         const bool view_card=frontend_page_==nba97::FrontendPage::ViewRosters &&
             roster_viewer_.mode()==nba97::RosterViewMode::PlayerCard;
@@ -7826,6 +7841,7 @@ private:
     nba97::BootFlow flow_;
     nba97::IntroPlayer intro_player_;
     nba97::FrontendMusicPlayer frontend_music_;
+    Nba97MusicInputs frontend_music_inputs_{};
     unsigned music_underruns_logged_=0;
     std::uint64_t music_clock_origin_ms_=0,music_generation_logged_=0;
     bool music_error_logged_=false;
@@ -7965,6 +7981,7 @@ private:
     std::string create_player_delete_team_,create_player_delete_context_;
     PshImage roster_portrait_;
     bool roster_portrait_loaded_ = false;
+    std::shared_ptr<const nba97::PlayerPortraitArchive> roster_portrait_archive_;
     nba97::PlayerPhotoLoader player_photo_loader_{decodePlayerPhotoOnWorker};
     bool roster_cool_facts_available_ = false;
     std::uint32_t stat_flash_until_ms_ = 0;

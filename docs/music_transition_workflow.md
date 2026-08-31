@@ -10,7 +10,9 @@ The source is private FEONLY.BIN SHA256
 `14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c`.
 The first boundary covers31ADC through31BF8, after the preceding31A88 callee
 effects and before2FB00. The second covers31F10 through31F20, after31F48
-resource dispatch returns. Addresses omit the80000000 runtime prefix.
+graphics/resource work returns. This is before outer3F7C8 dispatches the
+selector initializer, including5A538 for View Player. Addresses omit the
+80000000 runtime prefix.
 
 Recovered decisions
 
@@ -75,17 +77,21 @@ next start reads the resulting raw byte and applies its normal recovered gain.
 How transient source options map onto durable native settings is a caller
 integration responsibility, not an instruction to persist temporary reduction.
 
-Run the corresponding resource-load/dispatch work, allowing its documented
-effects on the shared input state, then call `nba97_music_transition_end`.
+Run2FB00 and the corresponding31A88 resource/graphics work through31F48,
+allowing its documented effects on shared inputs, then call
+`nba97_music_transition_end`. Outer3F7C8 selector initialization follows END;
+5A538's PORT/COOL initialization is not an intervening begin/end operation.
+See the [complete cleanup contract](frontend_resource_cleanup_workflow.md).
 The two functions deliberately leave room for that intervening owner; merging
 them into an unconditional UI event handler would conceal missing effects.
 
 The exact other selection-block clear found in this audit is30EFC, inside
 30E78. It executes only after the checksum comparison at30EE4 succeeds in a
-resource-load callback. The new helper does not claim to implement that
-callback, its pointers, or a successful asset-load event. Until its host
-mapping is recovered, keep24 blocked when no proven dispatch effect clears
-it. Do not substitute view-render completion or automatically start ZTPAUSE.
+resource-load callback. The checked native portrait loader now maps that
+accepted callback to the same persistent music inputs before publication;
+see the [photo workflow](player_photo_loader_workflow.md). Keep24 blocked
+when no proven effect clears it. Do not substitute view-render completion or
+automatically start ZTPAUSE.
 Ordinary routing still reaches all five tracks through the original slot table.
 
 F84C8's allocation/use includes3122C and its asynchronous loaded-resource

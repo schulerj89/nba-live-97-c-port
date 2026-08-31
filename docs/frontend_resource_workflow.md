@@ -102,9 +102,11 @@ cancellation. No instruction-conversion credit is claimed here for that queue.
 
 ## Host composition contract
 
-The existing `PlayerPhotoLoader::Ready` validates only a180x156 PNG. It has
-no raw IDX/BIG checksum evidence and cannot clear F9720. Its generation
-discard is a native cancellation policy, not proof of original CD timing.
+The checked `PlayerPhotoLoader` path now retains raw IDX/BIG checksum evidence
+separately from PNG readiness and applies it to the live F9720 field before
+publication. Its legacy image-only overload still cannot clear that field.
+Generation discard is a native cancellation policy, not proof of CD timing.
+See [the integrated photo workflow](player_photo_loader_workflow.md).
 
 The concrete native integration should:
 
@@ -112,10 +114,15 @@ The concrete native integration should:
    live input bytes and the same F84C8 allocation token. This includes ordinary
    View Rosters PlayerCard entry and editor/Re-order child entry through
    `openReorderView`; it does not include every in-card player cycle.
-2. Validate and retain both index allocations before resolving their records.
-   Publish Cool Facts ownership through3122C; keep portrait F9418 ownership
-   separate. Do not create a nonzero F84C8 token without the owned index data.
-3. Request the original physical portrait record using the index's count:
+2. Run old-resource cleanup2FB00, the actual31A88 resource/graphics work and
+   31F48, then31A88 end. Only after31A88 returns does outer3F7C8 dispatch24 to
+   5A538, which initializes PORT through30D14 and then COOL through3122C.
+   END does not follow that selector initialization. See the exact
+   [cleanup and dispatch contract](frontend_resource_cleanup_workflow.md).
+3. Retain validated index ownership before resolving each index's records.
+   Keep portrait F9418 separate from the actual F84C8 token used by3122C;
+   never invent a nonzero token without its allocation. Request the original
+   physical portrait record using the index's count:
    signed logical player below count uses logical+1, otherwise reserved0.
    For the current nonnegative player-ID domain, this preserves310D8. Negative
    malformed IDs can index before the source table; the native adapter must
@@ -127,16 +134,17 @@ The concrete native integration should:
    and PNG decoding share a worker result, carry the checksum result through
    PNG failure and apply it before `nba97_player_photo_complete` on the UI
    thread; never let a worker mutate music state.
-5. Run31A88 end after resource dispatch. It preserves resource24's current
-   block, including a clear already performed by an accepted callback. A
-   first draw, transition animation end, missing PNG, or speech load must not
+5. The earlier31A88 end preserves resource24's current block; a later accepted
+   portrait callback can clear it. A first draw, transition animation end,
+   missing PNG, or speech load must not
    provide an extra clear. Failed raw checksums remain blocked/retry or report
    an explicit native asset error; never fabricate successful completion.
 6. On ordinary card exit, `returnReorderView`, and the Trade/Release/Sign
    child return path, compose the source transition back to the actual parent
    state before losing resource ownership. Cancel pending native portrait
-   events and release each owned allocation once. The frozen transition owns
-   F84C8 release and saved-volume restoration; the index loader must not free
+   events and perform only the recovered release calls, including original
+   conditional-free quirks. The transition owns F84C8 release and saved-volume
+   restoration; the index loader must not free
    a second independently copied token for the same allocation.
 
 `loadSelectedPlayerCardAssets(false)` is a portrait change, not repeated24

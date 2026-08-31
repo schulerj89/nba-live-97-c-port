@@ -10,6 +10,14 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_resource_cleanup_tests tests/frontend_resource_cleanup_tests.cpp src/recovered/frontend_resource_cleanup.c)
+    target_compile_features(nba97_frontend_resource_cleanup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_cleanup_tests PRIVATE src)
+    add_test(NAME frontend_resource_cleanup COMMAND nba97_frontend_resource_cleanup_tests)
+    add_executable(nba97_game_player_update_tests tests/game_player_update_tests.cpp src/recovered/game_player_update.c)
+    target_compile_features(nba97_game_player_update_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_update_tests PRIVATE src)
+    add_test(NAME game_player_update COMMAND nba97_game_player_update_tests)
     add_executable(nba97_game_player_physics_tests tests/game_player_physics_tests.cpp src/recovered/game_player_physics.c)
     target_compile_features(nba97_game_player_physics_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_player_physics_tests PRIVATE src)
@@ -64,6 +72,7 @@ if(BUILD_TESTING)
     target_include_directories(nba97_game_substitution_support_tests PRIVATE src)
     add_test(NAME game_substitution_support COMMAND nba97_game_substitution_support_tests)
     add_executable(nba97_match_runtime_tests tests/match_runtime_tests.cpp src/match_runtime.cpp
+        src/match_player_update.cpp src/recovered/game_player_update.c src/recovered/game_player_physics.c
         src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
         src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
         src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c
@@ -315,11 +324,23 @@ if(BUILD_TESTING)
     target_compile_features(nba97_frontend_title_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_title_tests PRIVATE src)
     add_test(NAME frontend_title_core COMMAND nba97_frontend_title_tests)
-    add_executable(nba97_player_photo_tests tests/player_photo_test.cpp src/recovered/player_photo.c)
+    add_executable(nba97_player_photo_tests tests/player_photo_test.cpp src/recovered/player_photo.c
+        src/player_photo_loader.cpp src/player_portrait_archive.cpp src/recovered/frontend_resource.c)
     target_compile_features(nba97_player_photo_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_player_photo_tests PRIVATE src)
     target_link_libraries(nba97_player_photo_tests PRIVATE Threads::Threads)
     add_test(NAME player_photo_lifecycle COMMAND nba97_player_photo_tests)
+    add_executable(nba97_player_portrait_archive_tests tests/player_portrait_archive_tests.cpp
+        src/player_portrait_archive.cpp src/recovered/frontend_resource.c)
+    target_compile_features(nba97_player_portrait_archive_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_player_portrait_archive_tests PRIVATE src)
+    add_test(NAME player_portrait_archive COMMAND nba97_player_portrait_archive_tests)
+    add_executable(nba97_player_photo_checksum_tests tests/player_photo_checksum_tests.cpp
+        src/player_photo_loader.cpp src/player_portrait_archive.cpp src/recovered/frontend_resource.c src/recovered/player_photo.c)
+    target_compile_features(nba97_player_photo_checksum_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_player_photo_checksum_tests PRIVATE src)
+    target_link_libraries(nba97_player_photo_checksum_tests PRIVATE Threads::Threads)
+    add_test(NAME player_photo_checksum COMMAND nba97_player_photo_checksum_tests)
     add_executable(nba97_frontend_palette_tests tests/frontend_palette_test.cpp src/recovered/frontend_palette.c)
     target_compile_features(nba97_frontend_palette_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_palette_tests PRIVATE src)
@@ -492,6 +513,7 @@ if(WIN32)
         src/roster_database.cpp
         src/user_profiles.cpp
         src/png_image.cpp
+        src/player_photo_loader.cpp src/player_portrait_archive.cpp
         src/recovered/player_photo.c
         src/psh_image.cpp
         src/psh_font.cpp
@@ -527,9 +549,10 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_period_dependencies.c src/match_runtime.cpp
     src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
     src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
-    src/recovered/game_player_physics.c
+    src/recovered/game_player_physics.c src/recovered/game_player_update.c src/match_player_update.cpp
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
+    src/recovered/frontend_resource_cleanup.c
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)

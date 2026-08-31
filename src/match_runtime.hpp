@@ -19,10 +19,13 @@ template<std::size_t Size> struct MatchRuntimeRecord {
         for(unsigned i=0;i<width;++i) {
             if(known[offset+i]>1 || (!known[offset+i] && bytes[offset+i]))
                 throw std::invalid_argument("match field provenance");
-            if(!known[offset+i]) return {};
+            // Validate the whole span even after an unknown byte. An early
+            // return would hide invalid provenance in a later byte and allow
+            // a subsequent source store to erase a native representation bug.
+            if(!known[offset+i]) v.known=0;
             v.word|=std::uint32_t(bytes[offset+i])<<(i*8);
         }
-        return v;
+        return v.known?v:Nba97GamePeriodValue{};
     }
     void write(unsigned offset,unsigned width,Nba97GamePeriodValue v) {
         if((width!=1 && width!=2 && width!=4) || offset>Size || width>Size-offset || v.known>1 ||
@@ -55,6 +58,7 @@ struct MatchRuntimeEntry {
     Nba97GamePeriodValue incoming_s6{};
     Nba97GamePeriodValue render_flag21498{};
     Nba97GamePeriodValue simulation_tick6c{};
+    Nba97GamePeriodValue flags_fe910{},rule_three_seconds21d8f{};
 };
 struct MatchRuntimeState {
     std::shared_ptr<const MatchSnapshot> accepted;
@@ -70,11 +74,13 @@ struct MatchRuntimeState {
     std::array<Nba97GamePeriodReference,11> entity_table{},render_table{};
     std::array<Nba97GamePeriodReference,8> controller_table{};
     Nba97GamePeriodReference ball{},reference34{};
+    Nba97GamePeriodReference current_fdc3c{},team_fdc40{};
     std::array<Nba97GamePeriodValue,NBA97_PERIOD_SCALAR_COUNT> scalar{};
     std::array<Nba97GamePeriodValue,MatchRuntimeAuxCount> auxiliary{};
     Nba97GamePeriodValue incoming_s6{};
     Nba97GamePeriodValue render_flag21498{};
     Nba97GamePeriodValue simulation_tick6c{};
+    Nba97GamePeriodValue flags_fe910{},rule_three_seconds21d8f{};
     std::array<Nba97GamePeriodValue,11> player_height165f48{};
     std::uint64_t completed_period_initializations=0;
 };

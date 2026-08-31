@@ -1,6 +1,7 @@
 #pragma once
 #include "gameplay_setup.hpp"
 #include "recovered/game_animation_advance.h"
+#include "recovered/game_player_physics.h"
 
 namespace nba97 {
 class GameplayAnimation;
@@ -16,11 +17,15 @@ public:
     GameplayAnimation& operator=(GameplayAnimation&&)=delete;
     const GameplaySetupResource& setup() const noexcept {return setup_;}
     const Nba97GameAnimationResources& view() const noexcept {return view_;}
+    const Nba97GamePlayerPhysicsResources& physicsView() const noexcept {return physics_;}
 private:
     GameplayAnimation()=default;
     GameplaySetupResource setup_;
     std::vector<std::uint16_t> words_;
     Nba97GameAnimationResources view_{};
+    std::array<std::uint8_t,257> direction_{};
+    std::array<std::array<std::int8_t,8>,2> boundary_{};
+    Nba97GamePlayerPhysicsResources physics_{};
     friend GameplayAnimationResource decodeGameplayAnimation(const std::vector<std::uint8_t>&,GameplaySetupResource);
 };
 

@@ -37,6 +37,16 @@ int main(int argc,char** argv) {
     for(unsigned i=20;i<b.size();++i)b[i]=std::uint8_t((i*29u+(i>>8))&255);
     seal(b);auto source=setup();auto owner=nba97::decodeGameplayAnimation(b,source);
     const auto& view=owner->view();
+    const auto& physics=owner->physicsView();
+    check(physics.direction.angle_count==257);
+    for(unsigned i=0;i<257;++i)check(physics.direction.angle_d72b4[i]==b[20+0xd72b4-0xa850c+i]);
+    for(unsigned side=0;side<2;++side) {
+        check(physics.boundary_count[side]==8);
+        for(unsigned i=0;i<8;++i) {
+            const auto raw=b[20+0xb8a54-0xa850c+side*8+i];
+            check(int(physics.boundary[side][i])==(raw<128?int(raw):int(raw)-256));
+        }
+    }
     check(view.clip[0][0].header.flags==0x38 && view.clip[0][0].header.mode2==2 &&
         view.clip[0][0].header.count7==6 && view.clip[0][0].step3==86);
     check(view.clip[1][0].header.count7==7 && view.clip[1][0].step3==251);

@@ -28,6 +28,7 @@ defects should still be fixed.
 |GAME55018 |Asymmetric Euler adjustment changes A even at weight0; full unsigned weights and unusual distance expressions remain |Gameplay pose sampler and raw-angle original comparisons |
 |GAME6CFE0 |Landing marker comparison reads the just-copied unchanged height, so its2C=FF store is unreachable; actor12 can clearA0 without recalculating9C |Physics owner, ordered-store proof and source invariant |
 |GAME706E4 |Wrapped INT_MIN negation can cause a source division trap or adjacent-table read |Direction helper; no square-root/atan2 replacement or index clamp |
+|GAME6801C |A small negative angle snap retains positive modular delta990..1023 for EA; repeated entity-table aliases update the same player again |`game_player_update.c`, source-address workflow and composed `match_player_update` regression cases |
 |FE2F36C/6B6A0 |Router retains a zero-status branch although the original BUSY helper cannot return zero |`music_routing.c`, source-quirk comment and lifecycle tests |
 |FE2F330 |The sixteen-slot music table permits repeats and includes the special track in ordinary selection |Music extractor/routing workflow; no guessed shuffle |
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |
@@ -35,6 +36,7 @@ defects should still be fixed.
 |FE7309C |Natural drain compares signed read index with write index minus one without modulo correction; ending at write index0 can miss key-off |Stream stop/advance helpers and full original IRQ comparisons |
 |FE31A88 music arm |Zero adjacent volume skips reduction; repeated View Player entry overwrites saved volume; exit restores the saved low byte even after intervening edits |`music_transition.c`, exact source state/callback comparisons; no extra gain call to cancel the original fade |
 |FE3122C/8ABF0 |Already-finished nonnegative announcer voice keeps its old value; CRCF validation ignores the trailer's length field |`frontend_resource.c`, actual lifetime/content comparisons; native callback obligations remain explicit |
+|FE313C8/2FB00 |Already-finished announcer handle stays stale; portrait data with a zero graphic field is discarded without a free; cached record IDs survive cleanup |`frontend_resource_cleanup.c`, ordered source/callback comparisons and explicit source-bug comments |
 
 This is a growing index, not proof every original bug has been found. Callers
 and host adapters must preserve these outcomes when integrating the recovered
