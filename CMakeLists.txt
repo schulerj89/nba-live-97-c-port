@@ -10,6 +10,34 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_player_label_backend_tests tests/game_player_label_backend_tests.cpp
+        src/game_player_label_backend.cpp src/game_render_backend.cpp src/recovered/game_player_labels.c
+        src/recovered/game_text_objects.c src/recovered/game_image_upload.c)
+    target_compile_features(nba97_game_player_label_backend_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_label_backend_tests PRIVATE src)
+    add_test(NAME game_player_label_backend COMMAND nba97_game_player_label_backend_tests)
+    add_executable(nba97_game_text_objects_tests tests/game_text_objects_tests.cpp src/recovered/game_text_objects.c)
+    target_compile_features(nba97_game_text_objects_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_text_objects_tests PRIVATE src)
+    add_test(NAME game_text_objects COMMAND nba97_game_text_objects_tests)
+    add_executable(nba97_voice_allocation_tests tests/voice_allocation_tests.cpp src/recovered/voice_allocation.c
+        src/recovered/voice_handles.c src/recovered/music_voice.c)
+    target_compile_features(nba97_voice_allocation_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_voice_allocation_tests PRIVATE src)
+    add_test(NAME voice_allocation COMMAND nba97_voice_allocation_tests)
+    add_executable(nba97_voice_programs_tests tests/voice_programs_tests.cpp src/recovered/voice_programs.c)
+    target_compile_features(nba97_voice_programs_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_voice_programs_tests PRIVATE src)
+    add_test(NAME voice_programs COMMAND nba97_voice_programs_tests)
+    add_executable(nba97_match_input_edges_tests tests/match_input_edges_tests.cpp src/match_input_edges.cpp
+        src/recovered/game_player_input.c)
+    target_compile_features(nba97_match_input_edges_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_match_input_edges_tests PRIVATE src)
+    add_test(NAME match_input_edges COMMAND nba97_match_input_edges_tests)
+    add_executable(nba97_game_player_input_tests tests/game_player_input_tests.cpp src/recovered/game_player_input.c)
+    target_compile_features(nba97_game_player_input_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_input_tests PRIVATE src)
+    add_test(NAME game_player_input COMMAND nba97_game_player_input_tests)
     add_executable(nba97_voice_channels_tests tests/voice_channels_tests.cpp src/recovered/voice_channels.c
         src/recovered/voice_handles.c src/recovered/music_voice.c src/recovered/frontend_resource_cleanup.c)
     target_compile_features(nba97_voice_channels_tests PRIVATE c_std_99 cxx_std_17)
@@ -591,7 +619,10 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
     src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
     src/recovered/game_player_physics.c src/recovered/game_player_update.c src/match_player_update.cpp
-    src/recovered/game_player_jump.c src/recovered/voice_handles.c src/recovered/voice_channels.c
+    src/recovered/game_player_jump.c src/recovered/game_player_input.c src/match_input_edges.cpp
+    src/recovered/voice_handles.c src/recovered/voice_channels.c
+    src/recovered/voice_allocation.c src/recovered/voice_programs.c
+    src/recovered/game_text_objects.c src/game_player_label_backend.cpp
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c
