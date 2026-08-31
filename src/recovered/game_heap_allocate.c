@@ -24,7 +24,8 @@ static int access(Run* r,uint32_t at,unsigned width,uint32_t pc,uint8_t** data,u
 static int read_value(Run* r,uint32_t at,unsigned width,uint32_t pc,uint32_t* value){
     uint8_t *data,*known;unsigned i;uint32_t v=0;TRY(access(r,at,width,pc,&data,&known));
     if(known)for(i=0;i<width;++i)if(!known[i])return NBA97_TEXT_UNKNOWN;
-    for(i=0;i<width;++i)v|=(uint32_t)data[i]<<(8*i);*value=v;return NBA97_TEXT_COMPLETE;
+    for(i=0;i<width;++i)v|=(uint32_t)data[i]<<(8*i);
+    *value=v;return NBA97_TEXT_COMPLETE;
 }
 static int reserve(Run* r,uint32_t pc,uint32_t at){stop(r,pc,at);return r->out->events<r->capacity?NBA97_TEXT_COMPLETE:NBA97_TEXT_LIMIT;}
 static int write_value(Run* r,uint32_t at,unsigned width,uint32_t value,uint32_t pc){
@@ -121,7 +122,8 @@ forward_insufficient:
 forward_reclaim:
     TRY(callback(r,NBA97_HEAP_RECLAIM_A3074,0x8009045cu,args.flags,0,0,&returned));
     stop(r,0x80090464u,0);if(!returned.known)return NBA97_TEXT_UNKNOWN;
-    if(returned.word)goto forward_start;goto null_return;
+    if(returned.word)goto forward_start;
+    goto null_return;
 
 reverse_start:
     READ(heap+4u,0x80090474u,value);READ(value+0x24u,0x8009047cu,node);READ(value,0x80090480u,position);gap=0;
@@ -151,7 +153,8 @@ reverse_insufficient:
 reverse_reclaim:
     TRY(callback(r,NBA97_HEAP_RECLAIM_A3074,0x800905d4u,args.flags,0,0,&returned));
     stop(r,0x800905dcu,0);if(!returned.known)return NBA97_TEXT_UNKNOWN;
-    if(returned.word)goto reverse_start;goto null_return;
+    if(returned.word)goto reverse_start;
+    goto null_return;
 finish_descriptor:
     /* Reread padding AFTER namecallback and list insertion. A callback/alias
      * can select or suppress guard writes without changing cachedsize. */

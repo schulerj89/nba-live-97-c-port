@@ -10,6 +10,17 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_court_resources_tests tests/game_court_resources_tests.cpp
+        src/recovered/game_court_resources.c src/recovered/game_text_pools.c src/recovered/game_heap_allocate.c)
+    target_compile_features(nba97_game_court_resources_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_court_resources_tests PRIVATE src)
+    add_test(NAME game_court_resources COMMAND nba97_game_court_resources_tests)
+    add_executable(nba97_game_player_projection_tests tests/game_player_projection_tests.cpp
+        src/recovered/game_player_projection.c src/game_player_projection.cpp src/game_player_root.cpp
+        src/game_player_geometry.cpp src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp)
+    target_compile_features(nba97_game_player_projection_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_projection_tests PRIVATE src)
+    add_test(NAME game_player_projection COMMAND nba97_game_player_projection_tests)
     add_executable(nba97_game_player_root_tests tests/game_player_root_tests.cpp
         src/recovered/game_player_root.c src/game_player_root.cpp src/game_player_geometry.cpp
         src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp)
@@ -792,6 +803,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_court_packets.c src/game_court_geometry.cpp
     src/recovered/game_player_geometry.c src/game_player_geometry.cpp src/game_packet_renderer.cpp
     src/recovered/game_player_root.c src/game_player_root.cpp src/recovered/game_court_textures.c
+    src/recovered/game_player_projection.c src/game_player_projection.cpp src/recovered/game_court_resources.c
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c

@@ -6,6 +6,14 @@ The original in-game call supplies `(0x10, 500, 5, 200, 0x100, original_name, 40
 
 ## Retained memory and allocation
 
+The same source wrapper is exposed separately as
+`nba97_game_allocate_payload_90160`, without constructing text pools. It passes
+its caller's name, size and flags unchanged and supplies mode1. The court
+resource caller uses flags0; `2E200` continues to use flags20. Both entries
+share the existing lock/descriptor code and require the actual9027C callback.
+See the [court resource workflow](game_court_resources_workflow.md) for its
+composition with the concrete native heap allocator.
+
 The API reuses `Nba97GameTextMemory`: retained byte buffers mapped to explicit original addresses, with optional per-byte canonical knownness. It never converts native pointers to original addresses. Mapping metadata and lifetimes remain fixed across callbacks; mutations to the mapped bytes and knownness are synchronous. Distinct source regions cannot overlap. Native storage aliases follow the existing text-memory contract. Code/stack aliases are outside this boundary; the eight incoming argument values are supplied explicitly.
 
 The only I/O event requests actual `9027C(original_name, wrapped_size, 0x20, 1)`. An implementation must perform that allocator's heap search, descriptor/free-list, name-copy and required eviction/relocation effects in retained ownership, and return its original descriptor address. A native `malloc` plus an invented address is not that operation. No callback, or an unacknowledged callback, returns `NBA97_TEXT_IO_REFUSED`. The test allocator is explicitly a fixture boundary, not a recovered heap implementation.

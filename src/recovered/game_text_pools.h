@@ -13,7 +13,7 @@ typedef struct Nba97GameTextPoolArguments {
 enum Nba97GameTextPoolEventKind {NBA97_TEXT_POOL_STORE=0,NBA97_TEXT_POOL_ALLOCATE_9027C=1};
 typedef struct Nba97GameTextPoolEvent {
     uint32_t pc,address,value;
-    uint32_t argument[4]; /*9027C: originalname, wrappedsize,flags20,mode1. */
+    uint32_t argument[4]; /*9027C: originalname,wrappedsize,callerflags,mode1. */
     Nba97GameTextPoolValue returned; /*9027C returns a descriptor, not its word0. */
     uint8_t kind,width,completed;
 } Nba97GameTextPoolEvent;
@@ -23,7 +23,8 @@ typedef struct Nba97GameTextPoolEvent {
  * original descriptor address, including zero on actual source failure.
  * Returning a fabricated address/zero-filled allocation is not completion.
  * The callback must own9027C's heap search, descriptor/free-list/name/growth
- * effects, not just malloc bytes. Flag20 selects the source's reverse heap
+ * effects, not just malloc bytes. Text pools supply flag20; the shared90160
+ * entry passes its caller's flags unchanged. Flag20 selects reverse heap
  * search; it is NOT a zero-fill flag. Original90160 then reads descriptorword0
  * even for a NULL descriptor; no fallback/null check is inserted.
  * Byte/knownness mutations are synchronous. Regions cover actual owned arenas
@@ -64,6 +65,16 @@ typedef struct Nba97GameTextPoolProgress {
  * code/stack aliases are outside this boundary; incoming args are known raw
  * values, rather than fabricated reads of an unowned stack. */
 int nba97_game_text_pools(Nba97GameTextPoolContext*,const Nba97GameTextPoolArguments*,
+    Nba97GameTextPoolEvent* journal,size_t capacity,Nba97GameTextPoolProgress*);
+
+/* Reuses the same complete90160/901EC/A405C/A4088 owner without constructing
+ * text pools. Originala0/a1/a2 are name,size,flags;90160 supplies a3=1.
+ * Court479B8 uses flags0, while2E200 supplies20. No flag is implied by90160.
+ * The actual9027C callback, live lock rereads, NULL descriptor dereference,
+ * partial effects and memory/journal contracts above apply unchanged.
+ * On completion style and return_v0 contain descriptorword0 (the payload).
+ */
+int nba97_game_allocate_payload_90160(Nba97GameTextPoolContext*,uint32_t name,uint32_t size,uint32_t flags,
     Nba97GameTextPoolEvent* journal,size_t capacity,Nba97GameTextPoolProgress*);
 #ifdef __cplusplus
 }

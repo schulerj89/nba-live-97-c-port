@@ -1,8 +1,9 @@
 # Native port status
 
-Checkpoint 25 passes 129 Windows tests in both build configurations and 125
-Linux core tests locally. Its actor-root, court-texture and rendering updates
-also have separate original-source and pixel comparisons.
+Checkpoint 26 passes 131 Windows tests in both build configurations and 127
+Linux core tests locally. Its body-projection and court-resource additions
+also have original-source component comparisons. The preceding checkpoint 25
+(`af8e8d7`) passed its 125 Linux core tests in GitHub CI.
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -51,8 +52,10 @@ its frontend-to-match path.
 |---|---|---|
 | Match state and periods | Owned accepted players/teams/controllers, lineup/binding/role helpers and composed period initialization under explicit entry conditions | Natural cold/warm loader completion, every substitution dependency, or a running match. See [match runtime](match_runtime_workflow.md). |
 | Player updates | Animation/queue, motion/pose resources, bounded physics/jump and input-edge owners with native composition tests | Whole-frame simulation, ball ownership, passes/shots, contact, AI or an actual possession. See [player updates](match_player_update_workflow.md) and [input edges](match_input_edges_workflow.md). |
-| Player geometry / tip contact / ball release | Actor-root owner `5200C` and native geometry adapter compose with part-matrix/hand-endpoint owner `55368` using actual pose/body resources and supplied camera/scale state. Contact helpers, the post-acquisition continuation and ball-release owner `58610` have separate tests; composed release ends with a loose ball in phase `82` | Natural camera/scale production, full body caller/vertex path, live hand-path integration, upstream collision/acquisition, ball simulation and first possession remain unconnected. See [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md), [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
-| Rendering and resources | Retained CPU/VRAM storage, court packet projection and native pixel drawing; actual XATL textures upload through the bounded `479B8:487B8..48894` loop. Native line rasterization and SDK `9AC7C` no-data return handling have regressions | This is not the full `479B8` loader, a live court or a complete camera/render loop. Resource loading, caller integration and remaining raster fidelity domains are still required. Rendered fixtures are not gameplay captures. See [court textures](game_court_textures_workflow.md), [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
+| Player geometry and projection | Actor-root `5200C`, part-matrix/hand-endpoint `55368`, and complete body packet producer `525AC` have original-resource comparisons using actual poses, normalized bodies and supplied camera/scale/ordering state | Full `52914` caller setup, natural camera/control producers, shared frame submission and live actor rendering remain unconnected. See [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md) and [body projection](game_player_projection_workflow.md). |
+| Tip contact and ball release | Contact helpers, the post-acquisition continuation and ball-release owner `58610` have separate tests; composed release ends with a loose ball in phase `82` | Live hand-path integration, upstream collision/acquisition, ball simulation and first possession remain unconnected. See [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
+| Court resource setup | Texture loop `479B8:487B8..48894` uploads actual XATL images. The after-load tail `48A4C..48D28` normalizes court references and allocates/initializes edge storage through shared `90160/901EC` and the recovered heap owner | Neither slice implements the full `479B8` loader or natural resource arrival. Court allocation flags are `0`, while text pools use `0x20`; neither implies zero-filled payload. Unknown bytes remain unknown. See [court textures](game_court_textures_workflow.md) and [court resources](game_court_resources_workflow.md). |
+| Pixel rendering | Retained CPU/VRAM storage, court packet projection and native pixel drawing compose in fixtures. Native line rasterization and SDK `9AC7C` no-data returns have regressions | No live court or complete camera/render loop. Diagnostic images still use fixture camera and ordering state, with no live actors; they are not gameplay captures. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
 | Audio startup and transfers | Game sound entry point, common attributes, music reset, callback registration, SPU heap, PIO/DMA sample ownership, interrupt/controller and event composition | Natural host audio initialization, actual callback cadence, complete voices/synthesis, physical device timing or full-match sound. Some real resource transfers still stop where rounded source tails lack proven ownership. See [audio startup](audio_startup_workflow.md) and [sample backend](spu_sample_backend_workflow.md). |
 
 Asset-free CTests use synthetic fixtures. Private source comparisons additionally
@@ -98,14 +101,22 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-At checkpoint 25, Windows builds pass **129/129 CTests** in both Debug and
-RelWithDebInfo; the local Linux build passes **125/125 core CTests**.
-The preceding published checkpoint 24 (`16b4e70`),
-[GitHub run 33422404343](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33422404343)
-passed **123/123 Linux core CTests** and the metadata/verification workflow.
+At checkpoint 26, Windows builds passed **131/131 CTests** in both Debug and
+RelWithDebInfo, and local Linux passed **127/127 core CTests**. The preceding
+checkpoint 25 (`af8e8d7`) passed 125 Linux core tests in
+[GitHub run 33425384574](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33425384574)
+and its metadata/verification workflow also passed.
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured at that checkpoint, nor that
 a full match was tested.
+
+Checkpoint 26's body-projection comparisons
+cover all 635 owned instruction locations, actual normalized body/pose inputs
+and supplied geometry controls, including the original `ZSF3` value `341`.
+The bounded court-resource work covers 240 owned instruction locations and
+composes with the actual allocator on YATL and YNEU data, requiring six
+allocations each. This proves component behavior under supplied entry state,
+not a complete `52914` player caller, full `479B8` loader or natural frame.
 
 Checkpoint 25's separate component evidence
 includes 80 original pose/body actor-root-to-`55368` composition cases; all 84

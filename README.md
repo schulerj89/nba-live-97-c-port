@@ -68,14 +68,19 @@ comparisons, ending with a loose ball in phase `82`, not completed possession.
 The [court pass](docs/game_court_packets_workflow.md) calculates projected
 coordinates and builds draw packets using native integer geometry. Its flat and
 textured test packets now reach a [native pixel renderer](docs/game_packet_renderer_workflow.md).
-The new [actor-root owner](docs/game_player_root_workflow.md) composes with the
+The [actor-root owner](docs/game_player_root_workflow.md) composes with the
 [player part-matrix owner](docs/game_player_geometry_workflow.md) to produce hand
-endpoints under supplied camera/pose conditions. The bounded
+endpoints under supplied camera/pose conditions. The new
+[body-projection owner](docs/game_player_projection_workflow.md) produces player
+draw packets from those matrices and normalized body data; the full player
+caller and live frame integration remain unfinished. The bounded
 [court-texture loop](docs/game_court_textures_workflow.md) now uploads actual
-private XATL image data into retained VRAM; it does not implement the full
-court loader. Line drawing and SDK no-data upload behavior have separate
-regressions. These components are not yet connected into a live court or
-playable frame; rendered test fixtures are **not gameplay captures**.
+private XATL image data into retained VRAM. The separate
+[court-resource tail](docs/game_court_resources_workflow.md) normalizes loaded
+court data and prepares edge storage using the recovered allocator; neither
+slice implements the full court loader. These components are not yet connected
+into a live court or playable frame. Diagnostic court images use fixture camera
+and ordering state, with no live actors; they are **not gameplay captures**.
 
 Recovered game behavior is moving into portable C modules under
 `src/recovered/`. C++ owns native resources, adapters and the Win32 frontend,
@@ -154,14 +159,14 @@ ctest --test-dir build-core -C Debug --output-on-failure
 python tools/report_progress.py --check
 ```
 
-Checkpoint 25 passes all **129 Windows CTests** in both Debug and
-RelWithDebInfo, and all **125 Linux core CTests** locally. The preceding
-published checkpoint, `16b4e70`, passed 123 Linux core CTests in
-[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33422404343).
+Checkpoint 26 passes all **131 Windows CTests** in both Debug and
+RelWithDebInfo and all **127 Linux core CTests** locally. The preceding
+checkpoint, 25 (`af8e8d7`), also passed its 125 Linux tests in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33425384574).
 The counts differ because four tests are Windows-specific. These are bounded
 regression results, not complete-game acceptance or new original-game captures.
-The actor-root, court-texture and rendering updates also have separate
-original-source and native pixel comparisons, with their limits documented above.
+Checkpoint 26's body-projection and court-resource updates also have separate
+original-source component comparisons.
 
 ## Keyboard controls
 
