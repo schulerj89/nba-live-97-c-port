@@ -4,9 +4,9 @@
 
 ## Current baseline
 
-- **1,769** functions and **465,368** code bytes discovered by headless Ghidra in the currently scoped original binaries.
-- **68** functions (3.84%) have explicit recomp/Ghidra/source evidence records.
-- Evidence records touch **40,380** original code bytes (8.68%). Partial records do not mean the whole function is complete.
+- **3,701** functions and **1,044,056** code bytes discovered by headless Ghidra in the currently scoped original binaries.
+- **68** functions (1.84%) have explicit recomp/Ghidra/source evidence records.
+- Evidence records touch **40,380** original code bytes (3.87%). Partial records do not mean the whole function is complete.
 - **8** functions are currently claimed behavior-complete and **0** are instruction-matching. We deliberately begin conservatively.
 - Native port: **48 catalogued milestones** — 25 marked verified, 9 partial, 14 not started. Not an overall completion score.
 - Playable basketball remains unimplemented.
@@ -19,6 +19,9 @@
 |---|---:|---:|---|
 | PS-X EXE boot program | 272 | 49,280 | private input (not distributed) |
 | FEONLY frontend overlay | 1,497 | 416,088 | private input (not distributed) |
+| FELOAD frontend loader overlay | 106 | 16,316 | private input (not distributed) |
+| GAMELOAD gameplay loader overlay | 106 | 16,316 | private input (not distributed) |
+| GAMEONLY gameplay overlay | 1,720 | 546,056 | private input (not distributed) |
 
 ## Evidence coverage by subsystem
 
@@ -115,6 +118,8 @@ Source ownership, block accounting, CFG verification, runtime trace equivalence,
 - Native-port milestones are manually maintained status counts, not a game-completion percentage or estimate of remaining effort.
 - The milestone catalogue is incomplete and items differ substantially in scope. Partial has no numeric credit; verified means marked verified in the manifest, not exhaustive proof.
 - Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.
+- Inventories cover five known disc programs, including both loader overlays and GAMEONLY; automatic function discovery is not proof that every entry point or reachable resource is known.
+- Function identity includes the binary: shared numeric addresses and duplicated SDK routines in mutually exclusive overlays are separate inventory records.
 - Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status.
 
 The function inventories contain addresses, sizes, and generated names only. Original binaries, disc files, decoded images, audio, and all other copyrighted assets remain under `.local/` and are not published.

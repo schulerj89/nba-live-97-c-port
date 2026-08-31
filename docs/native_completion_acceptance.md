@@ -9,12 +9,13 @@ Source-confirmed original bugs and quirks must be preserved and commented, per
 the user. Comments identify the original owner, observable consequence and
 evidence. Native memory/I/O safety refusals must be identified separately; they
 must not silently replace source behavior with defaults or corrected rules.
+See the growing [preserved-behavior index](preserved_original_bugs.md).
 
 ## Acceptance matrix
 
-| Gate | Native state at baseline | Evidence still required |
+| Gate | Current native state | Evidence still required |
 |---|---|---|
-| Complete executable/feature/resource inventory | Boot and FEONLY inventories only; gameplay research is separate | Audit every executable/overlay and reachable mode/resource; retain full owners and unresolved branches |
+| Complete executable/feature/resource inventory | Five known programs:3701 discovered functions; feature/resource catalogue incomplete | Audit all entry points and reachable mode/resources; retain full owners and unresolved branches |
 | Boot, legal, movie, title, Setup | Implemented with scoped checks | Original transition, presentation and audio comparisons; repeated fresh/warm entry |
 | Team Select and User Setup | Implemented bounded frontend path | Complete original input/timing/visual comparison, all controller/profile variants |
 | Accepted current rosters/settings/controls | Owned ordinary snapshot;655B0 and65328 effects before period setup | Close extension/reference fields, created membership, special teams, period/entity bindings and selected-player producer |

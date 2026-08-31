@@ -11,6 +11,8 @@
       "Native-port milestones are manually maintained status counts, not a game-completion percentage or estimate of remaining effort.",
       "The milestone catalogue is incomplete and items differ substantially in scope. Partial has no numeric credit; verified means marked verified in the manifest, not exhaustive proof.",
       "Instruction-semantic tracking reports source ownership, block accounting, CFG verification, runtime trace equivalence, and exact matching as separate tiers.",
+      "Inventories cover five known disc programs, including both loader overlays and GAMEONLY; automatic function discovery is not proof that every entry point or reachable resource is known.",
+      "Function identity includes the binary: shared numeric addresses and duplicated SDK routines in mutually exclusive overlays are separate inventory records.",
       "Matching means instruction-identical PS1 output; the native C/C++ build cannot satisfy that status."
     ]
   },
@@ -37,6 +39,39 @@
       "entry_point": "0x8007B79C",
       "file_size": 959960,
       "sha256": "14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c"
+    },
+    {
+      "id": "feload",
+      "name": "FELOAD frontend loader overlay",
+      "local_path": ".local/extracted/FELOAD.BIN",
+      "inventory": "config/decomp/functions/feload.csv",
+      "load_address": "0x801E0000",
+      "image_file_offset": 0,
+      "entry_point": "0x801E1410",
+      "file_size": 36936,
+      "sha256": "aa5924e9b8eb462441a4f9b7a8aad0c470aed66e8166b78abc0ab16bdd8659f9"
+    },
+    {
+      "id": "gameload",
+      "name": "GAMELOAD gameplay loader overlay",
+      "local_path": ".local/extracted/GAMELOAD.BIN",
+      "inventory": "config/decomp/functions/gameload.csv",
+      "load_address": "0x801E0000",
+      "image_file_offset": 0,
+      "entry_point": "0x801E1410",
+      "file_size": 36936,
+      "sha256": "9474cc8b9109a1b9eebf14bae1ea1c1542c2d486e24477c086e7cf2523b1961f"
+    },
+    {
+      "id": "gameonly",
+      "name": "GAMEONLY gameplay overlay",
+      "local_path": ".local/extracted/GAMEONLY.BIN",
+      "inventory": "config/decomp/functions/gameonly.csv",
+      "load_address": "0x80015000",
+      "image_file_offset": 0,
+      "entry_point": "0x80094828",
+      "file_size": 1009196,
+      "sha256": "d95a433c24bd4996daddab43bf802463d82c25da33ca0d4fec93e0941223e3f0"
     }
   ]
 }
