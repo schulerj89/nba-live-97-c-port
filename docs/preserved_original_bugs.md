@@ -29,9 +29,11 @@ defects should still be fixed.
 |GAME6CFE0 |Landing marker comparison reads the just-copied unchanged height, so its2C=FF store is unreachable; actor12 can clearA0 without recalculating9C |Physics owner, ordered-store proof and source invariant |
 |GAME706E4 |Wrapped INT_MIN negation can cause a source division trap or adjacent-table read |Direction helper; no square-root/atan2 replacement or index clamp |
 |GAME6801C |A small negative angle snap retains positive modular delta990..1023 for EA; repeated entity-table aliases update the same player again |`game_player_update.c`, source-address workflow and composed `match_player_update` regression cases |
+|GAME6A2E4/2AB70 |Argument0 still loads the threshold and consumes shared RNG; a later rejection keeps the draw; accepted requests can be skipped by the actual motion gates |`game_player_jump.c`, actual motion-callee comparisons and `game_player_jump_workflow.md` |
 |GAME539FC/35A44 |Jersey FF draws texture00 but labels display -1; a palette with no zero entry uses fill byte10 rather than a repaired transparent index |Render texture/label owners, original-instruction comparisons and `game_render_entry_workflow.md` |
 |GAME4E3CC/35A44 |Name character count wraps at8 bits; original label formatting can overflow its32-byte stack buffer |Original widths retained; explicit native ownership/overflow refusal instead of truncation, with prior writes preserved |
 |GAME38A18 |Cache searches have no original bound; count is checked after service; home bench swaps synchronize three times while away swaps omit those calls |Head-cache owner, original ordered callback comparisons and mutable-cache probes; owned-range refusal stays explicit |
+|GAME94440/94540/946B8 |Odd rectangle width forces height odd; split uploads temporarily decrement the shared header height; CLUT placement0,0 still mutates the header while suppressing its transfer |`game_image_upload.c`; source comparisons and composed native VRAM tests preserve ordered prefixes without automatic header repair |
 |FE2F36C/6B6A0 |Router retains a zero-status branch although the original BUSY helper cannot return zero |`music_routing.c`, source-quirk comment and lifecycle tests |
 |FE2F330 |The sixteen-slot music table permits repeats and includes the special track in ordinary selection |Music extractor/routing workflow; no guessed shuffle |
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |
@@ -40,6 +42,8 @@ defects should still be fixed.
 |FE31A88 music arm |Zero adjacent volume skips reduction; repeated View Player entry overwrites saved volume; exit restores the saved low byte even after intervening edits |`music_transition.c`, exact source state/callback comparisons; no extra gain call to cancel the original fade |
 |FE3122C/8ABF0 |Already-finished nonnegative announcer voice keeps its old value; CRCF validation ignores the trailer's length field |`frontend_resource.c`, actual lifetime/content comparisons; native callback obligations remain explicit |
 |FE313C8/2FB00 |Already-finished announcer handle stays stale; portrait data with a zero graphic field is discarded without a free; cached record IDs survive cleanup |`frontend_resource_cleanup.c`, ordered source/callback comparisons and explicit source-bug comments |
+|FE916CC/92BFC/7AD48 |A status query returns its saved pre-unlock result even if pending service clears the voice during that unlock; unlocking depth0 wraps instead of repairing the counter |`voice_handles.c`, source comparisons and deferred-service tests |
+|FE702B0 |A nonzero channel-change guard returns with busy1; key batches use kind==2 while state4 completion uses kind>=2; post-callback mask rereads retain live changes before clearing the mask |`voice_channels.c`, all373 original instructions covered and composed fade/retirement tests |
 
 This is a growing index, not proof every original bug has been found. Callers
 and host adapters must preserve these outcomes when integrating the recovered

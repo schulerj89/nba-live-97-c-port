@@ -10,6 +10,28 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_voice_channels_tests tests/voice_channels_tests.cpp src/recovered/voice_channels.c
+        src/recovered/voice_handles.c src/recovered/music_voice.c src/recovered/frontend_resource_cleanup.c)
+    target_compile_features(nba97_voice_channels_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_voice_channels_tests PRIVATE src)
+    add_test(NAME voice_channels COMMAND nba97_voice_channels_tests)
+    add_executable(nba97_game_render_backend_tests tests/game_render_backend_tests.cpp src/game_render_backend.cpp
+        src/recovered/game_image_upload.c src/recovered/game_head_cache.c)
+    target_compile_features(nba97_game_render_backend_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_render_backend_tests PRIVATE src)
+    add_test(NAME game_render_backend COMMAND nba97_game_render_backend_tests)
+    add_executable(nba97_game_image_upload_tests tests/game_image_upload_tests.cpp src/recovered/game_image_upload.c)
+    target_compile_features(nba97_game_image_upload_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_image_upload_tests PRIVATE src)
+    add_test(NAME game_image_upload COMMAND nba97_game_image_upload_tests)
+    add_executable(nba97_game_player_jump_tests tests/game_player_jump_tests.cpp src/recovered/game_player_jump.c)
+    target_compile_features(nba97_game_player_jump_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_jump_tests PRIVATE src)
+    add_test(NAME game_player_jump COMMAND nba97_game_player_jump_tests)
+    add_executable(nba97_voice_handles_tests tests/voice_handles_tests.cpp src/recovered/voice_handles.c src/recovered/music_voice.c)
+    target_compile_features(nba97_voice_handles_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_voice_handles_tests PRIVATE src)
+    add_test(NAME voice_handles COMMAND nba97_voice_handles_tests)
     add_executable(nba97_game_render_entry_tests tests/game_render_entry_tests.cpp
         src/recovered/game_render_textures.c src/recovered/game_head_cache.c src/recovered/game_player_labels.c)
     target_compile_features(nba97_game_render_entry_tests PRIVATE c_std_99 cxx_std_17)
@@ -555,10 +577,12 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/match_pose.cpp src/gameplay_pose.cpp src/recovered/game_pose_request.c src/recovered/game_pose_sample.c
     src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
     src/recovered/game_player_physics.c src/recovered/game_player_update.c src/match_player_update.cpp
+    src/recovered/game_player_jump.c src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c
     src/recovered/game_render_textures.c src/recovered/game_head_cache.c src/recovered/game_player_labels.c
+    src/game_render_backend.cpp src/recovered/game_image_upload.c
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
