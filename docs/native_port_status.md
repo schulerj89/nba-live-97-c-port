@@ -1,11 +1,10 @@
 # Native port status
 
-Checkpoint 30 local verification passes 153 Windows tests in Debug, RelWithDebInfo
-and Release and 149 Linux core tests locally. It adds native pose, label,
-marker, court-frame and packet-startup integration, ball simulation/scoring,
-the fixed-global net transform, and the reusable page-offset service.
-Checkpoint 29 (`5b080f4`) passed 137 Linux core tests in
-[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33439288924).
+Checkpoint 31 local verification passes 154 Windows tests in Debug, RelWithDebInfo
+and Release and 150 Linux core tests locally. It adds the native scorer/actor
+selection and AI-state owner used by the recovered ball-scoring chain.
+Checkpoint 30 (`4b23dd3`) passed 149 Linux core tests in
+[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33449271383).
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -60,7 +59,7 @@ its frontend-to-match path.
 | Player rendering pass | Complete `52914` composes actor-root `5200C`, part-matrix/hand-endpoint `55368`, body packet producer `525AC`, shadows and off-screen indicators against shared retained state; original-resource comparisons use actual normalized bodies and poses | Natural entity/control/loader state, resource-lifetime integration, shared frame submission and live actor rendering remain unconnected. See [player pass](game_player_frame_workflow.md), [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md) and [body projection](game_player_projection_workflow.md). |
 | Camera and controller | Recovered `51098`, including controller `4EA88` and input helper `8F224`, produces camera state through native fixed-point math and explicit retained inputs | Actual timing, pad/device and monitor effects remain required external boundaries. Natural caller state and integration into the live render loop are unproven; component coverage is not complete controller-path coverage. See [camera workflow](game_camera_workflow.md). |
 | Tip contact and ball release | Contact helpers, the post-acquisition continuation and ball-release owner `58610` have separate tests; composed release ends with a loose ball in phase `82` | Live hand-path integration, upstream collision/acquisition, the outer simulation caller and first possession remain unconnected. See [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
-| Ball simulation and scoring | Complete `6EF60` integer ball tick with bounded collision/rim helpers and complete `6DC18` scoring/rim-grid chain; source comparisons preserve wrapped arithmetic, traps and callback prefixes | The outer `68BF8` match tick, actor/AI, gameplay audio/UI services and natural startup are not connected. This is not a possession or gameplay proof. See [simulation](game_ball_simulation_workflow.md) and [scoring](game_ball_scoring_workflow.md). |
+| Ball simulation and scoring | Complete `6EF60` integer ball tick with bounded collision/rim helpers, complete `6DC18` scoring/rim-grid chain, and complete `6E7AC` scorer/actor selection with its `58AA8/6E734` CPU leaves; source comparisons preserve wrapped arithmetic, traps and callback prefixes | The outer `68BF8` match tick, gameplay audio/UI services and natural startup are not connected. This is not a possession or gameplay proof. See [simulation](game_ball_simulation_workflow.md), [scoring](game_ball_scoring_workflow.md), and [scorer/actor state](game_scoring_actor_ai_workflow.md). |
 | Ball rendering | Complete ball/reflection `49300` and ground-shadow `49D34` use the existing player-frame adapter's retained buffers and geometry; `ball` and `ballShadow` have original/native component comparisons | Packet rendering does not implement ball simulation, attachment selection or possession. Natural entity/resource arrival, shared frame submission and a live match remain unconnected. See [ball pass](game_ball_frame_workflow.md). |
 | Ball/shadow/arrow resources | `4D490` through `4CAF4` initializes ball/reflection/shadow packets and arrow templates, copies palettes and requests real BALL/ASDW image uploads through the existing image/VRAM owners | Load, release and SDK synchronization remain required external operations. Packet XY and ordering links belong to later render passes; released image pointers are not retained resource owners. Source comparisons do not prove cold loader/heap execution or natural frame entry. See [marker resources](game_player_marker_resources_workflow.md). |
 | Court resource setup | A canonical source-order owner composes all `479B8..48D5C` child intervals; texture selection/upload and the after-load tail normalize court references and allocate edge storage. Exact `9BF98` page calculation and native heap release are reusable services | Real loader/GPU sync services, allocation-registry population and outer `52C20` producers remain unconnected. Allocation flags `0` do not imply zero-filled payload. See [startup sequence](game_court_startup_sequence_workflow.md), [startup bridge](game_court_startup_workflow.md), [packet startup](game_court_packet_startup_workflow.md), [page offset](game_page_offset_workflow.md), [court textures](game_court_textures_workflow.md) and [court resources](game_court_resources_workflow.md). |
@@ -110,10 +109,10 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-Checkpoint 30 local verification passes **153/153 CTests** in Windows Debug,
-RelWithDebInfo and Release and **149/149 core CTests** on Linux. Checkpoint 29 (`5b080f4`)
-passed **137/137 core CTests** in
-[GitHub run 33439288924](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33439288924).
+Checkpoint 31 local verification passes **154/154 CTests** in Windows Debug,
+RelWithDebInfo and Release and **150/150 core CTests** on Linux. Checkpoint 30 (`4b23dd3`)
+passed **149/149 core CTests** in
+[GitHub run 33449271383](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33449271383).
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured, nor that a full match was
 tested. Publication and the exact GitHub CI result are tracked separately from
@@ -141,6 +140,13 @@ all 65,536 live graphics-mode transitions. Court composition compares 555 cases
 and all 507 owned PCs. Each workflow states its explicit service boundaries.
 None of these component proofs crosses the Windows `MATCH-HANDOFF-PENDING`
 boundary or establishes a visible gameplay frame.
+
+Checkpoint 31 adds the complete 431-instruction `6E7AC/58AA8/6E734`
+scorer/actor and AI-state owner. Its original-CPU comparison passes 3,541 cases
+per MSVC configuration, including 91,914 ordered stores, 185,360 reads, 729
+typed service calls, 2,694 refusal prefixes and every owned PC. Gameplay audio
+and score/UI calls remain real typed boundaries; this checkpoint does not
+fabricate those effects or connect the owner to natural match entry.
 
 Checkpoint 28's separate ball-rendering evidence
 includes 585 original/native C cases per build with 16,111 ordered stores and

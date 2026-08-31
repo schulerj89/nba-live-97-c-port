@@ -69,6 +69,11 @@ if(BUILD_TESTING)
     target_compile_features(nba97_game_ball_scoring_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_ball_scoring_tests PRIVATE src)
     add_test(NAME game_ball_scoring COMMAND nba97_game_ball_scoring_tests)
+    add_executable(nba97_game_scoring_actor_ai_tests tests/game_scoring_actor_ai_tests.cpp
+        src/recovered/game_scoring_actor_ai.c)
+    target_compile_features(nba97_game_scoring_actor_ai_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_scoring_actor_ai_tests PRIVATE src)
+    add_test(NAME game_scoring_actor_ai COMMAND nba97_game_scoring_actor_ai_tests)
     add_executable(nba97_game_court_startup_sequence_tests tests/game_court_startup_sequence_tests.cpp
         src/recovered/game_court_startup_sequence.c src/recovered/game_court_roster_startup.c
         src/recovered/game_court_interactive.c src/recovered/game_court_packet_startup.c
@@ -959,7 +964,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_camera.c src/recovered/game_player_frame.c src/game_player_frame.cpp
     src/recovered/game_ball_frame.c src/game_ball_frame.cpp src/recovered/game_player_marker_resources.c
     src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp src/recovered/game_ball_simulation.c
-    src/recovered/game_ball_scoring.c
+    src/recovered/game_ball_scoring.c src/recovered/game_scoring_actor_ai.c
     src/recovered/game_net.c src/game_net.cpp src/recovered/game_net_transform.c src/recovered/game_page_offset.c
     src/recovered/game_court_startup.c src/recovered/game_court_startup_services.c src/recovered/game_court_roster_startup.c
     src/recovered/game_court_interactive.c src/recovered/game_court_packet_startup.c src/recovered/game_court_startup_sequence.c
