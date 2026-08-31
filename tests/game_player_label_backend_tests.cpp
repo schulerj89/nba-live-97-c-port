@@ -60,7 +60,7 @@ struct Fixture {
         if(f.misalignStyle && f.calls==1)f.put(0x800b2048,Style+1,4);
         if(f.poisonObjectStore && f.calls==2){Nba97GameImageMemory view{};
             f.memory.describe(f.all,view);view.known[Object+0x20-Base]=0;view.known[Object+0x21-Base]=0;
-            view.known[Object+0x1e-Base]=0;view.known[Object+0x1f-Base]=2;}
+            view.known[Object+0x1e - Base]=0;view.known[Object+0x1f-Base]=2;}
         const auto word=f.source(event->object,4);if(!word.data)return 0;
         word.data[0]=word.data[1]=word.data[2]=255;word.data[3]=0;return 1;
     }
@@ -129,12 +129,12 @@ void partial(){
     check(result.result==1&&result.completed==10&&f.calls==40,"partial producer-style resources create all labels");
     check(view.known[Style-Base]==0&&view.known[Style+0x49-Base]==2,"unread style bytes retained");
     check(view.known[Object+0x22-Base]==0&&view.known[Object+0x3f-Base]==0,"object padding remains unknown");
-    check(view.known[Object+0x1e-Base]==1&&view.known[Object+0x20-Base]==1,"reached direct stores known");
+    check(view.known[Object+0x1e - Base]==1&&view.known[Object+0x20-Base]==1,"reached direct stores known");
     check(view.known[Pool+38-Base]==0&&view.known[Pool+78-Base]==0,"packet padding copied opaque");
     check(view.known[Pool-Base]==1&&view.known[Pool+40-Base]==1&&view.known[0x80124000-Base]==0,"splice replaces copied unknown links without changing font");
     Fixture bad;bad.poisonObjectStore=true;const auto stopped=bad.run();bad.memory.describe(bad.all,view);
     check(stopped.result==NBA97_RENDER_ARGUMENT&&stopped.completed==0&&bad.calls==2,"reached write rejects invalid later knownness byte");
-    check(view.known[Object+0x20-Base]==1&&view.known[Object+0x21-Base]==1&&view.known[Object+0x1e-Base]==0&&view.known[Object+0x1f-Base]==2,"35B90 prefix remains before35B98 metadata refusal");
+    check(view.known[Object+0x20-Base]==1&&view.known[Object+0x21-Base]==1&&view.known[Object+0x1e - Base]==0&&view.known[Object+0x1f-Base]==2,"35B90 prefix remains before35B98 metadata refusal");
 }
 void split_ranges(){
     Fixture f;f.split();const auto result=f.run();

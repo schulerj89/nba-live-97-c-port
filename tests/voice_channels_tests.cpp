@@ -1,6 +1,7 @@
 #include "recovered/voice_channels.h"
 #include "recovered/frontend_resource_cleanup.h"
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <vector>

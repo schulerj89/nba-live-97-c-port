@@ -2,6 +2,7 @@
 #include "recovered/game_head_cache.h"
 #include "recovered/game_player_labels.h"
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>

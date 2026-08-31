@@ -1,5 +1,6 @@
 #include "recovered/game_image_upload.h"
 #include <array>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>

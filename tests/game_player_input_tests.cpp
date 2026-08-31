@@ -1,4 +1,5 @@
 #include "recovered/game_player_input.h"
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
