@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import wave
 from pathlib import Path
 
@@ -176,10 +175,14 @@ def main() -> int:
         except (OSError, wave.Error):
             valid = False
             raw_valid = False
-        expected_samples = math.ceil(
-            row["source_samples"] / (2.0 ** (row["pitch_cents"] / 1200.0)))
+        # Independent72048 outputs for this six-program fixture. The table
+        # stays private; these scalar expectations are not a waveform oracle.
+        expected_pitch = {100:2168, 0:2048, -400:1628}.get(row["pitch_cents"], 0)
+        expected_samples = ((row["source_samples"]*2048 + expected_pitch-1)//expected_pitch
+                            if expected_pitch else 0)
         pitch_valid = (row["requested_note"] == 60 and
                        row["pitch_cents"] == -100 * (row["root_note"] - 60) and
+                       row.get("pitch_register") == expected_pitch and
                        row["samples"] == expected_samples)
         bank_audio_ok = bank_audio_ok and valid and raw_valid
         pitch_semantics_ok = pitch_semantics_ok and pitch_valid

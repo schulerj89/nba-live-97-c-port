@@ -119,3 +119,7 @@ intermediate7-bit gain. Bank/program/tone and compressed intervals match source.
 Those scalar differences are not fixed by this presentation change. Original
 voice allocation, full RNG history, SPU waveform and live cue timing remain
 pending, along with the synchronized physical Team Select walkthrough.
+
+Subsequent cursor-audio checkpoint: the three scalar/RNG differences are now
+corrected in the bounded native path. See cursor_audio_workflow.md; the original
+hardware, allocation and full-history limits above still apply.

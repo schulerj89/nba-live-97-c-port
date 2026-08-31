@@ -16,6 +16,8 @@
     "original_historical_rank_cache": "145/145 scores and145/145 ranks match cached original FEONLY RAM; not a state3 capture",
     "native_rendering": "98 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration; completed Team Select frames retained across callback and repaint",
     "presentation_source_comparison": "33726 private original-MIPS/compiled-C Help assertions across342 cases/10854 visible frames; exact extracted host passes15 phase cases/204 assertions; hooks exclude GPU, OS and live timing; see docs/team_select_presentation_workflow.md",
+    "audio_source_comparison": "Cursor u7 gain and integer pitch match2401 source pitch values,1352 synthetic gain cases and132 actual-bank cases. Four hand-seeded actual cue/Circle dispatches match original first-candidate state including rejections. See docs/cursor_audio_workflow.md; allocation acceptance assumed, full history and SPU output pending.",
+    "native_audio": "36 independent export cases/640440 samples match declared native ADPCM + source scalars + linear interpolation; speech behavior unchanged; not original hardware waveform equivalence",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "state5_confirmation": "assignment/editor/Help/warnings/delete, v2 transactions and owned partial snapshot implemented; see user_setup.json and match_setup.json; original runtime and gameplay pending"
@@ -507,10 +509,11 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 52,
-      "native_owner": "nba97_team_select_rng_step",
+      "native_owner": "nba97_team_select_rng_step; bootstrap-owned shared state; acceptCursorSound before device submission and random candidate generation",
       "shared_dependencies": [],
       "tests_evidence": [
-        "docs/team_select_workflow.md"
+        "docs/team_select_workflow.md",
+        "docs/cursor_audio_workflow.md"
       ],
       "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
     }

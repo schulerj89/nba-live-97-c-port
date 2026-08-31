@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 #include <windows.h>
@@ -23,6 +24,12 @@ struct RecoveredClipInfo {
     std::uint32_t requested_note = 60;
     std::uint32_t rendered_sample_count = 0;
     bool playback_suppressed = false;
+    // Cursor-only source scalars. PCM normalization/interpolation remain native.
+    std::uint32_t authored_volume = 0;
+    std::uint32_t effective_volume = 0;
+    std::uint32_t pitch_register = 0;
+    std::uint32_t left_volume = 0;
+    std::uint32_t right_volume = 0;
 };
 
 // One selected clip, decoded but not submitted. Ownership moves into playback;
@@ -39,10 +46,14 @@ public:
     RecoveredAudioPlayer& operator=(const RecoveredAudioPlayer&) = delete;
     RecoveredAudioPlayer() = default;
 
+    // accepted runs once after validated PCM preparation, before any device
+    // submission/failure. It models the native accepted-cue boundary, not the
+    // original voice allocator. Muted/rejected cues and exports never call it.
     RecoveredClipInfo playCursorSound(const std::filesystem::path& header,
                                       const std::filesystem::path& body,
                                       std::uint32_t sound_id,
-                                      std::uint8_t sfx_setting);
+                                      std::uint8_t sfx_setting,
+                                      const std::function<void()>& accepted = {});
     RecoveredClipInfo exportCursorSound(const std::filesystem::path& header,
                                         const std::filesystem::path& body,
                                         std::uint32_t sound_id,
@@ -82,7 +93,8 @@ private:
                                       bool play,
                                       const std::filesystem::path* output,
                                       bool apply_authored_pitch,
-                                      std::uint8_t sfx_setting);
+                                      std::uint8_t sfx_setting,
+                                      const std::function<void()>& accepted = {});
     static void applyCoolFactPlayback(PreparedCoolFact&, std::uint8_t speech_setting);
     void playPcm(std::vector<std::int16_t> pcm, std::uint32_t sample_rate);
     HWAVEOUT wave_out_ = nullptr;

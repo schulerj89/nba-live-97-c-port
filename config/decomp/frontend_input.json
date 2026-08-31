@@ -18,6 +18,7 @@
     "native_unit": "tests/team_select_poll_test.cpp, tests/team_select_test.cpp, tests/user_setup_session_test.cpp",
     "host_integration": "98 explicit combined scenarios including retained state5 placement and Team Select pre-input presentation snapshots; first/second process state, frame and owned-snapshot comparisons",
     "native_rendering": "deterministic regression only; Team Select freezes each completed frame before callback/random/Help input continuation; see docs/team_select_presentation_workflow.md",
+    "cursor_rng_order": "Accepted native cursor preparation advances shared six-word state before device submission; four seeded actual Circle dispatches match original cue/candidate order. Static seed loads at frontend bootstrap, not Team Select entry; other original consumers/allocation/history pending.",
     "original_runtime": "pending",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending"

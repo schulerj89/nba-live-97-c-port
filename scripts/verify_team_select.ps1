@@ -22,12 +22,14 @@ Push-Location $repo
 try {
     if(-not $SkipBuild) { & "$PSScriptRoot/build.ps1" -Configuration $Configuration -AllTargets; if($LASTEXITCODE) {throw 'Build failed'} }
     $exe=Join-Path $repo "build-windows/$Configuration/nba97_boot_decomp.exe"
-    foreach($test in @('team_select','team_select_poll','team_ratings','user_setup','user_setup_session','user_setup_visibility','user_profiles','match_controls','match_snapshot','frontend_help','frontend_help_presentation','win32_keyboard')) {
+    foreach($test in @('team_select','team_select_poll','team_ratings','user_setup','user_setup_session','user_setup_visibility','user_profiles','match_controls','match_snapshot','frontend_help','frontend_help_presentation','frontend_audio_scalars','win32_keyboard')) {
         & (Join-Path $repo ("build-windows/{0}/nba97_{1}_tests.exe" -f $Configuration,$test))
         if($LASTEXITCODE) {throw "$test failed"}
     }
     & (Join-Path $repo "build-windows/$Configuration/nba97_frontend_help_tests.exe") "$repo/.local/assetpacks"
     if($LASTEXITCODE) {throw 'Original-font Help pixel checks failed'}
+    & (Join-Path $repo "build-windows/$Configuration/nba97_recovered_audio_tests.exe") "$repo/.local/assetpacks/menu"
+    if($LASTEXITCODE) {throw 'Cursor/speech numeric checks failed'}
     python tools/verify_team_select.py
     if($LASTEXITCODE) {throw 'Team Select metadata failed'}
     $stamp=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8)

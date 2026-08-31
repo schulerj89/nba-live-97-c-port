@@ -29,6 +29,26 @@ def require(ok, message):
         raise ValueError(message)
 
 
+def cursor_rng_step(words):
+    """Independent 7A538 word/carry contract; never calls the native helper."""
+    require(len(words) == 6 and all(type(word) is int and 0 <= word <= 0xffffffff
+            for word in words), "invalid six-word RNG step input")
+    radix = 1 << 32
+    result, carry = list(words), 0
+    # Descend from word4 to word0. Each sum uses the already updated successor
+    # and the preceding unsigned carry; overflow above word0 is discarded.
+    for index in range(4, -1, -1):
+        carry, result[index] = divmod(words[index] + result[index+1] + carry, radix)
+    # The source then increments from word5 toward word0 with carry. Treating
+    # the array as one big-endian 192-bit integer keeps this stage independent
+    # of the native increment loop, including wrap of all six words.
+    combined = 0
+    for word in result:
+        combined = combined * radix + word
+    combined = (combined + 1) % (1 << 192)
+    return [(combined >> (32 * (5-index))) & 0xffffffff for index in range(6)]
+
+
 def metadata():
     ledger = read(ROOT / "config/decomp/team_select.json")
     seen, totals = set(), {}
@@ -184,6 +204,36 @@ def capture(first, second, contract, fixture):
                 f"completed presentation count mismatch {before} -> {after}")
     require(by_id["help-full-box"]["shown_help_width"] == by_id["help-first-text"]["shown_help_width"] ==
             by_id["help-ack-frame"]["shown_help_width"], "full Help box changed before shrinking")
+    for actual in states:
+        require(len(actual["shared_rng"]) == 6 and all(type(word) is int and 0 <= word <= 0xffffffff
+                for word in actual["shared_rng"]), "invalid six-word cursor/team RNG receipt")
+    for before, after, draws in (
+            ("setup", "setup-quarter-wrap", 1), ("setup-held-start", "entry", 0),
+            ("left-before-poll", "home-left", 1), ("home-left", "left-post-wait", 0),
+            ("left-post-wait", "left-held-repeat", 1), ("criterion-up-wrap", "criterion-down-wrap", 1),
+            ("away-active", "away-first-post-frame", 0), ("selector-gold", "help-poll-frame", 1),
+            ("help-poll-frame", "help", 0), ("help", "help-ack-frame", 1),
+            ("help-ack-frame", "help-first-shrink", 0), ("random-poll-frame", "random-first-wait", 0)):
+        require(by_id[after]["cursor_rng_draws"] - by_id[before]["cursor_rng_draws"] == draws,
+                f"cursor cue count mismatch {before} -> {after}")
+        if not draws and before != "random-poll-frame":
+            require(by_id[after]["shared_rng"] == by_id[before]["shared_rng"],
+                    f"six-word RNG changed without a source consumer {before} -> {after}")
+        elif draws == 1:
+            # Every one-draw interval listed above has exactly one accepted
+            # cursor cue and no Random candidate or other six-word consumer.
+            require(by_id[after]["shared_rng"] == cursor_rng_step(by_id[before]["shared_rng"]),
+                    f"six-word cursor RNG transition mismatch {before} -> {after}")
+    # Hand-specified seeds executed independently through original4F934/2F124/
+    # 9267C/7A538, stopping at the first accepted4EF40. No disc table is embedded.
+    expected_rng_cases = [
+        {"setting":0,"seed":[1,2,3,4,5,6],"after":[21,20,18,15,11,7],"cursor_draws":0,"candidate":21},
+        {"setting":9,"seed":[1,2,3,4,5,6],"after":[92,71,51,33,18,8],"cursor_draws":1,"candidate":28},
+        {"setting":0,"seed":[29,0,0,0,0,0],"after":[36,6,5,4,3,3],"cursor_draws":0,"candidate":4},
+        {"setting":9,"seed":[29,0,0,0,0,0],"after":[36,6,5,4,3,3],"cursor_draws":1,"candidate":4}]
+    require(read(first/"cursor_rng_cases.json") == read(second/"cursor_rng_cases.json") == expected_rng_cases,
+            "first mismatch: actual cue/Circle dispatch versus original seeded RNG boundary")
+    print("CURSOR RNG HOST PASS: bootstrap/continuation counts and4 original-source seeded cue/Circle cases; full history pending")
     for name in ("rank_cache.json", "modified_rank_cache.json"):
         cache = read(first / name)
         require(cache == read(second / name), f"numeric nondeterminism {name}")

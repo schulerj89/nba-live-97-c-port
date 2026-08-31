@@ -49,13 +49,10 @@ void applyPsxGain(std::vector<std::int16_t>& pcm,
     }
 }
 
-std::vector<std::int16_t> applyPitchCents(const std::vector<std::int16_t>& input,
-                                          std::int32_t pitch_cents) {
-    if (input.empty() || pitch_cents == 0) return input;
-    // FUN_80072048 applies cents to the SPU pitch register. Keep WinMM at the
-    // common 22.05 kHz format and resample the PCM by the equivalent ratio so
-    // switching cues cannot cause device close/open transients.
-    const double ratio = std::pow(2.0, static_cast<double>(pitch_cents) / 1200.0);
+std::vector<std::int16_t> applyPitchRatio(const std::vector<std::int16_t>& input,
+                                       double ratio) {
+    if (input.empty() || ratio == 1.0) return input;
+    // Native linear interpolation, not an SPU waveform/interpolation claim.
     const auto output_size = std::max<std::size_t>(
         1, static_cast<std::size_t>(std::ceil(input.size() / ratio)));
     std::vector<std::int16_t> output(output_size);
@@ -70,6 +67,12 @@ std::vector<std::int16_t> applyPitchCents(const std::vector<std::int16_t>& input
             std::lround(value), static_cast<long>(-32768), static_cast<long>(32767)));
     }
     return output;
+}
+
+std::vector<std::int16_t> applyPitchCents(const std::vector<std::int16_t>& input,
+                                       std::int32_t pitch_cents) {
+    // Keep the existing speech policy separate from cursor integer pitch.
+    return applyPitchRatio(input, std::pow(2.0, static_cast<double>(pitch_cents) / 1200.0));
 }
 
 void writePcmWav(const std::filesystem::path& path,
@@ -147,7 +150,8 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
         const std::filesystem::path& header_path,
         const std::filesystem::path& body_path,
         std::uint32_t sound_id,
-        std::uint8_t sfx_setting) {
+        std::uint8_t sfx_setting,
+        const std::function<void()>& accepted) {
     // 2F12C branches directly to return when 21D7E is zero: no bank read,
     // voice allocation or interruption of a cue already playing.
     if (!sfx_setting) {
@@ -158,7 +162,7 @@ RecoveredClipInfo RecoveredAudioPlayer::playCursorSound(
         skipped.source = "FUN_8002F124 muted; bank/player not called";
         return skipped;
     }
-    return loadCursorSound(header_path, body_path, sound_id, true, nullptr, true, sfx_setting);
+    return loadCursorSound(header_path, body_path, sound_id, true, nullptr, true, sfx_setting, accepted);
 }
 
 RecoveredClipInfo RecoveredAudioPlayer::exportCursorSound(
@@ -186,14 +190,15 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
         bool play,
         const std::filesystem::path* output,
         bool apply_authored_pitch,
-        std::uint8_t sfx_setting) {
+        std::uint8_t sfx_setting,
+        const std::function<void()>& accepted) {
     const auto header = readFile(header_path);
     const auto body = readFile(body_path);
-    if (header.size()<8 || !tag(header, 0, "BNKl"))
+    if (header.size()<8 || !tag(header, 0, "BNKl") || header[4]!=1 || header[5]!=0)
         throw std::runtime_error("invalid ZCURSOR BNKl header");
-    // 91814: legacy bank version0 has128 slots; otherwise u16 at+6.
-    // ZCURSOR has128 table slots and populated IDs1..12, not IDs0..11.
-    const std::uint32_t program_count=header[4] ? u16(header,6):128;
+    // Bounded immutable version1 bank. Legacy/relocated banks are not accepted.
+    // ZCURSOR has128 slots and populated IDs1..12, not IDs0..11.
+    const std::uint32_t program_count=u16(header,6);
     if (sound_id>=program_count || program_count>(header.size()-8)/4)
         throw std::runtime_error("unsupported ZCURSOR BNKl sound id");
     // FUN_80091814 indexes the BNKl table at bank + 8 + sound_id * 4. BNKl's
@@ -202,20 +207,51 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     const std::size_t program_pointer = 8 + static_cast<std::size_t>(sound_id) * 4;
     const auto relative_program=u32(header,program_pointer);
     if(!relative_program) throw std::runtime_error("unpopulated ZCURSOR BNKl sound id");
+    if(relative_program>header.size()-program_pointer)
+        throw std::runtime_error("ZCURSOR program pointer outside header");
     const std::size_t patl = program_pointer + relative_program;
     if (patl + 16 > header.size() || !tag(header, patl, "PATl") ||
-        header[patl + 7] != 1)
+        header[patl+4]!=1 || header[patl+5]!=0 || header[patl+6]!=1 ||
+        header[patl+7]!=1 || header[patl+10]!=64 || header[patl+11]>127)
         throw std::runtime_error("invalid ZCURSOR PATl program");
     const std::size_t tone_pointer = patl + 12;
-    const std::size_t tone = tone_pointer + u32(header, tone_pointer);
+    const auto relative_tone=u32(header,tone_pointer);
+    if(relative_tone>header.size()-tone_pointer)
+        throw std::runtime_error("ZCURSOR tone pointer outside header");
+    const std::size_t tone = tone_pointer + relative_tone;
     const std::size_t tmxl = tone + 40;
     if (tone + 92 > header.size() || !tag(header, tmxl, "TMxl"))
         throw std::runtime_error("invalid ZCURSOR PATl tone mapping");
+    // This source scalar domain has one full-range tone, centered pan, no
+    // random amplitudes/maps, default bend, constant envelope and master127.
+    // Refuse unsupported authored behavior instead of silently omitting it.
+    if(header[tone]!=0 || header[tone+1]!=127 || header[tone+2]!=0 || header[tone+3]!=127 ||
+       u32(header,tone+4)!=UINT32_MAX || header[tone+8]!=0 || header[tone+9]>127 ||
+       header[tone+10]!=1 || header[tone+11]!=255 || header[tone+12]!=64 ||
+       header[tone+13]!=0 || header[tone+14]!=0 || header[tone+15]!=1 ||
+       header[tone+16]!=64 || header[tone+17]!=0 || header[tone+18]>127 ||
+       header[tone+19]!=0 || s16(header,tone+22)!=0 ||
+       u32(header,tone+24)!=0 || u32(header,tone+28)!=0 || u32(header,tone+32)!=0)
+        throw std::runtime_error("unsupported ZCURSOR tone scalar domain");
+    const auto envelope_delta=u32(header,tone+36);
+    if(!envelope_delta || envelope_delta>header.size()-(tone+36))
+        throw std::runtime_error("invalid ZCURSOR envelope pointer");
+    const auto envelope=tone+36+envelope_delta;
+    if(envelope+8>header.size() || u32(header,envelope)!=UINT32_MAX || u32(header,envelope+4)!=127)
+        throw std::runtime_error("unsupported ZCURSOR envelope");
+    if(header[tmxl+4]!=0 || header[tmxl+5]!=16 || header[tmxl+6]!=1 || header[tmxl+7]!=6 ||
+       u16(header,tmxl+8)!=0 || u16(header,tmxl+10)!=22050 || u16(header,tmxl+12)!=2048 ||
+       u16(header,tmxl+14)!=0 || u32(header,tmxl+20)!=UINT32_MAX ||
+       u32(header,tmxl+24)!=UINT32_MAX || u32(header,tmxl+32)!=0 || u32(header,tmxl+40)!=0 ||
+       u32(header,tmxl+44)!=UINT32_MAX || u32(header,tmxl+48)!=UINT32_MAX)
+        throw std::runtime_error("unsupported ZCURSOR TMxl format");
     const std::uint32_t sample_rate = u16(header, tmxl + 10);
     const std::uint32_t sample_count = u32(header, tmxl + 16);
     const std::uint32_t offset = u32(header, tmxl + 28);
     const std::uint32_t bytes = u32(header, tmxl + 36);
-    if (!sample_rate || !sample_count || bytes % 16 || offset > body.size() || bytes > body.size()-offset)
+    if (!sample_count || !bytes || bytes % 16 || offset % 16 ||
+        std::uint64_t(sample_count)>std::uint64_t(bytes/16)*28 ||
+        offset > body.size() || bytes > body.size()-offset)
         throw std::runtime_error("invalid ZCURSOR TMxl range");
     const std::uint32_t program_volume = header[patl + 11];
     const std::uint32_t tone_volume = header[tone + 18];
@@ -232,12 +268,27 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     // player. Runtime callers supply current Options SF/X volume; exports
     // default to the original first-boot setting (9) for stable comparisons.
     const std::uint32_t playback_volume = nba97_frontend_sfx_volume(sfx_setting);
+    const auto pitch_table = readFile(header_path.parent_path() / "zcursor_pitch.bin");
+    Nba97CursorScalars scalars{};
+    if (!nba97_cursor_scalars(&scalars, static_cast<std::uint8_t>(program_volume),
+            static_cast<std::uint8_t>(tone_volume), static_cast<std::uint8_t>(playback_volume),
+            pitch_cents, pitch_table.data(), pitch_table.size()))
+        throw std::runtime_error("unsupported ZCURSOR scalar input or pitch table");
     auto pcm = decodePsxAdpcmMono(body.data() + offset, bytes, sample_count);
-    applyPsxGain(pcm, program_volume, tone_volume, playback_volume);
-    if (apply_authored_pitch) pcm = applyPitchCents(pcm, pitch_cents);
+    // Preserve both source u7 truncations before applying native PCM gain.
+    // effective/127 is our unity-normalized renderer, not full SPU mixing.
+    for (auto& sample : pcm)
+        sample = static_cast<std::int16_t>(std::int32_t(sample) * scalars.effective_volume / 127);
+    if (apply_authored_pitch) pcm = applyPitchRatio(pcm, double(scalars.pitch) / scalars.base_pitch);
     const std::uint32_t rendered_sample_count = static_cast<std::uint32_t>(pcm.size());
     if (output) writePcmWav(*output, pcm, sample_rate);
-    if (play) playPcm(std::move(pcm), sample_rate);
+    if (play) {
+        // Native preparation acceptance stands in for source voice allocation.
+        // 9267C ->93190 consumes RNG before device submission can fail. Exports
+        // and rejected preparation never consume it; zero effective gain does.
+        if (accepted) accepted();
+        playPcm(std::move(pcm), sample_rate);
+    }
     info_ = {sound_id, sample_rate, sample_count, bytes,
              header_path.filename().string() + "/" + body_path.filename().string()};
     info_.program_volume = program_volume;
@@ -247,6 +298,11 @@ RecoveredClipInfo RecoveredAudioPlayer::loadCursorSound(
     info_.root_note = root_note;
     info_.requested_note = requested_note;
     info_.rendered_sample_count = rendered_sample_count;
+    info_.authored_volume = scalars.authored_volume;
+    info_.effective_volume = scalars.effective_volume;
+    info_.pitch_register = scalars.pitch;
+    info_.left_volume = scalars.left_volume;
+    info_.right_volume = scalars.right_volume;
     return info_;
 }
 

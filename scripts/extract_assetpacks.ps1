@@ -36,6 +36,8 @@ python $extractor $DiscImage (Join-Path $menu 'ZTMPAL.PSH') --lba 267022 --size 
 python $extractor $DiscImage (Join-Path $menu 'ZBPAL.PSH') --lba 234694 --size 17264
 python $extractor $DiscImage (Join-Path $menu 'ZCURSOR.VB') --lba 235174 --size 60940
 python $extractor $DiscImage (Join-Path $menu 'ZCURSOR.VH') --lba 235204 --size 1836
+python (Join-Path $repo 'tools\extract_cursor_audio.py') --overlay $feonly --output (Join-Path $menu 'zcursor_pitch.bin')
+if ($LASTEXITCODE -ne 0) { throw 'Private cursor pitch extraction failed.' }
 python $extractor $DiscImage (Join-Path $menu 'ZCARD.BIN') --lba 234703 --size 474240
 python $extractor $DiscImage (Join-Path $menu 'Z1COOL.BIG') --lba 165811 --size 122580678
 python $extractor $DiscImage (Join-Path $menu 'Z1COOL.IDX') --lba 225665 --size 19746

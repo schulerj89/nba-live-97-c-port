@@ -92,7 +92,15 @@ key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
 
-Presentation checkpoint validation on2026-08-30:44/44 CTest tests pass in Debug
+Cursor-audio checkpoint validation on2026-08-30:45/45 CTest tests pass in Debug
+and RelWithDebInfo. All98 captures repeat within/across configurations; four
+additional hand-seeded Circle dispatch receipts match original source state.
+Create Player retains27/27 scenarios and its numerical model/packet/texture
+checks. Cursor scalar pitch/gain and shared cue RNG consumption are corrected;
+speech retains its prior behavior. See cursor_audio_workflow.md for the bounded
+contract, original-code comparisons, private runs and remaining SPU/history gaps.
+
+Prior presentation checkpoint validation on2026-08-30:44/44 CTest tests pass in Debug
 and RelWithDebInfo. All98 repeated state/frame scenarios and owned snapshots
 match across configurations. Create Player retains27/27 repeated captures and
 the established numerical model/packet/texture checks. Real saves/configuration
@@ -199,10 +207,12 @@ presentation timing remain pending. The bounded state5 placement targets and
 same-row modal return are implemented; see user_setup_placement_workflow.md.
 Team Select presentation ownership and Help geometry/input phases are now
 source-compared; see team_select_presentation_workflow.md. Source Help open/close
-selects sounds7/8. A separate private audio audit confirms bank/program/tone and
-compressed sample intervals, but finds missing shared-RNG cue consumption,
-integer-pitch and intermediate-gain differences. Those fixes are the next
-bounded dependency; SPU waveform and live event-time comparison remain pending.
+selects sounds7/8. Cursor bank/program/tone/compressed sample intervals and the
+bounded pitch/gain scalars are source-compared. Accepted native cues now advance
+the shared six-word RNG before device submission and Circle candidate generation.
+The static seed loads at frontend bootstrap and is not reset on Team Select
+entry. Source voice-allocation outcomes, complete prior history, SPU waveform
+and live event-time comparison remain pending; see cursor_audio_workflow.md.
 
 ## First-mismatch notes
 

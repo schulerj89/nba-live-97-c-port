@@ -43,7 +43,12 @@ claim the original text list has been recovered.
 Random chooses its first candidate immediately. Its12 owner waits sum to78;
 the descriptor caller adds5 and the next poll adds1. A key held through the
 random animation is therefore sampled after84 minimum presentations, excluding
-pending text work. Help owns its modal presentations, grows before its first
+pending text work. Its cue6 first consumes one shared six-word RNG draw when
+source allocation succeeds. The native accepted-preparation boundary now models
+that draw before device submission; mute/rejection skips it. Seeded actual
+dispatch receipts agree with the original first-candidate/rejection paths.
+See cursor_audio_workflow.md for allocation, bootstrap and full-history limits.
+Help owns its modal presentations, grows before its first
 display, and writes the actual acknowledgment mask back to shared history.
 The Team Select host now composes each accepted presentation before sampling
 input or choosing the next random candidate. Help's terminal growth frame has
@@ -138,8 +143,10 @@ can leave gold history; initializing all stored colors to gray would invent
 behavior. Break at3D534 and its2ADEC call, dump the actual node including offsets
 30..32, and follow2AE5C updates with the node's flags. Compare the first differing
 field before changing rendering. Full text/arrow allocation and physical topology
-rebuild timing remain pending, as do synchronized visuals, sound bank/tone/
-pitch/sample timing, and a physical keyboard/controller walkthrough.
+rebuild timing remain pending, as do synchronized visuals, original audio
+waveform/event timing, and a physical keyboard/controller walkthrough. Cursor
+bank/tone/compressed intervals and bounded scalar gain/pitch are source-compared;
+those findings do not establish hardware audio equivalence.
 
 The first original pre-selector RAM observation found200 free text slots, each
 with stored start RGB0/0/0. This narrows the cold heap observation only: Game Setup

@@ -420,6 +420,16 @@ private:
         validateMenuAsset(menu_root / "ZBPAL.PSH", 17264);
         validateMenuAsset(menu_root / "ZCURSOR.VH", 1836);
         validateMenuAsset(menu_root / "ZCURSOR.VB", 60940);
+        validateMenuAsset(menu_root / "zcursor_pitch.bin", 256);
+        std::ifstream rng_input(menu_root / "frontend_rng.bin",std::ios::binary);
+        std::array<uint8_t,24> rng_seed{};
+        rng_input.read(reinterpret_cast<char*>(rng_seed.data()),rng_seed.size());
+        if(rng_input.gcount()!=rng_seed.size() || rng_input.peek()!=std::char_traits<char>::eof())
+            throw std::runtime_error("invalid private frontend six-word RNG seed; run tools/extract_cursor_audio.py");
+        for(unsigned i=0;i<6;++i) team_select_rng_[i]=uint32_t(rng_seed[i*4]) |
+            (uint32_t(rng_seed[i*4+1])<<8) | (uint32_t(rng_seed[i*4+2])<<16) | (uint32_t(rng_seed[i*4+3])<<24);
+        cursor_rng_ready_=true;
+        trace_.log("FRONTEND-RNG","800C73E4 static six-word seed at native frontend bootstrap; cursor/Team Select share7A538; other source consumers/history pending");
         validateMenuAsset(menu_root / "ZCARD.BIN", 474240);
         validateMenuAsset(menu_root / "Z1PORT.BIG", 13296378);
         validateMenuAsset(menu_root / "Z1PORT.IDX", 3970);
@@ -797,6 +807,9 @@ private:
                 ",\"shown_help_text\":"<<nba97_help_text_visible(&team_select_shown_help_)<<
                 ",\"shown_help_width\":"<<team_select_shown_help_.rect.width<<
                 ",\"shown_presentation\":"<<team_select_shown_presentation_<<
+                ",\"cursor_rng_draws\":"<<cursor_rng_draws_<<",\"shared_rng\":["<<
+                team_select_rng_[0]<<','<<team_select_rng_[1]<<','<<team_select_rng_[2]<<','<<
+                team_select_rng_[3]<<','<<team_select_rng_[4]<<','<<team_select_rng_[5]<<']'<<
                 ",\"quarter\":"<<unsigned(menu_.setupChoice(0))<<",\"mode\":"<<unsigned(menu_.setupChoice(1))<<
                 ",\"user_side\":"<<unsigned(user_setup_.state().side[0])<<
                 ",\"user_profile\":"<<int(user_setup_.state().profile[0])<<
@@ -1226,6 +1239,34 @@ private:
         frame("user-editor-rebuild-hidden");
         user_setup_.step(28);frame("user-editor-rebuild-restored");
         states<<"\n]\n";
+        // Isolated hand-seeded dispatch receipts. Do not use the long native
+        // frontend history as an expected retail seed; compare this explicit
+        // boundary with the original cue6 ->4F934 source path independently.
+        std::ofstream rng_cases(output/"cursor_rng_cases.json");rng_cases<<'[';
+        const auto saved_setting=settings_.option(3);
+        unsigned rng_case=0;
+        for(const auto seed:std::array<std::array<uint32_t,6>,2>{{{{1,2,3,4,5,6}},{{29,0,0,0,0,0}}}})
+            for(const auto setting:{0u,9u}) {
+                while(settings_.option(3)!=setting)settings_.adjustOption(3,settings_.option(3)<setting ? 1:-1);
+                team_select_rng_=seed;cursor_rng_draws_=0;team_select_random_={};team_select_exit_wait_=false;
+                nba97_team_select_open(&team_select_,3,24,3,24);nba97_team_poll_open(&team_select_poll_);
+                const auto title_rng=frontend_rng_;const auto title_draws=frontend_rng_draws_;
+                const auto presentations=team_select_presentations_;
+                dispatchTeamSelect({0x40,5,0});
+                require(cursor_rng_draws_==unsigned(setting!=0) && team_select_random_.remaining==11 &&
+                    team_select_random_.wait==1,"cue acceptance must precede first random candidate");
+                require(frontend_rng_==title_rng && frontend_rng_draws_==title_draws &&
+                    team_select_presentations_==presentations,"cursor RNG must not consume title RNG or presentations");
+                if(rng_case++)rng_cases<<',';
+                rng_cases<<"{\"setting\":"<<setting<<",\"seed\":[";
+                for(unsigned i=0;i<6;++i){if(i)rng_cases<<',';rng_cases<<seed[i];}
+                rng_cases<<"],\"after\":[";
+                for(unsigned i=0;i<6;++i){if(i)rng_cases<<',';rng_cases<<team_select_rng_[i];}
+                rng_cases<<"],\"cursor_draws\":"<<cursor_rng_draws_<<",\"candidate\":"<<team_select_.team[0]<<'}';
+            }
+        rng_cases<<"]\n";
+        while(settings_.option(3)!=saved_setting)settings_.adjustOption(3,settings_.option(3)<saved_setting ? 1:-1);
+        trace_.log("CURSOR-RNG-CASES","PASS:4 seeded actual Circle dispatches; cue acceptance before candidate; title RNG/presentations unchanged");
         trace_.log("TEAM-CAPTURE","PASS: "+std::to_string(count)+" original-asset native frames; host Team Select/User Setup/editor/modal/transaction/restart scenarios; match handoff pending; no real saves");
         return 0;
     }
@@ -4063,7 +4104,11 @@ private:
                      << info.rendered_sample_count << ",\"source_samples\":"
                      << info.sample_count << ",\"root_note\":" << info.root_note
                      << ",\"requested_note\":" << info.requested_note
-                     << ",\"pitch_cents\":" << info.pitch_cents << "}"
+                     << ",\"pitch_cents\":" << info.pitch_cents
+                     << ",\"pitch_register\":" << info.pitch_register
+                     << ",\"authored_volume\":" << info.authored_volume
+                     << ",\"effective_volume\":" << info.effective_volume
+                     << ",\"left_volume\":" << info.left_volume << ",\"right_volume\":" << info.right_volume << "}"
                      << (sound_id == 6 ? "\n" : ",\n");
             trace_.log("ROSTER-SFX", "captured id=" + std::to_string(sound_id) +
                 " role=" + sound_names[sound_id - 1] + " rate=" +
@@ -5699,7 +5744,6 @@ private:
                 };
                 for(unsigned i=4;i<18;++i) load(assets->layout()[i].tag);
                 for(unsigned id=0;id<31;++id) load(assets->team(id).logo);
-                team_select_rng_=assets->initialRng();
                 team_select_sprites_=std::move(sprites);team_select_assets_=std::move(assets);
             }
             team_select_ranks_=team_select_assets_->ranks(roster_database_);
@@ -6811,14 +6855,19 @@ private:
         return im;
     }
 
+    void acceptCursorSound() {
+        if(!cursor_rng_ready_) throw std::runtime_error("cursor RNG before frontend bootstrap");
+        nba97_team_select_rng_step(team_select_rng_.data());
+        ++cursor_rng_draws_;
+    }
+
     void playBottomMenuSound(std::uint32_t sound_id, const char* role) {
+        const auto draws_before=cursor_rng_draws_;
         try {
             const auto root = options_.asset_root / "menu";
             const auto info = cursor_audio_.playCursorSound(
-                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3));
-            const auto effective_percent =
-                (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
-                (127u * 127u * 127u);
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3),[this]{acceptCursorSound();});
+            const auto effective_percent=info.effective_volume*100u/127u;
             trace_.log("ROSTER-CARD-SFX", std::string("role=") + role +
                 " FUN_8002F124 id=" + std::to_string(sound_id) +
                 " rate=" + std::to_string(info.sample_rate) + "Hz samples=" +
@@ -6826,13 +6875,15 @@ private:
                 std::to_string(info.sample_count) + " root/request=" +
                 std::to_string(info.root_note) + "/" +
                 std::to_string(info.requested_note) + " pitch=" +
-                std::to_string(info.pitch_cents) + "c effective-gain=" +
+                std::to_string(info.pitch_cents) + "c pitch-register="+std::to_string(info.pitch_register)+
+                " effective-u7="+std::to_string(info.effective_volume)+" volume-register="+std::to_string(info.left_volume)+
+                " cursor-rng-draws="+std::to_string(cursor_rng_draws_)+" effective-gain=" +
                 std::to_string(effective_percent) + "% setting=" +
                 std::to_string(settings_.option(3)) + " playback=" +
                 (info.playback_suppressed ? "suppressed" : "submitted"));
         } catch (const std::exception& error) {
             trace_.log("AUDIO-ERROR", std::string("rosters ZCURSOR decode/play failed: ") +
-                error.what());
+                error.what()+"; accepted-cue-draw="+std::to_string(cursor_rng_draws_-draws_before));
         }
     }
 
@@ -6881,10 +6932,8 @@ private:
             const auto root = options_.asset_root / "menu";
             const std::uint32_t sound_id = direction < 0 ? 3u : 4u;
             const auto info = cursor_audio_.playCursorSound(
-                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3));
-            const auto effective_percent =
-                (info.program_volume * info.tone_volume * info.playback_volume * 100u) /
-                (127u * 127u * 127u);
+                root / "ZCURSOR.VH", root / "ZCURSOR.VB", sound_id, settings_.option(3),[this]{acceptCursorSound();});
+            const auto effective_percent=info.effective_volume*100u/127u;
             stat_flash_direction_ = direction;
             stat_flash_until_ms_ = menu_elapsed_ms_ + 340;
             trace_.log("PLAYER-STAT-FLASH", "FUN_8002AB88 gold transition=20 ticks; "
@@ -6895,9 +6944,9 @@ private:
                 " root/request=" + std::to_string(info.root_note) + "/" +
                 std::to_string(info.requested_note) + " pitch=" +
                 std::to_string(info.pitch_cents) + "c" +
-                " gain=" + std::to_string(info.program_volume) + "/127*" +
-                std::to_string(info.tone_volume) + "/127*" +
-                std::to_string(info.playback_volume) + "/127 (" +
+                " pitch-register="+std::to_string(info.pitch_register)+
+                " effective-u7="+std::to_string(info.effective_volume)+
+                " cursor-rng-draws="+std::to_string(cursor_rng_draws_)+" (" +
                 std::to_string(effective_percent) + "%) setting=" +
                 std::to_string(settings_.option(3)) + " playback=" +
                 (info.playback_suppressed ? "suppressed" : "submitted"));
@@ -7596,6 +7645,8 @@ private:
     uint64_t team_select_shown_presentation_=0;
     std::array<Nba97ReorderTint,12> team_select_tints_{};
     std::array<uint32_t,6> team_select_rng_{};
+    uint64_t cursor_rng_draws_=0;
+    bool cursor_rng_ready_=false;
     unsigned team_select_focus_=0;
     Nba97TeamRandom team_select_random_{};
     uint64_t team_select_tick_=0;
