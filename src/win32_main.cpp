@@ -6091,8 +6091,9 @@ private:
                 user_setup_assets_=std::move(assets);
             }
             if(!match_session_.initialized()) {
-                match_session_.initialize(nba97::loadMatchControlDefaults(options_.asset_root/"match_setup/controls.n97ctl"));
+                match_session_.initializeFresh(nba97::loadMatchControlDefaults(options_.asset_root/"match_setup/controls.n97ctl"));
                 trace_.log("MATCH-CONTROLS-INIT","28800 cold branch ->61674(1);8 default maps; once per fresh native process; warm overlay paths pending");
+                trace_.log("MATCH-STRATEGY-INIT","35D80 cold word21EE4=0;14 resident bytes owned once for fresh native epoch; no warm import or per-match reset");
             }
             user_setup_.open(user_setup_assets_->initialAssignments(),profile_store_.profiles(),
                 static_cast<int32_t>(uint64_t(menu_elapsed_ms_)*120/1000),

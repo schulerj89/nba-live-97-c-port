@@ -10,6 +10,10 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_match_strategy_tests tests/match_strategy_test.cpp src/recovered/match_strategy.c)
+    target_compile_features(nba97_match_strategy_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_match_strategy_tests PRIVATE src)
+    add_test(NAME match_strategy COMMAND nba97_match_strategy_tests)
     add_executable(nba97_frontend_plate_tests tests/frontend_plate_test.cpp src/frontend_plate.cpp)
     target_compile_features(nba97_frontend_plate_tests PRIVATE cxx_std_17)
     target_include_directories(nba97_frontend_plate_tests PRIVATE src)
@@ -32,7 +36,7 @@ if(BUILD_TESTING)
     add_test(NAME team_select_poll COMMAND nba97_team_select_poll_tests)
     add_executable(nba97_match_snapshot_tests tests/match_snapshot_test.cpp src/match_snapshot.cpp
         src/match_controls.cpp src/match_assets.cpp src/roster_ratings.cpp src/frontend_settings.cpp src/roster_database.cpp
-        src/recovered/match_setup.c src/recovered/match_controls.c src/recovered/team_ratings.c src/recovered/user_setup.c
+        src/recovered/match_setup.c src/recovered/match_strategy.c src/recovered/match_controls.c src/recovered/team_ratings.c src/recovered/user_setup.c
         src/recovered/create_player.c src/recovered/roster_reorder.c src/recovered/roster_lists.c
         src/recovered/reorder_screen.c src/recovered/semantic_trace.c src/recovered/team_select.c)
     target_compile_features(nba97_match_snapshot_tests PRIVATE c_std_99 cxx_std_17)
@@ -369,7 +373,7 @@ endif()
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select_poll.c src/recovered/team_select_placement.c
     src/recovered/team_select_text.c)
-target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/match_setup.c src/recovered/match_controls.c
+target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/match_setup.c src/recovered/match_strategy.c src/recovered/match_controls.c
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)

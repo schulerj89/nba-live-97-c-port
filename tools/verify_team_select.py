@@ -1,5 +1,6 @@
 """Check the bounded Team Select contract; never promote missing retail evidence."""
 import argparse
+import csv
 import json
 from pathlib import Path
 
@@ -18,6 +19,11 @@ INPUT_REFERENCES = {("team_select.json", "0x8003AE4C"):210,
                     ("team_select.json", "0x8004F934"):41,
                     ("user_setup.json", "0x80037010"):1716,
                     ("user_setup.json", "0x80036CA0"):42}
+STRATEGY_FUNCTIONS = {("feonly", "0x80035D80"):("0x80036008",162),
+                      ("feonly", "0x800360D4"):("0x8003610C",14),
+                      ("gameonly", "0x80065820"):("0x800659F0",116),
+                      ("gameonly", "0x80067930"):("0x80067A60",76),
+                      ("gameonly", "0x80068BF8"):("0x800691F8",384)}
 
 
 def read(path):
@@ -115,6 +121,34 @@ def metadata():
     require(all(inputs["evidence"][key] == "pending" for key in
                 ("original_runtime","original_visual_timing_audio","live_physical_walkthrough")),
             "frontend input original evidence needs explicit review")
+    strategy = read(ROOT / "config/decomp/match_strategy.json")
+    seen, totals = {}, {}
+    for f in strategy["functions"]:
+        key = (f["binary"], f["address"])
+        require(key not in seen, "strategy double-counted function")
+        seen[key] = (f["end_exclusive"], f["instructions_total"])
+        require(f["instructions_accounted"] == 0 and f["native_owner"] and
+                f["remaining_uncertainty"] and f["tests_evidence"], "strategy ownership/credit drift")
+        require(int(f["end_exclusive"],16)-int(f["address"],16) == 4*f["instructions_total"],
+                "strategy full owner extent drift")
+        totals[f["scope"]] = totals.get(f["scope"],0)+f["instructions_total"]
+    require(seen == STRATEGY_FUNCTIONS and totals == strategy["instruction_denominators"] ==
+            {"cold_dependency":176, "field_dependency":192, "caller_dependency":384},
+            "strategy bounded denominator drift")
+    require(all(strategy["evidence"][key] == "pending" for key in
+                ("original_runtime","full_gameplay_header","warm_import")),
+            "strategy unresolved boundaries require new evidence")
+    require(strategy["shared_inventory_references"] == [
+        {"ledger":"functions/feonly.csv","binary":"feonly","address":"0x80028800","instructions_total":227},
+        {"ledger":"frontend_input.json","binary":"feonly","address":"0x8003F7C8","instructions_total":1173}],
+        "strategy shared caller references drifted")
+    with (ROOT / "config/decomp/functions/feonly.csv").open(newline='') as stream:
+        cold_caller = [row for row in csv.DictReader(stream) if row["StartAddress"] == "0x80028800"]
+    require(len(cold_caller) == 1 and
+            int(cold_caller[0]["EndAddress"],16)+1-int(cold_caller[0]["StartAddress"],16) == 4*227,
+            "strategy cold caller inventory extent drifted")
+    require(any(f["address"] == "0x8003F7C8" and f["instructions_total"] == 1173
+                for f in inputs["functions"]), "strategy dispatcher shared inventory drifted")
     scenarios = read(ROOT / "config/decomp/team_select_scenarios.json")
     ids = [s["id"] for s in scenarios["native_frames"]]
     require(len(ids) == len(set(ids)), "duplicate scenario")
@@ -202,6 +236,16 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
         else:
             require(s == other, f"presentation snapshot nondeterminism {name}")
         p = s["presentation"]
+        strategy = s["strategy"]
+        require(type(strategy) is dict and type(strategy.get("known")) is bool and
+                type(strategy.get("writeback_revision")) is int and
+                type(strategy.get("side")) is list and len(strategy["side"]) == 2 and
+                all(type(row) is list and len(row) == 7 and
+                    all(type(value) is int and 0 <= value <= 255 for value in row)
+                    for row in strategy["side"]), f"strategy receipt types/extent {name}")
+        require(strategy == {"known": True, "writeback_revision": 0,
+                "side": [[1,1,0,7,5,0,0], [1,1,0,7,5,0,0]]},
+                f"fresh native strategy epoch must survive all frontend acceptances {name}")
         source_input = inputs[frame_id]
         require(source_input["cursor_draws"] == 1 and
                 p["rng_before"] == cursor_rng_step(source_input["rng_before"]),
@@ -222,7 +266,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
     require(refused["cursor_draws"] == 1 and
             cursor_rng_step(refused["rng_before"]) == by_id["match-special-pending"]["shared_rng"],
             "unsupported snapshot must consume the confirmation cue only, not presentation draws")
-    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh ranks, controls, four presentation/RNG acceptances and pending guards")
+    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh ranks, controls, persistent strategy, four presentation/RNG acceptances and pending guards")
 
 
 def arrow_flash_cases(first, second):
@@ -447,6 +491,8 @@ def capture(first, second, contract, fixture):
                 "same-update save continuation and independent retained-target rendering")
         require(trace.count("MATCH-CONTROLS-INIT ") == 1 and trace.count("MATCH-SNAPSHOT revision=") == 4 and
                 trace.count("MATCH-SNAPSHOT-PENDING ") == 1, "cold controls/snapshot publication/refusal traces")
+        require(trace.count("MATCH-STRATEGY-INIT ") == 1,
+                "persistent strategy must initialize once per fresh native epoch")
         require("TEAM-HANDOFF" in trace and "USER-ENTRY" in trace and
                 "MATCH-HANDOFF-PENDING" in trace and "TEAM-CAPTURE PASS:" in trace, "missing boundary/pass trace")
     print(f"TEAM NATIVE PASS: {len(states)}/{len(states)} deterministic frames + host state + isolated saved-roster adapter")

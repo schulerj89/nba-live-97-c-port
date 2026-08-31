@@ -78,11 +78,11 @@ void tests() {
     const uint8_t assignment[8]={1,2,0,0,0,0,0,0};const int8_t selectors[8]={7,-2,-2,-2,-2,-2,-2,-2};
     check(nba97_user_setup_open(&request.users,assignment,selectors),"source User Setup entry");
     uint16_t raw[8]={0x80};check(nba97_user_setup_global(&request.users,raw,1)==NBA97_USER_CONFIRMED,"source acceptance");
-    MatchSession session;session.initialize(defaults);
+    MatchSession session;session.initializeFresh(defaults);
     MatchSourceView source{db,settings,profiles,created,adjustments,81,82,83};
     std::array<uint32_t,6> rng{1,2,3,4,5,6}; // Invented source-domain seed, not a runtime initializer.
     const std::array<uint32_t,6> initial_rng{1,2,3,4,5,6},first_after{92,71,51,33,18,8};
-    const auto prepared=buildMatchSnapshot(request,source,session.liveControls(),defaults,rng);
+    const auto prepared=buildMatchSnapshot(request,source,session.liveControls(),defaults,rng,session.liveStrategy());
     check(initial_rng==rng && !session.snapshot(),
           "pure preparation must not consume caller RNG or publish");
     const auto first=session.capture(request,source,rng); // Own a copy across later publications.
@@ -98,8 +98,122 @@ void tests() {
     check(first.roster_generation==81 && first.profile_generation==82 && first.created_generation==83,"source generation receipt");
     for(unsigned r=0;r<5;++r)check(first.teams[0].metadata[r]==first.ranks.value[r][0],"rank overlay");
     check(std::equal(stock_metadata.begin()+5,stock_metadata.end(),first.teams[0].metadata.begin()+5),"metadata remainder preserved");
-    session.initialize(defaults);
+    session.initializeFresh(defaults);
     check(!std::memcmp(session.liveControls().map[0],profiles[0].controls.data(),59),"reentry cannot reset live maps");
+    {
+        // These are explicit native field-boundary calls with invented postgame
+        // values, not a simulated gameplay return or a memory-card restore.
+        const Nba97MatchStrategy cold{{{1,1,0,7,5,0,0},{1,1,0,7,5,0,0}}};
+        const Nba97MatchStrategy warmed{{{128,0,255,7,254,1,66},{2,3,4,5,6,7,8}}};
+        const Nba97MatchStrategy restored{{{9,10,11,12,13,14,15},{255,254,253,252,251,250,249}}};
+        const auto equalValues=[](const Nba97MatchStrategy& a,const Nba97MatchStrategy& b) {
+            return std::memcmp(a.side,b.side,sizeof(a.side))==0;
+        };
+        const auto teamFields=[](const Nba97MatchStrategy& values) {
+            std::array<Nba97MatchTeamStrategy,2> teams{};
+            for(unsigned side=0;side<2;++side)std::copy_n(values.side[side],7,teams[side].fields);
+            return teams;
+        };
+        const auto rejects=[](const auto& action) {
+            bool caught=false;try {action();}catch(const std::runtime_error&) {caught=true;}
+            check(caught,"unsupported strategy operation was accepted");
+        };
+        MatchSession strategies;
+        auto strategy_rng=initial_rng;
+        auto current=teamFields(warmed);
+        check(!strategies.liveStrategy().known && !strategies.initialized(),"uninitialized strategy must be unknown");
+        rejects([&]{strategies.writebackStrategy(0,0,current);});
+        rejects([&]{strategies.capture(request,source,strategy_rng);});
+        check(strategy_rng==initial_rng && !strategies.snapshot() && !strategies.revision() &&
+              !strategies.liveStrategy().known,"uninitialized refusal changed strategy or RNG");
+        strategies.initializeFresh(defaults);
+        check(strategies.liveStrategy().known && !strategies.liveStrategy().writeback_revision &&
+              equalValues(strategies.liveStrategy().values,cold),"fresh native strategy values/order");
+        rejects([&]{strategies.writebackStrategy(0,0,current);});
+        const auto cold_snapshot=strategies.capture(request,source,strategy_rng);
+        check(cold_snapshot.strategy.known && !cold_snapshot.strategy.writeback_revision &&
+              equalValues(cold_snapshot.strategy.values,cold) &&
+              (cold_snapshot.pending&MatchExtensionSettings) && !(cold_snapshot.pending&MatchStrategyFields),
+              "known strategy must resolve only its own pending group");
+        check(first.strategy.known && equalValues(first.strategy.values,cold),"ordinary capture owns cold strategy");
+        const auto cold_revision=strategies.revision();
+        const auto prior_snapshot=strategies.snapshot();
+        const auto cold_receipt=matchSnapshotReceipt(*prior_snapshot);
+        const auto prior_controls=strategies.liveControls();
+        const auto prior_rng=strategy_rng;
+        strategies.writebackStrategy(cold_revision,0,current);
+        check(strategies.liveStrategy().known && strategies.liveStrategy().writeback_revision==cold_revision &&
+              equalValues(strategies.liveStrategy().values,warmed),"all fourteen warm bytes must copy unsigned");
+        check(strategies.snapshot()==prior_snapshot && strategies.revision()==cold_revision &&
+              matchSnapshotReceipt(*strategies.snapshot())==cold_receipt && strategy_rng==prior_rng &&
+              !std::memcmp(&strategies.liveControls(),&prior_controls,sizeof(prior_controls)),
+              "writeback must not mutate frozen snapshot, controls, capture revision or RNG");
+        current={};
+        check(equalValues(strategies.liveStrategy().values,warmed),"strategy writeback borrowed caller storage");
+        strategies.initializeFresh(defaults);
+        check(equalValues(strategies.liveStrategy().values,warmed) &&
+              strategies.liveStrategy().writeback_revision==cold_revision,"reinitialization reset warmed strategy");
+        auto changed_defaults=defaults;changed_defaults[0]^=1;
+        rejects([&]{strategies.initializeFresh(changed_defaults);});
+        check(equalValues(strategies.liveStrategy().values,warmed),"refused defaults changed strategy");
+        const auto warm_snapshot=strategies.capture(request,source,strategy_rng);
+        check(warm_snapshot.strategy.known && warm_snapshot.strategy.writeback_revision==cold_revision &&
+              equalValues(warm_snapshot.strategy.values,warmed) &&
+              equalValues(cold_snapshot.strategy.values,cold) &&
+              warm_snapshot.frontend_rng_before==prior_rng,"recapture reset or borrowed strategy history");
+
+        const auto unchanged=[&](const auto& action) {
+            const auto live=strategies.liveStrategy();const auto controls=strategies.liveControls();
+            const auto before_rng=strategy_rng;const auto revision=strategies.revision();
+            const auto snapshot=strategies.snapshot();const auto receipt=matchSnapshotReceipt(*snapshot);
+            action();
+            check(strategies.liveStrategy().known==live.known &&
+                  strategies.liveStrategy().writeback_revision==live.writeback_revision &&
+                  equalValues(strategies.liveStrategy().values,live.values) && strategy_rng==before_rng &&
+                  strategies.revision()==revision && strategies.snapshot()==snapshot &&
+                  matchSnapshotReceipt(*snapshot)==receipt &&
+                  !std::memcmp(&strategies.liveControls(),&controls,sizeof(controls)),
+                  "strategy no-op or refusal changed live values, ownership, controls or RNG");
+        };
+        const auto preserve=[&](const auto& action) {unchanged([&]{rejects(action);});};
+        current=teamFields(restored);
+        // The original exit reads the live launch word again. It may differ
+        // from the zero launch word owned by this accepted snapshot.
+        for(const uint16_t live_launch:{uint16_t(1),uint16_t(0x62),uint16_t(0x100),uint16_t(0xffff)})
+            unchanged([&]{strategies.writebackStrategy(strategies.revision(),live_launch,current);});
+        for(const auto stale:{uint64_t(0),cold_revision,strategies.revision()+1})
+            preserve([&]{strategies.writebackStrategy(stale,0,current);});
+        auto special=request;special.teams[0]=29;
+        preserve([&]{strategies.capture(special,source,strategy_rng);});
+        auto season=request;season.setup[1]=1;
+        preserve([&]{strategies.capture(season,source,strategy_rng);});
+
+        const auto before_invalidate=matchSnapshotReceipt(*strategies.snapshot());
+        strategies.invalidateStrategy();
+        check(!strategies.liveStrategy().known && equalValues(strategies.liveStrategy().values,warmed) &&
+              matchSnapshotReceipt(*strategies.snapshot())==before_invalidate,
+              "invalidation must mark live strategy unknown without rewriting its old snapshot");
+        strategies.initializeFresh(defaults);
+        check(!strategies.liveStrategy().known && equalValues(strategies.liveStrategy().values,warmed),
+              "repeated fresh initializer promoted unknown warm state to cold");
+        for(const uint16_t live_launch:{uint16_t(1),uint16_t(0x62),uint16_t(0x100),uint16_t(0xffff)})
+            unchanged([&]{strategies.writebackStrategy(strategies.revision(),live_launch,current);});
+        preserve([&]{strategies.capture(request,source,strategy_rng);});
+        const auto unknown_rng=strategy_rng;
+        rejects([&]{buildMatchSnapshot(request,source,strategies.liveControls(),defaults,
+                                      strategy_rng,strategies.liveStrategy());});
+        check(strategy_rng==unknown_rng,"unknown pure preparation changed the borrowed RNG");
+        const auto restored_revision=strategies.revision();
+        strategies.writebackStrategy(restored_revision,0,current);
+        check(strategies.liveStrategy().known && strategies.liveStrategy().writeback_revision==restored_revision &&
+              equalValues(strategies.liveStrategy().values,restored) && strategy_rng==unknown_rng &&
+              matchSnapshotReceipt(*strategies.snapshot())==before_invalidate,
+              "complete writeback must restore knownness without changing the preceding snapshot or RNG");
+        const auto next=strategies.capture(request,source,strategy_rng);
+        check(next.strategy.known && next.strategy.writeback_revision==restored_revision &&
+              equalValues(next.strategy.values,restored) && (next.pending&MatchExtensionSettings) &&
+              !(next.pending&MatchStrategyFields),"restored strategy was not retained by next capture");
+    }
     const auto prior_revision=session.revision();const auto prior_receipt=matchSnapshotReceipt(*session.snapshot());
     auto refuse=[&](const MatchRequest& bad,const MatchSourceView& view) {
         bool caught=false;try {session.capture(bad,view,rng);}catch(const std::exception&) {caught=true;}
@@ -150,7 +264,7 @@ void tests() {
     const auto deleted=session.capture(neutral,{db,settings,profiles,created,adjustments},rng);
     check(deleted.controls.profile_ids[0]==0 && deleted.controls.provenance[0]==NBA97_CONTROLS_DEFAULT,
           "deleted neutral profile uses cleared-record defaults");
-    MatchSession fresh;fresh.initialize(defaults);
+    MatchSession fresh;fresh.initializeFresh(defaults);
     check(!std::memcmp(fresh.liveControls().map[0],defaults.data(),59),"fresh process defaults");
     created.records[0].raw[0]=uint8_t(493);created.records[0].raw[1]=uint8_t(493>>8);
     created.metadata[0].team=0;created.metadata[0].roster_slot=5;std::strcpy(created.metadata[0].first_name,"Created");
@@ -173,7 +287,7 @@ void tests() {
     created={};settings=FrontendSettings{};defaults.fill(0);
     check(first.teams[0].players[0].first_name=="Player0Field1" && first.teams[0].names[1]=="Team0Name1" &&
           first.controls.controls.map[0][1]==3,"frozen result owns destroyed source values");
-    std::cout<<"MATCH SNAPSHOT PASS: ordinary roster counts/order/ownership/ranks; styles/options; controls lifetime; presentation/shared RNG; created pending; atomic publication\n";
+    std::cout<<"MATCH SNAPSHOT PASS: ordinary roster counts/order/ownership/ranks; styles/options; controls lifetime; presentation/shared RNG; persistent strategy/knownness/writeback; created pending; atomic publication\n";
 }
 }
 int main(){try{tests();return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -76,8 +76,11 @@ The11 native option indices map to resident bytes21D86,21D7C,21D7D,21D7E,
 custom-rule backup is21DA3..21DB0. Unknown bytes21D80/85 remain unknown.
 
 Seven additional home/away setting pairs at21DE6..21DF3 feed GAMEONLY80065820.
-The cold source values per side are1,1,0,7,5,0,0; their full UI meanings and
-mutation history remain pending. They are not represented by FrontendSettings.
+The native snapshot now owns them once per fresh epoch, preserving the source
+cold values1,1,0,7,5,0,0. Conditional gameplay projection and ordinary-exit67930
+writeback have field-only C helpers; no gameplay loop invokes them yet. See
+match_strategy_workflow.md. Their full UI meanings, imported warm state and
+other extension bytes remain pending. They are not FrontendSettings options.
 The controller handoff clears0x24 bytes per0x78-byte slot, then conditionally
 copies59 control bytes; FE/FF skips that copy and requires retained live controls.
 

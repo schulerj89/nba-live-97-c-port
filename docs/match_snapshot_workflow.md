@@ -35,6 +35,9 @@ The snapshot contains:
 - The source-selected presentation byte and owned before/after shared RNG
   words, committed only after successful preparation. See
   [presentation selection](match_presentation_workflow.md).
+- Known persistent fourteen-byte team strategy, copied from the session without
+  reinitializing on confirmation. See [strategy lifetime](match_strategy_workflow.md)
+  for the field-only gameplay projection/writeback and remaining extensions.
 
 Ordinary exhibition retains source venue selector8001EC94=0 (u32), launch
 control8001EDEC=0 (u16) and injury slotsFF/FF. These named invariants do not

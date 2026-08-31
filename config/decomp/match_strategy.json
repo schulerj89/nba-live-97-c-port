@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "milestone": "Persistent fourteen-byte strategy snapshot and bounded gameplay field projections; no gameplay launch",
+  "instruction_policy": "Full contiguous owners, zero new credit. Field projections do not complete their containing owners. References to existing frontend callers are not additional progress.",
+  "instruction_denominators": {"cold_dependency":176,"field_dependency":192,"caller_dependency":384},
+  "shared_inventory_references": [
+    {"ledger":"functions/feonly.csv","binary":"feonly","address":"0x80028800","instructions_total":227},
+    {"ledger":"frontend_input.json","binary":"feonly","address":"0x8003F7C8","instructions_total":1173}
+  ],
+  "evidence": {
+    "native_unit":"tests/match_strategy_test.cpp and tests/match_snapshot_test.cpp",
+    "host_integration":"Four accepted snapshots retain the same known cold strategy group across profile and roster changes; no gameplay writeback is invoked by the host",
+    "original_runtime":"pending",
+    "full_gameplay_header":"pending",
+    "warm_import":"pending",
+    "source_comparison":"Original cold guard, no-injury conditional projection and ordinary-exit writeback independently exercised; exact current-native comparison receipts documented in docs/match_strategy_workflow.md",
+    "remaining_extensions":"MatchExtensionSettings remains set; other extension bytes, special/created membership and complete team initialization remain unresolved"
+  },
+  "functions": [
+    {
+      "binary":"feonly","address":"0x80035D80","end_exclusive":"0x80036008",
+      "name":"Cold frontend settings initialization","scope":"cold_dependency",
+      "instructions_accounted":0,"instructions_total":162,
+      "native_owner":"nba97_match_strategy_cold; MatchSession::initializeFresh fourteen-byte subset",
+      "shared_dependencies":["0x8003E698"],
+      "tests_evidence":["tests/match_strategy_test.cpp","tests/match_snapshot_test.cpp","docs/match_strategy_workflow.md"],
+      "remaining_uncertainty":"Only the full-word guard and fourteen strategy-byte stores are owned here; other settings, descriptor and rule initialization remain separate. Native epoch adoption is not warm/card restoration."
+    },
+    {
+      "binary":"feonly","address":"0x800360D4","end_exclusive":"0x8003610C",
+      "name":"Mark initialized frontend before dispatch","scope":"cold_dependency",
+      "instructions_accounted":0,"instructions_total":14,
+      "native_owner":"MatchSession initialized lifetime only; source dispatcher remains separate",
+      "shared_dependencies":["0x8003F7C8"],
+      "tests_evidence":["tests/match_snapshot_test.cpp","docs/match_strategy_workflow.md"],
+      "remaining_uncertainty":"Source word21EE4 store and call order verified; the full wrapper/global side effects are not implemented by the session guard."
+    },
+    {
+      "binary":"gameonly","address":"0x80065820","end_exclusive":"0x800659F0",
+      "name":"Apply team strategy and injury substitution","scope":"field_dependency",
+      "instructions_accounted":0,"instructions_total":116,
+      "native_owner":"nba97_match_strategy_apply; no-injury seven-field in/out projection",
+      "shared_dependencies":[],
+      "tests_evidence":["tests/match_strategy_test.cpp","docs/match_strategy_workflow.md"],
+      "remaining_uncertainty":"Preserving CPU/nonzero-launch branches implemented. Injury slots below12 refuse; injury/substitution work, preceding period/header state and live gameplay invocation remain pending."
+    },
+    {
+      "binary":"gameonly","address":"0x80067930","end_exclusive":"0x80067A60",
+      "name":"Match cleanup and strategy writeback","scope":"field_dependency",
+      "instructions_accounted":0,"instructions_total":76,
+      "native_owner":"nba97_match_strategy_writeback; MatchSession field-only revision-guarded adapter",
+      "shared_dependencies":["0x80083100","0x800670B0","0x80079758"],
+      "tests_evidence":["tests/match_strategy_test.cpp","tests/match_snapshot_test.cpp","docs/match_strategy_workflow.md"],
+      "remaining_uncertainty":"Only launch-guarded fourteen-byte copy implemented; preceding stats/resource cleanup and a real gameplay return are not implemented or inferred."
+    },
+    {
+      "binary":"gameonly","address":"0x80068BF8","end_exclusive":"0x800691F8",
+      "name":"Gameplay loop and exit caller","scope":"caller_dependency",
+      "instructions_accounted":0,"instructions_total":384,
+      "native_owner":"Dependency inventory only; no native gameplay loop",
+      "shared_dependencies":["0x80067930","0x800659F0"],
+      "tests_evidence":["docs/match_strategy_workflow.md"],
+      "remaining_uncertainty":"Exit call691BC and launch62 bypass/reinitialize branch are identified only; full loop, phase, input, scene and timing remain unimplemented."
+    }
+  ]
+}

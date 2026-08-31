@@ -8,7 +8,9 @@
 namespace nba97 {
 MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceView& source,
         const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
-        const std::array<uint32_t,6>& frontend_rng) {
+        const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy) {
+    if(!strategy.known)
+        throw std::runtime_error("match snapshot pending: unknown persistent team strategy");
     if(request.users.result!=6 || nba97_user_setup_busy(&request.users))
         throw std::runtime_error("match snapshot requires accepted state5 result6");
     if(request.setup[0]>3 || request.setup[1]>2 || request.setup[2]>2 || request.setup[3]>2)
@@ -29,6 +31,7 @@ MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceVi
             "match snapshot pending: special-team roster/jersey/metadata":
             "match snapshot: invalid selected team");
     MatchSnapshot result;result.request=request;
+    result.strategy=strategy;result.pending&=~MatchStrategyFields;
     result.base_identity=source.rosters.baseIdentity();
     result.accepted_slots=source.rosters.slotTable();
     result.roster_generation=source.roster_generation;
@@ -82,23 +85,41 @@ MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceVi
     return result;
 }
 
-void MatchSession::initialize(const std::array<uint8_t,59>& defaults) {
+void MatchSession::initializeFresh(const std::array<uint8_t,59>& defaults) {
     if(initialized_) {
         if(defaults_!=defaults)throw std::runtime_error("match controls: defaults changed after initialization");
         return;
     }
     std::array<int8_t,8> none;none.fill(-2);
     const auto initial=finalizeMatchControls({},none,{},defaults,true);
-    defaults_=defaults;live_=initial.controls;initialized_=true;
+    MatchStrategyState strategy;
+    // FE35D80 checks the full resident word21EE4. This host adopts only a
+    // fresh native epoch here; no imported/warm state is inferred as zero.
+    if(!nba97_match_strategy_cold(&strategy.values,0))
+        throw std::runtime_error("match strategy: fresh initialization refused");
+    strategy.known=true;
+    defaults_=defaults;live_=initial.controls;strategy_=strategy;initialized_=true;
 }
 const MatchSnapshot& MatchSession::capture(const MatchRequest& request,const MatchSourceView& source,
                                          std::array<uint32_t,6>& frontend_rng) {
     if(!initialized_)throw std::runtime_error("match controls: cold defaults not initialized");
     if(revision_==(std::numeric_limits<uint64_t>::max)())throw std::runtime_error("match snapshot revision exhausted");
-    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_,frontend_rng));
+    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_,frontend_rng,strategy_));
     // All validation and allocation finished. Publication cannot fail.
     frontend_rng=next->frontend_rng_after;
     live_=next->controls.controls;snapshot_=std::move(next);++revision_;return *snapshot_;
+}
+void MatchSession::writebackStrategy(uint64_t snapshot_revision,uint16_t live_launch_control,
+                                    const std::array<Nba97MatchTeamStrategy,2>& current) {
+    if(!initialized_ || !snapshot_ || snapshot_revision!=revision_)
+        throw std::runtime_error("match strategy: writeback requires the current accepted match revision");
+    auto next=strategy_;
+    if(!nba97_match_strategy_writeback(&next.values,current.data(),live_launch_control))
+        throw std::runtime_error("match strategy: writeback refused");
+    if(live_launch_control==0) {
+        next.known=true;next.writeback_revision=snapshot_revision;
+    }
+    strategy_=next; // Snapshot, controls, revision and external RNG stay intact.
 }
 std::string matchSnapshotReceipt(const MatchSnapshot& s) {
     std::ostringstream out;
@@ -113,7 +134,10 @@ std::string matchSnapshotReceipt(const MatchSnapshot& s) {
         ",\"from_schedule\":"<<unsigned(s.presentation.from_schedule)<<
         ",\"rng_draws\":"<<s.presentation.rng_draws<<",\"rejected_draws\":"<<s.presentation.rejected_draws<<
         ",\"rng_before\":";array(s.frontend_rng_before);
-    out<<",\"rng_after\":";array(s.frontend_rng_after);out<<"},\"setup\":";
+    out<<",\"rng_after\":";array(s.frontend_rng_after);
+    out<<"},\"strategy\":{\"known\":"<<(s.strategy.known ? "true":"false")<<
+        ",\"writeback_revision\":"<<s.strategy.writeback_revision<<",\"side\":[";
+    array(s.strategy.values.side[0]);out<<',';array(s.strategy.values.side[1]);out<<"]},\"setup\":";
     array(s.request.setup);out<<",\"assignments\":";array(s.request.users.assignment);
     out<<",\"selectors\":";array(s.request.users.profile);
     out<<",\"controls_source\":";array(s.controls.provenance);

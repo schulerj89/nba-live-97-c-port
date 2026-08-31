@@ -39,7 +39,8 @@
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "presentation_source": "FEONLY46D24 scalar branch and shared7A538 effects implemented. Independent source comparisons: B23760 assertions/1584 cases; A625433 checks/78192 cases plus128 checks/16 accepted-Start cue/selection cases. C13 publication assertions and12 paired receipt mutations rejected. Debug/release48 CTests,98 host frames,264 flash frames and27 Create Player scenarios pass. Source and native evidence remain separate from live runtime; docs/match_presentation_workflow.md",
-    "gameplay": "pending extension settings, special/created membership, gameplay side/overlay/scene initialization"
+    "gameplay": "pending extension settings, special/created membership, gameplay side/overlay/scene initialization",
+    "strategy_source":"Fourteen persistent bytes are owned once per fresh native epoch; unknown imported strategy refuses capture. Field-only no-injury projection and ordinary-exit writeback are separately tested, no host gameplay return yet. MatchExtensionSettings stays pending; see match_strategy.json and docs/match_strategy_workflow.md."
   },
   "functions": [
     {
