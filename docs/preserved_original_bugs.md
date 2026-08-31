@@ -29,6 +29,9 @@ defects should still be fixed.
 |GAME6CFE0 |Landing marker comparison reads the just-copied unchanged height, so its2C=FF store is unreachable; actor12 can clearA0 without recalculating9C |Physics owner, ordered-store proof and source invariant |
 |GAME706E4 |Wrapped INT_MIN negation can cause a source division trap or adjacent-table read |Direction helper; no square-root/atan2 replacement or index clamp |
 |GAME6801C |A small negative angle snap retains positive modular delta990..1023 for EA; repeated entity-table aliases update the same player again |`game_player_update.c`, source-address workflow and composed `match_player_update` regression cases |
+|GAME539FC/35A44 |Jersey FF draws texture00 but labels display -1; a palette with no zero entry uses fill byte10 rather than a repaired transparent index |Render texture/label owners, original-instruction comparisons and `game_render_entry_workflow.md` |
+|GAME4E3CC/35A44 |Name character count wraps at8 bits; original label formatting can overflow its32-byte stack buffer |Original widths retained; explicit native ownership/overflow refusal instead of truncation, with prior writes preserved |
+|GAME38A18 |Cache searches have no original bound; count is checked after service; home bench swaps synchronize three times while away swaps omit those calls |Head-cache owner, original ordered callback comparisons and mutable-cache probes; owned-range refusal stays explicit |
 |FE2F36C/6B6A0 |Router retains a zero-status branch although the original BUSY helper cannot return zero |`music_routing.c`, source-quirk comment and lifecycle tests |
 |FE2F330 |The sixteen-slot music table permits repeats and includes the special track in ordinary selection |Music extractor/routing workflow; no guessed shuffle |
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |
