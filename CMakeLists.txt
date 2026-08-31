@@ -364,6 +364,11 @@ if(BUILD_TESTING)
     target_compile_features(nba97_voice_programs_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_voice_programs_tests PRIVATE src)
     add_test(NAME voice_programs COMMAND nba97_voice_programs_tests)
+    add_executable(nba97_game_gameplay_audio_tests tests/game_gameplay_audio_tests.cpp
+        src/recovered/game_gameplay_audio.c)
+    target_compile_features(nba97_game_gameplay_audio_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gameplay_audio_tests PRIVATE src)
+    add_test(NAME game_gameplay_audio COMMAND nba97_game_gameplay_audio_tests)
     add_executable(nba97_match_input_edges_tests tests/match_input_edges_tests.cpp src/match_input_edges.cpp
         src/recovered/game_player_input.c)
     target_compile_features(nba97_match_input_edges_tests PRIVATE c_std_99 cxx_std_17)
@@ -973,6 +978,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_label_frame.c src/recovered/game_player_marker_update.c src/game_player_marker_update.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
+    src/recovered/game_gameplay_audio.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c
     src/recovered/spu_transfer.c src/recovered/spu_transfer_mapping.c src/spu_sample_backend.cpp src/recovered/spu_events.c src/spu_event_backend.cpp
     src/recovered/interrupt_controller.c src/interrupt_controller_backend.cpp

@@ -1,10 +1,10 @@
 # Native port status
 
-Checkpoint 31 local verification passes 154 Windows tests in Debug, RelWithDebInfo
-and Release and 150 Linux core tests locally. It adds the native scorer/actor
-selection and AI-state owner used by the recovered ball-scoring chain.
-Checkpoint 30 (`4b23dd3`) passed 149 Linux core tests in
-[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33449271383).
+Checkpoint 32 local verification passes 155 Windows tests in Debug, RelWithDebInfo
+and Release and 151 Linux core tests locally. It adds the native gameplay-audio
+request, sequence-clock, lock and routing CPU owner.
+Checkpoint 31 (`710e9af`) passed 150 Linux core tests in
+[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33450661291).
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -65,6 +65,7 @@ its frontend-to-match path.
 | Court resource setup | A canonical source-order owner composes all `479B8..48D5C` child intervals; texture selection/upload and the after-load tail normalize court references and allocate edge storage. Exact `9BF98` page calculation and native heap release are reusable services | Real loader/GPU sync services, allocation-registry population and outer `52C20` producers remain unconnected. Allocation flags `0` do not imply zero-filled payload. See [startup sequence](game_court_startup_sequence_workflow.md), [startup bridge](game_court_startup_workflow.md), [packet startup](game_court_packet_startup_workflow.md), [page offset](game_page_offset_workflow.md), [court textures](game_court_textures_workflow.md) and [court resources](game_court_resources_workflow.md). |
 | Pixel rendering | Retained CPU/VRAM storage, court packet projection and native pixel drawing compose in fixtures. Packet reads permit unknown unused bytes while requiring consumed fields and preserving source-memory knowledge. Six initialized ball/reflection/shadow diagnostic views render | No live court or complete camera/render loop. Diagnostic renders use fixture camera, entity and ordering state, with no court or players in the ball views; they are not gameplay captures. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
 | Audio startup and transfers | Game sound entry point, common attributes, music reset, callback registration, SPU heap, PIO/DMA sample ownership, interrupt/controller and event composition | Natural host audio initialization, actual callback cadence, complete voices/synthesis, physical device timing or full-match sound. Some real resource transfers still stop where rounded source tails lack proven ownership. See [audio startup](audio_startup_workflow.md) and [sample backend](spu_sample_backend_workflow.md). |
+| Gameplay audio requests | Complete `29258/29590` CPU request routing with `29200/AB0B8/93D94/93DD4` leaves; `AC080` is proven equivalent to the frozen voice-program owner | The general `93734` scheduler remains a synchronous refusal boundary, and the chain is not reached from a natural match. Request routing does not prove a host device emitted audible sound. See [gameplay audio](game_gameplay_audio_workflow.md). |
 
 Asset-free CTests use synthetic fixtures. Private source comparisons additionally
 exercise original instructions and selected real resources under documented
@@ -109,10 +110,10 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-Checkpoint 31 local verification passes **154/154 CTests** in Windows Debug,
-RelWithDebInfo and Release and **150/150 core CTests** on Linux. Checkpoint 30 (`4b23dd3`)
-passed **149/149 core CTests** in
-[GitHub run 33449271383](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33449271383).
+Checkpoint 32 local verification passes **155/155 CTests** in Windows Debug,
+RelWithDebInfo and Release and **151/151 core CTests** on Linux. Checkpoint 31 (`710e9af`)
+passed **150/150 core CTests** in
+[GitHub run 33450661291](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33450661291).
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured, nor that a full match was
 tested. Publication and the exact GitHub CI result are tracked separately from
@@ -147,6 +148,15 @@ per MSVC configuration, including 91,914 ordered stores, 185,360 reads, 729
 typed service calls, 2,694 refusal prefixes and every owned PC. Gameplay audio
 and score/UI calls remain real typed boundaries; this checkpoint does not
 fabricate those effects or connect the owner to natural match entry.
+
+Checkpoint 32 adds the complete 335-instruction gameplay-audio CPU request
+owner across `29200/29258/29590/AB0B8/93D94/93DD4`. Its original-CPU comparison
+passes 2,672 cases per MSVC configuration and visits every reachable owned PC;
+`294B8` is statically unreachable. A separate 2,000-case comparison per
+configuration proves that the `AC080` frontier maps to the frozen native
+voice-program owner. The general scheduler remains an explicit synchronous
+boundary. These are routing and retained-state proofs, not audible playback,
+device timing, or a natural gameplay claim.
 
 Checkpoint 28's separate ball-rendering evidence
 includes 585 original/native C cases per build with 16,111 ordered stores and
