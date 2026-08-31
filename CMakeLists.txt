@@ -28,6 +28,10 @@ if(BUILD_TESTING)
     target_compile_features(nba97_game_text_pools_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_text_pools_tests PRIVATE src)
     add_test(NAME game_text_pools COMMAND nba97_game_text_pools_tests)
+    add_executable(nba97_game_heap_release_tests tests/game_heap_release_tests.cpp src/recovered/game_heap_release.c)
+    target_compile_features(nba97_game_heap_release_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_heap_release_tests PRIVATE src)
+    add_test(NAME game_heap_release COMMAND nba97_game_heap_release_tests)
     add_executable(nba97_game_heap_initialize_tests tests/game_heap_initialize_tests.cpp src/recovered/game_heap_initialize.c)
     target_compile_features(nba97_game_heap_initialize_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_heap_initialize_tests PRIVATE src)
@@ -671,7 +675,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c
     src/recovered/game_text_objects.c src/recovered/game_text_pools.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
-    src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c
+    src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c
