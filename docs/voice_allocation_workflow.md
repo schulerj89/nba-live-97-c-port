@@ -35,10 +35,12 @@ Only the first eight scratch bytes are owned here. A ninth write/read refuses
 when reached, rather than inventing storage over the adjacent output/service
 globals. Signed selected indices outside0..23 likewise refuse at the first
 voice dereference. This is a native memory boundary, not an original count
-clamp. Actual private asset inspection found requested count1 in all2,466
-Z1COOL records including fallback and all12 cursor programs. Every speech
-header uses priority0 and maskFFFFFFFF. That inventory does not establish
-unknown program inputs or replace allocation proof.
+clamp. The2,466 Z1COOL index entries contain1,185 nonempty slices and1,281
+absent zero-length entries, including reserved record0. Only the nonempty
+slices provide header evidence: all1,185 request count1, priority0 and
+maskFFFFFFFF. All12 cursor programs also request count1. No header is inferred
+for an absent entry. That inventory does not establish unknown program inputs
+or replace allocation proof.
 
 ## Preserved source decisions and quirks
 
@@ -93,7 +95,8 @@ timer, and voice service execute their real original owners; hardware/APPLY
 effects are explicit boundaries. `source_mips.txt`, `oracle.py`, per-build
 logs, `report-Debug.json`, `report-Release.json`, and `freeze.json` record the
 source, implementation and tested binary hashes. `asset_allocation_inputs.json`
-records the separate header inventory. Source FE SHA-256 is
+is superseded by `asset_allocation_inputs_corrected.json`, which excludes
+absent entries from the header inventory. Source FE SHA-256 is
 `14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c`.
 
 To build the public test, link `voice_allocation.c`, `voice_handles.c`, and
