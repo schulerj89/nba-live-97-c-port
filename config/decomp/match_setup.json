@@ -32,14 +32,14 @@
   ],
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
-    "native_unit": "tests/match_snapshot_test.cpp, tests/match_controls_test.cpp and tests/match_presentation_test.cpp",
+    "native_unit": "tests/match_snapshot_test.cpp, tests/match_controls_test.cpp, tests/match_presentation_test.cpp, tests/team_header_test.cpp and tests/team_header_snapshot_test.cpp",
     "host_integration": "98 isolated Team Select/User Setup frames, four owned snapshot artifacts and explicit unsupported special-team refusal; presentation uses the existing shared RNG only after successful preparation",
     "original_isolated_instructions": "private raw-MIPS source oracle;544 roster and768 rule comparisons,1272 guard/alias checks,13 option mapping checks; no mismatches",
     "original_runtime": "pending",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "presentation_source": "FEONLY46D24 scalar branch and shared7A538 effects implemented. Independent source comparisons: B23760 assertions/1584 cases; A625433 checks/78192 cases plus128 checks/16 accepted-Start cue/selection cases. C13 publication assertions and12 paired receipt mutations rejected. Debug/release48 CTests,98 host frames,264 flash frames and27 Create Player scenarios pass. Source and native evidence remain separate from live runtime; docs/match_presentation_workflow.md",
-    "gameplay": "pending extension settings, special/created membership, gameplay side/overlay/scene initialization",
+    "gameplay": "Owned complete ordinary655B0 effects before65328/65DB0; unknown profile words explicit. Pending extension settings, special/created membership, remaining header/controller/period/overlay/scene initialization; docs/team_header_workflow.md",
     "strategy_source":"Fourteen persistent bytes are owned once per fresh native epoch; unknown imported strategy refuses capture. Field-only no-injury projection and ordinary-exit writeback are separately tested, no host gameplay return yet. MatchExtensionSettings stays pending; see match_strategy.json and docs/match_strategy_workflow.md."
   },
   "functions": [
@@ -75,20 +75,26 @@
     {
       "binary": "gameonly",
       "address": "0x800655B0",
+      "end_exclusive": "0x80065820",
       "name": "Match side/header initialization",
       "scope": "roster_dependency",
       "instructions_accounted": 0,
       "instructions_total": 156,
-      "native_owner": "nba97_match_roster_indices (active count clamp subset)",
+      "native_owner": "nba97_team_header_initialize; MatchSnapshot owned pre-period team effects",
+      "stage": "after_655B0_before_65328",
+      "effect_bytes": {"header":47, "status":24, "entity_table":20, "entity_opponent":10},
       "shared_dependencies": [
         "0x80063D58"
       ],
       "tests_evidence": [
+        "tests/team_header_test.cpp",
+        "tests/team_header_snapshot_test.cpp",
+        "docs/team_header_workflow.md",
         "tests/match_snapshot_test.cpp",
         "docs/match_snapshot_workflow.md",
         "private independent snapshot projection oracle; not live runtime"
       ],
-      "remaining_uncertainty": "Only count clamp is implemented. Header clearing, first-five lineup copies, difficulty/rank AI scalars, special branches and other side fields remain pending; full156 denominator retained."
+      "remaining_uncertainty": "All written effects represented for ordinary side0/5 pairs; typed words preserve unknown retail profile prefix and opaque controls bytes. This owner does not clear headers. Caller clearing, full header layout, controller/period/substitution/strategy ordering and live selected-match runtime remain pending; full156 denominator and zero credit retained."
     },
     {
       "binary": "feonly",

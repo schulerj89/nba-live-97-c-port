@@ -6,6 +6,41 @@
 #include <stdexcept>
 
 namespace nba97 {
+namespace {
+MatchTeamInitialization initializeTeams(const MatchSnapshot& snapshot,
+                                        const std::vector<UserProfile>& profiles) {
+    MatchTeamInitialization result;
+    // finalizeMatchControls has already validated unique fixed slots/IDs.
+    // The native STAT schema is not the retail profile prefix, so table12
+    // cannot be reconstructed from games/wins. Missing records also remain
+    // unknown here: this stage does not adopt a cleared resident profile table.
+    for(const auto& profile:profiles) {
+        if(profile.slot!=0)continue;
+        uint32_t word=0;
+        for(unsigned byte=0;byte<4;++byte)
+            word|=uint32_t(profile.controls[14+byte])<<(8*byte);
+        result.table24.payload=word;
+        result.table24.kind=word ? NBA97_TEAM_REF_OPAQUE_WORD:NBA97_TEAM_REF_NULL;
+        break; // Validity/selected-controller defaults do not govern this read.
+    }
+    for(unsigned side=0;side<2;++side) {
+        const auto& team=snapshot.teams[side];
+        Nba97TeamHeaderInput input{};
+        input.side_word=uint16_t(side*5);input.opponent_side_word=uint16_t((1-side)*5);
+        input.count=team.indices.count;input.injury_slot=snapshot.injury_slot[side];
+        input.difficulty=snapshot.request.setup[3];
+        input.rank54=team.metadata[0];input.rank57=team.metadata[3];
+        std::copy_n(team.indices.initial_lineup,5,input.lineup);
+        input.table12=result.table12;input.table24=result.table24;
+        if(!nba97_team_header_initialize(&result.teams[side],&input))
+            throw std::runtime_error("match snapshot: team initialization refused");
+    }
+    // No controller assignments, period preparation or65820 strategy apply
+    // has happened here. Those owners may change starters and direction.
+    result.stage=MatchTeamStage::After655B0Before65328;
+    return result;
+}
+}
 MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceView& source,
         const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
         const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy) {
@@ -73,6 +108,10 @@ MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceVi
     std::array<int8_t,8> selectors;
     std::copy_n(request.users.profile,8,selectors.begin());
     result.controls=finalizeMatchControls(live,selectors,source.profiles,defaults);
+    result.team_initialization=initializeTeams(result,source.profiles);
+    if(result.team_initialization.table12.kind!=NBA97_TEAM_REF_UNKNOWN &&
+       result.team_initialization.table24.kind!=NBA97_TEAM_REF_UNKNOWN)
+        result.pending&=~MatchTeamReferenceWords;
     // Accepted ordinary exhibition: 61674(0), then46D24, then3E7A8.
     // Preparation uses a copy; a refused native snapshot consumes no live RNG.
     result.frontend_rng_before=frontend_rng;
@@ -160,6 +199,32 @@ std::string matchSnapshotReceipt(const MatchSnapshot& s) {
         out<<",\"aliases\":";array(t.indices.alias);out<<",\"lineup\":";array(t.indices.initial_lineup);
         out<<",\"metadata\":";array(t.metadata);out<<'}';
     }
-    out<<"]}";return out.str();
+    out<<"],\"team_initialization\":{\"stage\":\""<<
+        (s.team_initialization.stage==MatchTeamStage::After655B0Before65328 ?
+            "after_655B0_before_65328":"unprepared")<<'"';
+    auto reference=[&](const Nba97TeamHeaderRef& ref) {
+        out<<"{\"kind\":"<<unsigned(ref.kind)<<",\"value\":"<<ref.payload<<'}';
+    };
+    out<<",\"table12\":";reference(s.team_initialization.table12);
+    out<<",\"table24\":";reference(s.team_initialization.table24);
+    out<<",\"teams\":[";
+    for(unsigned side=0;side<2;++side) {
+        if(side)out<<',';
+        const auto& t=s.team_initialization.teams[side];
+        out<<"{\"opponent_side\":"<<unsigned(t.opponent_side)<<
+            ",\"metadata_side\":"<<unsigned(t.metadata_side)<<",\"alias_side\":"<<unsigned(t.alias_side)<<
+            ",\"word08\":";reference(t.word08);out<<",\"word0c\":";reference(t.word0c);
+        out<<",\"direction10\":"<<t.direction10<<",\"field34\":"<<unsigned(t.field34)<<
+            ",\"field38\":"<<unsigned(t.field38)<<",\"field39\":"<<unsigned(t.field39)<<
+            ",\"field62\":"<<t.field62<<",\"count66\":"<<t.count66<<",\"count68\":"<<t.count68<<
+            ",\"field72\":"<<t.field72<<",\"field74\":"<<t.field74<<",\"saved_lineup\":";
+        array(t.saved_lineup);out<<",\"status\":";array(t.status);out<<",\"entity\":[";
+        for(unsigned i=0;i<5;++i) {
+            if(i)out<<',';
+            out<<'['<<t.entity[i].table_slot<<','<<t.entity[i].entity_id<<','<<t.entity[i].opponent_d6<<']';
+        }
+        out<<"]}";
+    }
+    out<<"]}}";return out.str();
 }
 }

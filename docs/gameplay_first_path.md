@@ -1,8 +1,9 @@
 # Smallest evidence-backed path after Team Select
 
 2026-08-30 source audit with native Team Select, User Setup and an owned partial
-ordinary-exhibition snapshot. Only small GAMEONLY index/count projections are
-implemented; there is no gameplay scene or loop.
+ordinary-exhibition snapshot. GAMEONLY now has owned index projections and the
+complete ordinary655B0 team-initialization effects before period setup; there
+is no gameplay scene or loop. See team_header_workflow.md for the exact stage.
 Original dumps, disassembly, art and raw tables remain private.
 This is a sequence of bounded dependencies, not a broad gameplay rewrite.
 

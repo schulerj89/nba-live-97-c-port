@@ -4,6 +4,7 @@
 #include "frontend_settings.hpp"
 #include "recovered/match_setup.h"
 #include "recovered/match_strategy.h"
+#include "recovered/team_header.h"
 #include "recovered/user_setup.h"
 #include "recovered/create_player.h"
 #include <memory>
@@ -32,12 +33,21 @@ struct MatchTeamSnapshot {
 };
 enum MatchPending : uint32_t {
     MatchExtensionSettings=1, MatchPresentationVariant=2, MatchCreatedMembership=4,
-    MatchStrategyFields=8
+    MatchStrategyFields=8, MatchTeamReferenceWords=16
 };
 struct MatchStrategyState {
     Nba97MatchStrategy values{};
     bool known=false; // Whole group: cold init/writeback owns all fourteen bytes.
     uint64_t writeback_revision=0; // Native provenance, not a source field.
+};
+enum class MatchTeamStage { Unprepared, After655B0Before65328 };
+struct MatchTeamInitialization {
+    MatchTeamStage stage=MatchTeamStage::Unprepared;
+    // Source table20BEC[12]/[24] overlap fixed profile slot0. They are not
+    // roster bounds. Unknown words remain unknown; opaque words never become
+    // native pointers. Side/entity IDs resolve only against this snapshot.
+    Nba97TeamHeaderRef table12{},table24{};
+    std::array<Nba97TeamHeaderEffects,2> teams{};
 };
 struct MatchSnapshot {
     MatchRequest request;
@@ -54,9 +64,10 @@ struct MatchSnapshot {
     std::array<uint32_t,6> frontend_rng_before{},frontend_rng_after{};
     MatchControlResult controls;
     MatchStrategyState strategy;
+    MatchTeamInitialization team_initialization;
     Nba97CreatedPlayerCatalog created{}; // retained, never treated as accepted membership.
     uint64_t roster_generation=0,profile_generation=0,created_generation=0;
-    uint32_t pending=MatchExtensionSettings|MatchPresentationVariant|MatchStrategyFields;
+    uint32_t pending=MatchExtensionSettings|MatchPresentationVariant|MatchStrategyFields|MatchTeamReferenceWords;
 };
 // Pure preparation: owns every published value, no I/O or source mutation.
 // Unsupported branches throw explicitly; a captured subset is not launch-ready.

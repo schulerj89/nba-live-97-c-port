@@ -133,14 +133,19 @@ checkpoint only.
 
 ## Remaining dependencies
 
+The later team-header checkpoint adds all ordinary655B0 written effects as an
+owned stage before65328/65DB0, with explicit unknown/opaque source words and
+pending bit16. It does not create full headers or a playable scene; see
+[team_header_workflow.md](team_header_workflow.md).
+
 The snapshot still marks extension settings pending. The subsequent
 [presentation checkpoint](match_presentation_workflow.md) implements21DF4 for
 ordinary exhibition using the existing RNG. Seven paired team
-settings21DE6..21DF3 and unowned extension bytes21D80/85/96..21DA2 are not
-fabricated. Created-player catalogue
+settings21DE6..21DF3 are now separately owned by the strategy checkpoint;
+unowned extension bytes21D80/85/96..21DA2 are not fabricated. Created-player catalogue
 membership/resolution and relative-rank effects remain a separate bridge.
 Special-team rosters/jerseys, season/playoffs, raw absent-player copy behavior,
-gameplay side/header/controller initialization and court/model/camera lifetimes
+remaining gameplay header/controller initialization and court/model/camera lifetimes
 also remain pending. See gameplay_first_path.md for the recovered ordering.
 
 Original comparison needs synchronized, overlay-identified stops at FE61674

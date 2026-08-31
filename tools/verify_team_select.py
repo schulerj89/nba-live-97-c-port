@@ -95,6 +95,11 @@ def metadata():
     require(seen == MATCH_FUNCTIONS and totals == match["instruction_denominators"] ==
             {"roster_dependency":253, "rules_dependency":148, "presentation_dependency":30}, "match setup denominator drift")
     require(match["evidence"]["original_runtime"] == "pending", "match original evidence needs explicit review")
+    header = next(f for f in match["functions"] if f["address"] == "0x800655B0")
+    require(header["end_exclusive"] == "0x80065820" and
+            header["effect_bytes"] == {"header":47, "status":24, "entity_table":20, "entity_opponent":10} and
+            header["stage"] == "after_655B0_before_65328",
+            "team-header full owner/effect boundary drift")
     inputs = read(ROOT / "config/decomp/frontend_input.json")
     seen, totals = {}, {}
     for f in inputs["functions"]:
@@ -163,6 +168,33 @@ def ppm(path):
     return parts[3]
 
 
+def team_initialization_receipt(snapshot, name):
+    # Full655B0 effects in the ordinary host fixture, before period changes.
+    # Fixed slot0 exists with zero saved control bytes, even when controller0
+    # has no selected profile. The retail statistics prefix remains unknown.
+    unknown, zero = {"kind":0, "value":0}, {"kind":1, "value":0}
+    expected = {"stage":"after_655B0_before_65328", "table12":unknown,
+                "table24":zero, "teams":[]}
+    require(len(snapshot["teams"]) == 2, f"team initialization side extent {name}")
+    for side, team in enumerate(snapshot["teams"]):
+        count = team["count"]
+        require(type(count) is int and 8 <= count <= 15 and len(team["metadata"]) == 20,
+                f"team initialization source bounds {name}")
+        rank54, rank57 = team["metadata"][0], team["metadata"][3]
+        expected["teams"].append({"opponent_side":1-side, "metadata_side":side, "alias_side":side,
+            "word08":unknown if side else {"kind":2, "value":0},
+            "word0c":zero if side else unknown, "direction10":85504 if side else -85504,
+            "field34":7, "field38":7, "field39":5, "field62":(120-2*rank57)&65535,
+            "count66":min(count,12), "count68":min(count,12),
+            "field72":(rank57+28)//(2 if snapshot["setup"][3]>=2 else 1),
+            "field74":(1260-32*rank54)&65535, "saved_lineup":list(range(5)),
+            "status":[32767 if i<min(count,12) else 65534 for i in range(12)],
+            "entity":[[side*5+i,side*5+i,(1-side)*5+i] for i in range(4,-1,-1)]})
+    # Canonical serialization also rejects booleans/floats masquerading as ints.
+    require(json.dumps(snapshot["team_initialization"],sort_keys=True) ==
+            json.dumps(expected,sort_keys=True), f"complete team initialization effects/provenance {name}")
+
+
 def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
     # Independent field relations from the bounded source contract. Native
     # artifacts are regression inputs, never newly adopted retail fixtures.
@@ -176,7 +208,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
             ("match_modified_snapshot.json", "match-modified-roster", modified_ranks, 1, 23)):
         s = read(first / name)
         require(s == read(second / name), f"snapshot nondeterminism {name}")
-        require(s["scope"] == "partial ordinary exhibition snapshot" and s["pending"] == 1,
+        require(s["scope"] == "partial ordinary exhibition snapshot" and s["pending"] == 17,
                 f"unowned launch fields silently accepted {name}")
         require(s["setup"] == [0,0,2,0] and s["venue"] == s["launch_control"] == 0,
                 f"Setup/exhibition projection {name}")
@@ -236,6 +268,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
         else:
             require(s == other, f"presentation snapshot nondeterminism {name}")
         p = s["presentation"]
+        team_initialization_receipt(s,name)
         strategy = s["strategy"]
         require(type(strategy) is dict and type(strategy.get("known")) is bool and
                 type(strategy.get("writeback_revision")) is int and
@@ -261,12 +294,12 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
                     f"presentation skipped an accepted draw or stopped at zero {name}")
         require(p["value"] == (state[0] & 0x60) and p["from_schedule"] == 0 and
                 p["rejected_draws"] == draws-1 and p["rng_after"] == state == by_id[frame_id]["shared_rng"] and
-                s["pending"] == 1, f"presentation/shared RNG boundary {name}")
+                s["pending"] == 17, f"presentation/shared RNG boundary {name}")
     refused = inputs["match-special-pending"]
     require(refused["cursor_draws"] == 1 and
             cursor_rng_step(refused["rng_before"]) == by_id["match-special-pending"]["shared_rng"],
             "unsupported snapshot must consume the confirmation cue only, not presentation draws")
-    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh ranks, controls, persistent strategy, four presentation/RNG acceptances and pending guards")
+    print("MATCH SNAPSHOT HOST PASS: owned inputs, fresh ranks, controls, strategy, complete pre-period team effects, four presentation/RNG acceptances and pending guards")
 
 
 def arrow_flash_cases(first, second):
