@@ -770,7 +770,12 @@ private:
         std::ofstream states(output/"states.json");states<<"[\n";unsigned count=0;
         auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
         auto frame=[&](const char* name,const nba97::RosterDatabase::SlotTable* expected_roster=nullptr) {
+            const bool cached_team=frontend_page_==nba97::FrontendPage::TeamSelect && team_select_frame_valid_;
+            const auto prior_pixels=cached_team ? menu_frame_.bgra:std::vector<uint8_t>{};
+            const auto prior_presentation=team_select_shown_presentation_;
             rebuildMenuFrame();
+            if(cached_team) require(menu_frame_.bgra==prior_pixels && team_select_shown_presentation_==prior_presentation,
+                "ordinary rebuild must retain the completed Team Select frame");
             PshImage pixels;pixels.width=static_cast<uint16_t>(menu_frame_.width);pixels.height=static_cast<uint16_t>(menu_frame_.height);
             pixels.rgba=menu_frame_.bgra;
             for(std::size_t i=0;i<pixels.rgba.size();i+=4) std::swap(pixels.rgba[i],pixels.rgba[i+2]);
@@ -786,6 +791,12 @@ private:
                 "\",\"home\":"<<team_select_.team[0]<<",\"away\":"<<team_select_.team[1]<<
                 ",\"criterion\":"<<unsigned(team_select_.criterion)<<",\"side\":"<<unsigned(team_select_.side)<<
                 ",\"help\":"<<int(team_select_help_.phase)<<",\"random_wait\":"<<unsigned(team_select_random_.wait)<<
+                ",\"shown_home\":"<<team_select_shown_.team[0]<<",\"shown_away\":"<<team_select_shown_.team[1]<<
+                ",\"shown_side\":"<<unsigned(team_select_shown_.side)<<",\"shown_criterion\":"<<unsigned(team_select_shown_.criterion)<<
+                ",\"shown_help\":"<<int(team_select_shown_help_.phase)<<
+                ",\"shown_help_text\":"<<nba97_help_text_visible(&team_select_shown_help_)<<
+                ",\"shown_help_width\":"<<team_select_shown_help_.rect.width<<
+                ",\"shown_presentation\":"<<team_select_shown_presentation_<<
                 ",\"quarter\":"<<unsigned(menu_.setupChoice(0))<<",\"mode\":"<<unsigned(menu_.setupChoice(1))<<
                 ",\"user_side\":"<<unsigned(user_setup_.state().side[0])<<
                 ",\"user_profile\":"<<int(user_setup_.state().profile[0])<<
@@ -815,7 +826,12 @@ private:
                 "Team Select lost settings/created catalogue");
         };
         auto ticks=[&](unsigned n) {for(unsigned i=0;i<n && frontend_page_==nba97::FrontendPage::TeamSelect;++i) {
+            const auto before=team_select_;const auto presents=team_select_presentations_;
             menu_elapsed_ms_=static_cast<uint32_t>(((team_select_tick_+1)*1001+29)/30);updateTeamSelect();
+            if(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_presentations_!=presents)
+                require(team_select_shown_.team[0]==before.team[0] && team_select_shown_.team[1]==before.team[1] &&
+                    team_select_shown_.side==before.side && team_select_shown_.criterion==before.criterion,
+                    "completed presentation must precede callback/random continuation");
         }rebuildMenuFrame();};
         auto pollReady=[&] {
             releaseFrontendPadKeys();
@@ -881,7 +897,7 @@ private:
         frame("left-before-poll");frontend_transition_active_=false;ticks(1);
         require(team_select_.team[0]==2 && team_select_.team[1]==24 && team_select_poll_.post_remaining==7,
             "first home Left sampled after presentation");frame("home-left");
-        const auto before_wait=team_select_presentations_;ticks(7);
+        const auto before_wait=team_select_presentations_;ticks(1);frame("left-first-post-frame");ticks(6);
         require(team_select_.team[0]==2 && team_select_poll_.phase==NBA97_TEAM_SETTLE,"Left seven-presentation postwait");frame("left-post-wait");
         ticks(1);require(team_select_.team[0]==1 && team_select_poll_.pad.repeat_counter==2 &&
             team_select_presentations_-before_wait==8,"held Left repeats only after7+1");frame("left-held-repeat");
@@ -890,16 +906,24 @@ private:
         key(VK_UP);require(team_select_.criterion==5,"criterion up wrap");frame("criterion-up-wrap");
         key(VK_DOWN);require(team_select_.criterion==0,"criterion down wrap");frame("criterion-down-wrap");
         key('C');require(team_select_.side==1,"Cross switches active side");frame("away-active");
+        ticks(1);frame("away-first-post-frame");
         key(VK_RIGHT);require(team_select_.team[1]==25,"away scan");frame("away-right");
         key(VK_DOWN);key(VK_RIGHT);frame("away-scoring-next");
         ticks(20);frame("selector-gold");
-        const auto before_help=team_select_;key('F');ticks(24);frame("help");
+        const auto before_help=team_select_;key('F');frame("help-poll-frame");
+        ticks(1);frame("help-first-growth");unsigned help_presents=1;
+        while(team_select_help_.phase==NBA97_HELP_GROWING && help_presents<24) {ticks(1);++help_presents;}
+        require(team_select_help_.phase==NBA97_HELP_WAIT_CHANGE && team_select_shown_help_.phase==NBA97_HELP_GROWING &&
+            !nba97_help_text_visible(&team_select_shown_help_),"terminal growth shows full box before creating Help text");
+        frame("help-full-box");ticks(1);++help_presents;frame("help-first-text");
+        require(help_presents<=24,"bounded Help growth fixture");ticks(24-help_presents);frame("help");
         require(team_select_help_.phase==NBA97_HELP_READY,"Help did not reach ready");
-        key('C');ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"Help did not close");
+        key('C');frame("help-ack-frame");ticks(1);frame("help-first-shrink");ticks(23);
+        require(team_select_help_.phase==NBA97_HELP_CLOSED,"Help did not close");
         require(before_help.team[0]==team_select_.team[0] && before_help.team[1]==team_select_.team[1] &&
             before_help.side==team_select_.side && before_help.criterion==team_select_.criterion && !team_select_.result,
             "Help changed selected team/state");frame("help-return");
-        key('F');handleMenuKey('C');ticks(14);
+        key('F');handleMenuKey('C');ticks(15);
         require(team_select_help_.phase==NBA97_HELP_SHRINKING,"changed held key must dismiss Help after growth");
         releaseFrontendPadKeys();ticks(24);require(team_select_help_.phase==NBA97_HELP_CLOSED,"early Help dismissal return barrier");
         frame("help-early-close");
@@ -1067,7 +1091,13 @@ private:
             user_setup_.state().side[0]==0 && user_setup_.state().profile[0]==-2,
             "User Setup reentry lost committed assignment or retained cancelled profile");frame("user-reentry");
         userKey(VK_RSHIFT);require(frontend_page_==nba97::FrontendPage::TeamSelect,"User Setup second cancel");
-        key('V');const auto random_begin=team_select_presentations_;ticks(66);
+        const auto before_random=team_select_;
+        key('V');const auto random_begin=team_select_presentations_;
+        require(team_select_shown_.team[team_select_.side]==before_random.team[team_select_.side],
+            "random poll must retain the pre-callback team");frame("random-poll-frame");
+        const auto first_candidate=team_select_;ticks(1);
+        require(team_select_shown_.team[first_candidate.side]==first_candidate.team[first_candidate.side],
+            "first random wait presents candidate1 before choosing candidate2");frame("random-first-wait");ticks(65);
         require(team_select_random_.remaining==0 && team_select_random_.wait==12,"last candidate wait boundary");
         const auto last_random=team_select_;handleMenuKey(VK_RSHIFT);handleMenuKey('C');
         require(frontend_page_==nba97::FrontendPage::TeamSelect && team_select_.side==last_random.side,
@@ -5686,6 +5716,7 @@ private:
             }
             nba97_team_poll_open(&team_select_poll_); // Shared history survives page opens.
             team_select_help_={};team_select_exit_wait_=false;
+            team_select_frame_valid_=false;
             team_select_random_={};team_select_tick_=uint64_t(menu_elapsed_ms_)*30/1001;
             trace_.log("TEAM-ENTRY","owner8004FCD8 state3 packZSET1/LOGO titleba08; home="+
                 std::to_string(team_select_.team[0])+" away="+std::to_string(team_select_.team[1])+
@@ -5750,7 +5781,6 @@ private:
             if(team_select_.sound) playBottomMenuSound(team_select_.sound,"team-selector");
             if(event==NBA97_SELECT_HELP) {
                 nba97_help_open(&team_select_help_,team_select_assets_->help().descriptor(3,0).rect,token);
-                nba97_help_tick(&team_select_help_,team_select_held_); // First growth precedes modal submission.
                 playBottomMenuSound(7,"team-help-open");
             }
             if(event==NBA97_SELECT_RANDOM) {
@@ -5774,6 +5804,17 @@ private:
                 std::to_string(team_select_focus_)+" sound="+std::to_string(team_select_.sound));
     }
 
+    void composeTeamSelectFrame(const Nba97HelpModal& shown_help) {
+        prepareFrontendTitle();
+        auto image=nba97::renderTeamSelect(team_select_,team_select_ranks_,*team_select_assets_,
+            team_select_sprites_,menu_font_,control_font_,team_select_palette_,team_select_tints_,frontend_title_.corners());
+        if(nba97_help_visible(&shown_help)) team_select_assets_->help().draw(image,control_font_,
+            team_select_assets_->help().descriptor(3,0),shown_help);
+        menu_frame_=makeFrame(image);
+        team_select_shown_=team_select_;team_select_shown_help_=shown_help;
+        team_select_shown_presentation_=team_select_presentations_;team_select_frame_valid_=true;
+    }
+
     void updateTeamSelect() {
         if(frontend_page_!=nba97::FrontendPage::TeamSelect || frontend_transition_active_) return;
         const auto now=uint64_t(menu_elapsed_ms_)*30/1001;
@@ -5785,11 +5826,16 @@ private:
             if(!help && !random && !nba97_team_poll_prepare(&team_select_poll_,0)) return;
             team_select_tick_=now; // Stall stretches time; never skip unseen presentations.
             ++team_select_presentations_;
+            Nba97HelpModal shown_help=team_select_help_;
+            const bool poll_help=help && nba97_help_prepare_presentation(&team_select_help_,&shown_help);
             prepareFrontendTitle();presentFrontendTitle();frontend_title_painted_=false;
             for(auto& tint:team_select_tints_) nba97_reorder_tint_tick(&tint);
             nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
+            // 39574 submits before3AE4C samples input or4F934 chooses the
+            // next candidate. Later rebuild/WM_PAINT must retain THIS frame.
+            composeTeamSelectFrame(shown_help);
             if(help) {
-                const auto event=nba97_help_tick(&team_select_help_,team_select_held_);
+                const auto event=poll_help ? nba97_help_input(&team_select_help_,team_select_held_):NBA97_HELP_NO_EVENT;
                 if(event==NBA97_HELP_CLOSE_SOUND) {
                     team_select_poll_.pad.prior_mask=team_select_help_.held;
                     playBottomMenuSound(8,"team-help-close");
@@ -7279,12 +7325,9 @@ private:
     void rebuildMenuFrame() {
         menu_.syncStyle(settings_.style());
         if(frontend_page_==nba97::FrontendPage::TeamSelect) {
-            prepareFrontendTitle();
-            auto image=nba97::renderTeamSelect(team_select_,team_select_ranks_,*team_select_assets_,
-                team_select_sprites_,menu_font_,control_font_,team_select_palette_,team_select_tints_,frontend_title_.corners());
-            if(nba97_help_visible(&team_select_help_)) team_select_assets_->help().draw(image,control_font_,
-                team_select_assets_->help().descriptor(3,0),team_select_help_);
-            menu_frame_=makeFrame(image);
+            // Initial composition is not a counted source pump. Afterward,
+            // only updateTeamSelect publishes a completed presentation.
+            if(!team_select_frame_valid_) composeTeamSelectFrame(team_select_help_);
         }
         else if(frontend_page_==nba97::FrontendPage::UserSetup) {
             prepareFrontendTitle();
@@ -7547,6 +7590,10 @@ private:
     Nba97TeamRanks team_select_ranks_{};
     Nba97FrontendPalette team_select_palette_{};
     Nba97HelpModal team_select_help_{};
+    Nba97TeamSelect team_select_shown_{};
+    Nba97HelpModal team_select_shown_help_{};
+    bool team_select_frame_valid_=false;
+    uint64_t team_select_shown_presentation_=0;
     std::array<Nba97ReorderTint,12> team_select_tints_{};
     std::array<uint32_t,6> team_select_rng_{};
     unsigned team_select_focus_=0;

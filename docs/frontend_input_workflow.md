@@ -11,7 +11,7 @@ live original timing, GPU, audio or physical-controller comparison.
 | Original function | Native scope | Accounted / full instructions | Shared dependencies and evidence | Remaining uncertainty |
 |---|---|---|---|---|
 | FE8003AE4C | team_select_poll.c physical-pad sampling, first nonzero controller, history and repeat delays |0 /210 |76198,39574; team_select_poll_test and private source oracle |Queued tokens, complete state0 polling, driver/cache refresh, original phase |
-| FE8003D930 | State3 whole-mask dispatch, postwaits, both exits; exact state0 Start history fragment |0 /828 |3AE4C,3B194, callbacks; poll tests and88 host captures |Other descriptor routes, movement/text cleanup, arrow lifecycle, source GPU phase |
+| FE8003D930 | State3 whole-mask dispatch, postwaits, both exits; exact state0 Start history fragment |0 /828 |3AE4C,3B194, callbacks; poll tests and98 host captures |Other descriptor routes, movement/text cleanup, arrow lifecycle, source GPU phase |
 | FE8003B194 | Mandatory presentation, then remembered mask change; physical controller or aggregate8 |0 /21 |39574,76198; poll/session tests and original-MIPS barrier probe |Original driver/cache and shared presentation lifecycle |
 | FE8003F7C8 | Exhibition transitions and state5 Cancel fragment3FCF4..3FD18 |0 /1173 |3D930,4FCD8,37010,3B194,61674; host scenarios |Full dispatcher, other modes and gameplay launch |
 | FE8004F934 | Twelve random candidates; owner waits1..12 |0 /41 |Six-word RNG,39574; random/poll tests |Runtime seed history and absolute presentation phase |
@@ -45,6 +45,11 @@ the descriptor caller adds5 and the next poll adds1. A key held through the
 random animation is therefore sampled after84 minimum presentations, excluding
 pending text work. Help owns its modal presentations, grows before its first
 display, and writes the actual acknowledgment mask back to shared history.
+The Team Select host now composes each accepted presentation before sampling
+input or choosing the next random candidate. Help's terminal growth frame has
+the full rectangle without text; acknowledgment retains the submitted text frame
+until the next shrinking presentation. Ordinary repaint retains these pixels.
+See team_select_presentation_workflow.md for the source comparison and limits.
 
 Both Team Select Start and Select update remembered regular teams before the
 exit sound and barrier.3B194 presents at least once and waits until the initiating
@@ -97,7 +102,7 @@ bounded target contract; original text allocation and physical cadence remain pe
 Public tests exercise every normalized mask, repeat boundaries, first-controller
 priority, postwait release, modal/reentry history, both exit paths, random caller
 ownership, changed nonzero handoffs, and topology/modal continuation ordering.
-The88 host scenarios include held input before/after polls, chords, focus/alias
+The98 host scenarios include held input before/after polls, chords, focus/alias
 handling, both Team Select exits, Setup Start, User Cancel, topology changes and
 the existing isolated persistence/snapshot flows. Two independent processes
 must agree; hashes are never adopted as retail fixtures.

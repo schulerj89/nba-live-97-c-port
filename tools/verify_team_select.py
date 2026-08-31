@@ -165,8 +165,25 @@ def capture(first, second, contract, fixture):
     by_id = {s["id"]: s for s in states}
     for actual, expected in zip(states, contract["native_frames"]):
         require(all(actual[k] == v for k, v in expected["expect"].items()), f"state mismatch {actual['id']}")
+        if actual["page"] == "Team Select":
+            require(0 <= actual["shown_criterion"] < 6 and actual["shown_presentation"] >= 0,
+                    f"invalid completed presentation metadata {actual['id']}")
         a, b = first / (actual["id"]+".ppm"), second / (actual["id"]+".ppm")
         require(ppm(a) == ppm(b), f"native frame nondeterminism {a.name}")
+    # Explicit owner-frame counts from the source contract and harness steps;
+    # they constrain both artifacts even if each has the same wrong metadata.
+    for before, after, count in (
+            ("entry", "left-before-poll", 0), ("left-before-poll", "home-left", 1),
+            ("home-left", "left-first-post-frame", 1), ("left-first-post-frame", "left-post-wait", 6),
+            ("left-post-wait", "left-held-repeat", 1), ("away-active", "away-first-post-frame", 1),
+            ("help-poll-frame", "help-first-growth", 1), ("help-first-growth", "help-full-box", 12),
+            ("help-full-box", "help-first-text", 1), ("help-first-text", "help", 10),
+            ("help", "help-ack-frame", 1), ("help-ack-frame", "help-first-shrink", 1),
+            ("random-poll-frame", "random-first-wait", 1), ("random-first-wait", "random-last-wait", 65)):
+        require(by_id[after]["shown_presentation"] - by_id[before]["shown_presentation"] == count,
+                f"completed presentation count mismatch {before} -> {after}")
+    require(by_id["help-full-box"]["shown_help_width"] == by_id["help-first-text"]["shown_help_width"] ==
+            by_id["help-ack-frame"]["shown_help_width"], "full Help box changed before shrinking")
     for name in ("rank_cache.json", "modified_rank_cache.json"):
         cache = read(first / name)
         require(cache == read(second / name), f"numeric nondeterminism {name}")
@@ -183,11 +200,19 @@ def capture(first, second, contract, fixture):
         require(by_id[name]["away"] == by_id["away-scoring-next"]["away"], f"unexpected team mutation {name}")
     require(by_id["random-complete"]["away"] < 29, "random selected special team")
     require(by_id["random-last-wait"]["away"] == by_id["random-complete"]["away"], "final wait changed candidate")
+    require(by_id["random-first-wait"]["shown_away"] == by_id["random-poll-frame"]["away"],
+            "first random owner frame must show candidate1 before candidate2 mutation")
+    require(by_id["random-poll-frame"]["shown_away"] == by_id["user-reentry"]["away"],
+            "random poll frame must retain the previously accepted team")
     # Localized native regressions, not original pixel equivalence.
     def crop(name, x0, y0, x1, y1):
         pixels = ppm(first / (name+".ppm"))
         return b"".join(pixels[(y*512+x0)*3:(y*512+x1)*3] for y in range(y0,y1))
-    require(crop("entry",368,15,488,78) != crop("home-left",368,15,488,78), "home logo unchanged")
+    require(crop("entry",368,15,488,78) == crop("home-left",368,15,488,78), "input leaked into pre-sample logo frame")
+    require(crop("home-left",368,15,488,78) != crop("left-first-post-frame",368,15,488,78), "first postwait did not show changed logo")
+    require(crop("help-full-box",130,82,380,192) != crop("help-first-text",130,82,380,192), "terminal growth created text before its presentation returned")
+    require(crop("help",130,82,380,192) == crop("help-ack-frame",130,82,380,192), "acknowledgment removed text from its already completed frame")
+    require(crop("help-ack-frame",130,82,380,192) != crop("help-first-shrink",130,82,380,192), "next Help presentation did not begin shrinking")
     require(crop("away-scoring-next",190,119,440,135) != crop("selector-gold",190,119,440,135), "selected tint unchanged")
     require(crop("help",130,82,380,192) != crop("help-return",130,82,380,192), "Help unchanged")
     require(crop("user-help",111,70,401,210) != crop("user-help-return",111,70,401,210), "User Help unchanged")

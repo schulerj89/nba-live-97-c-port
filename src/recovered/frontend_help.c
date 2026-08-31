@@ -66,6 +66,18 @@ Nba97HelpEvent nba97_help_tick(Nba97HelpModal *m, uint16_t raw) {
     return nba97_help_input(m, raw);
 }
 
+int nba97_help_prepare_presentation(Nba97HelpModal* state,Nba97HelpModal* shown) {
+    Nba97HelpPhase before;
+    if(!state || !shown || state==shown) return 0;
+    before=state->phase;
+    if(before==NBA97_HELP_GROWING || before==NBA97_HELP_SHRINKING)
+        nba97_help_tick(state,0);
+    *shown=*state;
+    if(before==NBA97_HELP_GROWING && state->phase==NBA97_HELP_WAIT_CHANGE)
+        shown->phase=NBA97_HELP_GROWING;
+    return before==NBA97_HELP_WAIT_CHANGE || before==NBA97_HELP_READY || before==NBA97_HELP_RETURN_BARRIER;
+}
+
 int nba97_help_visible(const Nba97HelpModal *m) {
     return m && m->phase != NBA97_HELP_CLOSED && m->phase != NBA97_HELP_RETURN_BARRIER;
 }

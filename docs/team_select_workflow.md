@@ -85,14 +85,24 @@ This session's fixture is
 Absent original evidence prints PENDING, not PASS. Native output is never
 automatically adopted as an expected retail fixture.
 
-There are88 capture checkpoints in config/decomp/team_select_scenarios.json.
+There are98 capture checkpoints in config/decomp/team_select_scenarios.json.
 Two fresh processes must reproduce identical state and512x240 PPM frames.
 Localized logo/tint/Help changes, Help sound events (including a changed held
 key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
 
-Placement checkpoint validation on2026-08-30:43/43 CTest tests pass in both Debug
+Presentation checkpoint validation on2026-08-30:44/44 CTest tests pass in Debug
+and RelWithDebInfo. All98 repeated state/frame scenarios and owned snapshots
+match across configurations. Create Player retains27/27 repeated captures and
+the established numerical model/packet/texture checks. Real saves/configuration
+remain unchanged; instruction credit is unchanged. Team Select now retains each
+completed frame before callback/random/Help input mutations, including terminal
+Help growth without text. See team_select_presentation_workflow.md for source
+owners, private run identifiers,33726 source assertions and15 extracted-host
+phase cases. Physical runtime, text/arrow history and audio remain separate gaps.
+
+Prior placement checkpoint validation on2026-08-30:43/43 CTest tests pass in both Debug
 and RelWithDebInfo, including418 new session assertions. All88 state/frame
 scenarios and owned snapshots repeat within each configuration and across them.
 Create Player retains27/27 repeated captures and its existing numerical model,
@@ -155,7 +165,7 @@ private audit evidence, not original modified-roster runtime equivalence.
 | Source structure |14 Team Select owners,637 instructions; separate34 Setup callback instructions,2596 targeted shared-helper instructions,524 rating-helper instructions |
 | Instruction accounting |0 credited here: per-block semantic annotation/review remains pending; denominators are retained in team_select.json |
 | Native state tests |Both sides, all31 teams, six criteria, both directions, boundaries, ignored tokens, exit persistence, RNG carry and random barrier; signed rating arithmetic/ties/saturation |
-| Host integration |88 checkpoints; native Setup/TeamSelect/UserSetup polling, held input/chords/exits, debounced topology and retained placement, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
+| Host integration |98 checkpoints; completed Team Select frames, native polling, held input/chords/exits, debounced topology and retained placement, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
 | Historical original numerical boundary |145/145 stock scores and145/145 ranks agree with cached original FEONLY RAM; not a live Team Select capture |
 | Modified roster arithmetic |Independent oracle checks reorder, cross-team swap and count-changing transfer; no original modified-roster runtime claim |
 | Native rendering |Two-run equality; regression stability only |
@@ -187,9 +197,12 @@ they no longer directly dispatch Team Select actions. Complete state0 polling,
 general queued text movement, directional-arrow flash/history and physical topology
 presentation timing remain pending. The bounded state5 placement targets and
 same-row modal return are implemented; see user_setup_placement_workflow.md.
-Source Help open/close selects sounds7/8; callback sound IDs
-are proven, but state3 bank/program/tone/sample/pitch/event-time comparisons
-remain pending.
+Team Select presentation ownership and Help geometry/input phases are now
+source-compared; see team_select_presentation_workflow.md. Source Help open/close
+selects sounds7/8. A separate private audio audit confirms bank/program/tone and
+compressed sample intervals, but finds missing shared-RNG cue consumption,
+integer-pitch and intermediate-gain differences. Those fixes are the next
+bounded dependency; SPU waveform and live event-time comparison remain pending.
 
 ## First-mismatch notes
 

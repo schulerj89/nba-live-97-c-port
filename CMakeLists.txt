@@ -191,6 +191,10 @@ if(BUILD_TESTING)
     target_compile_features(nba97_frontend_help_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_help_tests PRIVATE src)
     add_test(NAME frontend_help_core COMMAND nba97_frontend_help_tests)
+    add_executable(nba97_frontend_help_presentation_tests tests/frontend_help_presentation_test.cpp src/recovered/frontend_help.c)
+    target_compile_features(nba97_frontend_help_presentation_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_help_presentation_tests PRIVATE src)
+    add_test(NAME frontend_help_presentation COMMAND nba97_frontend_help_presentation_tests)
     add_executable(nba97_reorder_child_tests tests/reorder_child_test.cpp
         src/main_menu.cpp src/create_player_preview.cpp src/ps1_vram_texture.cpp src/zdomf_model.cpp src/zdomf_transform.cpp src/zdomf_projection.cpp src/zdomf_hierarchy.cpp src/zdomf_mocap.cpp src/zdomf_runtime.cpp src/zdomf_gte_compose.cpp src/frontend_settings.cpp src/user_profiles.cpp
         src/roster_database.cpp src/psh_font.cpp src/recovered/reorder_children.c

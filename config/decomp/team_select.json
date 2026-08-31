@@ -10,11 +10,12 @@
   },
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
-    "native_unit": "tests/team_select_test.cpp, tests/team_select_poll_test.cpp and tests/team_ratings_test.cpp",
+    "native_unit": "tests/team_select_test.cpp, tests/team_select_poll_test.cpp, tests/team_ratings_test.cpp and tests/frontend_help_presentation_test.cpp",
     "host_integration": "scripts/verify_team_select.ps1; synthetic handler input, isolated saves",
     "original_team_select_runtime": "pending",
     "original_historical_rank_cache": "145/145 scores and145/145 ranks match cached original FEONLY RAM; not a state3 capture",
-    "native_rendering": "88 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration",
+    "native_rendering": "98 combined Team Select/User Setup deterministic scenarios; two independent runs per configuration; completed Team Select frames retained across callback and repaint",
+    "presentation_source_comparison": "33726 private original-MIPS/compiled-C Help assertions across342 cases/10854 visible frames; exact extracted host passes15 phase cases/204 assertions; hooks exclude GPU, OS and live timing; see docs/team_select_presentation_workflow.md",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
     "state5_confirmation": "assignment/editor/Help/warnings/delete, v2 transactions and owned partial snapshot implemented; see user_setup.json and match_setup.json; original runtime and gameplay pending"
@@ -104,10 +105,11 @@
       "scope": "shared_dependency",
       "instructions_accounted": 0,
       "instructions_total": 276,
-      "native_owner": "updateTeamSelect native presentation adapter; remaining pump pending",
+      "native_owner": "updateTeamSelect/composeTeamSelectFrame pre-input frame ownership; remaining pump pending",
       "shared_dependencies": [],
       "tests_evidence": [
-        "docs/team_select_workflow.md"
+        "docs/team_select_workflow.md",
+        "docs/team_select_presentation_workflow.md"
       ],
       "remaining_uncertainty": "Per-block semantic assignment/credit pending; full denominator retained. Native behavior/fixture evidence is separate from original state3 runtime, timing, audio and physical-input equivalence."
     },

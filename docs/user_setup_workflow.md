@@ -108,14 +108,17 @@ power-loss and ambiguous OS replacement outcomes remain unverified.
 Extract with tools/extract_user_setup.py after Team Select extraction. Run
 scripts/verify_team_select.ps1 with fresh isolated settings/profile/created/roster
 paths. It rejects unsafe defaults and fingerprints all real save/config files.
-The88 capture scenarios include held input, exit barriers, topology changes,
+The98 combined capture scenarios include held input, exit barriers, topology changes,
 both Help pages, editor controls, duplicate/full/
 capacity warnings, failed-save retry, rename/no-op, delete cancel/invalid input/
 eight-update delay/final barrier, restart, abandonment, shoulder chords and
 owned ordinary-exhibition snapshots with retained controls/current saved rosters.
-Twelve controlled-clock placement checkpoints additionally cover hidden entry,
+Twelve controlled-clock placement checkpoints cover hidden entry,
 rebuilds, delayed disconnect/reconnect, Help return and retained editor state.
 Repeated native frames measure regression stability, not original GPU equivalence.
+Ten Team Select presentation checkpoints distinguish submitted pixels from
+post-frame input mutations. They do not change this owner's modal scheduling;
+see team_select_presentation_workflow.md.
 
 Public tests cover all6,561 assignments, eligibility, repeat/clock ordering,
 editor alphabet and width boundaries, inherited acknowledgments, modal controller

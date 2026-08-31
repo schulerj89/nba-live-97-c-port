@@ -30,6 +30,12 @@ Nba97HelpEvent nba97_help_open(Nba97HelpModal*, Nba97HelpRect, uint16_t invoking
 Nba97HelpEvent nba97_modal_open_prior(Nba97HelpModal*,Nba97HelpRect,uint16_t prior_mask);
 Nba97HelpEvent nba97_help_input(Nba97HelpModal*, uint16_t raw_mask);
 Nba97HelpEvent nba97_help_tick(Nba97HelpModal*, uint16_t raw_mask);
+/* Two-phase presentation adapter: geometry advances before drawing; raw input
+ * is sampled afterward. Supply a distinct visible snapshot. Terminal growth
+ * shows the full box without text:40A1C creates text after that frame returns.
+ * Returns1 only when this frame permits nba97_help_input AFTER presentation.
+ * Other owners can retain the combined tick API until their phase is audited. */
+int nba97_help_prepare_presentation(Nba97HelpModal* state,Nba97HelpModal* shown);
 int nba97_help_visible(const Nba97HelpModal*);
 int nba97_help_text_visible(const Nba97HelpModal*);
 #ifdef __cplusplus

@@ -9,7 +9,7 @@
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
     "native_unit": "tests/user_setup_test.cpp, tests/user_setup_session_test.cpp, tests/user_setup_visibility_test.cpp, tests/user_profiles_test.cpp, tests/frontend_help_test.cpp",
-    "host_integration": "88 combined isolated scenarios including retained topology/row placement, shared history, Cancel barrier and partial match snapshots; same-update inline save continuation asserted",
+    "host_integration": "98 combined isolated scenarios including retained topology/row placement, shared history, Cancel barrier and partial match snapshots; same-update inline save continuation asserted; ten additional Team Select presentation checkpoints do not change state5 modal scheduling",
     "original_runtime": "pending",
     "native_rendering": "two-run deterministic frames; original-font inline baseline plus independent retained label/marker target pixel checks",
     "placement_source_comparison": "11895 private compiled-C/original-MIPS target and tint assertions; 7 extracted-host save/delete/modal paths; controlled fixtures, not a live original run",
