@@ -779,6 +779,19 @@ private:
         frontend_page_=nba97::FrontendPage::GameSetup;frontend_transition_active_=false;menu_elapsed_ms_=0;
         std::ofstream states(output/"states.json");states<<"[\n";unsigned count=0;
         auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
+        const auto write_paints=[](std::ostream& out,const Nba97TeamTextPaint* paint,unsigned size) {
+            out<<'[';
+            for(unsigned i=0;i<size;++i) {
+                if(i)out<<',';
+                const auto& p=paint[i];const auto& t=p.tint;
+                out<<"{\"flags\":"<<unsigned(t.flags)<<",\"duration\":"<<unsigned(t.duration)<<
+                    ",\"elapsed\":"<<unsigned(t.elapsed)<<",\"start\":["<<unsigned(t.start[0])<<','<<
+                    unsigned(t.start[1])<<','<<unsigned(t.start[2])<<"],\"rgb\":["<<unsigned(t.rgb[0])<<','<<
+                    unsigned(t.rgb[1])<<','<<unsigned(t.rgb[2])<<"],\"known\":"<<unsigned(p.rgb_known)<<
+                    ",\"active\":"<<unsigned(p.active)<<'}';
+            }
+            out<<']';
+        };
         auto frame=[&](const char* name,const nba97::RosterDatabase::SlotTable* expected_roster=nullptr) {
             const bool cached_team=frontend_page_==nba97::FrontendPage::TeamSelect && team_select_frame_valid_;
             const auto prior_pixels=cached_team ? menu_frame_.bgra:std::vector<uint8_t>{};
@@ -848,6 +861,14 @@ private:
             poses("logical_arrows",team_select_placement_.arrow,4);
             poses("logical_labels",team_select_placement_.label,12);
             poses("logical_values",team_select_placement_.value,12);
+            Nba97TeamTextView logical_text{};nba97_team_text_view(&team_select_text_,&logical_text);
+            states<<",\"text_anchored\":"<<unsigned(logical_text.anchored)<<
+                ",\"text_hint\":"<<team_select_text_.hint<<",\"shown_arrow_tints\":";
+            write_paints(states,team_select_shown_text_.arrow,4);
+            states<<",\"logical_arrow_tints\":";write_paints(states,logical_text.arrow,4);
+            states<<",\"shown_label_tints\":";write_paints(states,team_select_shown_text_.label,12);
+            states<<",\"shown_value_tints\":";write_paints(states,team_select_shown_text_.value,12);
+            states<<",\"text_help_active\":"<<unsigned(team_select_text_.help_active);
             states<<'}';
             require(roster_database_.slotTable()==(expected_roster ? *expected_roster:slots) && roster_database_.baseIdentity()==identity,
                 "Team Select mutated accepted roster/identity");
@@ -1266,6 +1287,8 @@ private:
                 while(settings_.option(3)!=setting)settings_.adjustOption(3,settings_.option(3)<setting ? 1:-1);
                 team_select_rng_=seed;cursor_rng_draws_=0;team_select_random_={};team_select_exit_wait_=false;
                 nba97_team_select_open(&team_select_,3,24,3,24);nba97_team_poll_open(&team_select_poll_);
+                nba97_team_text_unknown(&team_select_text_);
+                require(nba97_team_text_open(&team_select_text_,0)!=0,"RNG fixture text entry");
                 const auto title_rng=frontend_rng_;const auto title_draws=frontend_rng_draws_;
                 const auto presentations=team_select_presentations_;
                 dispatchTeamSelect({0x40,5,0});
@@ -1283,6 +1306,62 @@ private:
         rng_cases<<"]\n";
         while(settings_.option(3)!=saved_setting)settings_.adjustOption(3,settings_.option(3)<saved_setting ? 1:-1);
         trace_.log("CURSOR-RNG-CASES","PASS:4 seeded actual Circle dispatches; cue acceptance before candidate; title RNG/presentations unchanged");
+        // Exercise real host polling/composition with explicit color premises.
+        // These seeds are test inputs, never bootstrap assumptions for users.
+        std::ofstream flash_cases(output/"arrow_flash_cases.json");flash_cases<<'[';
+        unsigned flash_case=0;
+        for(unsigned seed_kind=0;seed_kind<3;++seed_kind) for(unsigned arrow=0;arrow<4;++arrow) {
+            const unsigned setting=(arrow&1) ? 9:0;
+            while(settings_.option(3)!=setting)settings_.adjustOption(3,settings_.option(3)<setting ? 1:-1);
+            frontend_page_=nba97::FrontendPage::GameSetup;frontend_transition_active_=false;
+            releaseFrontendPadKeys();team_select_focus_=(arrow/2)*6;
+            if(!seed_kind) nba97_team_text_unknown(&team_select_text_);
+            else {
+                std::array<uint8_t,NBA97_TEAM_TEXT_SEED_BYTES> seed{};
+                if(seed_kind==2) for(unsigned i=0;i<200;++i) {
+                    seed[i*3]=17;seed[i*3+1]=203;seed[i*3+2]=91;
+                }
+                require(nba97_team_text_seed(&team_select_text_,seed.data(),seed.size(),37)!=0,"explicit flash seed");
+            }
+            require(openTeamSelect(),"flash fixture entry");frontend_page_=nba97::FrontendPage::TeamSelect;
+            composeTeamSelectFrame(team_select_help_,true);
+            const auto unpresented=team_select_text_;
+            rebuildMenuFrame();rebuildMenuFrame();
+            require(!std::memcmp(&unpresented,&team_select_text_,sizeof(unpresented)),"repaint advanced text history");
+            handleMenuKey((arrow&1) ? VK_RIGHT:VK_LEFT);ticks(1);releaseFrontendPadKeys();
+            if(flash_case++)flash_cases<<',';
+            flash_cases<<"{\"seed_kind\":"<<seed_kind<<",\"arrow\":"<<arrow<<",\"audio_setting\":"<<setting<<",\"frames\":[";
+            unsigned pixel_checks=0;
+            for(unsigned step=0;step<=21;++step) {
+                if(step) {ticks(1);flash_cases<<',';}
+                Nba97TeamTextView logical{};require(nba97_team_text_view(&team_select_text_,&logical)!=0,"flash view");
+                const std::string code(1,static_cast<char>((arrow&1) ? 0x8a:0x8d));
+                const auto* glyph=menu_font_.glyph(code[0]);require(glyph!=nullptr,"original arrow glyph");
+                const auto& shown=team_select_shown_text_.arrow[arrow];
+                const auto& pose=team_select_shown_placement_.arrow[arrow];
+                const int left=pose.x-menu_font_.textWidth(code)/2,top=pose.y-glyph->center_y;
+                for(unsigned y=0;y<glyph->height;++y) for(unsigned x=0;x<glyph->width;++x) {
+                    const auto source=(y*glyph->width+x)*4;
+                    if(!glyph->rgba[source+3]) continue;
+                    const int px=left+x,py=top+y;
+                    if(px<0 || px>=512 || py<0 || py>=240) continue;
+                    for(unsigned channel=0;channel<3;++channel) {
+                        const unsigned modulation=(shown.rgb_known&(1u<<channel)) ? shown.tint.rgb[channel]:128;
+                        const unsigned expected=(std::min)(255u,unsigned(glyph->rgba[source+channel])*modulation/128);
+                        require(menu_frame_.bgra[(py*512+px)*4+2-channel]==expected,
+                            "arrow pixels must preserve original glyph channels and neutral128 modulation");
+                        ++pixel_checks;
+                    }
+                }
+                flash_cases<<"{\"shown\":";write_paints(flash_cases,team_select_shown_text_.arrow,4);
+                flash_cases<<",\"logical\":";write_paints(flash_cases,logical.arrow,4);flash_cases<<'}';
+            }
+            require(pixel_checks>0,"flash pixel fixture exercised no glyphs");
+            flash_cases<<"],\"pixel_checks\":"<<pixel_checks<<'}';
+        }
+        flash_cases<<"]\n";
+        while(settings_.option(3)!=saved_setting)settings_.adjustOption(3,settings_.option(3)<saved_setting ? 1:-1);
+        trace_.log("TEAM-FLASH-CASES","PASS:12 host cases, four directions/pages with unknown/zero/unequal inherited colors; mute independent; repaint isolation");
         trace_.log("TEAM-CAPTURE","PASS: "+std::to_string(count)+" original-asset native frames; host Team Select/User Setup/editor/modal/transaction/restart scenarios; match handoff pending; no real saves");
         return 0;
     }
@@ -5767,8 +5846,9 @@ private:
                 team_select_.remembered_regular[0],team_select_.remembered_regular[1]);
             nba97_team_select_restore_focus(&team_select_,team_select_focus_);
             nba97_team_select_placement_open(&team_select_placement_,team_select_.side);
-            for(auto& tint:team_select_tints_) {tint={};std::fill_n(tint.rgb,3,uint8_t(128));}
-            nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
+            if(!team_select_text_.initialized) nba97_team_text_unknown(&team_select_text_);
+            if(!nba97_team_text_open(&team_select_text_,team_select_focus_))
+                throw std::runtime_error("Team Select text construction refused");
             nba97_frontend_palette_begin(&team_select_palette_,team_select_assets_->backgrounds().bank(),33,
                 team_select_.team[1],team_select_.team[0]);
             if(frontend_page_==nba97::FrontendPage::UserSetup) {
@@ -5784,7 +5864,7 @@ private:
                 " focus="+std::to_string(team_select_focus_)+" roster-generation="+
                 std::to_string(roster_store_ ? roster_store_->accepted().generation:0)+
                 " modified="+std::to_string(roster_database_.differsFromOriginal())+
-                "; current roster ranks8005DB34; placement8004FA3C, graphic-count2 bypasses text settle; settings/catalogue retained; native clock/seed history unverified");
+                "; current roster ranks8005DB34; placement8004FA3C, graphic-count2 bypasses text settle; retained text200; inherited RGB unknown unless established; settings/catalogue retained; native clock/seed history unverified");
             return true;
         } catch(const std::exception& error) {
             trace_.log("TEAM-ENTRY-REFUSED",error.what());return false;
@@ -5830,8 +5910,11 @@ private:
             const auto event=nba97_team_select_input(&team_select_,&team_select_ranks_,token);
             if(event==NBA97_SELECT_SIDE)
                 nba97_team_select_placement_switch_side(&team_select_placement_,before.side);
-            if(event==NBA97_SELECT_TEAM)
+            if(event==NBA97_SELECT_TEAM) {
                 nba97_team_select_placement_refresh_values(&team_select_placement_,team_select_.side);
+                if(!nba97_team_text_direction(&team_select_text_,team_select_.side,old_focus))
+                    throw std::runtime_error("Team Select directional text replacement refused");
+            }
             const auto wait=nba97_team_poll_caller_wait(token,sample.delay);
             team_select_focus_=team_select_.side*6+team_select_.criterion;
             if(event==NBA97_SELECT_CONTINUE || event==NBA97_SELECT_RETURN) {
@@ -5844,6 +5927,13 @@ private:
                     "; teams/focus retained; next screen is User Setup");
             }
             if(team_select_.sound) playBottomMenuSound(team_select_.sound,"team-selector");
+            // 3D534 follows the descriptor callback and its sound latch. Muting
+            // audio or a failed device submission must not suppress this flash.
+            if(team_select_.sound && (token==8 || token==4)) {
+                const unsigned arrow=team_select_.side*2+(token==4);
+                if(!nba97_team_text_flash(&team_select_text_,arrow))
+                    throw std::runtime_error("Team Select arrow flash refused");
+            }
             if(event==NBA97_SELECT_HELP) {
                 nba97_help_open(&team_select_help_,team_select_assets_->help().descriptor(3,0).rect,token);
                 playBottomMenuSound(7,"team-help-open");
@@ -5851,13 +5941,15 @@ private:
             if(event==NBA97_SELECT_RANDOM) {
                 nba97_team_random_begin(&team_select_random_,&team_select_,team_select_rng_.data());
                 nba97_team_select_placement_refresh_values(&team_select_placement_,team_select_.side);
+                if(!nba97_team_text_refresh(&team_select_text_,team_select_.side))
+                    throw std::runtime_error("Team Select Random text replacement refused");
                 trace_.log("TEAM-RANDOM","owner8004F934 candidate1; 78 presentations + caller5 + next-poll1; held input blocked");
             }
             if(event!=NBA97_SELECT_HELP && event!=NBA97_SELECT_RANDOM && !team_select_exit_wait_)
                 nba97_team_poll_finish_callback(&team_select_poll_,wait);
             if(old_focus!=team_select_focus_) {
-                nba97_reorder_tint_unpulse(&team_select_tints_[old_focus]);
-                nba97_reorder_tint_pulse(&team_select_tints_[team_select_focus_]);
+                if(!nba97_team_text_focus(&team_select_text_,team_select_focus_))
+                    throw std::runtime_error("Team Select text focus refused");
             }
             teamSelectPalette();
             if(event!=NBA97_SELECT_NONE || !team_select_poll_.pad.repeat_counter)
@@ -5877,13 +5969,17 @@ private:
         // Project queued placement on a COPY; only the source presentation
         // below may advance live objects, title/tints, palette or input.
         if(entry_preview) nba97_team_select_placement_tick(&shown_placement);
+        Nba97TeamTextView shown_text{};
+        if(!nba97_team_text_view(&team_select_text_,&shown_text))
+            throw std::runtime_error("Team Select text view refused");
         auto image=nba97::renderTeamSelect(team_select_,team_select_ranks_,*team_select_assets_,
-            team_select_sprites_,menu_font_,control_font_,team_select_palette_,team_select_tints_,shown_placement,frontend_title_.corners());
+            team_select_sprites_,menu_font_,control_font_,team_select_palette_,shown_text,shown_placement,frontend_title_.corners());
         if(nba97_help_visible(&shown_help)) team_select_assets_->help().draw(image,control_font_,
             team_select_assets_->help().descriptor(3,0),shown_help);
         menu_frame_=makeFrame(image);
         team_select_shown_=team_select_;team_select_shown_help_=shown_help;
         team_select_shown_placement_=shown_placement;team_select_shown_entry_preview_=entry_preview;
+        team_select_shown_text_=shown_text;
         team_select_shown_presentation_=team_select_presentations_;team_select_frame_valid_=true;
     }
 
@@ -5901,17 +5997,25 @@ private:
             team_select_tick_=now; // Stall stretches time; never skip unseen presentations.
             ++team_select_presentations_;
             Nba97HelpModal shown_help=team_select_help_;
+            const auto prior_help_phase=team_select_help_.phase;
             const bool poll_help=help && nba97_help_prepare_presentation(&team_select_help_,&shown_help);
             prepareFrontendTitle();presentFrontendTitle();frontend_title_painted_=false;
-            nba97_team_select_placement_tick(&team_select_placement_);
-            for(auto& tint:team_select_tints_) nba97_reorder_tint_tick(&tint);
+            if(team_select_poll_.phase!=NBA97_TEAM_EXIT_FINAL)
+                nba97_team_select_placement_tick(&team_select_placement_);
+            if(!nba97_team_text_present(&team_select_text_))
+                throw std::runtime_error("Team Select text presentation refused");
             nba97_frontend_palette_tick(&team_select_palette_,team_select_assets_->backgrounds().bank(),33);
             // 39574 submits before3AE4C samples input or4F934 chooses the
             // next candidate. Later rebuild/WM_PAINT must retain THIS frame.
             composeTeamSelectFrame(shown_help);
             if(help) {
+                if(prior_help_phase==NBA97_HELP_GROWING && team_select_help_.phase==NBA97_HELP_WAIT_CHANGE &&
+                   !nba97_team_text_help_create(&team_select_text_))
+                    throw std::runtime_error("Team Select Help text creation refused");
                 const auto event=poll_help ? nba97_help_input(&team_select_help_,team_select_held_):NBA97_HELP_NO_EVENT;
                 if(event==NBA97_HELP_CLOSE_SOUND) {
+                    if(!nba97_team_text_help_retire(&team_select_text_))
+                        throw std::runtime_error("Team Select Help text retirement refused");
                     team_select_poll_.pad.prior_mask=team_select_help_.held;
                     playBottomMenuSound(8,"team-help-close");
                 }
@@ -5919,6 +6023,8 @@ private:
             } else if(random) {
                 if(nba97_team_random_tick(&team_select_random_,&team_select_,team_select_rng_.data())) {
                     nba97_team_select_placement_refresh_values(&team_select_placement_,team_select_.side);
+                    if(!nba97_team_text_refresh(&team_select_text_,team_select_.side))
+                        throw std::runtime_error("Team Select Random text replacement refused");
                     teamSelectPalette();
                     trace_.log("TEAM-RANDOM","owner8004F934/8007A538 accepted="+
                         std::to_string(12-team_select_random_.remaining)+" team="+
@@ -5929,13 +6035,18 @@ private:
             } else {
                 const uint16_t pads[8]={team_select_held_};Nba97TeamSample sample{};
                 const auto event=nba97_team_poll_presented(&team_select_poll_,pads,&sample);
+                if(team_select_poll_.phase==NBA97_TEAM_EXIT_FINAL &&
+                   !nba97_team_text_retire_all(&team_select_text_))
+                    throw std::runtime_error("Team Select exit text retirement refused");
                 if(event==NBA97_TEAM_POLL_INPUT) dispatchTeamSelect(sample);
                 if(event==NBA97_TEAM_POLL_EXITED) {
                     team_select_exit_wait_=false;
                     const auto target=team_select_.result==1 ? nba97::FrontendPage::UserSetup:nba97::FrontendPage::GameSetup;
                     beginFrontendTransition(target,"state3 exit;3B194 changed initiating input then39574(0,1) cleanup; teams/focus retained");
                     if(frontend_page_==nba97::FrontendPage::TeamSelect) {
-                        team_select_.result=0;nba97_team_poll_open(&team_select_poll_);
+                        // A refused native destination needs a fresh screen:
+                        // its old source text was already freed by cleanup.
+                        if(!openTeamSelect()) throw std::runtime_error("Team Select recovery after refused exit failed");
                     }
                     return;
                 }
@@ -7533,6 +7644,8 @@ private:
         transition_source_ = menu_frame_;
         const auto previous_page = frontend_page_;
         frontend_page_ = target;
+        if(target!=nba97::FrontendPage::GameSetup && target!=nba97::FrontendPage::TeamSelect)
+            nba97_team_text_invalidate(&team_select_text_);
         if(target==nba97::FrontendPage::TeamSelect || target==nba97::FrontendPage::UserSetup) {}
         else if(target==nba97::FrontendPage::TradePlayers || target==nba97::FrontendPage::SignFreeAgent || target==nba97::FrontendPage::ReleasePlayers)openTrade();
         else if (target == nba97::FrontendPage::ReorderRosters) openReorder();
@@ -7677,7 +7790,8 @@ private:
     bool team_select_shown_entry_preview_=false;
     bool team_select_frame_valid_=false;
     uint64_t team_select_shown_presentation_=0;
-    std::array<Nba97ReorderTint,12> team_select_tints_{};
+    Nba97TeamTextState team_select_text_{};
+    Nba97TeamTextView team_select_shown_text_{};
     std::array<uint32_t,6> team_select_rng_{};
     uint64_t cursor_rng_draws_=0;
     bool cursor_rng_ready_=false;

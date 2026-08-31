@@ -11,6 +11,7 @@
 #include "recovered/create_player.h"
 #include "recovered/team_select.h"
 #include "recovered/team_select_placement.h"
+#include "recovered/team_select_text.h"
 #include "recovered/game_setup.h"
 #include "recovered/user_setup.h"
 
@@ -395,7 +396,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect&, const Nba97TeamRanks&,
                          const TeamSelectAssets&, const MenuSpritePack&,
                          const PshFont&, const PshFont&,
                          const Nba97FrontendPalette&,
-                         const std::array<Nba97ReorderTint,12>&,
+                         const Nba97TeamTextView&,
                          const Nba97TeamSelectPlacement&,
                          const int16_t* title_corners=nullptr);
 PshImage renderUserSetup(const Nba97UserSetup&,const Nba97UserNames&,

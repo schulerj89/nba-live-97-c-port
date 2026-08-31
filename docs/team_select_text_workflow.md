@@ -1,5 +1,9 @@
 # Team Select retained text placement
 
+Later color-history implementation and its explicit unknown-entry policy are
+documented in [Team Select arrow flash](team_select_arrow_flash_workflow.md).
+The placement checkpoint and its unchanged-pixel results below are historical.
+
 2026-08-30. The native screen now retains separate label/value placement and
 all four arrow nodes through entry, Cross, team replacement and presentation.
 This recovers a bounded source state boundary. It does not establish allocator

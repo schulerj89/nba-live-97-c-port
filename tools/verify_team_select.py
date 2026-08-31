@@ -179,12 +179,61 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
     print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh saved-roster ranks, controls lifetime and pending guards")
 
 
+def arrow_flash_cases(first, second):
+    cases = read(first / "arrow_flash_cases.json")
+    require(cases == read(second / "arrow_flash_cases.json"), "arrow flash host nondeterminism")
+    require([(c["seed_kind"], c["arrow"]) for c in cases] ==
+            [(seed, arrow) for seed in range(3) for arrow in range(4)], "missing flash host cases")
+    # Independent source schedule: four interpolation updates, transition,
+    # ten hold updates, transition, four return updates, cleanup. Signed
+    # divisions truncate toward zero, including unequal inherited channels.
+    def blend(start, target, elapsed):
+        return [a + (1 if b >= a else -1) * (abs(b-a)*elapsed//4)
+                for a, b in zip(start, target)]
+    gold, neutral = [120,102,0], [128,128,128]
+    for case in cases:
+        seed, arrow = case["seed_kind"], case["arrow"]
+        require(case["audio_setting"] == (9 if arrow & 1 else 0), "flash mute case drift")
+        frames = case["frames"]
+        require(len(frames) == 22, "flash schedule must include scheduling and21 updates")
+        require(type(case["pixel_checks"]) is int and case["pixel_checks"] > 0,
+                "flash needs original-glyph per-channel pixel checks")
+        initial = [17,203,91] if seed == 2 else [0,0,0]
+        for tick, frame in enumerate(frames):
+            require(len(frame["shown"]) == len(frame["logical"]) == 4, "four retained arrows required")
+            for index, paint in enumerate(frame["logical"]):
+                require(paint["active"] == 1, "live arrow disappeared during flash")
+                if index != arrow:
+                    require(paint["flags"] == 0 and paint["rgb"] == neutral and paint["known"] == 7,
+                            "flash changed the wrong arrow")
+            paint = frame["logical"][arrow]
+            flags = 0x42 if tick <= 4 else 0xc2 if tick <= 15 else 0x82 if tick <= 20 else 0
+            duration = 10 if 5 <= tick <= 15 else 4
+            elapsed = tick if tick <= 4 else tick-5 if tick <= 15 else min(tick-16,4)
+            rgb = neutral if not tick else blend(initial,gold,tick) if tick <= 4 else \
+                gold if tick <= 16 else blend(gold,neutral,min(tick-16,4))
+            known = 0 if not seed and 1 <= tick <= 3 else 7
+            require((paint["flags"],paint["duration"],paint["elapsed"],paint["known"]) ==
+                    (flags,duration,elapsed,known), f"flash phase/mask mismatch {seed}/{arrow}/{tick}")
+            if known:
+                require(paint["rgb"] == rgb, f"flash RGB mismatch {seed}/{arrow}/{tick}")
+            if tick:
+                require(frame["shown"] == frame["logical"], "completed flash frame differs from pre-poll state")
+            else:
+                require(all(p["flags"] == 0 and p["rgb"] == neutral and p["known"] == 7
+                            for p in frame["shown"]), "flash leaked into the already submitted input frame")
+        require(frames[-1]["logical"][arrow]["start"] == [120,128,128],
+                "flash cleanup lost source retained-red quirk")
+    print("TEAM FLASH HOST PASS:12 cases/264 frames; all4 arrows, unknown/zero/unequal seeds, mute and presentation order")
+
+
 def capture(first, second, contract, fixture):
     require(first.resolve() != second.resolve(), "two distinct capture directories required")
     states = read(first / "states.json")
     require(states == read(second / "states.json"), "native state nondeterminism")
     require([s["id"] for s in states] == [s["id"] for s in contract["native_frames"]], "scenario list drift")
     by_id = {s["id"]: s for s in states}
+    arrow_flash_cases(first, second)
     # These harness checkpoints precede the newly opened screen's first
     # requested presentation. Do not allow artifacts to redefine that boundary.
     preview_frames = {"entry", "left-before-poll", "reentry", "user-editor-abandon",
@@ -246,6 +295,22 @@ def capture(first, second, contract, fixture):
     require(by_id["reentry"]["value_head_moving"] == 8 and by_id["start-held-exit"]["poll_phase"] == 4,
             "type41 graphics must bypass pending away-value settlement before Start")
     print("TEAM PLACEMENT HOST PASS: separate label/value and4 retained arrow poses; preview isolation and source graphics bypass")
+    require(all(p["flags"] == 0 for p in by_id["home-left"]["shown_arrow_tints"]) and
+            by_id["home-left"]["logical_arrow_tints"][0]["flags"] == 0x42,
+            "Left flash must be scheduled after the input presentation")
+    first_flash = by_id["left-first-post-frame"]["shown_arrow_tints"][0]
+    require(first_flash["elapsed"] == 1 and first_flash["known"] == 0,
+            "unanchored entry silently invented first-flash RGB")
+    held = by_id["left-held-repeat"]["logical_arrow_tints"][0]
+    require(held["flags"] == 0xc2 and held["elapsed"] == 0,
+            "held Left must retrigger the hold clock")
+    require(by_id["help-full-box"]["text_help_active"] == 1 and
+            by_id["help-ack-frame"]["text_help_active"] == 0,
+            "Help allocation/retirement boundary mismatch")
+    for name in ("select-cleanup", "start-cleanup"):
+        require(all(p["active"] for p in by_id[name]["shown_arrow_tints"]) and
+                not any(p["active"] for p in by_id[name]["logical_arrow_tints"]),
+                "exit retirement changed an already completed frame")
     require(by_id["help-full-box"]["shown_help_width"] == by_id["help-first-text"]["shown_help_width"] ==
             by_id["help-ack-frame"]["shown_help_width"], "full Help box changed before shrinking")
     for actual in states:

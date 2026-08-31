@@ -635,7 +635,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
                          const TeamSelectAssets& assets, const MenuSpritePack& sprites,
                          const PshFont& font, const PshFont& small,
                          const Nba97FrontendPalette& palette,
-                         const std::array<Nba97ReorderTint,12>& tint,
+                         const Nba97TeamTextView& text_state,
                          const Nba97TeamSelectPlacement& placement,
                          const int16_t* title_corners) {
     PshImage image;image.width=512;image.height=240;image.tag="TSEL";
@@ -653,20 +653,23 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
             blitReorderPlate(image,sprites.at(assets.team(state.team[1]).logo),40,16,0);
         }
     }
-    draw_psh_text_centered(image,small,assets.heading(),258,66);
-    const auto text=[&](const std::string& value,int x,int y,unsigned object) {
-        const auto& rgb=tint.at(object).rgb;
-        drawCenteredText(image,font,value,x,y,1,
-            static_cast<uint8_t>(std::min(255,int(rgb[0])*255/128)),
-            static_cast<uint8_t>(std::min(255,int(rgb[1])*255/128)),
-            static_cast<uint8_t>(std::min(255,int(rgb[2])*255/128)));
+    const auto text=[&](const PshFont& face,const std::string& value,int x,int y,
+                        const Nba97TeamTextPaint& paint) {
+        if(!paint.active) return;
+        uint8_t rgb[3];
+        // Unknown inherited channels remain explicitly pending in state/trace.
+        // Neutral display is a native fallback, not an inferred source seed.
+        for(unsigned c=0;c<3;++c)
+            rgb[c]=(paint.rgb_known&(1u<<c)) ? paint.tint.rgb[c]:128;
+        draw_psh_text_centered(image,face,value,x,y,rgb);
     };
+    text(small,assets.heading(),258,66,text_state.header);
     for(unsigned side=0;side<2;++side) {
         const auto& name=assets.team(state.team[side]);
         const auto& name_node=placement.value[side*6];
         if(name_node.alive) {
-            text(name.city,name_node.x,name_node.y,side*6);
-            text(name.nickname,name_node.x,name_node.y+16,side*6);
+            text(font,name.city,name_node.x,name_node.y,text_state.value[side*6]);
+            text(font,name.nickname,name_node.x,name_node.y+16,text_state.value[side*6]);
         }
         for(unsigned category=0;category<5;++category) {
             const auto object=side*6+category+1;
@@ -678,16 +681,14 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
                     rank%10==1 ? "st":rank%10==2 ? "nd":rank%10==3 ? "rd":"th";
                 value=std::to_string(rank)+suffix;
             }
-            if(value_node.alive) text(value,value_node.x,value_node.y,object);
+            if(value_node.alive) text(font,value,value_node.x,value_node.y,text_state.value[object]);
             const auto& label_node=placement.label[object];
-            if(label_node.alive) text(assets.criterion(category),label_node.x,label_node.y,object);
+            if(label_node.alive) text(font,assets.criterion(category),label_node.x,label_node.y,text_state.label[object]);
         }
     }
-    // Four source nodes persist, including the offscreen pair. Their initial
-    // visible color is neutral; history-dependent first-flash tint is pending.
+    // All four source nodes persist and animate, including the offscreen pair.
     for(unsigned i=0;i<4;++i) if(placement.arrow[i].alive)
-        draw_psh_text_centered(image,font,i&1 ? "\x8a":"\x8d",
-                               placement.arrow[i].x,placement.arrow[i].y);
+        text(font,i&1 ? "\x8a":"\x8d",placement.arrow[i].x,placement.arrow[i].y,text_state.arrow[i]);
     return image;
 }
 

@@ -1,5 +1,10 @@
 # Team Select inherited text colors and capture contract
 
+The later [arrow flash checkpoint](team_select_arrow_flash_workflow.md) adds
+bounded native allocation history and color animation. This document retains
+the earlier construction evidence and safe capture procedure; it does not
+provide a universal seed for every entry route.
+
 2026-08-30. This checkpoint closes bounded upstream text-history questions and
 adds a read-only saved-RAM inspector. Four actual arrow constructions are now
 observed and compared with the source. It changes no game behavior or native
