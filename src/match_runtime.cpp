@@ -294,6 +294,7 @@ MatchRuntimeState prepareMatchRuntime(const MatchSnapshot& snapshot,GameplaySetu
        !snapshot.controller_initialization.prepared)throw std::runtime_error("unprepared match snapshot/resources");
     MatchRuntimeState s{};s.accepted=std::make_shared<const MatchSnapshot>(snapshot);s.setup=std::move(setup);
     s.scalar=entry.scalar;s.auxiliary=entry.auxiliary;s.incoming_s6=entry.incoming_s6;
+    s.render_flag21498=entry.render_flag21498;
     for(unsigned i=0;i<11;++i)s.entity[i].record=entry.entity[i];
     // Actual659F0 A3A74 clears cover bothC4 headers and24 status records.
     for(auto& t:s.team)t.clearFromSource();for(auto& status:s.status)status.clearFromSource();
@@ -358,6 +359,60 @@ MatchRuntimePeriodResult initializeMatchRuntimePeriod(MatchRuntimeState& live) {
         if(result.result==NBA97_PERIOD_COMPLETE) {
             importPeriod(candidate,period);++candidate.completed_period_initializations;live=std::move(candidate);
         }
+    } catch(const std::exception& e) {result.detail=e.what();}
+    return result;
+}
+
+MatchRuntimeAttributesResult initializeMatchRuntimeAttributes(MatchRuntimeState& live) {
+    MatchRuntimeAttributesResult result;
+    try {
+        if(!live.accepted)throw std::runtime_error("missing accepted match players");
+        auto candidate=live;
+        std::vector<Nba97GameAttributePlayer> players;
+        players.reserve(candidate.players.size());
+        for(const auto& p:candidate.players) {
+            // Original player offsets: ratings begin at0E; metadata begins1F.
+            // Byte20 is metadata[1], not the decimal20 rating field.
+            players.push_back({p.height_inches,p.source_metadata[1],p.ratings[16],
+                p.ratings[13],p.ratings[6],p.ratings[14],p.ratings[7]});
+        }
+        Nba97GamePlayerAttributesInput in{};
+        in.players=players.data();in.player_count=players.size();
+        const auto first=candidate.entity_table[0];
+        in.first_entity=first.record;in.first_known=first.known;
+        const auto divisor=candidate.scalar[NBA97_PERIOD_FDB64];
+        in.divisor64=divisor.word;in.divisor_known=divisor.known;
+        const auto flag=candidate.render_flag21498;
+        if(flag.word>UINT16_MAX)throw std::runtime_error("render flag exceeds source halfword");
+        in.flag21498=std::uint16_t(flag.word);in.flag_known=flag.known;
+        for(unsigned i=0;i<11;++i) {
+            const auto id=candidate.entity[i].record.read(0,4);
+            const auto player=candidate.entity[i].player;
+            if(player.word>UINT16_MAX)throw std::runtime_error("player reference exceeds owned index capacity");
+            in.entity[i]={id.word,std::uint16_t(player.word),id.known,player.known};
+        }
+        result.result=nba97_game_player_attributes(&result.effects,&in);
+        if(result.result!=NBA97_ATTRIBUTES_COMPLETE) {
+            switch(result.result) {
+            case NBA97_ATTRIBUTES_TAILS_REQUIRED:
+                result.detail="63EDC render tails4D9EC/35A44/38A18 are not composed";break;
+            case NBA97_ATTRIBUTES_RATING_DIVIDE_TRAP:
+                result.detail="original63EDC rating divide trap; prefix retained in receipt";break;
+            case NBA97_ATTRIBUTES_RATE_DIVIDE_TRAP:
+                result.detail="original63EDC FDB64 divide trap; prefix retained in receipt";break;
+            default:result.detail="63EDC needs valid known fields and owned references";break;
+            }
+            return result;
+        }
+        constexpr unsigned offsets[]={0x3a,0x3c,0x3e,0x40,0x42,0x44};
+        for(unsigned i=0;i<11;++i) {
+            const auto& e=result.effects.entity[i];
+            for(unsigned f=0;f<6;++f)if(e.written&(1u<<f))
+                candidate.entity[i].record.put(offsets[f],2,e.field[f]);
+            if(result.effects.height_written&(1u<<i))
+                candidate.player_height165f48[i]={result.effects.height165f48[i],1};
+        }
+        live=std::move(candidate);result.published=true;
     } catch(const std::exception& e) {result.detail=e.what();}
     return result;
 }

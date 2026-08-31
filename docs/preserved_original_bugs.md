@@ -27,6 +27,7 @@ defects should still be fixed.
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |
 |FE72254/72954 |Only full1024-byte/channel staging blocks are submitted; all five tracks discard their partial final block |`music_stream.c`, all original track chunk comparisons and workflow |
 |FE7309C |Natural drain compares signed read index with write index minus one without modulo correction; ending at write index0 can miss key-off |Stream stop/advance helpers and full original IRQ comparisons |
+|FE31A88 music arm |Zero adjacent volume skips reduction; repeated View Player entry overwrites saved volume; exit restores the saved low byte even after intervening edits |`music_transition.c`, exact source state/callback comparisons; no extra gain call to cancel the original fade |
 
 This is a growing index, not proof every original bug has been found. Callers
 and host adapters must preserve these outcomes when integrating the recovered

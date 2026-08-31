@@ -2,6 +2,7 @@
 #include "match_snapshot.hpp"
 #include "gameplay_setup.hpp"
 #include "recovered/game_period.h"
+#include "recovered/game_player_attributes.h"
 #include <stdexcept>
 
 namespace nba97 {
@@ -50,6 +51,7 @@ struct MatchRuntimeEntry {
     std::array<Nba97GamePeriodValue,NBA97_PERIOD_SCALAR_COUNT> scalar{};
     std::array<Nba97GamePeriodValue,MatchRuntimeAuxCount> auxiliary{};
     Nba97GamePeriodValue incoming_s6{};
+    Nba97GamePeriodValue render_flag21498{};
 };
 struct MatchRuntimeState {
     std::shared_ptr<const MatchSnapshot> accepted;
@@ -68,6 +70,8 @@ struct MatchRuntimeState {
     std::array<Nba97GamePeriodValue,NBA97_PERIOD_SCALAR_COUNT> scalar{};
     std::array<Nba97GamePeriodValue,MatchRuntimeAuxCount> auxiliary{};
     Nba97GamePeriodValue incoming_s6{};
+    Nba97GamePeriodValue render_flag21498{};
+    std::array<Nba97GamePeriodValue,11> player_height165f48{};
     std::uint64_t completed_period_initializations=0;
 };
 // Copies the accepted live rosters and proven boundary effects. Applies only
@@ -86,4 +90,14 @@ struct MatchRuntimePeriodResult {
 // completed65DB0. Retained immutable resources cannot dangle on failed retries.
 // Source traps and unavailable transitive owners refuse publication explicitly.
 MatchRuntimePeriodResult initializeMatchRuntimePeriod(MatchRuntimeState&);
+struct MatchRuntimeAttributesResult {
+    int result=NBA97_ATTRIBUTES_ARGUMENT;
+    bool published=false;
+    std::string detail;
+    Nba97GamePlayerAttributesEffects effects{};
+};
+// Executes63EDC/51ED8 using current owned player bindings and raw fields.
+// Publishes only the completed flag21498==0 route. Original traps retain their
+// diagnostic prefix; render tails remain explicit pending work, never skipped.
+MatchRuntimeAttributesResult initializeMatchRuntimeAttributes(MatchRuntimeState&);
 }

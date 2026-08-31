@@ -72,6 +72,32 @@ read preceding the separately executed640D8 normalization. This establishes
 composition under the supplied entry state, not natural loader completion.
 Evidence: private `period_dependencies/runtime_verification.json`.
 
+`initializeMatchRuntimeAttributes` composes63EDC and51ED8 after the period
+state is available. It reads the actual first entity reference once and uses
+the recovered physical walk, current player bindings, raw FDB64 divisor and
+explicit render flag21498. Heights have their own owned eleven-entry table;
+unwritten entries remain unchanged or unknown. Player byte20 is metadata[1],
+while ratings start at0E. All raw values come from the current owned players,
+including changes made after the accepted snapshot; no database reload occurs.
+
+Only the complete flag21498==0 path publishes. A source rating/divisor trap
+returns its exact earlier effects as a diagnostic receipt without publishing
+the candidate. Unknown state also refuses publication. Nonzero21498 explicitly
+requests4D9EC/35A44/38A18; those render tails are not replaced with success.
+The entry flag remains unknown until a caller supplies its proven value.
+
+The attribute bridge has a separate original-instruction comparison in
+`checkpoint6/attributes-verification-{Debug,RelWithDebInfo}.json`. Each build
+passes512 cases, including91 actual source divide traps,30,471 source writes,
+and1,919,760 known composed record bytes. It executes63EDC and51ED8 without
+callee hooks, compares all nonstack RAM and exact prefix write footprints,
+and verifies that traps leave live native state unchanged. Inputs are explicit
+post-period fixtures with arbitrary current player bytes, physical starts0/1,
+raw aliased IDs and signed divisors. This covers119 of127 coordinator
+instructions and all11 height-writer instructions; the six nonzero-render-tail
+instructions and two impossible division-overflow BREAKs are outside these
+composed cases. The C owner's broader proof remains documented separately.
+
 This checkpoint does not yet connect the period owner to the user-facing
 gameplay loop, draw a court, advance a possession, close every substitution
 callee, execute full659F0/2DB90, or claim complete matches. The accepted

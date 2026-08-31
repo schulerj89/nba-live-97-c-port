@@ -10,6 +10,10 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_music_transition_tests tests/music_transition_tests.cpp src/recovered/music_transition.c)
+    target_compile_features(nba97_music_transition_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_music_transition_tests PRIVATE src)
+    add_test(NAME music_transition COMMAND nba97_music_transition_tests)
     add_executable(nba97_music_playback_tests tests/music_playback_tests.cpp src/music_playback.cpp src/ea_schl.cpp
         src/recovered/music_routing.c src/recovered/music_voice.c src/recovered/music_stream.c src/recovered/frontend_title.c)
     target_compile_features(nba97_music_playback_tests PRIVATE c_std_99 cxx_std_17)
@@ -25,6 +29,7 @@ if(BUILD_TESTING)
     add_test(NAME game_substitution_support COMMAND nba97_game_substitution_support_tests)
     add_executable(nba97_match_runtime_tests tests/match_runtime_tests.cpp src/match_runtime.cpp
         src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c
+        src/recovered/game_player_attributes.c
         src/recovered/game_period.c src/recovered/game_period_dependencies.c
         src/recovered/game_player_bindings.c src/recovered/game_team_roles.c
         src/recovered/game_lineup_recovery.c src/recovered/game_player_initialization.c
@@ -483,7 +488,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_period.c src/recovered/game_substitution.c src/recovered/music_stream.c
     src/recovered/game_period_dependencies.c src/match_runtime.cpp
     src/recovered/game_substitution_support.c
-    src/recovered/game_player_attributes.c src/music_playback.cpp
+    src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)

@@ -68,6 +68,7 @@ static std::uint64_t fingerprint(const MatchRuntimeState& s) {
     for(const auto& r:s.team)record(r);for(const auto& r:s.status)record(r);for(const auto& r:s.controller)record(r);
     for(const auto& e:s.entity){record(e.record);field(e.player);field(e.status);field(e.opponent);}
     for(auto v:s.scalar)field(v);for(auto v:s.auxiliary)field(v);field(s.incoming_s6);
+    field(s.render_flag21498);for(auto v:s.player_height165f48)field(v);
     for(auto r:s.entity_table)ref(r);for(auto r:s.render_table)ref(r);for(auto r:s.controller_table)ref(r);
     for(auto v:s.active_player)field(v);for(auto v:s.active_status)field(v);ref(s.ball);ref(s.reference34);
     value(s.completed_period_initializations);return h;
@@ -126,5 +127,67 @@ int main() {
         check(next.completed_period_initializations==3,"later period cloned context");
         check(next.scalar[NBA97_PERIOD_FDB58].word==(quarter==4?18256u:18000u),"overtime table selection");
     }
+    auto attributes=s;
+    check(!attributes.render_flag21498.known && !attributes.player_height165f48[0].known,
+        "unproduced render flag and heights remain unknown");
+    attributes.render_flag21498={0,1};attributes.scalar[NBA97_PERIOD_FDB64]={4,1};
+    auto& edited=attributes.players[12];edited.height_inches=83;edited.source_metadata[1]=173;
+    edited.ratings[16]=75;edited.ratings[13]=120;edited.ratings[6]=100;
+    edited.ratings[14]=97;edited.ratings[7]=3;
+    //63EDC reads only table[0], then walks physical entities. Deliberately wrong
+    // later table slots must not change the physical visits or player binding.
+    for(unsigned i=1;i<10;++i)attributes.entity_table[i]={0,1};
+    const auto before_attributes=attributes;
+    auto attr=initializeMatchRuntimeAttributes(attributes);
+    check(attr.result==NBA97_ATTRIBUTES_COMPLETE && attr.published,"composed player attributes complete");
+    const auto& away=attributes.entity[5].record;
+    check(away.read(0x3a,2).word==1384 && away.read(0x44,2).word==198 &&
+        away.read(0x3c,2).word==33 && away.read(0x3e,2).word==31 &&
+        away.read(0x40,2).word==15 && away.read(0x42,2).word==65521,
+        "raw accepted player offsets, arithmetic shift and signed attribute values");
+    check(attributes.player_height165f48[5].known && attributes.player_height165f48[5].word==51792 &&
+        !attributes.player_height165f48[10].known,"height writes use entity ID; ball remains unknown");
+    for(unsigned i=0;i<11;++i)for(unsigned b=0;b<244;++b) {
+        if(i<10 && b>=0x3a && b<0x46)continue;
+        check(attributes.entity[i].record.bytes[b]==before_attributes.entity[i].record.bytes[b] &&
+            attributes.entity[i].record.known[b]==before_attributes.entity[i].record.known[b],
+            "attributes preserve all unrelated entity bytes and knownness");
+    }
+    for(unsigned bad_rating:{23u,24u,25u}) {
+        auto trap=before_attributes;trap.players[12].ratings[16]=std::uint8_t(bad_rating);
+        before=fingerprint(trap);attr=initializeMatchRuntimeAttributes(trap);
+        check(attr.result==NBA97_ATTRIBUTES_RATING_DIVIDE_TRAP && !attr.published &&
+            fingerprint(trap)==before,"original raw rating trap refuses atomic publication");
+        check(attr.effects.visited_entities==6 && attr.effects.height_written==0x3f &&
+            attr.effects.entity[5].written==(1u<<NBA97_ATTRIBUTE_3A) && attr.effects.tail_count==0,
+            "original rating trap height/3A prefix exposed without invented tails");
+    }
+    for(unsigned flag:{0u,1u}) {
+        auto pending=before_attributes;pending.render_flag21498={flag,std::uint8_t(flag!=0)};
+        before=fingerprint(pending);attr=initializeMatchRuntimeAttributes(pending);
+        check(!attr.published && fingerprint(pending)==before && attr.effects.visited_entities==10,
+            "unknown render flag or required tails leaves candidate unpublished");
+        check(attr.result==(flag?NBA97_ATTRIBUTES_TAILS_REQUIRED:NBA97_ATTRIBUTES_UNRESOLVED) &&
+            attr.effects.tail_count==(flag?3u:0u),"render tails are explicit and never replaced by success");
+    }
+    auto rate_trap=before_attributes;rate_trap.scalar[NBA97_PERIOD_FDB64]={0,1};
+    before=fingerprint(rate_trap);attr=initializeMatchRuntimeAttributes(rate_trap);
+    check(attr.result==NBA97_ATTRIBUTES_RATE_DIVIDE_TRAP && !attr.published && fingerprint(rate_trap)==before,
+        "source zero rate trap remains distinct from missing state");
+    auto alias=before_attributes;alias.entity[0].record.put(0,4,0x80000000u);
+    alias.entity[1].record.put(0,4,0x40000000u);attr=initializeMatchRuntimeAttributes(alias);
+    check(attr.published && alias.player_height165f48[0].word==71u*624 &&
+        !alias.player_height165f48[1].known,"raw source ID shift wrap and last height writer preserved");
+    auto physical=before_attributes;physical.entity_table[0]={1,1};
+    before=fingerprint(physical);attr=initializeMatchRuntimeAttributes(physical);
+    check(!attr.published && attr.result==NBA97_ATTRIBUTES_UNRESOLVED &&
+        attr.effects.visited_entities==9 && fingerprint(physical)==before,
+        "physical start1 reaches unknown ball binding after nine visits");
+    physical.entity[10].player={0,1};physical.entity[10].record.put(0,4,10);
+    const auto untouched=physical.entity[0].record;attr=initializeMatchRuntimeAttributes(physical);
+    check(attr.published && physical.entity[0].record.bytes==untouched.bytes &&
+        physical.entity[0].record.known==untouched.known && physical.player_height165f48[10].word==70u*624,
+        "explicit physical start1 writes through represented ball slot without visiting entity0");
     std::printf("MATCH RUNTIME PASS: %u checks; composed period, accepted ownership, preserved two-pass bindings, atomic failures\n",checks);
+    return 0;
 }

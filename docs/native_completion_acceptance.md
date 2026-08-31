@@ -104,3 +104,10 @@ hardware waveform and full-duration listening remain unverified. View Player
 transition fades/volume restore and gameplay Pause are still separate owners.
 The63EDC attribute owner retains its original rating/divisor traps. Neither
 this owner nor the period runtime is yet wired into a playable basketball loop.
+
+The next integration passes72/72 CTests in both builds and composes63EDC/51ED8 into owned match state, preserving
+current player bytes and atomic refusal on original divide traps or unresolved
+render tails. Both Debug and RelWithDebInfo match512 additional original
+attribute executions each, including91 source traps per build. The separately
+recovered31A88 music-transition boundaries retain the original temporary-volume
+quirks but still require their real frontend resource-dispatch integration.
