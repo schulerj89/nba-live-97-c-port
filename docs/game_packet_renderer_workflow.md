@@ -36,6 +36,22 @@ data refuse. Unsupported commands and 2MiB modes refuse. Unknown memory is
 never treated as black, a replacement texture or an invented packet terminator.
 Fill retains its independent alignment, wrapping and environment behavior.
 
+`drawKnownWords` and `drawKnownOrderingTable` accept one knowledge bit per
+packet byte. The parser requires bytes consumed by the command: tags remain
+fully known, XY/UV coordinates and texture-page/CLUT fields are not guessed,
+and an unknown opcode refuses. It permits unused high halves of polygon UV2
+and UV3, unused high bytes of subsequent Gouraud colors, and ignored command
+or raw-texture color bytes. Only a local command copy discards those unknown
+bytes; retained RAM and its knowledge are unchanged. The original fully known
+reader remains supported through the same parser. Knowledge masks outside
+bits 0..3 refuse as invalid arguments.
+
+This fixes a native integration defect found when actual `4D490` marker output
+reached `49300`/`49D34`: original packets leave unused UV padding unwritten.
+Demanding a fully known transfer word prevented valid drawing. The initializer
+is not changed to manufacture padding. A missing consumed byte still refuses
+at its accepted-word prefix, including when a command crosses ordering links.
+
 Commands may cross linked packet boundaries. Link and pixel budgets bound
 native execution without repairing a cyclic source list. Failure retains prior
 pixels and state; a successful prefix is not a completed frame. Atomic callers
@@ -63,6 +79,16 @@ hashes are recorded. The asset-free public tests cover explicit refusal,
 packet ordering, masks, textures, gradient regression cases and native limits.
 The court tests compose recovered projection and link writes directly with
 this renderer for both a flat and a textured quad, checking every output pixel.
+
+After the byte-knowledge change, private evidence under
+`.local/verification/native_completion/packet_renderer_known/` repeats all
+104,096 shading, 8,000 triangle and 4,000 line comparisons per configuration
+with no mismatches. Strict MSVC Debug/Release each pass 6,544 public checks,
+including all polygon command codes with poisoned unused bytes, missing
+consumed fields, preserved backing knowledge, packet crossings and refusal
+prefixes. The initialized ball diagnostic additionally draws the real uploaded
+textures and source-produced packet templates; its explicit camera and runtime
+fixtures do not establish a naturally reached game frame.
 
 These are bounded software-reference comparisons, not complete hardware or
 gameplay fidelity acceptance. Extreme coordinate/offset wrapping beyond the

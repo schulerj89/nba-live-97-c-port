@@ -27,6 +27,9 @@ public:
     int shadow(std::size_t operation_budget,Nba97PlayerFrameProgress&);
     int indicator(std::size_t operation_budget,Nba97PlayerFrameProgress&);
     int copy40(uint32_t source,uint32_t destination,std::size_t operation_budget,Nba97PlayerFrameProgress&);
+    // Subsequent49300/49D34 passes share these exact buffers and geometry.
+    int ball(std::size_t operation_budget,Nba97PlayerFrameProgress&);
+    int ballShadow(std::size_t operation_budget,Nba97PlayerFrameProgress&);
 private:
     int validateAddresses() const;
     int locate(uint32_t,unsigned,Nba97GameBodyReference&) const;

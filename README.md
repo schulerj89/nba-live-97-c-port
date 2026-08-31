@@ -74,7 +74,19 @@ endpoints under supplied camera/pose conditions. The
 [body-projection owner](docs/game_player_projection_workflow.md) produces player
 draw packets from those matrices and normalized body data. The complete
 [player pass](docs/game_player_frame_workflow.md) now composes these owners with
-shadows and off-screen indicators. The recovered
+shadows and off-screen indicators. The separate
+[ball pass](docs/game_ball_frame_workflow.md) produces ball, reflection and
+ground-shadow packets through the same retained buffers and geometry. The
+[BALL/ASDW initializer](docs/game_player_marker_resources_workflow.md) prepares
+their textures and packet fields, plus player shadows and arrow templates,
+through explicit load, release, upload and synchronization boundaries. This is
+rendering work; natural resource loading, ball simulation, attachment and
+possession remain unconnected. Component tests pass initialized packets into
+the ball/shadow pass after making both released source containers unavailable;
+the rendering owners do not read those containers again. A native packet-reader
+fix now permits unknown unused UV padding while still requiring every consumed
+packet byte; it does not initialize or change the retained source RAM.
+The recovered
 [camera/controller path](docs/game_camera_workflow.md) produces camera state
 under explicit inputs; timing, pad/device and monitor effects still require
 real providers. The bounded
@@ -83,8 +95,10 @@ private XATL image data into retained VRAM. The separate
 [court-resource tail](docs/game_court_resources_workflow.md) normalizes loaded
 court data and prepares edge storage using the recovered allocator; neither
 slice implements the full court loader. These components are not yet connected
-into a live court or playable frame. Diagnostic court images use fixture camera
-and ordering state, with no live actors; they are **not gameplay captures**.
+into a live court or playable frame. Diagnostic renders use fixture camera,
+entity and ordering state; they are **not gameplay captures**.
+Six private ball/reflection/shadow views now render from actual initialized
+packets and uploads, without a court or players. Those images remain ignored.
 
 Recovered game behavior is moving into portable C modules under
 `src/recovered/`. C++ owns native resources, adapters and the Win32 frontend,
@@ -163,14 +177,15 @@ ctest --test-dir build-core -C Debug --output-on-failure
 python tools/report_progress.py --check
 ```
 
-Checkpoint 27 passes all **133 Windows CTests** in both Debug and
-RelWithDebInfo, and all **129 Linux core CTests** locally. Its GitHub run is
-pending publication; the preceding checkpoint, 26 (`56a3f1e`), passed 127 core tests in
-[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33428417857).
+Checkpoint 28 passes all **135 Windows CTests** in both Debug and
+RelWithDebInfo, and all **131 Linux core CTests** locally. Its GitHub run is
+pending publication; the preceding checkpoint, 27 (`90a0bcc`), passed 129 core tests in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33431996636).
 The counts differ because four tests are Windows-specific. These are bounded
 regression results, not complete-game acceptance or new original-game captures.
-The player-pass and camera/controller updates also have separate original-source
-component comparisons, with their limits documented above.
+The ball-rendering and marker-resource updates also have separate original-source
+and initialized-packet composition comparisons, with their limits documented above.
+The local totals include fresh full-suite validation after the packet-reader fix.
 
 ## Keyboard controls
 

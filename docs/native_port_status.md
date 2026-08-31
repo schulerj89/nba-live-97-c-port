@@ -1,9 +1,10 @@
 # Native port status
 
-Checkpoint 27 passes 133 Windows tests in both build configurations and 129
-Linux core tests locally. Its player-pass and camera/controller additions also
-have separate component comparisons. The preceding checkpoint 26 (`56a3f1e`)
-passed 127 Linux core tests in GitHub CI; checkpoint 27's CI is pending publication.
+Checkpoint 28 passes 135 Windows tests in both build configurations and 131
+Linux core tests locally. Its ball-rendering and marker-resource additions also
+have separate component comparisons. The preceding checkpoint 27 (`90a0bcc`)
+passed 129 Linux core tests in GitHub CI; checkpoint 28's CI is pending publication.
+The local totals include full-suite revalidation after the native packet-reader fix.
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -52,11 +53,13 @@ its frontend-to-match path.
 |---|---|---|
 | Match state and periods | Owned accepted players/teams/controllers, lineup/binding/role helpers and composed period initialization under explicit entry conditions | Natural cold/warm loader completion, every substitution dependency, or a running match. See [match runtime](match_runtime_workflow.md). |
 | Player updates | Animation/queue, motion/pose resources, bounded physics/jump and input-edge owners with native composition tests | Whole-frame simulation, ball ownership, passes/shots, contact, AI or an actual possession. See [player updates](match_player_update_workflow.md) and [input edges](match_input_edges_workflow.md). |
-| Player rendering pass | Complete `52914` composes actor-root `5200C`, part-matrix/hand-endpoint `55368`, body packet producer `525AC`, shadows and off-screen indicators against shared retained state; original-resource comparisons use actual normalized bodies and poses | Natural entity/control/loader state, shadow/indicator resource setup, shared frame submission and live actor rendering remain unconnected. See [player pass](game_player_frame_workflow.md), [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md) and [body projection](game_player_projection_workflow.md). |
+| Player rendering pass | Complete `52914` composes actor-root `5200C`, part-matrix/hand-endpoint `55368`, body packet producer `525AC`, shadows and off-screen indicators against shared retained state; original-resource comparisons use actual normalized bodies and poses | Natural entity/control/loader state, resource-lifetime integration, shared frame submission and live actor rendering remain unconnected. See [player pass](game_player_frame_workflow.md), [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md) and [body projection](game_player_projection_workflow.md). |
 | Camera and controller | Recovered `51098`, including controller `4EA88` and input helper `8F224`, produces camera state through native fixed-point math and explicit retained inputs | Actual timing, pad/device and monitor effects remain required external boundaries. Natural caller state and integration into the live render loop are unproven; component coverage is not complete controller-path coverage. See [camera workflow](game_camera_workflow.md). |
 | Tip contact and ball release | Contact helpers, the post-acquisition continuation and ball-release owner `58610` have separate tests; composed release ends with a loose ball in phase `82` | Live hand-path integration, upstream collision/acquisition, ball simulation and first possession remain unconnected. See [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
+| Ball rendering | Complete ball/reflection `49300` and ground-shadow `49D34` use the existing player-frame adapter's retained buffers and geometry; `ball` and `ballShadow` have original/native component comparisons | Packet rendering does not implement ball simulation, attachment selection or possession. Natural entity/resource arrival, shared frame submission and a live match remain unconnected. See [ball pass](game_ball_frame_workflow.md). |
+| Ball/shadow/arrow resources | `4D490` through `4CAF4` initializes ball/reflection/shadow packets and arrow templates, copies palettes and requests real BALL/ASDW image uploads through the existing image/VRAM owners | Load, release and SDK synchronization remain required external operations. Packet XY and ordering links belong to later render passes; released image pointers are not retained resource owners. Source comparisons do not prove cold loader/heap execution or natural frame entry. See [marker resources](game_player_marker_resources_workflow.md). |
 | Court resource setup | Texture loop `479B8:487B8..48894` uploads actual XATL images. The after-load tail `48A4C..48D28` normalizes court references and allocates/initializes edge storage through shared `90160/901EC` and the recovered heap owner | Neither slice implements the full `479B8` loader or natural resource arrival. Court allocation flags are `0`, while text pools use `0x20`; neither implies zero-filled payload. Unknown bytes remain unknown. See [court textures](game_court_textures_workflow.md) and [court resources](game_court_resources_workflow.md). |
-| Pixel rendering | Retained CPU/VRAM storage, court packet projection and native pixel drawing compose in fixtures. Native line rasterization and SDK `9AC7C` no-data returns have regressions | No live court or complete camera/render loop. Diagnostic images still use fixture camera and ordering state, with no live actors; they are not gameplay captures. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
+| Pixel rendering | Retained CPU/VRAM storage, court packet projection and native pixel drawing compose in fixtures. Packet reads permit unknown unused bytes while requiring consumed fields and preserving source-memory knowledge. Six initialized ball/reflection/shadow diagnostic views render | No live court or complete camera/render loop. Diagnostic renders use fixture camera, entity and ordering state, with no court or players in the ball views; they are not gameplay captures. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
 | Audio startup and transfers | Game sound entry point, common attributes, music reset, callback registration, SPU heap, PIO/DMA sample ownership, interrupt/controller and event composition | Natural host audio initialization, actual callback cadence, complete voices/synthesis, physical device timing or full-match sound. Some real resource transfers still stop where rounded source tails lack proven ownership. See [audio startup](audio_startup_workflow.md) and [sample backend](spu_sample_backend_workflow.md). |
 
 Asset-free CTests use synthetic fixtures. Private source comparisons additionally
@@ -102,14 +105,40 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-At checkpoint 27, Windows builds passed **133/133 CTests** in both Debug and
-RelWithDebInfo; local Linux passed **129/129 core CTests**. Its CI is pending
-publication. The preceding checkpoint 26 (`56a3f1e`),
-[GitHub run 33428417857](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33428417857)
-passed **127/127 core CTests**; the GitHub metadata/verification workflow also passed.
+At checkpoint 28, Windows builds passed **135/135 CTests** in both Debug and
+RelWithDebInfo; local Linux passed **131/131 core CTests**. Its CI is pending
+publication. The preceding checkpoint 27 (`90a0bcc`),
+[GitHub run 33431996636](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33431996636)
+passed **129/129 core CTests**; the GitHub metadata/verification workflow also passed.
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured at that checkpoint, nor that
 a full match was tested.
+
+Checkpoint 28's separate ball-rendering evidence
+includes 585 original/native C cases per build with 16,111 ordered stores and
+95 matching refusal prefixes. Another 53 cases compare the actual C++ adapter,
+including all 64 geometry words and retained memory knowledge. The tests use
+explicit camera, entity, ordering and packet inputs; they do not establish
+resource arrival, ball simulation or a natural gameplay frame.
+The BALL/ASDW initializer has separate whole-asset and source comparisons,
+including load/release/synchronization refusals. Its explicit loader and sync
+fixtures must not be mistaken for completed native cold-start services.
+An initialized-packet composition additionally runs the actual C++ ball pass
+followed by its ground shadow across 60 combinations per build: 15 animation
+frames, both banks and reflection enabled/suppressed. All 3,720 stores,
+persistent bytes/knowledge and 64 geometry words match original execution.
+Both released source containers are unavailable and never read. Camera,
+entity, control and ordering inputs remain fixtures, not natural frame state.
+
+A native packet-reader bug initially rejected the ball-shadow packets because
+UV2/UV3 contain unused high halves whose source bytes remain unknown. The fix
+requires only consumed bytes without modifying retained RAM or its knowledge.
+Required tags, opcodes, coordinates, UVs, CLUTs and texture pages still refuse
+when unavailable. Six private diagnostic views now draw the initialized ball,
+reflection and shadow: both banks at animation frames 0, 7 and 14, with six
+triangles and 494 written pixels each. They contain no court or players and
+do not come from a natural game loop. Fresh full suites after this correction
+pass the 135 Windows and 131 Linux totals above; CI still awaits publication.
 
 Checkpoint 27's separate player-pass composition
 compares 120 actors and 175,272 ordered stores, including all 195 instructions

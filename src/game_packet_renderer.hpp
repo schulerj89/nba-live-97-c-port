@@ -31,6 +31,11 @@ struct GameDrawProgress {
 // Reader receives the real low24 ordering-table/packet address. It must map
 // proven retained allocations; never synthesize a missing tag/terminator.
 using GamePacketRead = GamePacketResult(*)(void*,std::uint32_t,std::uint32_t&);
+struct GamePacketWord {
+    std::uint32_t word=0;
+    std::uint8_t known_mask=0; // One bit per byte; only bits0..3 are valid.
+};
+using GamePacketKnownRead = GamePacketResult(*)(void*,std::uint32_t,GamePacketWord&);
 
 // Native drawing backend over the same VRAM that receives resource uploads.
 // Supports flat/Gouraud triangles/quads, single lines, rectangles, E1..E6,
@@ -49,6 +54,12 @@ public:
     GamePacketResult drawWords(const std::uint32_t*,std::size_t,GameDrawProgress&);
     GamePacketResult drawOrderingTable(GamePacketRead,void*,std::uint32_t first,
                                       std::size_t link_budget,GameDrawProgress&);
+    // Retained packet padding may be unknown. Validate command-consumed bytes,
+    // including across packet links; never mark backing bytes known or guess
+    // an opcode, tag, coordinate, texture page or consumed color/UV value.
+    GamePacketResult drawKnownWords(const GamePacketWord*,std::size_t,GameDrawProgress&);
+    GamePacketResult drawKnownOrderingTable(GamePacketKnownRead,void*,std::uint32_t first,
+                                           std::size_t link_budget,GameDrawProgress&);
 private:
     struct Vertex { int x=0,y=0,u=0,v=0;std::array<int,3> color{}; };
     GameVramWords& vram_;
@@ -57,7 +68,7 @@ private:
     unsigned used_=0,needed_=0;
     GameDrawProgress* progress_=nullptr;
     void begin(GameDrawProgress&);
-    GamePacketResult feed(std::uint32_t);
+    GamePacketResult feed(std::uint32_t,std::uint8_t known_mask=15);
     GamePacketResult execute();
     GamePacketResult ready() const;
     GamePacketResult sample(int,int,std::uint16_t,std::uint16_t&);

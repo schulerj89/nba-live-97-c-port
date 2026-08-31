@@ -162,9 +162,32 @@ Result GamePacketRenderer::rectangle(Vertex a,int w,int h,std::uint16_t clut,boo
         }
     return Result::Complete;
 }
-Result GamePacketRenderer::feed(std::uint32_t word){
+Result GamePacketRenderer::feed(std::uint32_t word,std::uint8_t known_mask){
+    if(known_mask&0xf0)return Result::Argument;
+    if(!used_&&!(known_mask&8))return Result::PacketUnavailable;
+    const unsigned code=used_?pending_[0]>>24:word>>24;
+    unsigned required=15;
     if(!used_){
-        const unsigned code=word>>24;
+        if(code==0||code==1)required=8;
+        else if(code==0xe1)required=11;
+        else if(code==0xe6)required=9;
+        else if(code>=0x20&&code<=0x7f&&(code<0x40||code>=0x60)&&(code&5)==5)required=8;
+    }else if(code>=0x20&&code<=0x3f){
+        const bool textured=(code&4)!=0,gouraud=(code&16)!=0;
+        const unsigned vertices=(code&8)?4:3;unsigned cursor=1;
+        for(unsigned i=0;i<vertices;++i){
+            if(gouraud&&i){if(used_==cursor)required=textured&&(code&1)?0:7;++cursor;}
+            ++cursor; // Every XY byte contains consumed coordinate bits.
+            if(textured){
+                // UV0's high half is CLUT; UV1's is the texture page. Only
+                // UV2/UV3 have entirely ignored high halves in the source GPU.
+                if(i>=2&&used_==cursor)required=3;
+                ++cursor;
+            }
+        }
+    }else if(code>=0x50&&code<=0x57&&used_==2)required=7;
+    if((known_mask&required)!=required)return Result::PacketUnavailable;
+    if(!used_){
         if(code==0||code==1||(code>=0xe1&&code<=0xe6))needed_=1;
         else if(code==2)needed_=3;
         else if(code>=0x20&&code<=0x3f){const unsigned n=(code&8)?4:3;needed_=1+n*((code&4)?2:1)+((code&16)?n-1:0);}
@@ -172,7 +195,10 @@ Result GamePacketRenderer::feed(std::uint32_t word){
         else if(code>=0x60&&code<=0x7f)needed_=2+((code&4)?1:0)+((code&24)?0:1);
         else return Result::UnsupportedCommand;
     }
-    pending_[used_++]=word;++progress_->words;
+    // Only discarded bytes can be absent here. Canonicalize the local command
+    // copy; the caller's retained bytes and byte knowledge remain untouched.
+    std::uint32_t mask=0;for(unsigned i=0;i<4;++i)if(known_mask&(1u<<i))mask|=0xffu<<(i*8);
+    pending_[used_++]=word&mask;++progress_->words;
     if(used_<needed_)return Result::Complete;
     used_=0;const auto result=execute();if(result==Result::Complete)++progress_->commands;return result;
 }
@@ -241,16 +267,33 @@ Result GamePacketRenderer::drawWords(const std::uint32_t* words,std::size_t coun
     p.completed=true;p.stopped_x=p.stopped_y=-1;return Result::Complete;
 }
 Result GamePacketRenderer::drawOrderingTable(GamePacketRead read,void* user,std::uint32_t first,std::size_t link_budget,GameDrawProgress& p){
+    struct Reader {GamePacketRead read;void* user;};Reader reader{read,user};
+    if(!read){begin(p);return Result::Argument;}
+    const auto known=[](void* context,std::uint32_t address,GamePacketWord& word){
+        auto& r=*static_cast<Reader*>(context);const auto result=r.read(r.user,address,word.word);
+        word.known_mask=15;return result;
+    };
+    return drawKnownOrderingTable(known,&reader,first,link_budget,p);
+}
+Result GamePacketRenderer::drawKnownWords(const GamePacketWord* words,std::size_t count,GameDrawProgress& p){
+    begin(p);if(!words&&count)return Result::Argument;
+    for(std::size_t i=0;i<count;++i){const auto result=feed(words[i].word,words[i].known_mask);if(result!=Result::Complete)return result;}
+    if(used_)return Result::IncompleteCommand;
+    p.completed=true;p.stopped_x=p.stopped_y=-1;return Result::Complete;
+}
+Result GamePacketRenderer::drawKnownOrderingTable(GamePacketKnownRead read,void* user,std::uint32_t first,std::size_t link_budget,GameDrawProgress& p){
     begin(p);if(!read||first>0xffffff)return Result::Argument;
     std::uint32_t address=first;
     while(!(address&0x800000)){
         p.stopped_link=address;if(address&3)return Result::LinkAlignment;
         if(p.links==link_budget)return Result::LinkLimit;
-        std::uint32_t tag=0;auto result=read(user,address,tag);if(result!=Result::Complete)return result;
-        ++p.links;const unsigned count=tag>>24;
-        for(unsigned i=0;i<count;++i){std::uint32_t word=0;result=read(user,address+4+i*4,word);if(result!=Result::Complete)return result;
-            result=feed(word);if(result!=Result::Complete)return result;}
-        address=tag&0xffffff;
+        GamePacketWord tag{};auto result=read(user,address,tag);if(result!=Result::Complete)return result;
+        if(tag.known_mask&0xf0)return Result::Argument;
+        if(tag.known_mask!=15)return Result::PacketUnavailable;
+        ++p.links;const unsigned count=tag.word>>24;
+        for(unsigned i=0;i<count;++i){GamePacketWord word{};result=read(user,address+4+i*4,word);if(result!=Result::Complete)return result;
+            result=feed(word.word,word.known_mask);if(result!=Result::Complete)return result;}
+        address=tag.word&0xffffff;
     }
     if(used_)return Result::IncompleteCommand;
     p.completed=true;p.stopped_link=0;p.stopped_x=p.stopped_y=-1;return Result::Complete;
