@@ -10,6 +10,35 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_substitution_support_tests tests/game_substitution_support_tests.cpp src/recovered/game_substitution_support.c)
+    target_compile_features(nba97_game_substitution_support_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_substitution_support_tests PRIVATE src)
+    add_test(NAME game_substitution_support COMMAND nba97_game_substitution_support_tests)
+    add_executable(nba97_match_runtime_tests tests/match_runtime_tests.cpp src/match_runtime.cpp
+        src/gameplay_setup.cpp src/gameplay_mocap.cpp src/recovered/gameplay_mocap.c
+        src/recovered/game_period.c src/recovered/game_period_dependencies.c
+        src/recovered/game_player_bindings.c src/recovered/game_team_roles.c
+        src/recovered/game_lineup_recovery.c src/recovered/game_player_initialization.c
+        src/recovered/game_controller_selection.c src/recovered/team_header.c src/recovered/game_controllers.c)
+    target_compile_features(nba97_match_runtime_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_match_runtime_tests PRIVATE src)
+    add_test(NAME match_runtime COMMAND nba97_match_runtime_tests)
+    add_executable(nba97_game_period_dependencies_tests tests/game_period_dependencies_tests.cpp src/recovered/game_period_dependencies.c)
+    target_compile_features(nba97_game_period_dependencies_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_dependencies_tests PRIVATE src)
+    add_test(NAME game_period_dependencies COMMAND nba97_game_period_dependencies_tests)
+    add_executable(nba97_music_stream_tests tests/music_stream_tests.cpp src/recovered/music_stream.c)
+    target_compile_features(nba97_music_stream_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_music_stream_tests PRIVATE src)
+    add_test(NAME music_stream COMMAND nba97_music_stream_tests)
+    add_executable(nba97_game_period_tests tests/game_period_tests.cpp src/recovered/game_period.c)
+    target_compile_features(nba97_game_period_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_tests PRIVATE src)
+    add_test(NAME game_period COMMAND nba97_game_period_tests)
+    add_executable(nba97_game_substitution_tests tests/game_substitution_tests.cpp src/recovered/game_substitution.c)
+    target_compile_features(nba97_game_substitution_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_substitution_tests PRIVATE src)
+    add_test(NAME game_substitution COMMAND nba97_game_substitution_tests)
     add_executable(nba97_game_team_roles_tests tests/game_team_roles_tests.cpp src/recovered/game_team_roles.c)
     target_compile_features(nba97_game_team_roles_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_team_roles_tests PRIVATE src)
@@ -440,6 +469,9 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp
     src/recovered/game_controllers.c src/recovered/game_controller_selection.c
     src/recovered/game_player_bindings.c src/recovered/game_lineup_recovery.c
+    src/recovered/game_period.c src/recovered/game_substitution.c src/recovered/music_stream.c
+    src/recovered/game_period_dependencies.c src/match_runtime.cpp
+    src/recovered/game_substitution_support.c
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
