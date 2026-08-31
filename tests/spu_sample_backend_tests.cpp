@@ -215,10 +215,173 @@ void reverseAndPio() {
     f.isr();
     check(f.run(NBA97_SPU_CONTROL_7D9E8,2,0x2000)==1);check(f.run(NBA97_SPU_CONTROL_7D9E8,0)==1);
     check(f.run(NBA97_SPU_CONTROL_7D9E8,3,Cpu,64)==1);check(f.backend.servicePendingDma(f.memory,Generation).status==SpuSampleStatus::Unknown);
-    Fixture p;check(p.backend.writeDevice(p.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::UnsupportedAddress);
+    Fixture p;check(p.backend.writeDevice(p.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::Unknown);
     check(p.backend.writeDevice(p.memory,SpuSampleBackend::Control,2,0x10,Generation).status==SpuSampleStatus::UnsupportedTransfer);
     SpuSampleBackend empty;check(empty.importRegister(SpuSampleBackend::Control,2,{1,0}).status==SpuSampleStatus::Metadata);
     check(empty.importRegister(SpuSampleBackend::Control,2,{0,2}).status==SpuSampleStatus::Metadata);
 }
 }
-int main() { ordinary();paddingAndRefusals();clonesAndAliases();eventsAndIsr();reverseAndPio();std::printf("spu sample backend: %u checks passed\n",checks); }
+void pioRequestAndCopy() {
+    for(unsigned words=1;words<=32;++words) {
+        Fixture f;const auto h=f.open();good(f.backend.deliverEvent(0xf0000009,0x20));
+        good(f.backend.writeDevice(f.memory,SpuSampleBackend::TransferAddress,2,0x200,Generation));
+        for(unsigned i=0;i<words;++i) good(f.backend.writeDevice(f.memory,SpuSampleBackend::Fifo,2,0x1234+i,Generation));
+        check(f.backend.pioRequest().phase==SpuPioPhase::Filling&&f.backend.pioRequest().bytes==2*words);
+        check(f.backend.known()[0x1000]==0&&f.backend.request().phase==SpuDmaPhase::Idle);
+        good(f.backend.writeDevice(f.memory,SpuSampleBackend::Control,2,0x10,Generation));
+        check(f.backend.pioRequest().phase==SpuPioPhase::Requested&&f.backend.known()[0x1000]==0);
+        check(f.backend.servicePendingPio(Generation+1).status==SpuSampleStatus::StaleGeneration);
+        check(f.backend.writeDevice(f.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::Busy);
+        Fixture copy=f;copy.rebind();good(copy.backend.servicePendingPio(Generation));
+        check(f.backend.known()[0x1000]==0);good(f.backend.servicePendingPio(Generation));
+        for(unsigned i=0;i<2*words;++i) check(f.backend.known()[0x1000+i]==1&&
+            f.backend.samples()[0x1000+i]==static_cast<std::uint8_t>((0x1234+i/2)>>(8*(i%2))));
+        check(f.backend.known()[0xfff]==0&&f.backend.known()[0x1000+2*words]==0);
+        check(f.backend.servicePendingPio(Generation).status==SpuSampleStatus::NoRequest);
+        check(f.test(h)==1&&f.test(h)==0); // old pending only; PIO never delivers
+        Nba97SpuTransferValue v{};check(f.backend.readDevice(f.memory,SpuSampleBackend::Status,2,v).status==SpuSampleStatus::Unknown);
+        good(f.backend.writeDevice(f.memory,SpuSampleBackend::Control,2,0,Generation));
+        check(f.backend.writeDevice(f.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::UnsupportedTransfer);
+        f.start(64);good(f.backend.servicePendingDma(f.memory,Generation));f.isr();check(f.test(h)==1);
+    }
+    Fixture edge;good(edge.backend.writeDevice(edge.memory,SpuSampleBackend::TransferAddress,2,0xffff,Generation));
+    for(unsigned i=0;i<4;++i) good(edge.backend.writeDevice(edge.memory,SpuSampleBackend::Fifo,2,0xabcd,Generation));
+    check(edge.backend.writeDevice(edge.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::UnsupportedTransfer);
+    good(edge.backend.writeDevice(edge.memory,SpuSampleBackend::Control,2,0x10,Generation));good(edge.backend.servicePendingPio(Generation));
+    check(edge.backend.known()[0x7ffff]==1&&edge.backend.known()[0]==0);
+    Fixture type;good(type.backend.importRegister(SpuSampleBackend::TransferControl,2,{6,1}));
+    good(type.backend.writeDevice(type.memory,SpuSampleBackend::TransferAddress,2,0x200,Generation));
+    check(type.backend.writeDevice(type.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::UnsupportedTransfer);
+    Fixture full;good(full.backend.writeDevice(full.memory,SpuSampleBackend::TransferAddress,2,0x200,Generation));
+    for(unsigned i=0;i<32;++i) good(full.backend.writeDevice(full.memory,SpuSampleBackend::Fifo,2,i,Generation));
+    check(full.backend.writeDevice(full.memory,SpuSampleBackend::Fifo,2,0,Generation).status==SpuSampleStatus::UnsupportedTransfer);
+    check(full.backend.writeDevice(full.memory,SpuSampleBackend::Madr,4,Cpu,Generation).status==SpuSampleStatus::Busy);
+    check(full.backend.importRegister(SpuSampleBackend::Control,2,{0,1}).status==SpuSampleStatus::Busy);
+}
+struct PioFixture {
+    Fixture f;
+    unsigned statusReads=0,services=0;
+    bool service=true;
+    PioFixture() { f.binding.external=io;f.binding.externalUser=this; }
+    static int io(void* p,const Nba97VoicePatlMemory* m,const Nba97SpuTransferEvent* e,Nba97SpuTransferValue* out) {
+        auto& self=*static_cast<PioFixture*>(p);
+        if(e->kind==NBA97_SPU_TRANSFER_DEVICE_READ&&e->address==SpuSampleBackend::Status) {
+            ++self.statusReads;
+            if(self.f.backend.pioRequest().phase==SpuPioPhase::Requested) {
+                if(!self.service) return 0;
+                good(self.f.backend.servicePendingPio(Generation));++self.services;
+            }
+            // Explicit scripted observation for CPU composition, not a claim
+            // that Control readback predicts physical SPUSTAT or busy timing.
+            Nba97SpuTransferValue control{};good(self.f.backend.readDevice(*m,SpuSampleBackend::Control,2,control));
+            *out={control.word&0x30u,1};return 1;
+        }
+        return 0;
+    }
+    int run(std::uint32_t n) {
+        Nba97SpuTransfer owner{f.memory,SpuSampleBackend::io,&f.binding,10000};
+        return nba97_spu_transfer(&owner,NBA97_SPU_PIO_7D334,Cpu,n,0,f.journal.data(),f.journal.size(),&f.progress);
+    }
+};
+void actualPioProtocol() {
+    for(unsigned n=0;n<=65;++n) {
+        PioFixture p;const int rc=p.run(n);
+        if(n<=64) check(rc==1);else check(rc==NBA97_PATL_IO_REFUSED);
+        const unsigned bytes=n==65?64:((n+1)&~1u);
+        for(unsigned i=0;i<bytes;++i) check(p.f.backend.known()[0x1000+i]==1&&p.f.backend.samples()[0x1000+i]==p.f.bytes[i]);
+        check(p.f.backend.known()[0x1000+bytes]==0&&p.f.backend.request().phase==SpuDmaPhase::Idle);
+        check(p.services==(n?1u:0u));
+    }
+    PioFixture startup;for(unsigned i=0;i<16;++i) startup.f.bytes[i]=7;
+    check(startup.run(16)==1);for(unsigned i=0;i<16;++i) check(startup.f.backend.samples()[0x1000+i]==7);
+    PioFixture unknown;unknown.f.known[5]=0;check(unknown.run(16)==NBA97_PATL_RESOURCE);
+    check(unknown.f.backend.pioRequest().phase==SpuPioPhase::Filling&&unknown.f.backend.pioRequest().bytes==4);
+    check(unknown.f.backend.known()[0x1000]==0);
+    PioFixture pending;pending.service=false;check(pending.run(16)==NBA97_PATL_IO_REFUSED);
+    check(pending.f.backend.pioRequest().phase==SpuPioPhase::Requested&&pending.f.backend.known()[0x1000]==0);
+    PioFixture alias;alias.f.bytes.resize(512);alias.f.known.resize(512,1);alias.f.rebind();alias.f.put(0x800c75c8,Cpu);
+    check(nba97_voice_patl_write(&alias.f.memory,Cpu+0x1aa,2,0)==1);
+    check(nba97_voice_patl_write(&alias.f.memory,Cpu+0x1ae,2,0)==1);
+    // Redirected base uses actual retained RAM. It cannot start the real FIFO.
+    check(alias.run(16)==1);
+    check(alias.f.bytes[0x1a8]==alias.f.bytes[14]&&alias.f.bytes[0x1a9]==alias.f.bytes[15]);
+    check(alias.f.bytes[0x1a6]==0&&alias.f.bytes[0x1a7]==2&&alias.statusReads==0);
+    check(alias.f.backend.pioRequest().phase==SpuPioPhase::Idle);
+}
+void startupConfigurations() {
+    Fixture f;Nba97SpuTransferValue v{};
+    for(unsigned voice=0;voice<24;++voice) for(unsigned offset=0;offset<=10;offset+=2) {
+        const auto a=0x1f801c00u+16*voice+offset;
+        check(f.backend.writtenConfiguration(a,v).status==SpuSampleStatus::Unknown);
+        good(f.backend.writeDevice(f.memory,a,2,0x12340000+voice*16+offset,Generation));
+        good(f.backend.writtenConfiguration(a,v));check(v.word==voice*16+offset&&v.known);
+        check(f.backend.readDevice(f.memory,a,2,v).status==SpuSampleStatus::Unknown);
+    }
+    for(unsigned offset:std::array<unsigned,15>{{0x180,0x182,0x184,0x186,0x190,0x192,0x194,0x196,0x198,0x19a,0x1a2,0x1b0,0x1b2,0x1b4,0x1b6}}) {
+        const auto a=0x1f801c00u+offset;good(f.backend.writeDevice(f.memory,a,2,0xffff,Generation));
+        good(f.backend.writtenConfiguration(a,v));check(v.word==0xffff&&v.known);
+        check(f.backend.readDevice(f.memory,a,2,v).status==SpuSampleStatus::Unknown);
+    }
+    for(unsigned offset=0x188;offset<=0x18e;offset+=2) {
+        check(f.backend.writeDevice(f.memory,0x1f801c00+offset,2,0xffff,Generation).status==SpuSampleStatus::Unowned);
+        check(f.backend.readDevice(f.memory,0x1f801c00+offset,2,v).status==SpuSampleStatus::Unowned);
+    }
+    Fixture clone=f;clone.rebind();good(clone.backend.writeDevice(clone.memory,0x1f801c00,2,777,Generation));
+    good(f.backend.writtenConfiguration(0x1f801c00,v));check(v.word==0);
+    f.spans[2]={f.bytes.data(),f.known.data(),4,0x1f801c00,1,1,0};f.memory.count=3;
+    check(f.backend.writeDevice(f.memory,0x1f801c00,2,0,Generation).status==SpuSampleStatus::Ambiguous);
+    check(f.backend.readDevice(f.memory,0x1f801c00,2,v).status==SpuSampleStatus::Ambiguous);
+}
+struct StatusObservation {
+    Nba97SpuTransferValue value{};
+    unsigned calls=0;
+    bool executed=true;
+    unsigned successLimit=0;
+    static int io(void* p,const Nba97VoicePatlMemory* m,const Nba97SpuTransferEvent* e,Nba97SpuTransferValue* out) {
+        auto& self=*static_cast<StatusObservation*>(p);++self.calls;
+        check(e->kind==NBA97_SPU_TRANSFER_DEVICE_READ&&e->address==SpuSampleBackend::Status&&e->width==2);
+        // A refused observation can still have an actual completed native
+        // prefix. The caller cannot roll this retained effect back implicitly.
+        check(nba97_voice_patl_write(m,Cpu+100,1,self.calls)==1);
+        *out=self.value;return self.executed&&(!self.successLimit||self.calls<=self.successLimit)?1:0;
+    }
+};
+void externalStatusObservations() {
+    for(std::uint8_t marker:std::array<std::uint8_t,3>{{0,1,2}}) {
+        Fixture f;StatusObservation observation{{0xdeadbeef,marker}};
+        observation.successLimit=1;
+        f.binding.external=StatusObservation::io;f.binding.externalUser=&observation;
+        const int rc=f.run(NBA97_SPU_PIO_7D334,Cpu,16);
+        check(rc==(marker==2?NBA97_PATL_METADATA:marker==0?NBA97_PATL_RESOURCE:NBA97_PATL_IO_REFUSED));
+        const auto& first=f.journal[0];
+        check(first.completed==1&&first.returned.word==0xdeadbeef&&first.returned.known==marker);
+        check(f.bytes[100]==observation.calls&&observation.calls>=1);
+        Nba97SpuTransferValue out{};check(f.backend.readDevice(f.memory,SpuSampleBackend::Status,2,out).status==SpuSampleStatus::Unknown);
+    }
+    Fixture f;StatusObservation observation{{0x3456,1}};
+    f.binding.external=StatusObservation::io;f.binding.externalUser=&observation;
+    Nba97SpuTransferEvent e{};e.kind=NBA97_SPU_TRANSFER_DEVICE_READ;e.address=SpuSampleBackend::Status;e.width=2;
+    Nba97SpuTransferValue out{};
+    for(unsigned i=0;i<3;++i) {
+        check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==1);
+        check(out.known==1&&out.word==0x3456&&observation.calls==i+1);
+    }
+    observation.executed=false;check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==0);
+    check(observation.calls==4&&f.bytes[100]==4&&f.backend.lastResult().status==SpuSampleStatus::CallbackRefused);
+    observation.executed=true;good(f.backend.importRegister(SpuSampleBackend::Status,2,{0x71,1}));
+    check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==1&&out.word==0x71&&observation.calls==4);
+    good(f.backend.importRegister(SpuSampleBackend::Status,2,{}));
+    f.known[0]=0;
+    for(auto a:std::array<std::uint32_t,5>{{Cpu,SpuSampleBackend::TransferAddress,SpuSampleBackend::Madr,0x1f801c00,SpuSampleBackend::Fifo}}) {
+        e.address=a;e.width=a==SpuSampleBackend::Madr?4u:2u;
+        check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==0&&observation.calls==4);
+    }
+    e.address=SpuSampleBackend::Status;
+    for(auto w:std::array<std::uint32_t,3>{{0,1,4}}) {
+        e.width=w;check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==0&&observation.calls==4);
+    }
+    e.width=2;f.spans[2]={f.bytes.data(),f.known.data(),2,SpuSampleBackend::Status,1,1,0};f.memory.count=3;
+    check(SpuSampleBackend::io(&f.binding,&f.memory,&e,&out)==0&&observation.calls==4);
+    check(f.backend.lastResult().status==SpuSampleStatus::Ambiguous);
+}
+int main() { ordinary();paddingAndRefusals();clonesAndAliases();eventsAndIsr();reverseAndPio();pioRequestAndCopy();actualPioProtocol();startupConfigurations();externalStatusObservations();std::printf("spu sample backend: %u checks passed\n",checks); }

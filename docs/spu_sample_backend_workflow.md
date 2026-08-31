@@ -14,7 +14,8 @@ CPU aliases through the same `Nba97VoicePatlMemory` supplied to the recovered
 CPU owner. A CPU mapping that overlaps a recognized device slot is ambiguous
 and refuses. Importing entry registers is an explicit provenance operation;
 it cannot create a DMA request or substitute for a fresh address-register
-write. Programmed-I/O FIFO execution remains unsupported.
+write. Programmed-I/O now supports the source initialization's single FIFO
+chunk through explicit queueing and service, as described below.
 
 A supported CHCR store captures a request from the actual register values.
 It does not capture a host CPU pointer, copy bytes, clear an older event, or
@@ -37,9 +38,35 @@ sample writers are explicit unsupported domains. They are not silently
 clamped or repaired. The original CPU still computes its literal register
 values and retains its completed prefix.
 
+## Programmed I/O and startup writes
+
+The source `7D334` writes halfwords to the FIFO and changes the transfer mode
+to manual write. The backend retains those halfwords, requires a fresh address,
+type 4 and a matching positive generation, and records the reached request.
+`servicePendingPio` copies precisely the queued bytes into sample storage,
+without DMA rounding or an event. The initial supported domain is one chunk of
+1–32 halfwords within storage; additional chunks without a fresh address,
+address wrapping and competing writers refuse. The startup's 16 bytes at sample
+offset `1000` are covered. Original odd-count extra halfword reads remain in the
+CPU owner. Service cannot repeat a completed copy.
+
+PIO transitions invalidate prior status observations. An unknown canonical
+status halfword read can use an explicit external platform callback; its result
+is not cached. Other unknown registers, unknown RAM and unsupported widths do
+not acquire a fallback. No automatic service, busy-bit timeline or completion
+readback is fabricated. Direct `readDevice` continues to report unknown status
+until actual incoming provenance establishes it.
+
+Startup volume, voice and configuration writes retain their literal values
+for inspection through `writtenConfiguration`. This separate query does not
+claim the corresponding hardware readback or voice synthesis. Key-command
+semantics and readbacks still require the external platform. See
+[the initialization workflow](spu_initialize_workflow.md) for the recovered
+startup sequence and the explicit integration-test conditions.
+
 ## Interrupt and event ownership
 
-After a copy, the request waits for its interrupt owner. The caller brackets
+After a DMA copy, the request waits for its interrupt owner. The caller brackets
 execution of recovered `7D668` with `beginIsr` and `finishIsr`; the backend
 does not claim the original interrupt controller dispatched it. A refused
 interrupt retains copied bytes and the executed CPU prefix, without claiming

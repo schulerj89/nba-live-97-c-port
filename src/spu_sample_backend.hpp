@@ -13,6 +13,12 @@ enum class SpuSampleStatus {
     OutOfMemory
 };
 enum class SpuDmaPhase { Idle, Requested, CopiedAwaitingIsr, IsrRunning, IsrComplete, IsrRefused };
+enum class SpuPioPhase { Idle, Filling, Requested, Copied };
+struct SpuPioRequest {
+    SpuPioPhase phase=SpuPioPhase::Idle;
+    std::uint64_t memoryGeneration=0;
+    std::uint32_t spuAddress=0,bytes=0;
+};
 struct SpuSampleResult {
     SpuSampleStatus status=SpuSampleStatus::Complete;
     std::uint32_t address=0,bytes=0;
@@ -37,7 +43,7 @@ struct SpuSampleIoContext {
 };
 
 // Bounded native sample storage, NOT an SPU emulator/audio renderer. No startup,
-// ISR registration, address wrap, PIO FIFO, DMA timing or physical BIOS-handle
+// ISR registration, address wrap, DMA timing or physical BIOS-handle
 // claim. Source and known-mask storage must not alias backend/context metadata.
 // CPU source-address spans cannot share the sample array/known mask: original
 // CPU RAM and SPU RAM are separate storage. Reached aliases are refused.
@@ -57,12 +63,17 @@ public:
     const std::vector<std::uint8_t>& samples() const { return samples_; }
     const std::vector<std::uint8_t>& known() const { return known_; }
     const SpuDmaRequest& request() const { return request_; }
+    const SpuPioRequest& pioRequest() const { return pio_; }
     const SpuSampleResult& lastResult() const { return last_; }
 
     // Explicit known entry/snapshot import, not implicit hardware initialization.
     // Register import cannot create a request or count as a fresh address store.
     // This snapshot API requires known0/word0. This is stricter than the external
     // C callback ABI, where known0 may carry arbitrary unused word bits.
+    // A Status import is an explicitly authoritative fixture/snapshot value,
+    // not proof that hardware status remains unchanged after Control writes.
+    // The existing DMA snapshot domain is retained; PIO start/copy/stop makes
+    // Status unknown. Natural startup must use actual external observations.
     SpuSampleResult importRegister(std::uint32_t address,std::uint32_t width,Nba97SpuTransferValue);
     SpuSampleResult importSamples(std::uint32_t offset,const std::uint8_t*,const std::uint8_t*,std::size_t);
     SpuSampleResult readDevice(const Nba97VoicePatlMemory&,std::uint32_t address,std::uint32_t width,Nba97SpuTransferValue&);
@@ -77,6 +88,19 @@ public:
     // MADR/BCR/CHCR become unknown after copying: final hardware readback is not
     // established here. Fresh source writes may establish their next values.
     SpuSampleResult servicePendingDma(const Nba97VoicePatlMemory&,std::uint64_t generation);
+    // One1..32-halfword FIFO chunk per fresh transfer-address store, type4,
+    // initially stopped transfer mode. FIFO stores retain actual CPU values;
+    // Control mode10 requests their copy. Service copies exactly2*N bytes,
+    // without DMA rounding, padding, status manufacture or event delivery.
+    // Multi-chunk cursor continuation and cancellation are unproved domains:
+    // a next chunk without a fresh address refuses, preserving copied bytes.
+    // Source7CE18's16-byte initialization at1000 is inside this domain.
+    SpuSampleResult servicePendingPio(std::uint64_t generation);
+    // Startup configuration storage is distinct from hardware readback. These
+    // new slots retain exact successful writes, but readDevice returns Unknown;
+    // physical voice/envelope/reverb behavior is not implemented here. Key-on/
+    // off command registers remain Unowned and require actual platform effects.
+    SpuSampleResult writtenConfiguration(std::uint32_t address,Nba97SpuTransferValue&);
     // The caller must execute the actual recovered ISR between these calls.
     // false preserves copied data and source prefix, terminally refusing retry.
     SpuSampleResult beginIsr(std::uint64_t ticket);
@@ -91,14 +115,19 @@ public:
     SpuSampleResult closeEvent(std::uint32_t handle);
     SpuSampleResult deliverEvent(std::uint32_t eventClass,std::uint32_t spec);
     SpuSampleResult testEvent(std::uint32_t handle,std::uint32_t& occurred);
+    // An unknown canonical Status halfword read requires external observation.
+    // Its exact return/knownness is forwarded without caching or auto-service.
+    // Other unknown registers/RAM and unsupported accesses never fall back.
     static int io(void*,const Nba97VoicePatlMemory*,const Nba97SpuTransferEvent*,Nba97SpuTransferValue*);
 private:
-    struct Register { std::uint32_t address,width;Nba97SpuTransferValue value; };
+    struct Register { std::uint32_t address,width;Nba97SpuTransferValue value;bool configurationOnly=false; };
     struct Event { std::uint32_t handle,eventClass,spec;bool enabled,pending; };
     std::vector<std::uint8_t> samples_,known_;
-    std::array<Register,9> registers_;
+    std::array<Register,168> registers_;
     std::vector<Event> events_;
     SpuDmaRequest request_;
+    SpuPioRequest pio_;
+    std::array<std::uint16_t,32> pioWords_{};
     SpuSampleResult last_;
     std::uint64_t nextTicket_=1;
     std::uint32_t nextHandle_=1;
@@ -107,5 +136,7 @@ private:
     Event* event(std::uint32_t);
     SpuSampleResult result(SpuSampleStatus,std::uint32_t=0,std::uint32_t=0);
     SpuSampleResult startDma(std::uint64_t);
+    SpuSampleResult queuePio(std::uint32_t,std::uint64_t);
+    SpuSampleResult startPio(std::uint64_t);
 };
 }

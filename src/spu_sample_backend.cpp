@@ -42,6 +42,7 @@ bool mainRam(std::uint32_t a,std::uint32_t count) {
 bool active(SpuDmaPhase p) {
     return p!=SpuDmaPhase::Idle&&p!=SpuDmaPhase::IsrComplete;
 }
+bool active(SpuPioPhase p) { return p==SpuPioPhase::Filling||p==SpuPioPhase::Requested; }
 bool inStorage(const std::uint8_t* p,const std::vector<std::uint8_t>& storage) {
     if (!p||storage.empty()) return false;
     const auto a=reinterpret_cast<std::uintptr_t>(p),base=reinterpret_cast<std::uintptr_t>(storage.data());
@@ -54,7 +55,15 @@ bool sampleAlias(const Byte& b,const std::vector<std::uint8_t>& samples,const st
 SpuSampleBackend::SpuSampleBackend():samples_(SampleBytes,0),known_(SampleBytes,0),registers_{{
     {TransferAddress,2,{}},{Control,2,{}},{TransferControl,2,{}},{Status,2,{}},
     {Madr,4,{}},{Bcr,4,{}},{Chcr,4,{}},{Dpcr,4,{}},{BusDelay,4,{}}
-}} {}
+}} {
+    std::size_t at=9;
+    for (std::uint32_t voice=0;voice<24;++voice)
+        for (std::uint32_t offset=0;offset<=10;offset+=2)
+            registers_[at++]={0x1f801c00u+16*voice+offset,2,{},true};
+    const std::uint32_t offsets[]={0x180,0x182,0x184,0x186,0x190,0x192,0x194,0x196,
+        0x198,0x19a,0x1a2,0x1b0,0x1b2,0x1b4,0x1b6};
+    for (auto offset:offsets) registers_[at++]={0x1f801c00u+offset,2,{},true};
+}
 SpuSampleBackend& SpuSampleBackend::operator=(const SpuSampleBackend& other) {
     if (this!=&other) { SpuSampleBackend copy(other);*this=std::move(copy); }
     return *this;
@@ -71,15 +80,15 @@ SpuSampleBackend::Event* SpuSampleBackend::event(std::uint32_t handle) {
     return nullptr;
 }
 SpuSampleResult SpuSampleBackend::importRegister(std::uint32_t a,std::uint32_t w,Nba97SpuTransferValue v) {
-    if (active(request_.phase)) return result(SpuSampleStatus::Busy,a,w);
+    if (active(request_.phase)||active(pio_.phase)) return result(SpuSampleStatus::Busy,a,w);
     auto* r=reg(a,w);
-    if (!r) return result(SpuSampleStatus::UnsupportedAddress,a,w);
+    if (!r||r->configurationOnly) return result(SpuSampleStatus::UnsupportedAddress,a,w);
     if (v.known>1||(!v.known&&v.word)||(w==2&&v.word>0xffffu)) return result(SpuSampleStatus::Metadata,a,w);
     r->value=v;if (a==TransferAddress) freshAddress_=false;
     return result(SpuSampleStatus::Complete,a,w);
 }
 SpuSampleResult SpuSampleBackend::importSamples(std::uint32_t at,const std::uint8_t* data,const std::uint8_t* mask,std::size_t n) {
-    if (active(request_.phase)) return result(SpuSampleStatus::Busy,at);
+    if (active(request_.phase)||active(pio_.phase)) return result(SpuSampleStatus::Busy,at);
     if (samples_.size()!=SampleBytes||known_.size()!=SampleBytes||at>SampleBytes||n>SampleBytes-at||(!data&&n)||(!mask&&n)) return result(SpuSampleStatus::Metadata,at);
     for (std::size_t i=0;i<n;++i) if (mask[i]>1) return result(SpuSampleStatus::Metadata,at+static_cast<std::uint32_t>(i));
     // Snapshot inputs may overlap this owner's retained sample/known storage.
@@ -99,7 +108,7 @@ SpuSampleResult SpuSampleBackend::readDevice(const Nba97VoicePatlMemory& m,std::
     if (mapped&&device) return result(SpuSampleStatus::Ambiguous,a,w);
     if (device) {
         if (!r) return result(SpuSampleStatus::UnsupportedAddress,a,w);
-        if (!r->value.known) return result(SpuSampleStatus::Unknown,a,w);
+        if (r->configurationOnly||!r->value.known) return result(SpuSampleStatus::Unknown,a,w);
         out=r->value;return result(SpuSampleStatus::Complete,a,w);
     }
     std::array<Byte,4> bytes{};
@@ -116,12 +125,21 @@ SpuSampleResult SpuSampleBackend::writeDevice(const Nba97VoicePatlMemory& m,std:
     device=device||overlaps(a,w,Fifo,2);
     if (mapped&&device) return result(SpuSampleStatus::Ambiguous,a,w);
     if (device) {
+        if (a==Fifo&&w==2) {
+            if (active(request_.phase)) return result(SpuSampleStatus::Busy,a,w);
+            return queuePio(v,generation);
+        }
         if (!r||a==Status) return result(SpuSampleStatus::UnsupportedAddress,a,w);
         if (active(request_.phase)&&!(a==Control&&request_.phase==SpuDmaPhase::IsrRunning)) return result(SpuSampleStatus::Busy,a,w);
-        // Manual FIFO flush/PIO timing is not implemented as a DMA shortcut.
-        if (a==Control&&(v&0x30u)==0x10u) return result(SpuSampleStatus::UnsupportedTransfer,a,w);
+        if (active(pio_.phase)&&!(pio_.phase==SpuPioPhase::Filling&&a==Control&&(v&0x30u)==0x10u))
+            return result(SpuSampleStatus::Busy,a,w);
         r->value={w==2?v&0xffffu:v,1};
-        if (a==TransferAddress) freshAddress_=true;
+        if (a==TransferAddress) { freshAddress_=true;pio_={}; }
+        if (a==Control&&(v&0x30u)==0x10u) return startPio(generation);
+        // Once a PIO mode transition occurs, a former status snapshot is not
+        // current hardware evidence. Poll observations must come from the
+        // actual platform; neither service nor mode-stop invents ready bits.
+        if (a==Control&&pio_.phase==SpuPioPhase::Copied) reg(Status,2)->value={};
         // Preserve the reached CHCR store even when its unsupported request is
         // refused. The CPU owner's prefix is not rolled back by this backend.
         if (a==Chcr) return startDma(generation);
@@ -133,6 +151,51 @@ SpuSampleResult SpuSampleBackend::writeDevice(const Nba97VoicePatlMemory& m,std:
     for (std::uint32_t i=0;i<w;++i) if (!bytes[i].writable||(!bytes[i].fully&&!bytes[i].known)) return result(SpuSampleStatus::ReadOnly,a+i,w);
     for (std::uint32_t i=0;i<w;++i) { *bytes[i].data=static_cast<std::uint8_t>(v>>(8*i));if (bytes[i].known) *bytes[i].known=1; }
     return result(SpuSampleStatus::Complete,a,w);
+}
+SpuSampleResult SpuSampleBackend::writtenConfiguration(std::uint32_t a,Nba97SpuTransferValue& out) {
+    out={};auto* r=reg(a,2);
+    if (!r||!r->configurationOnly) return result(SpuSampleStatus::UnsupportedAddress,a,2);
+    if (!r->value.known) return result(SpuSampleStatus::Unknown,a,2);
+    out=r->value;return result(SpuSampleStatus::Complete,a,2);
+}
+SpuSampleResult SpuSampleBackend::queuePio(std::uint32_t value,std::uint64_t generation) {
+    if (pio_.phase==SpuPioPhase::Requested) return result(SpuSampleStatus::Busy,Fifo,2);
+    if (pio_.phase==SpuPioPhase::Copied) return result(SpuSampleStatus::UnsupportedTransfer,Fifo,2);
+    if (!generation||(pio_.phase==SpuPioPhase::Filling&&generation!=pio_.memoryGeneration))
+        return result(SpuSampleStatus::StaleGeneration,Fifo,2);
+    const auto control=reg(Control,2)->value,type=reg(TransferControl,2)->value,address=reg(TransferAddress,2)->value;
+    if (!control.known||!type.known||!address.known) return result(SpuSampleStatus::Unknown,Fifo,2);
+    if ((control.word&0x30u)!=0||type.word!=4||
+        (pio_.phase!=SpuPioPhase::Filling&&!freshAddress_)||pio_.bytes>=64)
+        return result(SpuSampleStatus::UnsupportedTransfer,Fifo,2);
+    const auto start=pio_.phase==SpuPioPhase::Filling?pio_.spuAddress:address.word*8u;
+    const auto count=pio_.phase==SpuPioPhase::Filling?pio_.bytes:0u;
+    if (std::uint64_t(start)+count+2>SampleBytes) return result(SpuSampleStatus::UnsupportedTransfer,start,count+2);
+    if (pio_.phase!=SpuPioPhase::Filling) pio_={SpuPioPhase::Filling,generation,start,0};
+    pioWords_[pio_.bytes/2]=static_cast<std::uint16_t>(value);pio_.bytes+=2;freshAddress_=false;
+    return result(SpuSampleStatus::Complete,Fifo,2);
+}
+SpuSampleResult SpuSampleBackend::startPio(std::uint64_t generation) {
+    // The reached control store is retained even if this supported-domain
+    // guard refuses. No empty flush, transfer-type guess or implicit cursor.
+    reg(Status,2)->value={};
+    if (pio_.phase!=SpuPioPhase::Filling||!pio_.bytes) return result(SpuSampleStatus::UnsupportedTransfer,Control,2);
+    if (!generation||generation!=pio_.memoryGeneration) return result(SpuSampleStatus::StaleGeneration,Control,2);
+    pio_.phase=SpuPioPhase::Requested;return result(SpuSampleStatus::Complete,Control,2);
+}
+SpuSampleResult SpuSampleBackend::servicePendingPio(std::uint64_t generation) {
+    if (pio_.phase!=SpuPioPhase::Requested) return result(SpuSampleStatus::NoRequest);
+    if (!generation||generation!=pio_.memoryGeneration) return result(SpuSampleStatus::StaleGeneration);
+    const auto start=pio_.spuAddress,n=pio_.bytes;
+    if (samples_.size()!=SampleBytes||known_.size()!=SampleBytes) return result(SpuSampleStatus::Metadata);
+    for (std::uint32_t i=0;i<n;++i) if (known_[start+i]>1) return result(SpuSampleStatus::Metadata,start+i,n);
+    for (std::uint32_t i=0;i<n;++i) { samples_[start+i]=static_cast<std::uint8_t>(pioWords_[i/2]>>(8*(i%2)));known_[start+i]=1; }
+    pio_.phase=SpuPioPhase::Copied;
+    // Do not assert persistent internal transfer-cursor/readback behavior.
+    // Another chunk requires an actual fresh address store; previous copied
+    // bytes and any old BIOS pending event remain exactly as they are.
+    reg(TransferAddress,2)->value={};reg(Status,2)->value={};
+    return result(SpuSampleStatus::Complete,start,n);
 }
 SpuSampleResult SpuSampleBackend::startDma(std::uint64_t generation) {
     const std::uint32_t required[]={Madr,Bcr,Chcr,Control,TransferAddress,TransferControl,Dpcr};
@@ -237,7 +300,15 @@ int SpuSampleBackend::io(void* opaque,const Nba97VoicePatlMemory* memory,const N
     if (!binding||!binding->backend||!memory||!e||!out) return 0;
     auto& b=*binding->backend;
     switch (e->kind) {
-    case NBA97_SPU_TRANSFER_DEVICE_READ: return b.readDevice(*memory,e->address,e->width,*out)?1:0;
+    case NBA97_SPU_TRANSFER_DEVICE_READ: {
+        const auto r=b.readDevice(*memory,e->address,e->width,*out);
+        if (r) return 1;
+        // Only canonical SPUSTAT permits a required live observation. Never
+        // cache it, infer it from Control, or fall back for unknown CPU bytes,
+        // aliases, unsupported widths or other retained register values.
+        if (r.status!=SpuSampleStatus::Unknown||e->address!=Status||e->width!=2) return 0;
+        break;
+    }
     case NBA97_SPU_TRANSFER_DEVICE_WRITE: return b.writeDevice(*memory,e->address,e->width,e->value,binding->memoryGeneration)?1:0;
     case NBA97_SPU_TRANSFER_TEST_EVENT_B0_0B: {
         std::uint32_t v=0;auto r=b.testEvent(e->argument[0],v);if (r) *out={v,1};return r?1:0;
@@ -247,13 +318,14 @@ int SpuSampleBackend::io(void* opaque,const Nba97VoicePatlMemory* memory,const N
         if (b.request_.phase!=SpuDmaPhase::IsrRunning) { b.result(SpuSampleStatus::InvalidTicket);return 0; }
         [[fallthrough]];
     case NBA97_SPU_TRANSFER_DIAGNOSTIC_83B20:
-        if (!binding->external||binding->external(binding->externalUser,memory,e,out)!=1) { b.result(SpuSampleStatus::CallbackRefused,e->address);return 0; }
-        // The external callback already ran. Preserve both its output bits
-        // (known0 permits an unused opaque word) and the completed-call prefix.
-        // The C owner diagnoses known>1 AFTER recording completed execution.
-        if (out->known>1) { b.result(SpuSampleStatus::Metadata,e->address);return 1; }
-        b.result(SpuSampleStatus::Complete,e->address);return 1;
+        break;
     default: b.result(SpuSampleStatus::UnsupportedTransfer,e->address);return 0;
     }
+    if (!binding->external||binding->external(binding->externalUser,memory,e,out)!=1) { b.result(SpuSampleStatus::CallbackRefused,e->address);return 0; }
+    // The external callback already ran. Preserve both its output bits
+    // (known0 permits an unused opaque word) and the completed-call prefix.
+    // The C owner diagnoses known>1 AFTER recording completed execution.
+    if (out->known>1) { b.result(SpuSampleStatus::Metadata,e->address);return 1; }
+    b.result(SpuSampleStatus::Complete,e->address);return 1;
 }
 }
