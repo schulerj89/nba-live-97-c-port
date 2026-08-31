@@ -92,6 +92,56 @@ void tests() {
           first_after==rng &&
           !(first.pending&MatchPresentationVariant),"source presentation value and exact rejected-draw history");
     check(matchSnapshotReceipt(prepared)==matchSnapshotReceipt(first),"preparation and publication agree");
+    {
+        const auto& controller=first.controller_initialization;
+        check(controller.prepared && controller.effects.human_count[0]==1 &&
+              controller.effects.human_count[1]==1,"65328 follows both team initializers");
+        for(unsigned i=0;i<8;++i) {
+            check(!controller.previous_selected[i].known && !controller.previous_selected[i].word,
+                  "first capture cannot fabricate prior selected player");
+            check(controller.effects.selected[i].known==(i>=2) &&
+                  controller.effects.selected[i].word==(i>=2?65535:0),
+                  "only neutral65328 branch produces known FFFF");
+        }
+        MatchSession ownership;ownership.initializeFresh(defaults);
+        auto ownership_rng=initial_rng;
+        const auto before=ownership.capture(request,source,ownership_rng);
+        auto next_request=request;
+        const uint8_t neutral_assignments[8]={0,0,0,0,0,0,0,0};
+        const int8_t no_profiles[8]={-2,-2,-2,-2,-2,-2,-2,-2};
+        check(nba97_user_setup_open(&next_request.users,neutral_assignments,no_profiles),"neutral setup");
+        check(nba97_user_setup_global(&next_request.users,raw,1)==NBA97_USER_CONFIRMED,"neutral acceptance");
+        ownership.capture(next_request,source,ownership_rng);
+        ownership.initializeFresh(defaults);
+        for(const auto selected:ownership.liveControllerSelections())
+            check(selected.known==1 && selected.word==65535,"neutral write persists across frontend reentry");
+        const auto rejoined=ownership.capture(request,source,ownership_rng);
+        check(rejoined.controller_initialization.effects.selected[0].word==65535 &&
+              rejoined.controller_initialization.effects.selected[0].known==1 &&
+              !rejoined.controller_initialization.effects.selected_written[0],
+              "source quirk: rejoining retains FFFF until later653E8 producer");
+        check(!before.controller_initialization.effects.selected[0].known,
+              "owned earlier controller receipt changed after reentry");
+        auto refused=request;refused.teams[0]=29;
+        const auto published=matchSnapshotReceipt(*ownership.snapshot());
+        const auto revision=ownership.revision();const auto rng_before=ownership_rng;
+        bool rejected=false;
+        try {ownership.capture(refused,source,ownership_rng);}catch(const std::runtime_error&) {rejected=true;}
+        check(rejected && revision==ownership.revision() && rng_before==ownership_rng &&
+              published==matchSnapshotReceipt(*ownership.snapshot()),"refused capture changed controller publication");
+        MatchControllerSelections supplied{};
+        supplied[0]={0xdead,NBA97_GAME_SELECTION_KNOWN};
+        const auto raw_selection=buildMatchSnapshot(request,source,session.liveControls(),defaults,rng,
+                                                     session.liveStrategy(),supplied);
+        check(raw_selection.controller_initialization.effects.selected[0].word==0xdead &&
+              raw_selection.controller_initialization.effects.selected[0].known,
+              "source65328 must preserve invalid raw joined selection, not clamp to player zero");
+        supplied[7]={1,NBA97_GAME_SELECTION_UNKNOWN};
+        rejected=false;
+        try {buildMatchSnapshot(request,source,session.liveControls(),defaults,rng,session.liveStrategy(),supplied);}
+        catch(const std::runtime_error&) {rejected=true;}
+        check(rejected,"invalid native selection provenance was accepted");
+    }
     check(first.teams[0].players[0].first_name=="Player0Field1","owned player string field");
     check(first.teams[0].indices.count==12 && first.teams[0].indices.active_count==12,"count is occupied prefix");
     check(first.controls.profile_ids[0]==123 && first.controls.provenance[0]==NBA97_CONTROLS_PROFILE,"saved controls receipt");

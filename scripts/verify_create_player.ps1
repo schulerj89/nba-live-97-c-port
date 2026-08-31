@@ -69,7 +69,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'PS1 VRAM texture addressing checks failed.' }
     Write-Host 'CREATE PLAYER VRAM: PASS - 4/8-bpp TPAGE word addressing, FUN_80067F74 dthr/dthl, five FUN_80067A14 team uploads, and shared SHOE upload.'
 
-    $hierarchyEvidence = Join-Path $repo '.local\verification\create_player\hierarchy'
+    $hierarchyStamp=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8)
+    $hierarchyEvidence = Join-Path $repo ('.local\verification\create_player\hierarchy-run-'+$hierarchyStamp)
     New-Item -ItemType Directory -Force -Path $hierarchyEvidence | Out-Null
     $hierarchyFrame = Join-Path $hierarchyEvidence 'smoke.ppm'
     & $hierarchySmoke (Join-Path $assetRoot 'create_player\model') `

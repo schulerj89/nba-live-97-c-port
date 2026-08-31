@@ -1,17 +1,19 @@
 # Gameplay motion resource: bounded resolver contract
 
-2026-08-30. This is an audited resource boundary toward gameplay, not a native
-scene, animation sampler or playable possession. No gameplay motion parser is
-implemented yet. Original files, invented source-oracle fixtures, RAM snapshots
-and comparison scripts remain ignored under .local/verification/gameplay/.
+2026-08-31. The native raw-file resolver and immutable byte owner are implemented
+in `src/recovered/gameplay_mocap.*` and `src/gameplay_mocap.*`. This is a resource
+boundary toward gameplay, not a native scene, animation sampler or possession.
+Original files, source-oracle fixtures and RAM snapshots remain ignored under
+`.local/verification/gameplay/`; native comparison receipts are under
+`.local/verification/native_completion/gameplay_motion/run-20260831/`.
 
 ## Source ownership
 
-| GAMEONLY function | Scope | Accounted / full instructions | Dependencies and evidence | Remaining uncertainty |
+| GAMEONLY function | Scope | Native support / full original instructions | Dependencies and evidence | Remaining uncertainty |
 |---|---|---|---|---|
-|800640D8 |Load and normalize two motion directories |0 /132 |29BFC;23 synthetic cases over the full owner, two passes; actual-file post-loader comparison |Native parser/ownership, other callers and playback |
-|80029BFC |Retry file loading until a nonzero pointer |0 /17 |941C8; callsite and filename/argument checks only |File/device/allocation failure behavior; not implemented by the oracle's loader stub |
-|800642E8 |Release resource and clear21490 |0 /17 |90698; source audit only |Native teardown and stale directory users |
+|800640D8 |Load and normalize two motion directories |Raw-file projection /132 |23 synthetic source cases,64 randomized source comparisons, actual file and saved demo comparisons |Loader retry behavior, caller integration and playback |
+|80029BFC |Retry file loading until a nonzero pointer |Not recovered /17 |941C8; callsite and filename/argument checks only |File/device/allocation failure behavior; not implemented by the oracle's loader stub |
+|800642E8 |Release resource and clear21490 |Not integrated /17 |90698; source audit only |Native caller teardown and stale directory users |
 
 All denominators are complete functions. Source PC coverage is distinct from
 native semantic ownership and earns no instruction credit. These three functions
@@ -49,19 +51,21 @@ have unequal normalized counts;10 have only one channel present. Downstream66F88
 uses the larger count, with null contributing0. The frontend six-clip parser's
 nonnull/equal-count/data-offset12 assumptions must not be copied here.
 
-## Next native implementation boundary
+## Native implementation boundary
 
-A focused portable C parser can produce an immutable index: two84-entry optional
+A focused portable C parser produces an immutable index: two84-entry optional
 references, at most168 unique headers, file/header/data offsets, and both raw and
-normalized flags/timing/count. A C++ resource owns the input bytes and index and
-publishes only after validation. Reuse the cached index for the same resource;
+normalized flags/timing/count. A shared immutable C++ resource owns the input
+bytes and index and publishes only after validation. Reuse its cached index;
 decode fresh bytes for a new resource. No original address becomes a host pointer.
 
 Native bounds checks must be labeled as guards, not retail rejection branches.
-Validate directory/header extents and4-byte alignment, signed in-file targets,
-and output capacity. Permit exact directory/header aliases, different headers
-sharing data, nulls, unequal counts and unrelated flag bits. Reject overlapping
-distinct headers and headers overlapping control words/directories, which would
+The parser validates directory/header extents and4-byte alignment and signed
+in-file targets. Its output is a fixed-capacity168-header C struct, with capacity
+guaranteed by the168 input entries; it does not accept a variable-capacity buffer.
+It permits exact directory/header aliases, different headers sharing data,
+nulls, unequal counts and unrelated flag bits. It rejects overlapping distinct
+headers and headers overlapping control words/directories, which would
 otherwise let original in-place writes alter later traversal. Do not infer a
 payload extent or joint/frame stride from this resolver alone.
 
@@ -69,7 +73,7 @@ For the first immutable raw-file API, reject pre-relocated flag20 input. Its+8
 word already holds an absolute PS1 pointer; it is a different encoding, not another
 relative offset. A future RAM-import API would need an explicit encoding and
 validated source base. Source normalization evidence includes those inputs even
-though the proposed disk API deliberately excludes them.
+though the disk API deliberately excludes them.
 
 Keep src/zdomf_mocap.* and the verified Create Player pipeline unchanged. This
 resource resolver requires no camera, player clock or animation selection.
@@ -98,7 +102,8 @@ with home17/New York and away5/Dallas; the currently supported native exhibition
 snapshot uses launch0. The dumps were not paused at640D8 return, and whole RAM
 differs in198,685 bytes between them. Acquisition atomicity, instruction timing,
 rendered phase and input delivery are not established by stable resource bytes.
-There is still no native gameplay parser or sampler comparison.
+The new native resolver comparison below uses these saved captures; there is
+still no gameplay sampler comparison or new live capture in that verification.
 
 Private captures: .local/verification/gameplay/runtime-20260830/
 demo-gameonly-ram.bin and demo-gameonly-followup-ram.bin. The independent report
@@ -109,9 +114,10 @@ compare_demo_mocap_runtime.py. Original material is never included in commits.
 
 The private synthetic oracle has23 cases with two passes each, covering all132
 owner instructions while stubbing only the file-loader return. Twenty fit the
-proposed raw-file contract; two pre-relocated cases and one out-of-file address
-wrap are source diagnostics. Eighteen additional malformed-input cases specify
-future native guards; they are not native test passes. The earlier actual-file
+raw-file contract; two pre-relocated cases and one out-of-file address wrap are
+source diagnostics. Eighteen historical native-guard proposals in that oracle
+are specifications, not test passes; implemented guard tests are reported below.
+The earlier actual-file
 oracle covers126 post-loader instructions, all168 pointer outputs and unique
 header mutations, plus second-pass idempotence. Full132 remains the denominator.
 
@@ -119,3 +125,40 @@ Evidence is under .local/verification/gameplay/audit_b/: the resolver contract,
 source/lifetime references, synthetic vectors/results, actual-file results and
 runtime comparison. None is a claim about a native gameplay implementation or
 the ordinary-exhibition handoff from Team Select.
+
+## Native verification and integration
+
+`tests/gameplay_mocap_tests.cpp` uses only invented data. Its2793 checks cover
+normalization quirks, alias identity/order, optional and unequal channels, zero
+directory offsets, overlapping read-only directories, shared/backward/unaligned
+data targets, the168-header capacity boundary, atomic guard failures, and retained
+resource generations. Source count wrap is preserved and commented: count0 with
+flag09 becomes255 and count128 with flag08 becomes0. These are not clamped or
+silently repaired. Original hardware-address overflow and pre-relocated input
+remain outside the explicitly bounded raw-file interface.
+
+The private `compare_native.py` invokes the compiled C DLL and independently
+executes the original GAMEONLY instructions with only the29BFC file-return hook.
+It reruns all23 source cases twice (20 accepted raw encodings,3 source-only
+diagnostics), plus64 randomized raw resources twice. All132 owner PCs execute.
+It compares the native projection of all200044 actual-file bytes and672 output
+directory bytes against the original owner and both saved demo captures, after
+revalidating all seven code anchors (3876 bytes) in each capture. All145 unique
+headers and five backward targets agree. The C++ file loader additionally agrees
+on all158 nonnull references and preserves the prior owner after a failed file
+replacement. Debug and RelWithDebInfo receipts retain hashes and scope limits.
+This is native resolver evidence, not instruction-identical binary matching.
+
+The C parser returns `NBA97_GAME_MOCAP_OK` on success; other named result codes
+are native guard failures. Output and input are disjoint, and failure leaves the
+output unchanged. `decode_gameplay_mocap` and `load_gameplay_mocap` return a
+`GameplayMocapResource` shared pointer. Hold that owner for any borrowed index,
+header or byte reference. Retained owners survive replacement; a fresh load makes
+a fresh generation. No player/frame payload interpretation is exposed yet.
+
+Integration needs the two new implementation files in the relevant native target
+and a CTest target built from the new test plus both implementations (C99/C++17,
+include directory `src`). Runtime loading belongs at the original2DB90→640D8
+boundary before659F0, using privately extracted raw `ZMOCAP.BIN`; it must not
+replace Create Player's six-clip parser. Caller teardown, the2E0EC rebuild lifetime
+and actual gameplay sampling remain separate unresolved integration work.

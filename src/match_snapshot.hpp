@@ -5,6 +5,7 @@
 #include "recovered/match_setup.h"
 #include "recovered/match_strategy.h"
 #include "recovered/team_header.h"
+#include "recovered/game_controllers.h"
 #include "recovered/user_setup.h"
 #include "recovered/create_player.h"
 #include <memory>
@@ -49,6 +50,14 @@ struct MatchTeamInitialization {
     Nba97TeamHeaderRef table12{},table24{};
     std::array<Nba97TeamHeaderEffects,2> teams{};
 };
+using MatchControllerSelections=std::array<Nba97GameControllerSelection,8>;
+struct MatchControllerInitialization {
+    // Separate immutable boundary receipt; team_initialization still describes
+    // the earlier655B0 effects, not a header silently modified by later owners.
+    bool prepared=false;
+    MatchControllerSelections previous_selected{};
+    Nba97GameControllersEffects effects{};
+};
 struct MatchSnapshot {
     MatchRequest request;
     std::array<MatchTeamSnapshot,2> teams;
@@ -65,6 +74,7 @@ struct MatchSnapshot {
     MatchControlResult controls;
     MatchStrategyState strategy;
     MatchTeamInitialization team_initialization;
+    MatchControllerInitialization controller_initialization;
     Nba97CreatedPlayerCatalog created{}; // retained, never treated as accepted membership.
     uint64_t roster_generation=0,profile_generation=0,created_generation=0;
     uint32_t pending=MatchExtensionSettings|MatchPresentationVariant|MatchStrategyFields|MatchTeamReferenceWords;
@@ -73,7 +83,8 @@ struct MatchSnapshot {
 // Unsupported branches throw explicitly; a captured subset is not launch-ready.
 MatchSnapshot buildMatchSnapshot(const MatchRequest&,const MatchSourceView&,
     const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
-    const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy);
+    const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy,
+    const MatchControllerSelections& previous_selected={});
 std::string matchSnapshotReceipt(const MatchSnapshot&);
 
 class MatchSession {
@@ -89,6 +100,7 @@ public:
     const MatchSnapshot* snapshot() const noexcept {return snapshot_.get();}
     const Nba97MatchControls& liveControls() const noexcept {return live_;}
     const MatchStrategyState& liveStrategy() const noexcept {return strategy_;}
+    const MatchControllerSelections& liveControllerSelections() const noexcept {return selected_;}
     // A future warm-state importer must invalidate an unproven group. Calling
     // initializeFresh again cannot silently replace it with cold defaults.
     void invalidateStrategy() noexcept {strategy_.known=false;}
@@ -106,6 +118,9 @@ private:
     std::array<uint8_t,59> defaults_{};
     Nba97MatchControls live_{};
     MatchStrategyState strategy_;
+    // Original65328 retains joined controller+26. A fresh native session has
+    // no proven producer yet, so these begin UNKNOWN, never guessed zero/FFFF.
+    MatchControllerSelections selected_{};
     std::unique_ptr<MatchSnapshot> snapshot_;
 };
 }

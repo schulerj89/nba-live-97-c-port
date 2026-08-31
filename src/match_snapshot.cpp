@@ -43,7 +43,8 @@ MatchTeamInitialization initializeTeams(const MatchSnapshot& snapshot,
 }
 MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceView& source,
         const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
-        const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy) {
+        const std::array<uint32_t,6>& frontend_rng,const MatchStrategyState& strategy,
+        const MatchControllerSelections& previous_selected) {
     if(!strategy.known)
         throw std::runtime_error("match snapshot pending: unknown persistent team strategy");
     if(request.users.result!=6 || nba97_user_setup_busy(&request.users))
@@ -109,6 +110,16 @@ MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceVi
     std::copy_n(request.users.profile,8,selectors.begin());
     result.controls=finalizeMatchControls(live,selectors,source.profiles,defaults);
     result.team_initialization=initializeTeams(result,source.profiles);
+    // GAME659F0 calls65328 after BOTH655B0 calls. It does not initialize the
+    // selected player for joined controllers; preserve raw value/provenance.
+    // The later65DB0/653E8 producers remain separate, unexecuted boundaries.
+    Nba97GameControllersInput controllers{};
+    std::copy_n(request.users.assignment,8,controllers.assignment);
+    std::copy(previous_selected.begin(),previous_selected.end(),controllers.previous_selected);
+    if(!nba97_game_controllers_initialize(&result.controller_initialization.effects,&controllers))
+        throw std::runtime_error("match snapshot: controller initialization refused");
+    result.controller_initialization.previous_selected=previous_selected;
+    result.controller_initialization.prepared=true;
     if(result.team_initialization.table12.kind!=NBA97_TEAM_REF_UNKNOWN &&
        result.team_initialization.table24.kind!=NBA97_TEAM_REF_UNKNOWN)
         result.pending&=~MatchTeamReferenceWords;
@@ -143,9 +154,10 @@ const MatchSnapshot& MatchSession::capture(const MatchRequest& request,const Mat
                                          std::array<uint32_t,6>& frontend_rng) {
     if(!initialized_)throw std::runtime_error("match controls: cold defaults not initialized");
     if(revision_==(std::numeric_limits<uint64_t>::max)())throw std::runtime_error("match snapshot revision exhausted");
-    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_,frontend_rng,strategy_));
+    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_,frontend_rng,strategy_,selected_));
     // All validation and allocation finished. Publication cannot fail.
     frontend_rng=next->frontend_rng_after;
+    std::copy_n(next->controller_initialization.effects.selected,8,selected_.begin());
     live_=next->controls.controls;snapshot_=std::move(next);++revision_;return *snapshot_;
 }
 void MatchSession::writebackStrategy(uint64_t snapshot_revision,uint16_t live_launch_control,
@@ -225,6 +237,24 @@ std::string matchSnapshotReceipt(const MatchSnapshot& s) {
         }
         out<<"]}";
     }
-    out<<"]}}";return out.str();
+    out<<"]},\"controller_initialization\":{\"stage\":\""<<
+        (s.controller_initialization.prepared ? "after_65328_before_65DB0":"unprepared")<<'"';
+    auto selections=[&](const auto& values) {
+        out<<'[';bool comma=false;
+        for(const auto& value:values) {
+            if(comma)out<<',';comma=true;
+            out<<"{\"known\":"<<unsigned(value.known)<<",\"word\":"<<value.word<<'}';
+        }
+        out<<']';
+    };
+    const auto& c=s.controller_initialization.effects;
+    out<<",\"previous_selected\":";selections(s.controller_initialization.previous_selected);
+    out<<",\"selected\":";selections(c.selected);
+    out<<",\"selected_written\":";array(c.selected_written);
+    out<<",\"team_base\":";array(c.team_base);
+    out<<",\"player_claim\":";array(c.player_claim);
+    out<<",\"controller_binding\":";array(c.controller_binding);
+    out<<",\"human_count\":";array(c.human_count);
+    out<<",\"marker\":"<<c.marker<<"}}";return out.str();
 }
 }

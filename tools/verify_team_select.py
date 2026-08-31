@@ -251,6 +251,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
                 "match-no-profile-retains", "match-special-pending", "match-modified-roster"],
             "missing or nondeterministic confirmation input receipts")
     inputs = {item["id"]: item for item in inputs}
+    previous_selected = [{"known":0, "word":0} for _ in range(8)]
     for name, frame_id in (("match_snapshot.json", "match-handoff-pending"),
                            ("match_profile_snapshot.json", "match-profile-snapshot"),
                            ("match_retained_snapshot.json", "match-no-profile-retains"),
@@ -269,6 +270,19 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
             require(s == other, f"presentation snapshot nondeterminism {name}")
         p = s["presentation"]
         team_initialization_receipt(s,name)
+        assignments=s["assignments"]
+        selected=[dict(previous_selected[i]) if value in (1,2) else {"known":1,"word":65535}
+                  for i,value in enumerate(assignments)]
+        expected_controllers={"stage":"after_65328_before_65DB0",
+            "previous_selected":previous_selected,"selected":selected,
+            "selected_written":[int(value not in (1,2)) for value in assignments],
+            "team_base":[{1:0,2:5}.get(value,-1) for value in assignments],
+            "player_claim":[-1]*10,"controller_binding":list(range(8)),
+            "human_count":[assignments.count(1),assignments.count(2)],"marker":-1}
+        require(json.dumps(s["controller_initialization"],sort_keys=True)==
+                json.dumps(expected_controllers,sort_keys=True),
+                f"65328 effects and retained selection provenance {name}")
+        previous_selected=selected
         strategy = s["strategy"]
         require(type(strategy) is dict and type(strategy.get("known")) is bool and
                 type(strategy.get("writeback_revision")) is int and
@@ -299,7 +313,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
     require(refused["cursor_draws"] == 1 and
             cursor_rng_step(refused["rng_before"]) == by_id["match-special-pending"]["shared_rng"],
             "unsupported snapshot must consume the confirmation cue only, not presentation draws")
-    print("MATCH SNAPSHOT HOST PASS: owned inputs, fresh ranks, controls, strategy, complete pre-period team effects, four presentation/RNG acceptances and pending guards")
+    print("MATCH SNAPSHOT HOST PASS: owned inputs, fresh ranks, controls, strategy, team/controller effects before65DB0, four presentation/RNG acceptances and pending guards")
 
 
 def arrow_flash_cases(first, second):

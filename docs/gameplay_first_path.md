@@ -7,6 +7,13 @@ is no gameplay scene or loop. See team_header_workflow.md for the exact stage.
 Original dumps, disassembly, art and raw tables remain private.
 This is a sequence of bounded dependencies, not a broad gameplay rewrite.
 
+2026-08-31 continuation: the snapshot now also contains the complete65328
+controller effects before65DB0, preserving joined selection provenance across
+acceptances. The gameplay motion resolver has a native immutable resource owner
+and original-data comparison; its runtime loader/sampler integration remains
+open. See game_controllers_workflow.md, gameplay_mocap_workflow.md and the
+full [completion acceptance ledger](native_completion_acceptance.md).
+
 ## 1. Original User Setup, then a valid match snapshot
 
 Team Select state3 returns1 to dispatcher8003F7C8, which invokes state5 owner

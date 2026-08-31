@@ -45,7 +45,8 @@ python $extractor $DiscImage (Join-Path $menu 'Z1PORT.BIG') --lba 225675 --size 
 python $extractor $DiscImage (Join-Path $menu 'Z1PORT.IDX') --lba 232168 --size 3970
 python $extractor $DiscImage (Join-Path $menu 'Z2PORT.BIG') --lba 232170 --size 2344626
 python $extractor $DiscImage (Join-Path $menu 'Z2PORT.IDX') --lba 233315 --size 3970
-python $extractor $DiscImage (Join-Path $menu 'ZTMENU1.CNK') --lba 252406 --size 8522396
+python (Join-Path $repo 'tools\extract_music_resources.py') --disc $DiscImage --overlay $feonly --output $menu
+if ($LASTEXITCODE -ne 0) { throw 'Private five-track music/selection-table extraction failed.' }
 python $extractor $DiscImage (Join-Path $menu 'ZSET1.PSP') --lba 251190 --size 342448
 python $extractor $DiscImage (Join-Path $menu 'ZSET4.PSP') --lba 251683 --size 332084
 python $extractor $DiscImage (Join-Path $menu 'ZSET5.PSP') --lba 251846 --size 146888

@@ -5,6 +5,17 @@ uses current saved roster membership and settings, retains live controller maps,
 and owns all published data. It does not execute an overlay or change the
 Create Player model, animation, projection or texture paths.
 
+The 2026-08-31 continuation adds a separate owned `controller_initialization`
+receipt after both655B0 calls and65328, before65DB0. All ten player claims,
+eight controller bindings/team bases, both human counts and the marker are
+represented. Neutral controllers write knownFFFF; joined controllers preserve
+their previous selection and its provenance. Fresh native selections remain
+Unknown until a recovered producer establishes them. Successful captures retain
+these tokens in MatchSession; refusals/reentry do not reset them. The earlier
+team-initialization receipt remains immutable at its original boundary.
+See [controller workflow](game_controllers_workflow.md). No period or gameplay
+loop has been added, and Unknown is not permission to substitute player zero.
+
 ## Native boundary
 
 State5 result6 calls MatchSession::capture before the native Start latch is

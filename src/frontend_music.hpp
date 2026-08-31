@@ -9,13 +9,9 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "ea_schl.hpp"
 
 namespace nba97 {
-
-struct EaSchlInfo {
-    std::uint8_t version = 0, bits_per_sample = 0, channels = 0, codec = 0;
-    std::uint32_t sample_rate = 0, sample_count = 0, data_blocks = 0;
-};
 
 class FrontendMusicPlayer final {
 public:
