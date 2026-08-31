@@ -132,19 +132,19 @@
     }
   },
   "native_port": {
-    "catalogued_features": 48,
+    "catalogued_features": 49,
     "status_counts": {
-      "not_started": 14,
-      "partial": 9,
+      "not_started": 5,
+      "partial": 19,
       "verified": 25
     },
     "measurement": "manually_catalogued_milestone_counts",
     "playable_basketball_status": "not_started",
     "groups": {
       "Audio": {
-        "items": 3,
+        "items": 4,
         "status_counts": {
-          "partial": 1,
+          "partial": 2,
           "verified": 2
         }
       },
@@ -164,7 +164,8 @@
       "Gameplay path": {
         "items": 8,
         "status_counts": {
-          "not_started": 8
+          "not_started": 3,
+          "partial": 5
         }
       },
       "Native platform": {
@@ -177,8 +178,8 @@
       "Roster transactions": {
         "items": 7,
         "status_counts": {
-          "not_started": 5,
-          "partial": 2
+          "not_started": 1,
+          "partial": 6
         }
       },
       "Rosters": {
@@ -343,39 +344,43 @@
         "id": "rosters.trade",
         "group": "Roster transactions",
         "name": "Trade players",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Windows two-team screen, swaps/transfers, Help/View/Compare, native saves/discard and Reset are implemented and tested. Exact original timing, rendering and waveform acceptance remain open. See docs/trade_rosters_workflow.md."
       },
       {
         "id": "rosters.sign",
         "group": "Roster transactions",
         "name": "Sign free agent",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Windows 100-slot free-agent list, destination validation, signing, child routes, native saves and preserved re-entry undo behavior are implemented. Bounded accounting does not establish full transitive or presentation fidelity. See docs/sign_free_agent_progress.md."
       },
       {
         "id": "rosters.release",
         "group": "Roster transactions",
         "name": "Release player",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Native release/refusal, Help/View/Compare, save/discard/restart and Reset paths have functional acceptance. Original animation/audio fidelity remains open; partial describes the full feature, not an absent screen. See docs/release_players_progress.md."
       },
       {
         "id": "rosters.reset",
         "group": "Roster transactions",
         "name": "Reset rosters",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Native confirmation, default-roster restoration, failure-safe persistence and restart are tested. This is bounded frontend behavior, not complete PS1 card or all-mode equivalence. See docs/reset_rosters_progress.md."
       },
       {
         "id": "rosters.reorder",
         "group": "Roster transactions",
         "name": "Re-order rosters",
         "status": "partial",
-        "notes": "Tested C swap core plus selection/cancel controller and in-memory database integration through CLI; original screen, audio and persistence pending. See docs/reorder_rosters_progress.md."
+        "notes": "Windows original-asset screen, selection/swap, Help/View/Compare, native saves/discard and Reset are implemented and tested. The older instruction ledger's pending slice labels are not current host status; full original-reference acceptance remains open. See docs/reorder_rosters_workflow.md."
       },
       {
         "id": "rosters.create",
         "group": "Roster transactions",
         "name": "Create player",
         "status": "partial",
-        "notes": "Original ZSET5 manager, 40-slot catalogue rules and isolated edit/new transactions are native-tested. Editor fields, animated model, persistence and original-reference acceptance remain pending. See docs/create_player_progress.md."
+        "notes": "40-slot durable catalogue, manager/Edit/New/Delete, 32-field editor and articulated original-data preview are native-tested. Roster insertion/resolution and final original raster/whole-screen acceptance remain open. See docs/create_player_progress.md."
       },
       {
         "id": "rosters.injuries",
@@ -386,8 +391,9 @@
       {
         "id": "audio.frontend_music",
         "group": "Audio",
-        "name": "Looping frontend music decoder",
-        "status": "verified"
+        "name": "Frontend music decoding and host routing",
+        "status": "verified",
+        "notes": "Five-track bank and recovered router use native finite audio output. Verification is scoped to decoding/routing and host regressions, not exact SPU timing, every transition/pause caller or full-match playback. See docs/music_playback_workflow.md."
       },
       {
         "id": "audio.menu_sfx",
@@ -400,6 +406,13 @@
         "group": "Audio",
         "name": "Original speech stream decoder",
         "status": "verified"
+      },
+      {
+        "id": "audio.startup",
+        "group": "Audio",
+        "name": "Original sound startup and sample ownership",
+        "status": "partial",
+        "notes": "Recovered startup, SPU heap/transfer, interrupt and event owners compose in native tests. Natural host startup, timer cadence, voice synthesis and complete resource ownership remain open. Registration does not establish callback scheduling. See docs/audio_startup_workflow.md."
       },
       {
         "id": "card.save_settings",
@@ -423,37 +436,43 @@
         "id": "game.team_select",
         "group": "Gameplay path",
         "name": "Team selection",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Exhibition Team Select and User Setup are connected to the Windows frontend and bounded accepted-match snapshot. Season/playoff/special-team handoff, full original-reference acceptance and gameplay launch remain open. See docs/team_select_workflow.md."
       },
       {
         "id": "game.lineups",
         "group": "Gameplay path",
         "name": "Starting lineup flow",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Lineup recovery, player binding, role and controller owners compose in isolated period tests. The complete live starting-lineup/substitution flow is not connected. See docs/match_runtime_workflow.md."
       },
       {
         "id": "game.match_load",
         "group": "Gameplay path",
         "name": "Match loading",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Windows accepts an ordinary-exhibition snapshot; separate native resource and period composition tests exist. Natural loader/entry provenance and a playable match launch remain incomplete. See docs/match_snapshot_workflow.md and docs/match_runtime_workflow.md."
       },
       {
         "id": "game.render",
         "group": "Gameplay path",
         "name": "Native court and player rendering",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Recovered body/texture/text owners and native CPU/VRAM storage have bounded tests. No playable court or complete match rasterizer/scene is connected; Create Player's preview is a separate frontend path. See docs/game_render_backend_workflow.md."
       },
       {
         "id": "game.input",
         "group": "Gameplay path",
         "name": "Playable basketball controls",
-        "status": "not_started"
+        "status": "not_started",
+        "notes": "Recovered input-edge and player helpers have isolated tests, but no host controls operate a live basketball possession. See docs/match_input_edges_workflow.md."
       },
       {
         "id": "game.rules",
         "group": "Gameplay path",
         "name": "Match rules and clock",
-        "status": "not_started"
+        "status": "partial",
+        "notes": "Frontend rule settings and bounded period initialization are tested. Live clocks, scoring, fouls, violations and complete period/end behavior remain unimplemented. See docs/match_runtime_workflow.md."
       },
       {
         "id": "game.ai",

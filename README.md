@@ -1,26 +1,30 @@
 # NBA Live 97 PS1 decompilation
 
 An experimental, native C/C++ reconstruction of the US PlayStation release of
-NBA Live 97 (`SLUS-00267`). The project uses static recompilation evidence,
-headless Ghidra analysis, and runtime comparison with the original game.
+NBA Live 97 (`SLUS-00267`). Original behavior is recovered using disassembly,
+Ghidra, private static-recompilation evidence, and original-game comparisons.
+The application runs native code; it does not run an emulator or a generated
+recompilation runtime.
+
+**You can explore a substantial Windows frontend, but you cannot play a
+basketball match yet.** Exhibition Team Select and User Setup reach a partial
+match snapshot; they do not launch a court. There is no complete possession,
+CPU-versus-CPU or user-versus-CPU match, season/playoff progression, or match
+save/load path.
 
 [![NBA Live 97 decompilation progress](docs/progress.svg)](docs/progress.md)
 
-The gold percentage measures original functions with explicit recovery
-evidence, not completed functions. The green panel lists manually catalogued
-native-port milestones by status, not an overall game-completion percentage.
-Items vary greatly in size and the catalogue is incomplete; partial work earns
-no arbitrary half-credit. Playable basketball remains unimplemented.
-
-The tracked View Rosters scope currently has semantic ownership for **997/997
-original instructions** across **83/83 basic blocks**, with **12/12 native
-scenarios**, **18/18 interaction contracts**, and **91.82% weighted behavioral
-and screenshot fidelity**. Structural MIPS control-flow matching is not targeted for the
-native port and is not presented as a completion percentage.
+Neither panel is a game-completion percentage. The gold figure counts entries
+in an **incomplete function-evidence catalogue**, which has not caught up with
+the newer recovered modules. The green panel counts unequal, manually tracked
+milestones. A source-accounted routine or passing test does not establish a
+working game feature. See [current implementation status](docs/native_port_status.md)
+for the distinction between playable frontend paths, tested subsystems, and
+remaining work.
 
 ## Current scope
 
-The native Windows build currently covers:
+With your own extracted assets, the native Windows application provides:
 
 - the loading, legal, intro-movie, title, and Game Setup sequence;
 - Rules and Options, including persistent settings;
@@ -28,28 +32,39 @@ The native Windows build currently covers:
 - the Rosters frontend, team browsing, player statistics, portraits, and Cool
   Fact playback;
 - Re-order selection, Help/View/Compare, durable saves/discard and Reset
-  ([scoped instruction ledger](docs/reorder_rosters_progress.md));
+  ([implementation and limits](docs/reorder_rosters_workflow.md));
 - Trade Players: two-team lists, swaps/transfers, Help/View/Compare and local
   saves/discard/Reset ([verification and remaining work](docs/trade_rosters_workflow.md));
 - Sign Free Agent: 100-slot source list, destination validation, signing and
   local saves ([bounded accounting and tests](docs/sign_free_agent_progress.md));
+- Release Players: releases, refusals, Help/View/Compare and local saves
+  ([implementation and acceptance](docs/release_players_progress.md));
 - Create Player: 40-slot durable catalogue, manager/Edit/New/Delete flow,
   32-field editor, recovered name/College/scroll timing, and a local-only
-  ZDOM/ZFEMOCAP articulated preview ([status and remaining polygon work](docs/create_player_progress.md));
-- original frontend music and recovered menu sounds; and
+  ZDOM/ZFEMOCAP articulated preview ([status and remaining work](docs/create_player_progress.md));
+- Exhibition Team Select and User Setup, including profile/control editing
+  and a bounded accepted-match snapshot
+  ([handoff boundary](docs/team_select_workflow.md));
+- a five-track frontend music bank, menu sounds and Cool Fact speech through
+  native audio output ([playback limits](docs/music_playback_workflow.md)); and
 - a CLI trace describing recovered states, assets, audio, and transitions.
 
-This is not yet a complete game. Gameplay, remaining roster transactions, and several
-deeper frontend paths remain unfinished. See the generated
-[progress report](docs/progress.md) for the measured breakdown.
+These paths still have scoped fidelity and integration limits. Created-player
+roster insertion, injuries management, special-team match setup, deeper menu
+paths, and original memory-card behavior remain incomplete. Local saves are
+native formats, not a claim of PS1 memory-card compatibility.
 
-Release Players supports releases, refusals, Help/View/Compare and persistent saves;
-original-game animation/audio acceptance remains open ([bounded ledger](docs/release_players_progress.md)).
+Separate recovered modules and native tests cover portions of match startup,
+lineups/controllers, player animation/input/physics, render-resource ownership,
+and sound initialization, sample transfers, interrupts and events. Many are
+compiled into the application but are **not connected to its live game loop**.
+The newer audio startup tests do not replace the current host playback path or
+prove natural startup, real hardware timing, synthesis, or full-match audio.
 
 Recovered game behavior is moving into portable C modules under
-`src/recovered/`. The existing C++ code remains the native Win32 platform shell
-for rendering, input, movies, audio devices, and resource ownership. A recovered
-C function replaces its C++ approximation rather than creating a second copy.
+`src/recovered/`. C++ owns native resources, adapters and the Win32 frontend,
+including rendering, input, movies and audio devices. Recovery and integration
+are separate steps: a newly tested C owner is not automatically a live host path.
 
 Confirmed original bugs are preserved and commented with their source owner;
 see the [preserved behavior index](docs/preserved_original_bugs.md). Defects
@@ -70,30 +85,64 @@ property. See [ASSET_NOTICE.md](ASSET_NOTICE.md) for the complete notice.
 
 Requirements:
 
-- Windows with Visual Studio 2022 and its C++/CMake tools;
-- Python 3; and
+- Windows with Visual Studio 2022 and its C++/CMake tools (the build script
+  currently uses the Community edition's default installation path);
+- PowerShell 7 (`pwsh`), Python 3, and the private asset tools described below; and
 - a matching `SLUS-00267` BIN image at
   `.local/input/nba-live-97-slus-00267.bin`.
 
-From PowerShell:
+The asset scripts also require EA Graphics Manager at
+`.local/tools/EA-Graphics-Manager`, its Python dependencies (including Pillow
+and reversebox), and Java for intro preparation. The intro script downloads and
+hash-checks jPSXdec when missing. These are asset-preparation dependencies, not
+an emulator runtime bundled with the port.
+
+From PowerShell in the repository root:
 
 ```powershell
 pwsh -File scripts/extract_assetpacks.ps1
+python tools/extract_team_select.py
+python tools/extract_user_setup.py
+python tools/extract_match_setup.py
 pwsh -File scripts/prepare_intro_movie.ps1
 pwsh -File scripts/build.ps1
-pwsh -File scripts/create_desktop_shortcut.ps1
 pwsh -File scripts/run.ps1
 ```
 
+The three additional extractors prepare Team Select, User Setup and the
+accepted-match data; they are not yet called by `extract_assetpacks.ps1`.
 Asset extraction and movie preparation write only beneath `.local/`. The
 normal build and desktop shortcut use the optimized
 `build-windows/RelWithDebInfo/nba97_boot_decomp.exe`; its runtime trace is
 mirrored to `.local/logs/boot_decomp_trace.log`. Verification scripts explicitly
 build the complete Debug target set. For a manual Debug build, run
 `scripts/build.ps1 -Configuration Debug -AllTargets`.
+Optional: `pwsh -File scripts/create_desktop_shortcut.ps1` creates a shortcut
+and requires Windows Terminal (`wt.exe`).
 
-`scripts/build_wsl.ps1` provides the SDL2 compatibility build used for WSL and
-Linux testing; the main reconstruction targets native Win32.
+`scripts/build_wsl.ps1` builds the separate SDL2 compatibility application in
+WSL Ubuntu with CMake, Ninja and SDL2 installed. It does not have Windows
+frontend feature parity. GitHub CI builds the asset-free test targets, not the
+full SDL or Windows frontend.
+
+## Tests without game assets
+
+The recovered logic and native adapter tests use synthetic fixtures. They need
+CMake 3.20+ and C99/C++17 compilers, but no disc image, asset tools, SDL2 or
+emulator. From a shell with CMake and the compiler available:
+
+```sh
+cmake -S . -B build-core -DNBA97_RECOVERED_TESTS_ONLY=ON
+cmake --build build-core --config Debug --parallel
+ctest --test-dir build-core -C Debug --output-on-failure
+python tools/report_progress.py --check
+```
+
+At code checkpoint `1702b81` (2026-08-31), all **122 Windows CTests** passed
+in both Debug and RelWithDebInfo, and all **118 Linux core CTests** passed in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33413002259).
+The counts differ because four tests are Windows-specific. These are bounded
+regression results, not complete-game acceptance or new original-game captures.
 
 ## Keyboard controls
 
@@ -125,6 +174,7 @@ verified [no$psx keyboard mappings](docs/nopsx_controls.md).
 | Create Player ratings | Cross (`C`) toggles individual/group focus; `Left/Right` adjusts; Cross returns to the remembered individual row; Triangle (`F`) opens Help 4/5 or 5/5. |
 | Cool Facts | `Enter` plays; `S` stops |
 | Help | Triangle (`F`); `H` or `F1` remain convenience aliases |
+| Team Select | Arrows browse; `C` switches side; `V` randomizes; `F` opens Help; `Enter` continues to User Setup; `Right Shift` returns to Setup |
 
 Mouse hover and selection are supported in menu cards; the two-list roster editors use keyboard controls.
 
@@ -134,8 +184,8 @@ Recovery metadata is committed without original code or assets:
 
 - `config/decomp/functions/` contains Ghidra-generated address and size
   inventories;
-- `config/decomp/recovered_functions.json` records evidence-backed function
-  research;
+- `config/decomp/recovered_functions.json` is an incomplete catalogue of
+  evidence-backed function research, not an inventory of every implemented C owner;
 - `config/decomp/features.json` records manually assigned native milestone statuses; and
 - `reports/progress.json` and `docs/progress.*` are generated views.
 
@@ -147,9 +197,12 @@ pwsh -File scripts/update_progress.ps1
 python tools/report_progress.py --check
 ```
 
-GitHub Actions rejects stale generated reports and any tracked `.local/` file.
-Function coverage is intentionally conservative: partial behavioral evidence
-does not count as a complete or instruction-matching decompilation.
+GitHub Actions rejects reports that differ from their committed manifests and
+any tracked `.local/` file. This freshness check does not discover missing
+evidence records or prove that a manually assigned feature status is correct.
+New source recovery is also documented in the individual subsystem workflows.
+Partial behavioral evidence does not count as complete or instruction-matching
+decompilation; this native port does not target instruction-identical PS1 output.
 
 View Rosters additionally tracks the original MIPS denominator—functions,
 instructions, basic blocks, and call sites—from headless Ghidra. Source
@@ -173,20 +226,22 @@ state interactions, while original no$psx trace equivalence remains a separate
 decoding also have non-scoring pass/fail regressions so they cannot inflate the
 visual-fidelity percentage.
 
-View Rosters also has a separate end-to-end fidelity score generated from
-recovered behavior checks and local screenshot comparisons. Run
+View Rosters has **997/997 instructions** accounted for across **83/83 blocks**
+in its fixed scope. Its separate recorded **91.82%** fidelity score combines
+behavior checks and local screenshot comparisons for those screens only. Run
 `python tools/verify_view_rosters.py --behavior-pass --require-references` after
 deterministic capture to refresh it. The score is useful regression evidence,
 not a byte-match claim: emulator scaling, color presentation, and animation
 phase can prevent identical pixels even when the recovered layout agrees.
 
-Re-order Rosters now opens the original-asset two-list screen, with selection,
-team scanning, shared validation/swap/refresh helpers and in-memory accept/discard.
-Its [instruction ledger](docs/reorder_rosters_progress.md) accounts for **875/875**
-instructions in the initial ten owners—not 100% of the feature. Help/child routes,
-disk persistence and original-reference acceptance remain pending.
-Run `pwsh -File scripts/verify_reorder_rosters.ps1` for
-fresh CLI tests; see the [workflow](docs/reorder_rosters_workflow.md).
+The Re-order [instruction ledger](docs/reorder_rosters_progress.md) accounts for
+**875/875** instructions in its initial ten owners, not 100% of the feature.
+Its older pending-slice labels have not all caught up with implemented Help,
+View/Compare, disk persistence and Reset. Use the
+[implementation workflow](docs/reorder_rosters_workflow.md) and
+[current status](docs/native_port_status.md) for the broader boundary;
+original-reference acceptance still remains separate. Run
+`pwsh -File scripts/verify_reorder_rosters.ps1` for its scoped checks.
 
 For the parent Rosters card screen:
 
@@ -202,14 +257,16 @@ local raw-versus-authored waveform/spectrum audit. The original screenshot,
 exported WAVs, and plots remain ignored under `.local/`; only the asset-free
 measurement report is committed.
 
-Run the complete local verification pipeline with:
+Run the legacy frontend verification pipeline with your private assets:
 
 ```powershell
 pwsh -File scripts/verify.ps1
 ```
 
-It checks progress metadata, validates C recovery ownership, builds the mixed
-C/C++ application, and runs the asset-backed behavioral self-test. Optional raw
+It checks progress metadata, validates registered C recovery ownership, builds
+the mixed C/C++ application, and runs the asset-backed frontend self-test and
+View Rosters checks. It is not a complete-game verifier and does not replace
+the CTest command above or the individual feature verification scripts. Optional raw
 PS1 function candidates belong under `.local/build/ps1/functions/`; the verifier
 compares eligible candidates against the owned original bytes. A normal
 verification pass never implies byte matching—use `-RequireMatching` when exact
