@@ -2,6 +2,7 @@
 #include "recovered/spu_heap_mapping.h"
 #include "spu_sample_backend.hpp"
 #include "spu_event_backend.hpp"
+#include "interrupt_controller_backend.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -31,10 +32,16 @@ struct Fixture {
     Nba97VoiceMappingProgress progress{};
     Backend device;
     nba97::SpuEventBackend events;
+    nba97::InterruptControllerBackend controller;
     nba97::SpuSampleIoContext binding{&device,1,nullptr,nullptr};
     nba97::SpuEventIoContext eventBinding{&events,&device,1,nullptr,nullptr};
     std::array<Nba97SpuEventsEvent,128> eventJournal{};
     Nba97SpuEventsProgress eventProgress{};
+    nba97::InterruptControllerIoContext controllerBinding{};
+    std::array<Nba97InterruptEvent,512> controllerJournal{};
+    Nba97InterruptProgress controllerProgress{};
+    uint32_t irqStatus=0,dicr=0,timerMode=0;
+    std::array<uint32_t,4> counterPolicy{};
     uint32_t handle=0;
     bool service=true;
     unsigned copied=0,interrupts=0;
@@ -50,9 +57,9 @@ struct Fixture {
         transferBridge.io=io;transferBridge.io_context=this;transferBridge.access_budget=10000;
         transferBridge.journal=transferJournal.data();transferBridge.journal_capacity=transferJournal.size();
         mapping={{spans.data(),spans.size()},nba97_spu_heap_mapping_invoke,&heapBridge,10000};
-        // Declared earlier controller/device entry and owned padding. Actual
-        // SPU event startup executes below; full ResetCallback/hardware startup
-        // remains separate and is not implied by these incoming values.
+        // Declared earlier sound-device entry and owned padding. Original
+        // controller and SPU event startup execute below. BIOS counter policy
+        // and IRQ hardware effects remain explicit external test conditions.
         put(0x800c75ecu,3);put(0x800c75f4u,7);put(0x800c762cu,0);
         put(0x800c75e8u,1);put(0x800c75f0u,8);put(0x800c75f8u,0);
         put(0x800c75fcu,0);put(0x800c6d2cu,0,1);put(0x800f9600u,0);
@@ -68,11 +75,20 @@ struct Fixture {
         check(device.importRegister(Backend::TransferControl,2,{4,1}));
         check(device.importRegister(Backend::Dpcr,4,{0x80000,1}));
         check(device.importRegister(Backend::BusDelay,4,{0,1}));
-        put(0x800c7a80u,0);put(0x800c7dc4u,0x800c7dacu);put(0x800c7db0u,0x8007fdb8u);
-        put(0x800c7e38u,1,2);put(0x800c7e4cu,0);
+        put(0x800c7a80u,0);put(0x800c7dc4u,0x800c7dacu);put(0x800c7db0u,0);
+        put(0x800c7db4u,0x8007f9bcu);put(0x800c7dc8u,0,2);
+        put(0x800c7e2cu,0x1f801070u);put(0x800c7e64u,0x1f801114u);put(0x800c7e70u,0);
         put(0x800c7e30u,nba97::SpuEventBackend::IrqMask);put(0x800c7e5cu,nba97::SpuEventBackend::Dicr);
-        check(events.importRegister(nba97::SpuEventBackend::IrqMask,2,{0x7ff,1}));
-        check(events.importRegister(nba97::SpuEventBackend::Dicr,4,{0,1}));
+        check(events.importRegister(nba97::SpuEventBackend::IrqMask,2,{0,1}));
+        // General DICR is consistently owned by the explicit external fixture;
+        // do not mix its pending flags with a retained registration-only cache.
+        check(events.importRegister(nba97::SpuEventBackend::Dicr,4,{0,0}));
+        eventBinding.external=eventHardware;eventBinding.externalUser=this;
+        controllerBinding={&controller,eventBinding,1,controllerIo,this};
+        check(controller.importIso9660Driver({1,1}));check(controller.importPadClearPolicy({1,1}));
+        check(controllerOperation(NBA97_INTERRUPT_INITIALIZE_7F708)==1);
+        check(controller.contextCaptured()&&controller.hookInstalled());
+        check(get(0x800c7db0u)==0x8007fdb8u&&get(0x800c7e38u,2)==1);
         check(eventOperation(NBA97_SPU_EVENTS_INITIALIZE_7E4C4)==1);
         handle=get(0x800c7678u);
         check(handle!=0&&get(0x800c7e4cu)==0x8007d668u&&get(0x800c7a80u)==1);
@@ -85,21 +101,63 @@ struct Fixture {
         Nba97SpuEvents owner{mapping.memory,nba97::SpuEventBackend::io,&eventBinding,10000};
         return nba97_spu_events(&owner,operation,0,0,0,0,eventJournal.data(),eventJournal.size(),&eventProgress);
     }
+    int controllerOperation(Nba97InterruptOperation operation) {
+        return controller.run(controllerBinding,mapping.memory,operation,0,0,{0,0},controllerJournal.data(),
+            controllerJournal.size(),controllerProgress,10000);
+    }
+    static int eventHardware(void* p,const Nba97VoicePatlMemory* memory,const Nba97SpuEventsEvent* e,Nba97SpuTransferValue* out) {
+        auto& f=*static_cast<Fixture*>(p);check(memory->spans==f.mapping.memory.spans);
+        const bool write=e->kind==NBA97_SPU_EVENTS_DEVICE_WRITE;
+        if(!write&&e->kind!=NBA97_SPU_EVENTS_DEVICE_READ)return 0;
+        if(e->address==0x1f801070u&&e->width==2) {
+            if(write)f.irqStatus&=e->value;else *out={f.irqStatus,1};return 1;
+        }
+        if(e->address==0x1f801114u&&e->width==4) {
+            if(write)f.timerMode=e->value;else *out={f.timerMode,1};return 1;
+        }
+        if(e->address==nba97::SpuEventBackend::Dicr&&e->width==4) {
+            if(write) {
+                f.dicr=(f.dicr&0x7f000000u&~e->value)|(e->value&0x00ffffffu);
+                f.updateDmaFlag();
+            } else *out={f.dicr,1};
+            return 1;
+        }
+        return 0;
+    }
+    void updateDmaFlag() {
+        dicr&=0x7fffffffu;
+        if((dicr&0x8000u)||((dicr&0x800000u)&&((dicr>>24)&(dicr>>16)&0x7fu)))dicr|=0x80000000u;
+    }
+    static int controllerIo(void* p,const Nba97VoicePatlMemory* memory,const Nba97InterruptEvent* e,Nba97SpuTransferValue* out) {
+        auto& f=*static_cast<Fixture*>(p);check(memory->spans==f.mapping.memory.spans);
+        if(e->kind==NBA97_INTERRUPT_CHANGE_CLEAR_COUNTER) {
+            if(e->argument[0]>=4||e->argument[1]>1)return 0;
+            f.counterPolicy[e->argument[0]]=e->argument[1];*out={};return 1;
+        }
+        if(e->kind!=NBA97_INTERRUPT_CALLBACK||e->address!=0x8007d668u)return 0;
+        const auto ticket=f.device.request().ticket;
+        if(!f.device.beginIsr(ticket))return 0;
+        Nba97SpuTransfer cpu{*memory,io,&f,10000};Nba97SpuTransferProgress progress{};
+        int rc=nba97_spu_transfer(&cpu,NBA97_SPU_ISR_7D668,0,0,0,f.isrJournal.data(),f.isrJournal.size(),&progress);
+        const bool finished=bool(f.device.finishIsr(ticket,rc==1));
+        if(rc!=1||!finished)return 0;
+        ++f.interrupts;*out=progress.returned;return 1;
+    }
     static int io(void* opaque,const Nba97VoicePatlMemory* memory,const Nba97SpuTransferEvent* event,Nba97SpuTransferValue* result) {
         auto& f=*static_cast<Fixture*>(opaque);
         check(memory->spans==f.mapping.memory.spans&&memory->count==f.mapping.memory.count);
         if(event->kind==NBA97_SPU_TRANSFER_TEST_EVENT_B0_0B&&f.service&&f.device.request().phase==Phase::Requested) {
-            // Explicit scheduling boundary in this test: service the owned
-            // request, then execute the recovered ISR before the original poll.
-            // No fabricated completion and no claim of hardware IRQ cadence.
+            // Explicit scheduling/device fixture: service actual sample bytes,
+            // signal its DMA source, and enter the installed native context.
+            // Actual controller -> DMA dispatcher -> registered SPU ISR completes
+            // the event. This does not claim physical device timing/cadence.
             if(!f.device.servicePendingDma(*memory,f.binding.memoryGeneration))return 0;
-            ++f.copied;const auto ticket=f.device.request().ticket;
-            if(!f.device.beginIsr(ticket))return 0;
-            Nba97SpuTransfer cpu{*memory,io,&f,10000};Nba97SpuTransferProgress p{};
-            int rc=nba97_spu_transfer(&cpu,NBA97_SPU_ISR_7D668,0,0,0,f.isrJournal.data(),f.isrJournal.size(),&p);
-            const bool finished=bool(f.device.finishIsr(ticket,rc==1));
-            if(rc!=1||!finished)return 0;
-            ++f.interrupts;
+            ++f.copied;f.dicr|=0x10000000u;f.updateDmaFlag();
+            if(!(f.dicr&0x80000000u))return 0;
+            f.irqStatus|=8u;
+            int rc=f.controller.enterException(f.controllerBinding,*memory,f.controllerJournal.data(),
+                f.controllerJournal.size(),f.controllerProgress,10000);
+            if(rc!=NBA97_INTERRUPT_TRANSFERRED||!f.controllerProgress.transferred)return 0;
         }
         return Backend::io(&f.binding,memory,event,result);
     }
@@ -111,6 +169,8 @@ void actual_upload_and_unload() {
         f.progress.stopped_address,f.transferBridge.progress.completion,int(f.device.lastResult().status));
     check(result.completion==1&&result.value==0);
     check(f.copied==1&&f.interrupts==1&&f.device.request().phase==Phase::IsrComplete);
+    check(f.controller.exceptionPhase()==nba97::InterruptExceptionPhase::Returned);
+    check(f.controllerProgress.transferred&&f.irqStatus==0&&!(f.dicr&0xff000000u));
     check(f.get(Map+0x2c)==0x1010&&f.get(0x800c6d2du,1)==0);
     check(f.heapBridge.progress.operations_completed==1&&f.transferBridge.progress.operations_completed==2);
     check(std::count(f.device.known().begin(),f.device.known().end(),uint8_t(1))==64);
@@ -130,6 +190,16 @@ void actual_upload_and_unload() {
     check(f.eventOperation(NBA97_SPU_EVENTS_INITIALIZE_7E4C4)==1);
     f.handle=f.get(0x800c7678u);
     check(f.handle!=oldHandle&&f.device.testEvent(f.handle,event)&&event==0);
+    check(f.eventOperation(NBA97_SPU_EVENTS_SHUTDOWN_7E81C)==1);
+    check(f.controllerOperation(NBA97_INTERRUPT_SHUTDOWN_7FAE4)==1);
+    // Original shutdown clears the saved context without detaching its hook.
+    // The native owner retains that hook but cannot enter a cleared context.
+    check(f.controller.hookInstalled()&&f.get(0x800c7dfcu)==0);
+    check(f.controller.enterException(f.controllerBinding,f.mapping.memory,f.controllerJournal.data(),
+        f.controllerJournal.size(),f.controllerProgress,10000)==NBA97_PATL_IO_REFUSED);
+    check(f.controllerProgress.events==0&&f.events.criticalEnabled().word==1);
+    check(f.controllerOperation(NBA97_INTERRUPT_INITIALIZE_7F708)==1);
+    check(f.eventOperation(NBA97_SPU_EVENTS_INITIALIZE_7E4C4)==1&&f.get(0x800c7678u)!=f.handle);
 }
 void stereo_rounding_and_source_failure() {
     {Fixture f;f.put(Map+6,2,1);auto result=f.upload();
