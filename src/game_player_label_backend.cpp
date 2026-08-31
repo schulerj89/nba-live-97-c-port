@@ -12,44 +12,68 @@ struct LabelRun {
     Nba97GameTextContext text{};
     Nba97GameRenderBuffer lastObject{};
     std::uint32_t lastAddress = 0;
+    std::uint32_t styleAddress = 0;
 
-    Nba97GameRenderBuffer at(std::uint32_t address, std::size_t size, bool requireKnown) {
+    Nba97GameRenderBuffer at(std::uint32_t address, std::size_t size) {
         for(const auto& region:regions) {
             if(address<region.base) continue;
             const auto offset=static_cast<std::uint64_t>(address)-region.base;
             if(offset>region.size || size>region.size-static_cast<std::size_t>(offset)) continue;
-            if(region.known) for(std::size_t i=0;i<size;++i) {
-                const auto known=region.known[static_cast<std::size_t>(offset)+i];
-                if(known>1 || (requireKnown && !known))
-                    throw std::invalid_argument("legacy label field needs known retained bytes");
-            }
             return {region.data+static_cast<std::size_t>(offset),size};
         }
         throw std::out_of_range("text source reference is outside retained bindings");
     }
-    void knownLegacy(Nba97GameRenderBuffer view) {
+    int refreshStyle() {
+        const auto root=at(0x800b2048u,4);
         Nba97GameImageMemory described{};
-        if(!memory.describe(view,described)) throw std::invalid_argument("unowned legacy label buffer");
-        if(described.known) for(std::size_t i=0;i<described.size;++i)
-            if(described.known[i]!=1) throw std::invalid_argument("legacy label buffer is not fully known");
-    }
-    void validateLegacyInputs() {
-        // SDK callbacks can replace these live views or change their bytes and
-        // knownness. Revalidate before returning to35A44's unchecked reads.
-        for(const auto* entity:labels.entity_table)
-            if(entity && entity->player.data) knownLegacy(entity->player);
-        if(labels.position_count && !labels.position_name)
-            throw std::invalid_argument("position string table missing");
-        for(std::size_t i=0;i<labels.position_count;++i) knownLegacy(labels.position_name[i]);
-    }
-    void refreshStyle() {
-        const auto root=at(0x800b2048u,4,true);
+        if(!memory.describe(root,described)) return NBA97_RENDER_ARGUMENT;
+        if(described.known) {
+            for(unsigned i=0;i<4;++i) if(described.known[i]>1) return NBA97_RENDER_ARGUMENT;
+            for(unsigned i=0;i<4;++i) if(!described.known[i]) return NBA97_LABEL_UNKNOWN;
+        }
         std::uint32_t address=0;
         for(unsigned i=0;i<4;++i) address|=std::uint32_t(root.data[i])<<(i*8);
-        if(address&1u) throw std::invalid_argument("legacy style halfword alignment is unsupported");
-        // Require known bytes for legacy35A44's direct halfword writes. The
-        // text owner itself retains full knownness for every other allocation.
-        labels.style=at(address,0x54,true);
+        if(address&1u) return NBA97_LABEL_ALIGNMENT;
+        styleAddress=address;
+        // This borrowed legacy identity is informational in the checked
+        // entry. Do not require unused byte0 to be mapped just to write+2A.
+        labels.style={};
+        for(const auto& region:regions) if(address>=region.base && std::uint64_t(address)-region.base<region.size) {
+            labels.style={region.data+(address-region.base),1};break;
+        }
+        return NBA97_RENDER_COMPLETE;
+    }
+    static int resolve(void* context,const Nba97GamePlayerLabelAccess* access,Nba97GamePlayerLabelStorage* out) {
+        auto& self=*static_cast<LabelRun*>(context);
+        try {
+            auto view=access->buffer;
+            if(access->role==1) {
+                const auto code=self.refreshStyle();
+                if(code!=NBA97_RENDER_COMPLETE) return code;
+                view=self.at(self.styleAddress+static_cast<std::uint32_t>(access->offset),access->size);
+            }else if(access->role==2) {
+                if(!self.lastObject.data || view.data!=self.lastObject.data || view.size!=self.lastObject.size)
+                    return NBA97_RENDER_ARGUMENT;
+                view=self.at(self.lastAddress+static_cast<std::uint32_t>(access->offset),access->size);
+            }else if(access->role==0) {
+                if(!view.data || access->offset>view.size || access->size>view.size-access->offset)
+                    return NBA97_RENDER_RESOURCE;
+                Nba97GameImageMemory owner{};
+                if(!self.memory.describe(view,owner)) return NBA97_RENDER_ARGUMENT;
+                view={owner.data+access->offset,access->size};
+            }else return NBA97_RENDER_ARGUMENT;
+            Nba97GameImageMemory described{};
+            if(!self.memory.describe(view,described)) return NBA97_RENDER_ARGUMENT;
+            // Reached views are resolved afresh after every callback. C owns
+            // canonical metadata validation and commits each source store;
+            // unused padding, other players and unselected names stay unread.
+            *out={described.data,described.known,static_cast<std::uint8_t>(described.address_mod4&1u),described.address_mod4_known};
+            return NBA97_RENDER_COMPLETE;
+        }catch(const std::out_of_range& error) {
+            self.result.detail=error.what();return NBA97_RENDER_RESOURCE;
+        }catch(const std::exception& error) {
+            self.result.detail=error.what();return NBA97_RENDER_ARGUMENT;
+        }
     }
     static int invoke(void* context,const Nba97GamePlayerLabelEvent* event,Nba97GameRenderBuffer* created) {
         auto& self=*static_cast<LabelRun*>(context);
@@ -70,7 +94,7 @@ struct LabelRun {
                     static_cast<std::uint32_t>(event->argument),&address,&self.result.textProgress);
                 if(code==NBA97_TEXT_COMPLETE) {
                     self.lastAddress=address;
-                    self.lastObject=address?self.at(address,64,true):Nba97GameRenderBuffer{};
+                    self.lastObject=address?self.at(address,1):Nba97GameRenderBuffer{};
                     *created=self.lastObject;
                 }
             }else if(event->kind==NBA97_LABEL_RESET_PACKET_99960) {
@@ -78,19 +102,14 @@ struct LabelRun {
                 // Use that exact returned source identity even if two source
                 // bindings alias the same native bytes.
                 if(!self.lastObject.data) throw std::invalid_argument("no returned label object");
-                std::uint32_t delta=0;
-                if(event->object.data==self.lastObject.data) delta=0;
-                else if(event->object.data==self.lastObject.data+4) delta=4;
-                else throw std::invalid_argument("reset is not the returned label object");
-                if(event->object.size>self.lastObject.size-delta || event->object.size<4)
+                if(event->object.data!=self.lastObject.data || event->object.size!=self.lastObject.size ||
+                    (event->object_offset!=0 && event->object_offset!=4))
                     throw std::invalid_argument("returned label object span changed");
-                code=nba97_game_text_reset_packet(&self.text,self.lastAddress+delta,
+                code=nba97_game_text_reset_packet(&self.text,self.lastAddress+static_cast<std::uint32_t>(event->object_offset),
                     static_cast<std::uint32_t>(event->argument),&self.result.textProgress);
             }else throw std::invalid_argument("unowned label call");
             self.result.textResult=code;
             if(code!=NBA97_TEXT_COMPLETE) return 0;
-            self.refreshStyle();
-            self.validateLegacyInputs();
             return 1;
         }catch(const std::exception& error) {
             self.result.detail=error.what();
@@ -104,7 +123,7 @@ GamePlayerLabelResult runGamePlayerLabels(GameRenderMemory& memory,Nba97GamePlay
     const std::vector<GameTextBinding>& bindings,Nba97GameTextIo io,void* user,std::size_t stepBudget) {
     GamePlayerLabelResult result;
     try {
-        LabelRun run{memory,labels,result,{},{},{},0};
+        LabelRun run{memory,labels,result,{},{},{},0,0};
         run.regions.reserve(bindings.size());
         for(const auto& binding:bindings) {
             Nba97GameImageMemory described{};
@@ -118,11 +137,8 @@ GamePlayerLabelResult runGamePlayerLabels(GameRenderMemory& memory,Nba97GamePlay
                     throw std::invalid_argument("overlapping source text bindings");
             run.regions.push_back({binding.sourceAddress,described.data,described.known,described.size});
         }
-        // Legacy C buffers have no knownness member. Refuse this restricted
-        // native domain up front rather than silently read an unknown payload.
-        run.validateLegacyInputs();
         run.text={{run.regions.data(),run.regions.size()},stepBudget,io,user};
-        result.result=nba97_game_player_labels(&labels,LabelRun::invoke,&run,&result.completed);
+        result.result=nba97_game_player_labels_checked(&labels,LabelRun::invoke,LabelRun::resolve,&run,&result.completed);
         if(result.result!=NBA97_RENDER_COMPLETE && result.detail.empty())
             result.detail="label owner stopped at its retained-resource or required SDK boundary";
     }catch(const std::exception& error) {result.detail=error.what();}

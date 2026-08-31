@@ -20,9 +20,15 @@ struct Fixture {
     unsigned calls=0,refuse=0;
     bool poisonNextPlayer=false;
     bool misalignStyle=false;
+    bool poisonObjectStore=false;
     std::uint8_t* at(std::uint32_t address){return all.data+address-Base;}
     void put(std::uint32_t address,std::uint32_t value,unsigned size){for(unsigned i=0;i<size;++i)at(address)[i]=static_cast<std::uint8_t>(value>>(i*8));}
     std::uint32_t get(std::uint32_t address,unsigned size){std::uint32_t value=0;for(unsigned i=0;i<size;++i)value|=std::uint32_t(at(address)[i])<<(i*8);return value;}
+    Nba97GameRenderBuffer source(std::uint32_t address,unsigned size){
+        for(const auto& b:bindings)if(address>=b.sourceAddress&&address-b.sourceAddress<=b.view.size&&size<=b.view.size-(address-b.sourceAddress))
+            return {b.view.data+address-b.sourceAddress,size};
+        return {};
+    }
     Fixture() {
         allocation=memory.add(std::vector<std::uint8_t>(0xb0000,0xa5),std::vector<std::uint8_t>(0xb0000,1),0);
         all=memory.buffer(allocation,0,0xb0000);bindings.push_back({Base,all});
@@ -52,9 +58,25 @@ struct Fixture {
         if(f.poisonNextPlayer && f.calls==1){Nba97GameImageMemory view{};
             f.memory.describe(f.entities[1].player,view);view.known[0x29]=0;}
         if(f.misalignStyle && f.calls==1)f.put(0x800b2048,Style+1,4);
-        f.put(event->object,0xffffff,4);return 1;
+        if(f.poisonObjectStore && f.calls==2){Nba97GameImageMemory view{};
+            f.memory.describe(f.all,view);view.known[Object+0x20-Base]=0;view.known[Object+0x21-Base]=0;
+            view.known[Object+0x1e-Base]=0;view.known[Object+0x1f-Base]=2;}
+        const auto word=f.source(event->object,4);if(!word.data)return 0;
+        word.data[0]=word.data[1]=word.data[2]=255;word.data[3]=0;return 1;
     }
     GamePlayerLabelResult run(){return runGamePlayerLabels(memory,labels,bindings,io,this);}
+    void split(bool omitFont=false){
+        bindings.clear();auto same=[&](std::uint32_t a,std::size_t n){bindings.push_back({a,memory.buffer(allocation,a-Base,n)});};
+        same(Base,Style-Base);same(Style+0x54,Object-(Style+0x54));same(Object+16*64,Base+all.size-(Object+16*64));
+        same(Style+8,0x1e);if(!omitFont)same(Style+0x26,2);same(Style+0x28,0x1a);
+        same(Style+0x43,1);same(Style+0x4b,1);same(Style+0x52,1);
+        for(unsigned i=0;i<16;++i)for(unsigned offset=0;offset<64;offset+=4){
+            if(offset>0x20&&offset!=0x28&&offset!=0x38)continue;
+            const auto a=Object+i*64+offset;
+            const auto id=memory.add(std::vector<std::uint8_t>(at(a),at(a)+4),std::vector<std::uint8_t>(4,1),0);
+            bindings.push_back({a,memory.buffer(id,0,4)});
+        }
+    }
 };
 void composed(){
     Fixture f;const auto result=f.run();
@@ -82,15 +104,48 @@ void refusal(){
     check(result.result==NBA97_RENDER_ARGUMENT&&bad.calls==0&&bad.get(Style+42,2)==before,"alignment provenance mismatch before source work");
     Fixture unknown;Nba97GameImageMemory view{};check(unknown.memory.describe(unknown.all,view),"owned memory described");
     view.known[0xa8000+0x29]=0;result=unknown.run();
-    check(result.result==NBA97_RENDER_ARGUMENT&&unknown.calls==0,"legacy unknown text rejected");
+    check(result.result==NBA97_LABEL_UNKNOWN&&unknown.calls==0&&unknown.get(Style+42,2)==3,"unknown text refused at actual read after group store");
     Fixture overlap;overlap.bindings.push_back(overlap.bindings.front());result=overlap.run();
     check(result.result==NBA97_RENDER_ARGUMENT&&overlap.calls==0,"source binding overlap rejected");
     Fixture late;late.poisonNextPlayer=true;result=late.run();
-    check(result.result==NBA97_RENDER_IO_REFUSED&&result.textResult==NBA97_TEXT_ARGUMENT&&result.completed==0,"callback-created unknown next name refused before legacy read");
-    check(late.calls==2&&late.get(Object+64+0x12,2)==65535,"no label1 creation from unknown payload");
+    check(result.result==NBA97_LABEL_UNKNOWN&&result.completed==1,"callback-created unknown next name refused only when reached");
+    check(late.calls==4&&late.get(Object+64+0x12,2)==65535,"label0 resets complete before unknown label1 read");
     Fixture alignment;const auto oddFontBefore=alignment.get(Style+0x27,2);alignment.misalignStyle=true;result=alignment.run();
-    check(result.result==NBA97_RENDER_IO_REFUSED&&result.textResult==NBA97_TEXT_ARGUMENT&&result.completed==0,"callback-created odd style refused before legacy halfword store");
-    check(alignment.calls==2&&alignment.get(Style+0x27,2)==oddFontBefore,"no misaligned font write repairs original behavior");
+    check(result.result==NBA97_LABEL_ALIGNMENT&&result.completed==1,"callback-created odd style refused at next actual style store");
+    check(alignment.calls==4&&alignment.get(Style+0x27,2)==oddFontBefore,"both outer resets precede odd style refusal");
+}
+void partial(){
+    Fixture f;Nba97GameImageMemory view{};check(f.memory.describe(f.all,view),"partial retained memory");
+    auto unknown=[&](std::uint32_t address,std::size_t count){std::memset(view.known+address-Base,0,count);};
+    unknown(Style,8);unknown(Style+0x42,16);view.known[Style+0x43-Base]=view.known[Style+0x4b-Base]=1;
+    unknown(Style+0x26,2);unknown(Style+0x2a,2);
+    unknown(Object,16*64);for(unsigned i=0;i<16;++i)view.known[Object+i*64+0x12-Base]=view.known[Object+i*64+0x13-Base]=1;
+    unknown(Pool,0x1000);
+    for(unsigned i=0;i<2;++i)unknown(0x80124000+i*20,3);
+    for(unsigned i=0;i<10;++i){unknown(Base+0xa8000+i*128,128);std::memset(view.known+0xa8000+i*128+0x29,1,3);}
+    // Unvisited metadata is not repaired or eagerly validated.
+    view.known[Style+0x49-Base]=2;
+    const auto result=f.run();
+    check(result.result==1&&result.completed==10&&f.calls==40,"partial producer-style resources create all labels");
+    check(view.known[Style-Base]==0&&view.known[Style+0x49-Base]==2,"unread style bytes retained");
+    check(view.known[Object+0x22-Base]==0&&view.known[Object+0x3f-Base]==0,"object padding remains unknown");
+    check(view.known[Object+0x1e-Base]==1&&view.known[Object+0x20-Base]==1,"reached direct stores known");
+    check(view.known[Pool+38-Base]==0&&view.known[Pool+78-Base]==0,"packet padding copied opaque");
+    check(view.known[Pool-Base]==1&&view.known[Pool+40-Base]==1&&view.known[0x80124000-Base]==0,"splice replaces copied unknown links without changing font");
+    Fixture bad;bad.poisonObjectStore=true;const auto stopped=bad.run();bad.memory.describe(bad.all,view);
+    check(stopped.result==NBA97_RENDER_ARGUMENT&&stopped.completed==0&&bad.calls==2,"reached write rejects invalid later knownness byte");
+    check(view.known[Object+0x20-Base]==1&&view.known[Object+0x21-Base]==1&&view.known[Object+0x1e-Base]==0&&view.known[Object+0x1f-Base]==2,"35B90 prefix remains before35B98 metadata refusal");
+}
+void split_ranges(){
+    Fixture f;f.split();const auto result=f.run();
+    check(result.result==1&&result.completed==10&&f.calls==40,"split style and noncontiguous native object fields compose");
+    check(f.labels.style.data==nullptr&&f.get(Style+42,2)==1,"unmapped unused style byte0 does not refuse real stores");
+    const auto word=f.source(Object,4),other=f.source(Object+4,4),field=f.source(Object+0x20,2);
+    check(word.data&&other.data&&word.data+4!=other.data&&word.data[0]==0x7c&&other.data[0]==0x7c,"two reset offsets preserve source identity across separate allocations");
+    check(field.data[0]==0&&field.data[1]==0&&f.get(Object,4)==0xa5a5a5a5,"actual split object stores never mutate discarded flat mirror");
+    Fixture missing;missing.split(true);const auto stopped=missing.run();
+    check(stopped.result==NBA97_RENDER_RESOURCE&&stopped.completed==0&&missing.calls==0,"missing reached style half refuses before create");
+    check(missing.get(Style+42,2)==3&&missing.labels.dirty_fdb4e==0,"initial35A74 store survives missing35B70 span");
 }
 void cloned(){
     Fixture live;auto candidate=live.memory;auto labels=live.labels;auto entities=live.entities;
@@ -107,5 +162,5 @@ void cloned(){
     check(labels.style.data!=live.at(Style),"no stale style pointer after clone");
 }
 }
-int main(){try{composed();refusal();cloned();std::cout<<checks<<" composed native player label checks passed\n";return 0;}
+int main(){try{composed();refusal();partial();split_ranges();cloned();std::cout<<checks<<" composed native player label checks passed\n";return 0;}
 catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

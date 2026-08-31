@@ -21,8 +21,12 @@ struct GamePlayerLabelResult {
 // Actual35A44 ->30758/30D18/99960 using the same retained allocations. Required
 // SDK callback performs the actual packet-clear/diagnostic boundary or refuses.
 // No default DMA success, source address, font, object pool, or visible label.
-// This restricted bridge requires known legacy label buffers because35A44 has
-// no per-byte knownness channel. Text resources retain their knownness.
+// Each reached35A44 byte read/store is checked against retained knownness and
+// source alignment. Unread style/object/player padding remains unknown. Live
+// B2048 is resolved at the three source store sites, not at child-call returns.
+// Source ranges may split style/object fields across native allocations. The
+// returned object's source identity and checked event offset are authoritative;
+// labels.style is only an optional one-byte informational base identity.
 // Mutates a candidate in place: completed source prefixes survive refusal.
 // For atomic publication clone all memory, rebind every borrowed input view,
 // and stage external callback state too. This function does not do that clone.

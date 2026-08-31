@@ -12,10 +12,13 @@ struct Fixture {
     static constexpr uint32_t base=0x80130000,body=base+2048;
     std::array<uint8_t,4096> data{},known{};
     Nba97VoicePatlSpan span{};Nba97VoicePatlUpload state{};
-    uint32_t auxiliary=0xffffffff,uploads=0,unloads=0,fail_upload=0,refuse_upload=0;
+    std::array<uint8_t,24> table_bytes{},table_known{};
+    Nba97VoiceMappingTable table{table_bytes.data(),table_known.data(),24};
+    uint32_t uploads=0,unloads=0,fail_upload=0,refuse_upload=0;
     bool shorten=false,move_cleanup=false,corrupt_metadata=false;
     std::vector<uint32_t> events;
     Fixture(unsigned count=3){
+        table_known.fill(1);table_bytes.fill(0xa5);nba97_voice_mapping_table_write(&table,0,0xffffffffu);
         known.fill(1);span={data.data(),known.data(),data.size(),base,1,1,0};state={{&span,1},invoke,this};
         put(0,0x6c544150,4);put(7,count,1);put(12,4,4);
         for(unsigned block:{16u,512u})for(unsigned i=0;i<8;++i){
@@ -25,30 +28,36 @@ struct Fixture {
     }
     void put(std::size_t at,uint32_t value,unsigned width){for(unsigned i=0;i<width;++i)data.at(at+i)=uint8_t(value>>(8*i));}
     uint32_t get(std::size_t at,unsigned width=4){uint32_t v=0;for(unsigned i=0;i<width;++i)v|=uint32_t(data.at(at+i))<<(8*i);return v;}
-    static int invoke(void* p,const Nba97VoicePatlMemory* memory,Nba97VoicePatlCall op,uint32_t mapping,uint32_t body_token,uint32_t* auxiliary,uint32_t* result){
+    static int invoke(void* p,const Nba97VoicePatlMemory* memory,Nba97VoicePatlCall op,uint32_t mapping,uint32_t body_token,Nba97VoiceMappingTable* table,uint32_t* result){
         auto& f=*static_cast<Fixture*>(p);f.events.push_back(mapping);uint32_t value;
         if(op==NBA97_PATL_UPLOAD_MAPPING_70884){
+            check(table==&f.table);
             ++f.uploads;if(f.refuse_upload==f.uploads)return 0;
             if(nba97_voice_patl_read(memory,mapping,4,&value)!=1||value!=0x6c784d54||nba97_voice_patl_read(memory,body_token,2,&value)!=1)return 0;
-            *auxiliary=value;*result=f.fail_upload==f.uploads?0xfffffff5:f.uploads;
+            if(nba97_voice_mapping_table_write(table,0,value)!=1||nba97_voice_mapping_table_write(table,12,f.uploads)!=1)return 0;
+            *result=f.fail_upload==f.uploads?0xfffffff5:f.uploads;
             if(f.shorten)f.put(7,0,1);
             if(f.corrupt_metadata)f.span.writable=2;
         }else{
+            check(table==nullptr&&body_token==0);
             ++f.unloads;*result=0xfffffff1; // Source ignores this original result.
             if(f.move_cleanup&&f.unloads==1)f.put(12,base+512,4);
             if(f.shorten)f.put(7,0,1);
         }
         return 1;
     }
-    Nba97VoiceApiResult upload(){return nba97_voice_patl_upload(&state,base,body,&auxiliary);}
+    Nba97VoiceApiResult upload(){return nba97_voice_patl_upload(&state,base,body,&table);}
 };
 void normal(){
     Fixture f;auto r=f.upload();check(r.completion==1&&r.value==3&&f.uploads==3&&!f.unloads);
-    check(f.get(12)==Fixture::base+16&&f.get(5,1)==1&&f.auxiliary==0x3412);
+    uint32_t word=0;check(f.get(12)==Fixture::base+16&&f.get(5,1)==1&&nba97_voice_mapping_table_read(&f.table,0,&word)==1&&word==0x3412);
+    check(nba97_voice_mapping_table_read(&f.table,12,&word)==1&&word==3&&f.table_bytes[8]==0xa5);
     check(f.get(16+24)==Fixture::base+44&&f.get(16+28)==0&&f.get(16+32)==Fixture::base+56&&f.get(16+36)==Fixture::base+52);
     r=f.upload();check(r.value==-1&&f.uploads==3); // No double relocation when loaded.
     r=nba97_voice_patl_unload(&f.state,Fixture::base);check(r.value==0&&f.unloads==3&&f.get(5,1)==1);
     Fixture zero(0);r=zero.upload();check(r.value==0&&!zero.uploads&&zero.get(12)==Fixture::base+16&&zero.get(5,1)==1);
+    Fixture unused(0);r=nba97_voice_patl_upload(&unused.state,Fixture::base,Fixture::body,nullptr);check(r.completion==1&&r.value==0&&unused.get(5,1)==1);
+    r=nba97_voice_patl_upload(&unused.state,Fixture::base,Fixture::body,nullptr);check(r.completion==1&&r.value==-1);
 }
 void failures(){
     Fixture first;first.fail_upload=1;auto r=first.upload();
@@ -119,18 +128,18 @@ struct Composed {
             return nba97_voice_patl_read(&f.state.memory,request->argument[0],width,value)==1;
         }
         if(op!=NBA97_PROGRAM_UPLOAD_PATL_924B4)return 0;
-        auto result=nba97_voice_patl_upload(&f.state,request->argument[0],request->argument[1],&request->auxiliary);
+        auto result=nba97_voice_patl_upload(&f.state,request->argument[0],request->argument[1],request->mapping_table);
         if(result.completion!=1)return 0;*value=uint32_t(result.value);return 1;
     }
 };
 void composed(){
     Composed c;uint32_t out=0xffffffff;
-    auto r=nba97_voice_program_register(&c.programs,0,&out,Fixture::base,Fixture::body);
+    auto r=nba97_voice_program_register(&c.programs,0,&out,Fixture::base,Fixture::body,&c.fixture.table);
     check(r.completion==1&&r.value==8&&out==0&&c.fixture.get(3008)==Fixture::base);
     check(c.fixture.get(5,1)==1&&c.fixture.uploads==1&&c.fixture.get(12)==Fixture::base+16);
-    Composed failure;failure.fixture.fail_upload=1;r=nba97_voice_program_register(&failure.programs,0,&out,Fixture::base,Fixture::body);
+    Composed failure;failure.fixture.fail_upload=1;r=nba97_voice_program_register(&failure.programs,0,&out,Fixture::base,Fixture::body,&failure.fixture.table);
     check(r.value==-11&&out==0xffffffff&&!failure.fixture.get(3008)&&failure.fixture.get(5,1)==1);
-    Composed refused;refused.fixture.refuse_upload=1;out=123;r=nba97_voice_program_register(&refused.programs,0,&out,Fixture::base,Fixture::body);
+    Composed refused;refused.fixture.refuse_upload=1;out=123;r=nba97_voice_program_register(&refused.programs,0,&out,Fixture::base,Fixture::body,&refused.fixture.table);
     check(r.completion==NBA97_PROGRAM_IO_REFUSED&&out==123&&!refused.fixture.get(3008)&&!refused.fixture.get(5,1));
 }
 }

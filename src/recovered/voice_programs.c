@@ -40,7 +40,7 @@ Nba97VoiceApiResult nba97_voice_program_play(Nba97VoicePrograms* s,uint32_t bank
     if(s->call(s->context,op,&request,&value)!=1)return result(NBA97_PROGRAM_IO_REFUSED,0);
     return result(NBA97_PROGRAM_COMPLETE,s32(value));
 }
-Nba97VoiceApiResult nba97_voice_program_register(Nba97VoicePrograms* s,uint32_t bank,uint32_t* output_program,uint32_t program,uint32_t body){
+Nba97VoiceApiResult nba97_voice_program_register(Nba97VoicePrograms* s,uint32_t bank,uint32_t* output_program,uint32_t program,uint32_t body,Nba97VoiceMappingTable* table){
     uint32_t header,version,count=128,i,pointer,tag,value;
     enum Nba97VoiceProgramCall op;Nba97VoiceProgramRequest request;
     if(!valid(s)||!output_program)return result(NBA97_PROGRAM_ARGUMENT,0);
@@ -52,6 +52,16 @@ Nba97VoiceApiResult nba97_voice_program_register(Nba97VoicePrograms* s,uint32_t 
     for(i=0;i<count;++i){
         if(!memory(s,NBA97_PROGRAM_READ32,header+8+i*4,0,&pointer))return result(NBA97_PROGRAM_IO_REFUSED,0);
         if(pointer)continue;
+        /*91A4C source SW occurs after finding a vacancy and BEFORE92628's
+         * tag read. Initialize only this word; later incoming records stay
+         * unknown/live. Aliases may change the tag about to be read. */
+        {
+            /* The third record would reach saved s0 at source sp+28. A
+             * caller may not enlarge this particular local-table domain. */
+            if(table&&table->size!=24)return result(NBA97_PROGRAM_TABLE_METADATA,0);
+            int status=nba97_voice_mapping_table_write(table,0,0xffffffffu);
+            if(status!=1)return result(status==NBA97_VOICE_TABLE_METADATA?NBA97_PROGRAM_TABLE_METADATA:NBA97_PROGRAM_TABLE_RESOURCE,0);
+        }
         /* Complete92628 tag dispatch; memory/upload ownership is required. */
         if(!memory(s,NBA97_PROGRAM_READ32,program,0,&tag))return result(NBA97_PROGRAM_IO_REFUSED,0);
         if(tag==0x6c544150u)op=NBA97_PROGRAM_UPLOAD_PATL_924B4;
@@ -60,10 +70,10 @@ Nba97VoiceApiResult nba97_voice_program_register(Nba97VoicePrograms* s,uint32_t 
             if((tag&65535u)!=0x5450u){*output_program=0xffffffffu;return result(NBA97_PROGRAM_COMPLETE,-1);}
             op=NBA97_PROGRAM_UPLOAD_PT_921F4;
         }
-        memset(&request,0,sizeof request);request.argument[0]=program;request.argument[1]=body;request.auxiliary=0xffffffffu;
+        memset(&request,0,sizeof request);request.argument[0]=program;request.argument[1]=body;request.mapping_table=table;
         if(s->call(s->context,op,&request,&value)!=1)return result(NBA97_PROGRAM_IO_REFUSED,0);
         if(s32(value)<0){
-            *output_program=0xffffffffu; /* Original ignores upload's output word. */
+            *output_program=0xffffffffu; /* Original retains all upload table changes. */
             return result(NBA97_PROGRAM_COMPLETE,s32(value));
         }
         /* Retain the bank address/index selected BEFORE upload; do not reread

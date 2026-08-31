@@ -116,5 +116,22 @@ void span(){
     check(nba97_game_text_create_span(&d.context,246,{d.at(Text),known.data(),3},100,20,1,&d.result,&d.progress)==NBA97_TEXT_UNKNOWN);
     check(d.progress.stopped_in_text==1&&d.progress.stopped_address==2&&d.get(Object+12,2)==2);
 }
+void opaque_tag(){
+    Fixture f;for(unsigned i=0;i<3;++i)f.known[0x80124000+i-Base]=0;
+    check(f.create()==1&&f.progress.glyphs_written==2);
+    check(f.known[0x80124000-Base]==0&&f.known[Pool-Base]==1&&f.known[Pool+40-Base]==1);
+    check(f.get(Pool,4)==(0x09000000|((Pool+80)&0xffffff)));
+    Fixture bad;bad.known[0x80124000-Base]=0;bad.known[0x80124001-Base]=2;
+    check(bad.create()==NBA97_TEXT_ARGUMENT&&bad.events.size()==2&&bad.get(Pool,4)==0xa5a5a5a5);
+    Fixture mixed;mixed.known[0x80124000-Base]=0;
+    // Source font can carry unknown bits, while this distinct packet region
+    // has no knownness channel. Refuse beforeSW rather than losing metadata.
+    std::array<Nba97GameTextRegion,3> regions{{
+        {Base,mixed.data.data(),mixed.known.data(),Pool-Base},
+        {Pool,mixed.at(Pool),nullptr,0x1000},
+        {Pool+0x1000,mixed.at(Pool+0x1000),mixed.known.data()+Pool+0x1000-Base,mixed.data.size()-(Pool+0x1000-Base)}}};
+    mixed.context.memory={regions.data(),regions.size()};
+    check(mixed.create()==NBA97_TEXT_UNKNOWN&&mixed.events.size()==2&&mixed.get(Pool,4)==0xa5a5a5a5);
 }
-int main(){try{geometry();allocator();boundaries();span();std::cout<<checks<<" text object checks passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+}
+int main(){try{geometry();allocator();boundaries();span();opaque_tag();std::cout<<checks<<" text object checks passed\n";}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

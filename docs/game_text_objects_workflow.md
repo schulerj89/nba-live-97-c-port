@@ -74,3 +74,15 @@ The original `9A97C` programs DMA ordering-table clearing through pointers `C56B
 The private oracle executes original GAME instructions for every CPU owner above, including `AA468` and `56914`. Only the original SDK DMA target and diagnostic callback are explicit external boundaries. It compares callback-visible memory and ordering, complete non-stack memory, output references and completed callback counts. Inputs include all group branches, allocation exhaustion, zero/negative glyph counts, lowercase/fallback/control parsing, multiline alignment, descriptor/packet aliases, and callback changes to current style and text bytes. DMA fixture behavior is explicitly synthetic and is not hardware proof.
 
 Private Debug and Release each pass 45 public checks and 928 original-instruction cases, including 128 span cases and 1,931 ordered callback events. All 887 instructions across the eight direct CPU owners are covered, plus 42 instructions in the reached `AA468` copy path; the generic 200-instruction copy helper is not claimed complete. Exact coverage and final public hashes are recorded in the accompanying private freeze receipt. Public tests independently check packet coordinates and encoded links, bitmap allocation, deactivate-only reset, exhausted-slot reuse and resulting cycles, source allocation failure, refusal prefixes, unknown padding propagation, source alignment, metadata errors and native text-span bounds. Integrate only the new C owner and its test target; no font-loader, DMA backend, host entry or visible-scene completion is implied by these checks.
+
+The partial-known label integration corrects one port validation at original
+31344LW/3134CSW: glyph word0 is an opaque copy, not a numeric read requiring
+all bits known. Its four bytes and their knowledge are snapshotted before the
+store, including source/destination aliases; both accesses retain original
+alignment and canonical-metadata checks. Unknown low24 font-tag bits from
+2EA80 survive packet-bank copying until56914 replaces them. An all-known-only
+destination refuses unknown copies rather than fabricating a terminator.
+The new label_partial_known receipts supersede the earlier text_objects C/test
+freeze identities for this correction, while preserving all earlier receipts.
+Both strict configurations now pass50 text checks and repeat all928 original
+cases/1931 callbacks, plus the real five-font producer/label composition.

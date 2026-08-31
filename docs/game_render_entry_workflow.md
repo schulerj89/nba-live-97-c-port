@@ -189,3 +189,13 @@ U bytes. The atlas currently lacks source-equivalent VRAM readback/move state;
 it cannot satisfy `99780` by guessing a head from roster identity. Actual
 geometry transformation, pose rendering, court assets and camera composition
 remain owned by their separate paths, not by these texture tails.
+
+The later partial-known label integration adds a checked35A44 entry while
+preserving the old flat-buffer entry. Its C-owned reads/stores validate only
+reached metadata and mark source writes known before child calls. STYLE and
+OBJECT accesses resolve explicit source identities so split retained mappings
+need not contain unused padding. Checked packet resets use a stable object
+identity plus object_offset0/4; old-entry callbacks retain their original
+advanced flat pointer. See game_player_label_backend_workflow.md and the new
+private label_partial_known receipts for replacement C/header hashes and
+unchanged old-entry240case original-instruction comparisons.

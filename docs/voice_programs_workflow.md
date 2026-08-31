@@ -1,8 +1,9 @@
 # Bank dispatch and the Cool Facts callback contract
 
 `voice_programs.c` closes the CPU request path93098/9180C/92B74 and registration
-path919A0/92628. Actual PATl/PT upload and voice launch remain mandatory backend
-operations. A rejected native memory/backend operation returns
+path919A0/92628. PATl upload and mapping CPU owners now compose through the
+borrowed table API; actual lower SPU operations, PT upload and voice launch
+remain mandatory backend operations. A rejected native memory/backend operation returns
 `NBA97_PROGRAM_IO_REFUSED`, never a fabricated original handle or successful
 registration. This work does not wire full31A88 into the host.
 
@@ -30,19 +31,32 @@ The complete eight-argument request is
 this owner; the actual program launch validates/defaults its parameters.
 The original backend result is returned unchanged.
 
-`nba97_voice_program_register(bank, output_program, header, body)` preserves
-919A0 and92628. It does not check the voice-enabled byte. It rejects invalid
-banks or null header/body, scans the existing bank for the first null slot,
-then dispatches PATl upload924B4 or PT upload921F4. Upload's stack-local output
-word startsFFFFFFFF and is represented by request.auxiliary instead of a fake
-native address. Unknown tag returns-1. Any original negative upload result
-writesFFFFFFFF to the caller's output, ignoring the upload auxiliary word.
-For a nonnegative result, it writes the header token into the previously
-selected bank address/index, writes that index to the caller, and returns the
-original constant8, regardless of the upload's nonnegative value. Callback
-changes to the bank pointer or vacancy do not trigger another search. A full
-bank returns-9 without modifying the output. Output storage must remain owned
-and distinct from the memory/bank projection during this synchronous call.
+`nba97_voice_program_register(bank, output_program, header, body, table)`
+preserves919A0 and92628. It does not check the voice-enabled byte. Invalid bank,
+null header/body, zero capacity, or a full bank return the source error before
+accessing the table. After finding a vacancy, source91A4C storesFFFFFFFF into
+the first table word **before**92628 reads the program tag. This ordering is
+observable when retained table bytes alias the program header.
+
+The caller supplies the actual retained incoming24 bytes from source frame
+sp+10..27, with their knownness. Registration rejects any other table extent
+at the reached sentinel store, so a third record cannot read saved s0 atsp+28.
+It does not initialize the other20 bytes or preflight them. This extent refusal
+is a native ownership boundary; the original contains no such bounds check.
+Malformed reached metadata returns `NBA97_PROGRAM_TABLE_METADATA`; unknown or
+missing reached table storage returns `NBA97_PROGRAM_TABLE_RESOURCE`.
+
+The request carries the SAME `Nba97VoiceMappingTable*` in `mapping_table`;
+`argument[2]` remains zero rather than encoding a fake native address. No table
+copy, scalar compatibility cast, or automatic terminator is permitted. PATl
+upload924B4 and PT upload921F4 receive that pointer. Memory/play requests have
+a null table pointer. Unknown tag returns-1. Any original negative upload
+result writesFFFFFFFF to the caller's output while retaining table changes.
+For a nonnegative result, registration writes the header token into the
+previously selected bank address/index, writes that index to the caller, and
+returns the original constant8. Callback changes to the bank pointer or vacancy
+do not trigger another search. Output storage remains owned and distinct from
+the memory/bank/table projection during this synchronous call.
 
 Callbacks may mutate live state during upload/play, but return1 only after
 performing the requested original operation. Successful synthetic results in
@@ -89,13 +103,14 @@ remain required before claiming this source callback is composed.
 The inspected PATl upload924B4 relocates the program's tone pointer and
 optional tone map/envelope pointers in place, then calls70884 for each tone's
 mapping/body upload. Previously uploaded mappings can be freed through714B8
-on later failure. A confirmed source quirk must be kept in the next owner:
+on later failure. The composed owner preserves this confirmed source quirk:
 when the **first** tone upload fails, its saved cleanup bound becomes-1,
 so the source skips cleanup and sets the loaded byte+5 to1 while returning
 that negative failure. Relocations have already happened. Do not modernize
 this into an atomic load or clear the loaded byte. Current registration
-dispatch preserves the returned failure and output behavior but does not
-pretend these upload effects have been implemented.
+dispatch preserves the returned failure and output behavior. The bounded
+relocation/mapping CPU effects are now implemented; actual allocator/transfer
+completion and later voice launch remain separate required operations.
 
 PATl9267C chooses a tone, applies source parameter/default/range/mapping and
 randomization rules, calls the shared91338 allocator, initializes the selected
@@ -118,19 +133,29 @@ lifetime once those source operations have a real adapter.
 
 ## Evidence
 
-Private `.local/verification/native_completion/voice_programs/` contains the
-raw `source_mips.txt`, focused `caller_source_mips.txt`, original instruction
-oracle, build/test logs and hashes. Debug and Release each pass22 public
-checks and5,400 original-instruction comparisons, with479 backend events and
-206,068 executed instructions. All191 direct instructions are covered:
-93098=14,9180C=53,92B74=34,919A0=69,92628=21. Mutating upload tests verify the
-saved bank-slot address and ignored auxiliary output. These are CPU-boundary
-comparisons, not actual SPU upload or playback proof. Source FE SHA-256 is
-`14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c`.
+Current evidence is in
+`.local/verification/native_completion/voice_mapping/table_api/`. Strict private
+Debug and Release builds each pass45 program checks and5,400 original-instruction
+comparisons, with479 backend events and206,068 executed instructions. All191
+direct instructions are covered:93098=14,9180C=53,92B74=34,919A0=69,92628=21.
+The adapted boundary comparison checks the whole24-byte table and pointer
+identity; callback mutations still verify the saved bank-slot decision.
 
-The public test links only `voice_programs.c`. No shared build, host edit,
-Ghidra session, audio/UI device, or saved state was used. Final `freeze.json`
-identifies the public files and tested binaries. Full31A88 still has the
-resource ordering described in `frontend_resource_cleanup_workflow.md`:
-BEGIN, cleanup/graphics, END, then outer selector PORT/COOL initialization.
-Neither this dispatch nor a render-complete event clears resource24 early.
+The additional composed comparison executes919A0/92628/924B4/70884 and reached
+CPU wrappers:658 cases per configuration, including18 actual resource prefixes,
+2,274 lower-boundary events and262,659 instructions. Synthetic cases supply
+explicit allocator/transfer/event/free fixture effects. Every actual asset case
+refuses the first required7EC2C allocator operation, preserving the real CPU
+prefix without claiming a successful SPU allocation. Native table ownership
+guards stop original execution at the exact read/store that would be refused;
+they do not claim that the original game checks knownness or stack bounds.
+
+The new `table_api/freeze.json` supersedes earlier program, PATl and standalone
+mapping freeze bindings and the old scalar-only callback domain. Historical
+receipts remain unchanged in their original directories. The source FE SHA-256
+is `14904a5644a517f3799a8ac0b5a5b010a2f57752cf1c9ff64ac97e9d3d32a94c`.
+The program test now also links `voice_mapping_table.c`. No host, device, shared
+build or saved state was used for this correction. Full31A88 still requires the
+ordering in `frontend_resource_cleanup_workflow.md`: BEGIN, cleanup/graphics,
+END, then outer selector PORT/COOL initialization. Neither registration nor a
+render-complete event clears resource24 early.

@@ -45,9 +45,9 @@ int nba97_voice_patl_write(const Nba97VoicePatlMemory* m,uint32_t address,uint32
 static int valid(const Nba97VoicePatlUpload* s){return s&&s->call&&s->memory.spans&&s->memory.count;}
 #define READ(address,width,target) do{int status=nba97_voice_patl_read(&s->memory,(address),(width),&(target));if(status!=1)return result(status,0);}while(0)
 #define WRITE(address,width,value) do{int status=nba97_voice_patl_write(&s->memory,(address),(width),(value));if(status!=1)return result(status,0);}while(0)
-Nba97VoiceApiResult nba97_voice_patl_upload(Nba97VoicePatlUpload* s,uint32_t header,uint32_t body,uint32_t* auxiliary){
+Nba97VoiceApiResult nba97_voice_patl_upload(Nba97VoicePatlUpload* s,uint32_t header,uint32_t body,Nba97VoiceMappingTable* table){
     uint32_t loaded,count,pointer,index=0,offset=0,tone,value,last=0,cleanup=0xffffffffu,field;
-    if(!valid(s)||!auxiliary)return result(NBA97_PATL_ARGUMENT,0);
+    if(!valid(s))return result(NBA97_PATL_ARGUMENT,0);
     READ(header+5,1,loaded);if(loaded)return result(NBA97_PATL_COMPLETE,-1);
     READ(header+12,4,pointer);READ(header+7,1,count);
     /* Even zero tones relocate the program pointer and mark loaded. */
@@ -61,7 +61,7 @@ Nba97VoiceApiResult nba97_voice_patl_upload(Nba97VoicePatlUpload* s,uint32_t hea
             }
             /* Envelope+36 relocates unconditionally, including relative0. */
             READ(tone+36,4,value);WRITE(tone+36,4,tone+36+value);
-            if(s->call(s->context,&s->memory,NBA97_PATL_UPLOAD_MAPPING_70884,tone+40,body,auxiliary,&last)!=1)
+            if(s->call(s->context,&s->memory,NBA97_PATL_UPLOAD_MAPPING_70884,tone+40,body,table,&last)!=1)
                 return result(NBA97_PATL_IO_REFUSED,0);
             if(s32(last)<0){cleanup=index-1u;break;}
             READ(header+7,1,count);++index;offset+=92;

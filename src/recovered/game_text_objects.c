@@ -175,6 +175,18 @@ static int prefix_width(Run* r,uint32_t text,uint32_t stop,uint32_t* width){
 /* AA468's reached aligned40-byte copy: two groups of fourLW before fourSW,
  * then two independentwords. Copy opaque unknownbytes withtheirknownness;
  * never establish knownness for stale untouched packet padding. */
+static int copy_tag(Run* r,uint32_t source,uint32_t destination){
+    uint8_t data[4],known[4],*p,*q;unsigned i;
+    /*31344 LW ->3134C SW moves opaque font tag bits.2EA80 can leave its
+     * low24 unknown;56914 replaces those bits later. Preserve their knowledge
+     * through this copy, including aliases, rather than inventing FFFFFF. */
+    if(source&3u){r->p->stopped_address=source;r->p->stopped_in_text=0;return NBA97_TEXT_ALIGNMENT_TRAP;}
+    TRY(bytes(r,source,4,&p,&q));for(i=0;i<4;++i){data[i]=p[i];known[i]=q?q[i]:1;}
+    if(destination&3u){r->p->stopped_address=destination;r->p->stopped_in_text=0;return NBA97_TEXT_ALIGNMENT_TRAP;}
+    TRY(bytes(r,destination,4,&p,&q));
+    if(!q)for(i=0;i<4;++i)if(!known[i])return NBA97_TEXT_UNKNOWN;
+    for(i=0;i<4;++i){p[i]=data[i];if(q)q[i]=known[i];}return 1;
+}
 static int copy_packet(Run* r,uint32_t source){
     unsigned block,j,k,count;uint8_t data[16],known[16],*p,*q;
     for(block=0;block<4;++block){
@@ -272,7 +284,7 @@ found:
 have_glyph:
         if(s16(g)<0)goto next_character;
         R32(style+8u,pool);glyph=pool+g*20u;
-        R32(glyph,v);W32(packet,v);R16(glyph+4u,v);W16(packet+0xeu,v);R16(glyph+6u,v);W16(packet+0x16u,v);
+        TRY(copy_tag(r,glyph,packet));R16(glyph+4u,v);W16(packet+0xeu,v);R16(glyph+6u,v);W16(packet+0x16u,v);
         R8(glyph+0xbu,v);W8(packet+7u,v);
         R8(glyph+0xcu,v);W8(packet+0xcu,v);R8(glyph+0xdu,v);W8(packet+0x14u,v);
         R8(glyph+0xeu,v);W8(packet+0x1cu,v);R8(glyph+0xfu,v);W8(packet+0x24u,v);

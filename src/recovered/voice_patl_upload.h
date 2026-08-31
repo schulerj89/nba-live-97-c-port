@@ -1,6 +1,7 @@
 #ifndef NBA97_VOICE_PATL_UPLOAD_H
 #define NBA97_VOICE_PATL_UPLOAD_H
 #include "voice_handles.h"
+#include "voice_mapping_table.h"
 #include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
@@ -22,14 +23,15 @@ enum Nba97VoicePatlCall {
 };
 /* Required synchronous mapping/backend boundary. Return1 only after executing
  * the operation, and set result to the original signed return bits. Upload
- * passes its real shared auxiliary output word; unload passes NULL and body0.
+ * forwards the SAME retained mapping table each tone; unload passes NULL and
+ * body0. No scalar cast, copied table or implicit sentinel initialization.
  * Use this same memory registry for mapping/body reads and metadata writes.
  * Unknown input or unimplemented SPU allocation/transfer must refuse, never
  * return fake success. Callback may change bytes/known masks but may not
  * resize/free storage or change span metadata while an owner is running. */
 typedef int (*Nba97VoicePatlInvoke)(void*,const Nba97VoicePatlMemory*,
     enum Nba97VoicePatlCall,uint32_t mapping,uint32_t body,
-    uint32_t* auxiliary,uint32_t* result);
+    Nba97VoiceMappingTable*,uint32_t* result);
 typedef struct Nba97VoicePatlUpload {
     Nba97VoicePatlMemory memory;
     Nba97VoicePatlInvoke call;
@@ -60,7 +62,7 @@ int nba97_voice_patl_write(const Nba97VoicePatlMemory*,uint32_t address,
  * Refusal retains every prior relocation/backend effect and is not resumable.
  * Source loaded/partial-failure bugs and live pointer/count rereads are kept. */
 Nba97VoiceApiResult nba97_voice_patl_upload(Nba97VoicePatlUpload*,
-    uint32_t header,uint32_t body,uint32_t* auxiliary);
+    uint32_t header,uint32_t body,Nba97VoiceMappingTable*);
 Nba97VoiceApiResult nba97_voice_patl_unload(Nba97VoicePatlUpload*,uint32_t header);
 
 #ifdef __cplusplus

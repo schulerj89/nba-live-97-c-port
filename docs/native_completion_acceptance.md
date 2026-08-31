@@ -19,7 +19,7 @@ See the growing [preserved-behavior index](preserved_original_bugs.md).
 | Boot, legal, movie, title, Setup | Implemented with scoped checks | Original transition, presentation and audio comparisons; repeated fresh/warm entry |
 | Team Select and User Setup | Implemented bounded frontend path | Complete original input/timing/visual comparison, all controller/profile variants |
 | Accepted current rosters/settings/controls | Owned snapshot and atomic65DB0 composition with actual reached dependencies on verified no-substitution routes | Close natural entry producers, actual substitution, extension/reference fields, created membership and special teams |
-| Gameplay assets and scene | Owned animation resources, per-entity animation and pose-request/sample bridges source-compared; scene absent | Natural entry, model/court/camera lifetime and source numerical/frame comparison across teams/courts |
+| Gameplay assets and scene | Owned animation, body geometry/names, font/text-pool and label paths source-compared; scene absent | Natural entry, full renderer/court/camera lifetime and source numerical/frame comparison across teams/courts |
 | Tipoff through first possession | Not implemented | Original phase/input trace and native deterministic possession with no substituted logic |
 | Player/ball simulation and CPU AI | Player animation and bounded6CFE0 physics recovered; complete simulation absent | Whole player-update composition, input/AI, contact, ball ownership, passes/shots and source state comparisons |
 | CPU versus CPU full match | Not implemented | Full actual matches, regulation/overtime/end/results/return without human intervention or scripted outcome |
@@ -32,7 +32,7 @@ See the growing [preserved-behavior index](preserved_original_bugs.md).
 | All menu/pause music | Five-track bank and recovered router wired to the host/shared frontend RNG; finite native output and source ending quirks retained | Complete transition/pause callers, full-duration playback/listening, original hardware timing and waveform comparisons |
 | XA music/media | Original containers inventoried only | Channel/index/selection rules, every reachable logical track, synchronization and decode/playback receipts |
 | Gameplay SFX/crowd/announcer | Not implemented | Source events, banks/indexes, voice allocation/overlap/gain/pitch/timing and captured listening checks |
-| Frontend sound and speech | Bounded scalar/decoder checks | Preserve shared RNG and existing regressions; recover remaining allocation/SPU/runtime behavior |
+| Frontend sound and speech | Scalar/decoder, voice allocation, program registration and sample-mapping CPU owners have scoped source comparisons | Preserve shared RNG and existing regressions; close remaining SPU allocation/transfer/event/playback and full resource/runtime behavior |
 | Fidelity and original bugs | Scoped source semantics and frontend captures | Original comparisons by correct overlay and state; documented preserved quirks throughout runtime |
 | Stability/performance | Frontend only | Repeated full matches, memory/resource stability, timing, input continuity and unmodified real saves |
 | Final independent review | Not started | Try to disprove completion against full inventory; no relevant unknown/pending/placeholder paths |
@@ -127,3 +127,18 @@ sequences and composed native animation/pose bridges. These are bounded
 source-state experiments, not a working court, possession or completed match.
 Natural entry, renderer setup, full6801C composition, input/AI/ball/rules and
 the remaining music/resource host lifecycle still require integration.
+
+The heap/text/audio-table checkpoint passes 108/108 CTests in Debug and
+RelWithDebInfo, including the full host builds. It adds the original heap
+initializers, allocator CPU logic, text-pool initialization, and the shared
+sample-mapping table passed through registration and tone uploads. Label
+accesses now respect the original partial initialization and split retained
+storage. Original failure effects and documented bugs remain unchanged.
+
+Independent source comparisons include heap setup through text allocation,
+text pools through all five original fonts and label creation, and complete
+registration through tone mapping, including real-asset prefixes that stop at
+the required SPU allocator. Formatter, BIOS name-copy, heap reclamation and
+SPU allocation/transfer/event operations remain explicit where not recovered.
+These CPU and integration checks do not establish a complete natural startup,
+rendered court, basketball possession, full match, or all-mode completion.
