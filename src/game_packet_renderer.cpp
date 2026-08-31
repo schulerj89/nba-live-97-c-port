@@ -129,16 +129,24 @@ Result GamePacketRenderer::triangle(Vertex a,Vertex b,Vertex c,std::uint16_t clu
 }
 Result GamePacketRenderer::line(Vertex a,Vertex b,bool transparent){
     ++progress_->lines;
-    const int dx=b.x-a.x,dy=b.y-a.y,steps=std::max(std::abs(dx),std::abs(dy));
-    if(std::abs(dx)>1023||std::abs(dy)>511)return Result::Complete;
-    // Native endpoint-inclusive interpolation. Exact hardware tie-breaking is
-    // tracked separately from this integer line drawing implementation.
+    const int width=std::abs(b.x-a.x),height=std::abs(b.y-a.y),steps=std::max(width,height);
+    if(width>1023||height>511)return Result::Complete;
+    // The original line convention orders endpoints by X (including vertical
+    // ties). Coordinates retain32fractional bits; slopes round away from zero.
+    // Tiny start biases resolve half-pixel ties differently on descending Y.
+    if(steps&&a.x>=b.x)std::swap(a,b);
+    constexpr std::int64_t unit=std::int64_t{1}<<32;
+    const auto slope=[&](int delta){return steps?(std::int64_t(delta)*unit+(delta>0?steps-1:delta<0?1-steps:0))/steps:0;};
+    const auto sx=slope(b.x-a.x),sy=slope(b.y-a.y);
+    const auto start_x=std::int64_t(a.x)*unit+unit/2-1024;
+    const auto start_y=std::int64_t(a.y)*unit+unit/2-(sy<0?1024:0);
+    std::array<int,3> color_step{};
+    for(unsigned ch=0;ch<3;++ch)color_step[ch]=steps?(b.color[ch]-a.color[ch])*4096/steps:0;
     for(int i=0;i<=steps;++i){
-        const int divisor=steps?steps:1;
-        const int x=a.x+(dx*i+(dx>=0?steps/2:-steps/2))/divisor;
-        const int y=a.y+(dy*i+(dy>=0?steps/2:-steps/2))/divisor;
+        const int x=signed11(std::uint32_t(std::uint64_t(start_x+sx*i)>>32));
+        const int y=signed11(std::uint32_t(std::uint64_t(start_y+sy*i)>>32));
         std::array<int,3> color{};
-        for(unsigned ch=0;ch<3;++ch)color[ch]=a.color[ch]+(b.color[ch]-a.color[ch])*i/divisor;
+        for(unsigned ch=0;ch<3;++ch)color[ch]=int((std::uint32_t(a.color[ch]*4096+2048+color_step[ch]*i)>>12)&255);
         const auto result=pixel(x,y,color,0,0,0,false,false,transparent,true);
         if(result!=Result::Complete)return result;
     }

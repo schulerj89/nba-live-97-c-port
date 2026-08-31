@@ -88,7 +88,8 @@ struct GameRenderBackend {
     std::size_t headerBudget = 4096;
     bool unmaskedTransfersKnown = false;
     // SDK9AC7C/9AED0 clamp dimensions against C55C4/C55C6. This backend
-    // supports the domain where no clamp is required, with explicit limits.
+    // supports positive transfers needing no clamp, plus9AC7C's verified
+    // zero-after-clamp no-data return. Both require explicit positive limits.
     bool sdkTransferLimitsKnown = false;
     std::int16_t sdkTransferWidth = 0, sdkTransferHeight = 0;
     Nba97GameRenderIo service = nullptr;

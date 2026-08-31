@@ -67,6 +67,15 @@ void memoryAndAliases() {
 }
 
 void rawTransfers() {
+    GameRenderBackend zero;
+    Nba97GameImageTransfer empty{};empty.rect={-200,30000,0,1};
+    check(GameRenderBackend::transferIo(&zero,&empty)==0&&zero.lastResult==R::SdkLimitsUnknown,"zero SDK upload still requires limit provenance");
+    zero.sdkTransferLimitsKnown=true;zero.sdkTransferWidth=1024;zero.sdkTransferHeight=512;
+    for(int w:{-32768,-1,0,1,1024,32767})for(int h:{-32768,-1,0,1,512,32767})if(w<=0||h<=0){
+        empty.rect.w=static_cast<std::int16_t>(w);empty.rect.h=static_cast<std::int16_t>(h);
+        check(GameRenderBackend::transferIo(&zero,&empty)==1&&zero.lastResult==R::Complete,"SDK empty upload returns before source/mask/coordinates");
+    }
+    std::uint16_t untouched=9;check(!zero.vram.word(0,0,untouched)&&untouched==9,"empty SDK transfer never establishes pixels");
     GameVramWords vram;
     std::uint16_t value = 0xbeef;
     check(!vram.word(0, 0, value) && value == 0xbeef, "initial VRAM unknown, output untouched");

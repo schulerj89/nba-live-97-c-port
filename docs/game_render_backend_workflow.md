@@ -5,8 +5,9 @@ operations for the recovered render owners. Header walking, split uploads,
 coordinate writes, temporary-height changes and the upload-pending word remain
 in `game_image_upload.c`. No emulator is linked into the application.
 
-This backend is not yet wired to a playable match or a rasterizer. It closes
-the raw storage operations needed by player texture setup and the head cache,
+The native packet rasterizer uses this storage, but neither component is wired
+to a playable match. It closes the raw storage operations needed by player and
+court texture setup and the head cache,
 without treating a callback receipt as proof that pixels were transferred.
 
 ## Storage and staging
@@ -48,18 +49,28 @@ rebuild old borrowed views rather than retaining pointers into retired storage.
 
 ## Supported SDK transfer domain
 
-The bridge supports positive, in-range word rectangles under explicitly proven
+The bridge transfers positive, in-range word rectangles under explicitly proven
 unmasked GPU transfer state. This is not a default assumption. Mask-bit effects,
 GPU wrapping and overlapping moves, including exact self-copy, remain explicit
 unsupported domains until independently verified.
 
 GAME9971C and99780 dispatch to SDK handlers9AC7C and9AED0. Those handlers clamp
 dimensions against the signed16 limits C55C4/C55C6. The bridge requires known
-positive limits and a requested rectangle that does not need that clamp. It
+positive limits and, for positive transfers, a rectangle that does not need that clamp. It
 refuses a request exceeding them instead of silently assuming1024/512 or
 implementing an unverified malformed-rectangle behavior. The raw word-plane
 class itself is a bounded storage primitive; these SDK requirements belong to
 the render bridge.
+
+Upload handler9AC7C has a separate no-data case: a nonpositive width or height
+clamps to zero and returnsFFFFFFFF at9AD60 before reading source pixels or
+accessing the GPU. With known positive SDK limits, the native upload bridge
+completes that boundary without requiring a source buffer, coordinates or mask
+state and without changing VRAM. The image caller ignores the SDK return;
+callback acceptance means the boundary was handled, not that the SDK reported
+success or wrote pixels. This does not extend the readback domain or change
+the raw word-plane upload primitive. Original deadline initialization remains
+outside the synchronous storage contract.
 
 The handlers consume or write `ceil(width*height/2)` CPU32-bit words. An odd
 pixel count therefore consumes a padding halfword on upload. The backend checks
@@ -85,8 +96,9 @@ clear. Original debug callbacks, SDK timeout/queue bookkeeping and physical GPU
 timing are not claimed as reproduced by this synchronous storage backend.
 
 SERVICE8892C is the CD/service boundary, not GPU synchronization. It requires a
-real external callback and refuses when none is supplied. A successful upload
-callback means actual CPU words were copied into native VRAM. A successful
+real external callback and refuses when none is supplied. An accepted positive
+upload copies actual CPU words into native VRAM; the proved no-data upload
+case above is the only exception. A successful
 store callback means the owned destination was filled from known VRAM.
 
 ## Original quirks and verification
@@ -109,5 +121,10 @@ padding and original alignment, unknown data, allocation alias topology,
 independent fork additions, signed backward palette links, split-upload pixel
 placement, pending-flag ordering, source prefixes on failure, SDK-limit refusal,
 and128 scattered rectangular transfers against an absolute-coordinate oracle.
+An additional729 private original-instruction cases verify the9AC7C no-data
+return across signed dimensions, positive SDK limits and varied coordinates,
+with no pixel-source/GPU access. The actual84-image Atlanta court pack also
+composes through the recovered texture loop, image owner and this backend;
+see the [court texture workflow](game_court_textures_workflow.md).
 These tests do not establish retail cold-entry provenance, texture sampling,
 geometry, frame output, input, possession or a complete playable match.

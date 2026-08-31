@@ -210,6 +210,15 @@ int GameRenderBackend::transferIo(void* context, const Nba97GameImageTransfer* e
     if (!context) return 0;
     auto& self = *static_cast<GameRenderBackend*>(context);
     if (!event) { self.lastResult = Result::Argument; return 0; }
+    if(event->rect.w<=0||event->rect.h<=0){
+        // SDK9AC7C clamps negative dimensions to zero, then returns -1 at
+        // 9AD60 before reading source pixels or touching GPU registers. The
+        // recovered image callers ignore that SDK value. A handled boundary
+        // here is not a GPU write and needs no source/mask data.
+        if(!self.sdkTransferLimitsKnown){self.lastResult=Result::SdkLimitsUnknown;return 0;}
+        if(self.sdkTransferWidth<=0||self.sdkTransferHeight<=0){self.lastResult=Result::SdkLimitsUnsupported;return 0;}
+        self.lastResult=Result::Complete;return 1;
+    }
     if (!self.unmaskedTransfersKnown) { self.lastResult = Result::MaskModeUnknown; return 0; }
     self.lastResult = checkSdkLimits(self, event->rect);
     if (self.lastResult != Result::Complete) return 0;

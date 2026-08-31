@@ -51,17 +51,22 @@ Both strict MSVC configurations independently match:
   in all four blend modes plus randomized masks, modulation and dithering.
 * 8,000 flat, Gouraud, raw-textured and modulated-textured triangle cases, with
   clipped coordinates, both windings and per-pixel output comparisons.
+* 4,000 flat and Gouraud single-line cases, including reversed endpoints,
+  descending ties, vertical ties and fixed-point color gradients.
 
-The comparisons caught and corrected native blend rounding and unquantized
-attribute interpolation defects. Reference bodies remain private and their
+The comparisons caught and corrected native blend rounding, unquantized
+attribute interpolation, and line endpoint/gradient rounding defects. Lines
+retain the source Q32 coordinate slope, directional initial bias, inclusive
+endpoints, and Q12 color steps; a floating-point segment is not substituted.
+Reference bodies remain private and their
 hashes are recorded. The asset-free public tests cover explicit refusal,
 packet ordering, masks, textures, gradient regression cases and native limits.
 The court tests compose recovered projection and link writes directly with
 this renderer for both a flat and a textured quad, checking every output pixel.
 
 These are bounded software-reference comparisons, not complete hardware or
-gameplay fidelity acceptance. Arbitrary single-line tie breaking, extreme
-coordinate/offset wrapping, all texture-window/cache interactions, overlapping
+gameplay fidelity acceptance. Extreme coordinate/offset wrapping beyond the
+bounded line and triangle fixtures, all texture-window/cache interactions, overlapping
 render-to-texture, and hardware timing remain separate gates. Polylines and
 transfer packets are unsupported here; recovered transfer owners remain the
 separate upload/readback path. Texture or CLUT reads from a word written earlier

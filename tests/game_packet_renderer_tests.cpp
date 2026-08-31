@@ -95,6 +95,12 @@ void packetStream(){
     memory[0x1000]=0x1000;require(linked.renderer.drawOrderingTable(read,&memory,0x1000,3,linked.progress)==R::LinkLimit&&linked.progress.links==3,"source cycle bounded without repaired terminator");
     require(linked.renderer.drawOrderingTable(read,&memory,0x1001,3,linked.progress)==R::LinkAlignment,"unaligned link refused");
     Fixture line;require(line.draw({0x400000f8,xy(0,0),xy(3,0)})==R::Complete&&line.progress.pixels==4,"line includes final endpoint");
+    Fixture descending;require(descending.draw({0x400000f8,xy(0,1),xy(2,0)})==R::Complete,"descending diagonal line");
+    require(descending.known(0,1)&&descending.known(1,0)&&descending.known(2,0)&&!descending.known(1,1),"descending half-pixel tie bias");
+    Fixture reverse;require(reverse.draw({0x400000f8,xy(2,0),xy(0,1)})==R::Complete,"reversed diagonal line");
+    require(reverse.known(0,1)&&reverse.known(1,0)&&reverse.known(2,0)&&!reverse.known(1,1),"line endpoint order does not change coverage");
+    Fixture shaded;require(shaded.draw({0x50000000,xy(0,0),63,xy(4,0)})==R::Complete,"Gouraud line gradient");
+    require(shaded.at(1,0)==2,"line color usesQ12gradient and half-unit bias");
 }
 }
 int main(){try{flat();textures();blendAndDither();packetStream();std::cout<<checks<<" packet renderer checks passed\n";return 0;}

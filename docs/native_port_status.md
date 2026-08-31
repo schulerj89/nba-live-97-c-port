@@ -1,9 +1,10 @@
 # Native port status
 
-Frontend capture baseline: code checkpoint `1702b81`, 2026-08-31. The later
-court/tipoff checkpoint passes 125 Windows and 121 Linux core tests, but has
-not connected gameplay. This page distinguishes live application paths from
-tested subsystems; it is not an overall completion estimate.
+Checkpoint 25 passes 129 Windows tests in both build configurations and 125
+Linux core tests locally. Its actor-root, court-texture and rendering updates
+also have separate original-source and pixel comparisons.
+This page distinguishes live application paths from tested subsystems; it is
+not an overall completion estimate or a claim of new frontend captures.
 
 **Playable basketball is not implemented.** There is no rendered playable court,
 complete possession, full CPU/user match, or finished season/playoff mode. The
@@ -50,8 +51,8 @@ its frontend-to-match path.
 |---|---|---|
 | Match state and periods | Owned accepted players/teams/controllers, lineup/binding/role helpers and composed period initialization under explicit entry conditions | Natural cold/warm loader completion, every substitution dependency, or a running match. See [match runtime](match_runtime_workflow.md). |
 | Player updates | Animation/queue, motion/pose resources, bounded physics/jump and input-edge owners with native composition tests | Whole-frame simulation, ball ownership, passes/shots, contact, AI or an actual possession. See [player updates](match_player_update_workflow.md) and [input edges](match_input_edges_workflow.md). |
-| Tip contact and ball release | Complete player part-matrix/hand-endpoint owner `55368`, hand/body contact helpers, the post-acquisition tipoff continuation, and ball-release owner `58610`; composed release comparisons end with a loose ball and intended receiver in phase `82` | Live actor-root/camera production, hand-path integration, upstream collision/acquisition, ball simulation and a natural first possession remain unconnected. See [player geometry](game_player_geometry_workflow.md), [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
-| Rendering and resources | Body geometry, textures, names/fonts/text pools, heap owners, retained CPU allocations and VRAM transfers; court packet projection now composes with native pixel drawing in flat/textured fixtures | No live rasterized court, complete camera/render loop or gameplay frame. Actual resource/caller integration and remaining raster fidelity domains are still required. See [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
+| Player geometry / tip contact / ball release | Actor-root owner `5200C` and native geometry adapter compose with part-matrix/hand-endpoint owner `55368` using actual pose/body resources and supplied camera/scale state. Contact helpers, the post-acquisition continuation and ball-release owner `58610` have separate tests; composed release ends with a loose ball in phase `82` | Natural camera/scale production, full body caller/vertex path, live hand-path integration, upstream collision/acquisition, ball simulation and first possession remain unconnected. See [actor root](game_player_root_workflow.md), [player geometry](game_player_geometry_workflow.md), [tipoff phase](game_tipoff_phase_workflow.md) and [ball release](game_ball_release_workflow.md). |
+| Rendering and resources | Retained CPU/VRAM storage, court packet projection and native pixel drawing; actual XATL textures upload through the bounded `479B8:487B8..48894` loop. Native line rasterization and SDK `9AC7C` no-data return handling have regressions | This is not the full `479B8` loader, a live court or a complete camera/render loop. Resource loading, caller integration and remaining raster fidelity domains are still required. Rendered fixtures are not gameplay captures. See [court textures](game_court_textures_workflow.md), [court packets](game_court_packets_workflow.md), [packet drawing](game_packet_renderer_workflow.md) and [render backend](game_render_backend_workflow.md). |
 | Audio startup and transfers | Game sound entry point, common attributes, music reset, callback registration, SPU heap, PIO/DMA sample ownership, interrupt/controller and event composition | Natural host audio initialization, actual callback cadence, complete voices/synthesis, physical device timing or full-match sound. Some real resource transfers still stop where rounded source tails lack proven ownership. See [audio startup](audio_startup_workflow.md) and [sample backend](spu_sample_backend_workflow.md). |
 
 Asset-free CTests use synthetic fixtures. Private source comparisons additionally
@@ -97,19 +98,24 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-At `1702b81`, Windows builds passed **122/122 CTests** in both Debug and
-RelWithDebInfo. [GitHub run 33413002259](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33413002259)
-passed **118/118 Linux core CTests** and the metadata/verification workflow.
+At checkpoint 25, Windows builds pass **129/129 CTests** in both Debug and
+RelWithDebInfo; the local Linux build passes **125/125 core CTests**.
+The preceding published checkpoint 24 (`16b4e70`),
+[GitHub run 33422404343](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33422404343)
+passed **123/123 Linux core CTests** and the metadata/verification workflow.
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured at that checkpoint, nor that
 a full match was tested.
 
-The later court/tipoff checkpoint passes **125/125 Windows CTests** in Debug
-and RelWithDebInfo, and **121/121 Linux core CTests** locally under GCC 11.4.
-These totals include the three new test targets; they do not replace the
-historical GitHub run above with an unobserved CI result.
+Checkpoint 25's separate component evidence
+includes 80 original pose/body actor-root-to-`55368` composition cases; all 84
+XATL images through the bounded texture loop, with 246 transfer events and
+23,556 known VRAM pixels agreeing across three comparisons; 4,000 flat/Gouraud
+line comparisons per build with no pixel mismatches; and 729 original-source
+cases for SDK no-data return handling. These are supplied-state experiments,
+not a complete loader, natural host frame or gameplay capture.
 
-The additions also have directed native tests and private original-source
+Earlier components also have directed native tests and private original-source
 comparisons. The tipoff/release
 composition covers 96 supplied-state cases per build, reaching loose-ball
 phase `82`. Court verification covers all 507 owned instruction locations and

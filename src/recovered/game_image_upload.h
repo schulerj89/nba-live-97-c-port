@@ -45,7 +45,8 @@ typedef struct Nba97GameImageTransfer {
 } Nba97GameImageTransfer;
 
 /* Actual9971C boundary. Return1 only after consuming/copying the requested raw
- * VRAM words. Do not repack indexed pixels or normalize this rectangle again.
+ * VRAM words, or handling a proved SDK no-data return before GPU access.
+ * Do not repack indexed pixels or normalize this rectangle again.
  * This call's source can lie before the current image within the same owner.
  * The backend must check positive/in-range supported rectangle dimensions,
  * allocation bounds and knownness of consumed bytes. Unsupported GPU domains,

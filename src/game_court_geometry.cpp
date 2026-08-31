@@ -127,7 +127,8 @@ int GameCourtGeometry::apply(const Nba97CourtMathRequest& request,Nba97CourtValu
         if(!camera.known)return NBA97_COURT_UNKNOWN;
         Word sum=0;
         for(auto v:depth){const int result=valid(v);if(result!=NBA97_COURT_COMPLETE)return result;
-            if(v.word>65535)return NBA97_COURT_ARGUMENT;sum+=v.word;}
+            if(v.word>65535)return NBA97_COURT_ARGUMENT;
+            sum+=v.word;}
         const Wide scaled=Wide(sum)*camera.average_scale4;
         overflow(scaled,0,status_flags);mac[0]=value(Word(scaled));
         order_depth=value(Word(limit(floorShift(scaled,12),0,65535,18,status_flags)));
