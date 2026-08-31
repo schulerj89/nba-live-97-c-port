@@ -10,6 +10,11 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_team_select_placement_tests tests/team_select_placement_test.cpp
+        src/recovered/team_select_placement.c src/recovered/team_select_poll.c)
+    target_compile_features(nba97_team_select_placement_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_team_select_placement_tests PRIVATE src)
+    add_test(NAME team_select_placement COMMAND nba97_team_select_placement_tests)
     add_executable(nba97_team_select_poll_tests tests/team_select_poll_test.cpp
         src/recovered/team_select_poll.c src/recovered/team_select.c)
     target_compile_features(nba97_team_select_poll_tests PRIVATE c_std_99 cxx_std_17)
@@ -347,7 +352,7 @@ else()
 endif()
 
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
-target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select_poll.c)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select_poll.c src/recovered/team_select_placement.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/match_setup.c src/recovered/match_controls.c
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)

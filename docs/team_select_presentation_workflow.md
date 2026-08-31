@@ -123,3 +123,11 @@ pending, along with the synchronized physical Team Select walkthrough.
 Subsequent cursor-audio checkpoint: the three scalar/RNG differences are now
 corrected in the bounded native path. See cursor_audio_workflow.md; the original
 hardware, allocation and full-history limits above still apply.
+
+Subsequent text-placement checkpoint: separate labels/values and all four arrow
+poses now survive callbacks and advance at the existing presentation boundary.
+The full state3 caller has two graphic descriptors, so it bypasses the selected
+text-head wait even when that head has pending movement. No additional entry
+delay is due. The uncounted native entry preview projects a copy, leaving live
+placement pending. See team_select_text_workflow.md for source evidence and the
+remaining allocator/first-flash history limit.

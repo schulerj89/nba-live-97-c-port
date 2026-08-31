@@ -10,6 +10,7 @@
 #include "recovered/roster_compare.h"
 #include "recovered/create_player.h"
 #include "recovered/team_select.h"
+#include "recovered/team_select_placement.h"
 #include "recovered/game_setup.h"
 #include "recovered/user_setup.h"
 
@@ -395,6 +396,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect&, const Nba97TeamRanks&,
                          const PshFont&, const PshFont&,
                          const Nba97FrontendPalette&,
                          const std::array<Nba97ReorderTint,12>&,
+                         const Nba97TeamSelectPlacement&,
                          const int16_t* title_corners=nullptr);
 PshImage renderUserSetup(const Nba97UserSetup&,const Nba97UserNames&,
                         unsigned topology,const Nba97UserPlacement& placement,int home,int away,

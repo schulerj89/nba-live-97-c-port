@@ -183,11 +183,46 @@ def capture(first, second, contract, fixture):
     require(states == read(second / "states.json"), "native state nondeterminism")
     require([s["id"] for s in states] == [s["id"] for s in contract["native_frames"]], "scenario list drift")
     by_id = {s["id"]: s for s in states}
+    # These harness checkpoints precede the newly opened screen's first
+    # requested presentation. Do not allow artifacts to redefine that boundary.
+    preview_frames = {"entry", "left-before-poll", "reentry", "user-editor-abandon",
+                      "user-setup-return", "match-cancel-preserved"}
+    entry_group = None
     for actual, expected in zip(states, contract["native_frames"]):
         require(all(actual[k] == v for k, v in expected["expect"].items()), f"state mismatch {actual['id']}")
         if actual["page"] == "Team Select":
             require(0 <= actual["shown_criterion"] < 6 and actual["shown_presentation"] >= 0,
                     f"invalid completed presentation metadata {actual['id']}")
+            # Independent4FA3C/4F7B8 anchors. A shown object follows the
+            # completed presentation, even when Cross has changed logical side.
+            side = actual["shown_side"]
+            arrows = [[x + 500*side, 96] for x in (320,460,-458,-318)]
+            labels = [[0,0] if i % 6 == 0 else
+                      [248,106+16*(i % 6)+(200 if i//6 != side else 0)] for i in range(12)]
+            values = [[388 if i < 6 else 112,86 if i % 6 == 0 else 106+16*(i % 6)] for i in range(12)]
+            require(actual["shown_arrows"] == arrows and actual["shown_labels"] == labels and
+                    actual["shown_values"] == values, f"retained text/arrow pose mismatch {actual['id']}")
+            if actual["id"] in preview_frames - {"left-before-poll"}:
+                entry_group = 120+actual["side"]
+            require(actual["team_graphic_count"] == 2 and actual["arrow_group"] == entry_group,
+                    f"source graphics/group routing mismatch {actual['id']}")
+            preview = actual["shown_entry_preview"]
+            require(type(preview) is int and preview == int(actual["id"] in preview_frames),
+                    f"entry preview/presentation boundary mismatch {actual['id']}")
+            if preview:
+                # Native crossfade preview projects a copy. Live entry nodes
+                # must still contain their unpresented source commands/anchors.
+                labels = [[0,0] if i % 6 == 0 else
+                          [248,106+16*(i % 6)+(96 if i >= 6 else 0)] for i in range(12)]
+                values = [[388 if i < 6 else 112,86] if i % 6 == 0 else
+                          [388,106+16*(i % 6)+(96 if i >= 6 else 0)] for i in range(12)]
+                arrows = [[x,96] for x in (320,460,-458,-318)]
+                require(actual["arrow_group"] == 120+actual["side"], "entry arrow group changed")
+            require(actual["logical_arrows"] == arrows and actual["logical_labels"] == labels and
+                    actual["logical_values"] == values, f"callback/preview advanced live placement {actual['id']}")
+            head_moving = 8 if preview and actual["side"] == 1 and actual["criterion"] else 0
+            require(actual["value_head_moving"] == head_moving,
+                    f"selected value head query mismatch {actual['id']}")
         a, b = first / (actual["id"]+".ppm"), second / (actual["id"]+".ppm")
         require(ppm(a) == ppm(b), f"native frame nondeterminism {a.name}")
     # Explicit owner-frame counts from the source contract and harness steps;
@@ -196,12 +231,19 @@ def capture(first, second, contract, fixture):
             ("entry", "left-before-poll", 0), ("left-before-poll", "home-left", 1),
             ("home-left", "left-first-post-frame", 1), ("left-first-post-frame", "left-post-wait", 6),
             ("left-post-wait", "left-held-repeat", 1), ("away-active", "away-first-post-frame", 1),
+            ("reentry", "start-held-exit", 2),
             ("help-poll-frame", "help-first-growth", 1), ("help-first-growth", "help-full-box", 12),
             ("help-full-box", "help-first-text", 1), ("help-first-text", "help", 10),
             ("help", "help-ack-frame", 1), ("help-ack-frame", "help-first-shrink", 1),
             ("random-poll-frame", "random-first-wait", 1), ("random-first-wait", "random-last-wait", 65)):
         require(by_id[after]["shown_presentation"] - by_id[before]["shown_presentation"] == count,
                 f"completed presentation count mismatch {before} -> {after}")
+    require(by_id["entry"]["arrow_group"] == by_id["away-active"]["arrow_group"] ==
+            by_id["away-first-post-frame"]["arrow_group"] == 120 and by_id["reentry"]["arrow_group"] == 121,
+            "Cross regrouped persistent arrows or reentry lost entry-page group")
+    require(by_id["reentry"]["value_head_moving"] == 8 and by_id["start-held-exit"]["poll_phase"] == 4,
+            "type41 graphics must bypass pending away-value settlement before Start")
+    print("TEAM PLACEMENT HOST PASS: separate label/value and4 retained arrow poses; preview isolation and source graphics bypass")
     require(by_id["help-full-box"]["shown_help_width"] == by_id["help-first-text"]["shown_help_width"] ==
             by_id["help-ack-frame"]["shown_help_width"], "full Help box changed before shrinking")
     for actual in states:

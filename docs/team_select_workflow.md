@@ -42,6 +42,8 @@ match_snapshot_workflow.md. MATCH-HANDOFF-PENDING still blocks gameplay launch.
 - recovered/team_select.c owns selector behavior, six-word RNG and bounded
   random presentation schedule. recovered/team_select_poll.c owns whole-mask
   polling, repeat waits, callback continuations and changed-input exits.
+  recovered/team_select_placement.c owns separate label/value and four-arrow
+  placement through entry, callbacks and requested presentations.
   recovered/team_ratings.c owns weighted scores
   and stable rank ordering. recovered/game_setup.c owns card choice wrapping.
 - TeamSelectAssets loads a bounded private pack and derives ranks from the
@@ -92,7 +94,16 @@ key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
 
-Cursor-audio checkpoint validation on2026-08-30:45/45 CTest tests pass in Debug
+Text-placement checkpoint validation on2026-08-30:46/46 CTest tests pass in Debug
+and RelWithDebInfo. All98 captures repeat and retain their previous pixels;
+new pose receipts validate separate objects, preview isolation and fixed entry
+groups. Source comparison passes91,230 assertions/84 cases. The two type41 logo
+descriptors bypass text settlement, so no extra input delay was added. Create
+Player retains27/27 repeated scenarios and all numerical checks. See
+team_select_text_workflow.md; allocator tint history and runtime evidence remain
+pending. This is recovered retained state, not a demonstrated visual correction.
+
+Prior cursor-audio checkpoint validation on2026-08-30:45/45 CTest tests pass in Debug
 and RelWithDebInfo. All98 captures repeat within/across configurations; four
 additional hand-seeded Circle dispatch receipts match original source state.
 Create Player retains27/27 scenarios and its numerical model/packet/texture
@@ -202,8 +213,10 @@ exit barriers, exact Setup Start history, User Cancel barrier, and topology
 debounce are now implemented. See frontend_input_workflow.md and its separate
 full-caller ledger. Key messages update held masks before fade/repeat guards;
 they no longer directly dispatch Team Select actions. Complete state0 polling,
-general queued text movement, directional-arrow flash/history and physical topology
-presentation timing remain pending. The bounded state5 placement targets and
+general text allocation, directional-arrow flash/history and physical topology
+presentation timing remain pending. State3 retained relative placement and its
+graphics-count wait bypass are source-compared; see team_select_text_workflow.md.
+The bounded state5 placement targets and
 same-row modal return are implemented; see user_setup_placement_workflow.md.
 Team Select presentation ownership and Help geometry/input phases are now
 source-compared; see team_select_presentation_workflow.md. Source Help open/close

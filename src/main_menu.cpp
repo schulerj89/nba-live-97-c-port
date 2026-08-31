@@ -636,6 +636,7 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
                          const PshFont& font, const PshFont& small,
                          const Nba97FrontendPalette& palette,
                          const std::array<Nba97ReorderTint,12>& tint,
+                         const Nba97TeamSelectPlacement& placement,
                          const int16_t* title_corners) {
     PshImage image;image.width=512;image.height=240;image.tag="TSEL";
     image.rgba.resize(512*240*4);
@@ -661,9 +662,15 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
             static_cast<uint8_t>(std::min(255,int(rgb[2])*255/128)));
     };
     for(unsigned side=0;side<2;++side) {
-        const auto& name=assets.team(state.team[side]);const int x=side ? 112:388;
-        text(name.city,x,86,side*6);text(name.nickname,x,102,side*6);
+        const auto& name=assets.team(state.team[side]);
+        const auto& name_node=placement.value[side*6];
+        if(name_node.alive) {
+            text(name.city,name_node.x,name_node.y,side*6);
+            text(name.nickname,name_node.x,name_node.y+16,side*6);
+        }
         for(unsigned category=0;category<5;++category) {
+            const auto object=side*6+category+1;
+            const auto& value_node=placement.value[object];
             const auto rank=ranks.value[category][state.team[side]];
             std::string value="--";
             if(rank<=29) {
@@ -671,13 +678,16 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
                     rank%10==1 ? "st":rank%10==2 ? "nd":rank%10==3 ? "rd":"th";
                 value=std::to_string(rank)+suffix;
             }
-            text(value,x,122+int(category)*16,side*6+category+1);
+            if(value_node.alive) text(value,value_node.x,value_node.y,object);
+            const auto& label_node=placement.label[object];
+            if(label_node.alive) text(assets.criterion(category),label_node.x,label_node.y,object);
         }
     }
-    for(unsigned c=0;c<5;++c) text(assets.criterion(c),248,122+int(c)*16,state.side*6+c+1);
-    // 3D434 uses font0 glyphs 8D/8A, no generic arrows or keyboard captions.
-    draw_psh_text_centered(image,font,"\x8d",state.side ? 42:320,96);
-    draw_psh_text_centered(image,font,"\x8a",state.side ? 182:460,96);
+    // Four source nodes persist, including the offscreen pair. Their initial
+    // visible color is neutral; history-dependent first-flash tint is pending.
+    for(unsigned i=0;i<4;++i) if(placement.arrow[i].alive)
+        draw_psh_text_centered(image,font,i&1 ? "\x8a":"\x8d",
+                               placement.arrow[i].x,placement.arrow[i].y);
     return image;
 }
 
