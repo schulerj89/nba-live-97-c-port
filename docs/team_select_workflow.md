@@ -94,7 +94,21 @@ key during growth), last-random wait, Setup routes, invalid input and preserved
 selection are independently checked. These are handler tests, not physical
 keyboard delivery or original pixel equivalence.
 
-Text-placement checkpoint validation on2026-08-30:46/46 CTest tests pass in Debug
+Text-history/capture checkpoint on2026-08-30: the original physical demo exit
+reached Setup, and the next physical Enter reached Team Select. Four observed
+arrow-construction stops match the independent source fixture in2,769 assertions,
+including all pool colors/lifetimes and group heads. A settled entry dump also
+matches source/native placement and12 value strings in1,143 assertions.
+Their storedRGB is0, but
+50 other free slots in the preceding warm Setup pool have nonzero RGB; there is
+no universal zero initializer. The new read-only capture inspector rejects old,
+misaligned or incorrectly phased captures. See team_select_text_history_workflow.md.
+No game behavior changed. Debug/release retain46/46 CTest tests and98 repeated
+captures; Create Player retains27/27 and the established numerical checks.
+Full original runtime/flash/visual/timing/audio and the remaining walkthrough
+stay pending; the overall runtime tier below describes those full scenarios.
+
+Prior text-placement checkpoint validation on2026-08-30:46/46 CTest tests pass in Debug
 and RelWithDebInfo. All98 captures repeat and retain their previous pixels;
 new pose receipts validate separate objects, preview isolation and fixed entry
 groups. Source comparison passes91,230 assertions/84 cases. The two type41 logo
@@ -186,6 +200,8 @@ private audit evidence, not original modified-roster runtime equivalence.
 | Native state tests |Both sides, all31 teams, six criteria, both directions, boundaries, ignored tokens, exit persistence, RNG carry and random barrier; signed rating arithmetic/ties/saturation |
 | Host integration |98 checkpoints; completed Team Select frames, native polling, held input/chords/exits, debounced topology and retained placement, editor/modals, save retry/restart and owned partial snapshots; gameplay pending |
 | Historical original numerical boundary |145/145 stock scores and145/145 ranks agree with cached original FEONLY RAM; not a live Team Select capture |
+| Original arrow construction |Four observed state3 post-store stops match source pool/group/scalar predictions; applies only to the recorded warm route |
+| Original settled entry |One paused state3 sample matches retained placement and12 value strings; no tick-count or pixel-equivalence claim |
 | Modified roster arithmetic |Independent oracle checks reorder, cross-team swap and count-changing transfer; no original modified-roster runtime claim |
 | Native rendering |Two-run equality; regression stability only |
 | Original state3 runtime/visual/timing/audio |Pending synchronized observations |
@@ -251,7 +267,12 @@ presentation: context800214F0, shared history0/0/0, teams3/24. It is not a state
 runtime comparison. The title later entered its automatic gameplay demo without
 game-key injection, replacing FEONLY; the FE probe correctly refused that state.
 
-Reach Game Setup with ONE physical input at a time, then verify before continuing;
+Subsequent physical inputs reached Game Setup and Team Select. Four initial
+arrow stops and a later paused state3 RAM baseline are saved in that same private
+runtime directory; see team_select_text_history_workflow.md. This establishes
+bounded entry observations, not the remaining navigation/flash/exit scenarios.
+
+Continue with ONE physical input at a time, then verify before continuing;
 no$psx game-key injection remains unverified. Initial preparation artifacts are
 under .local/verification/team_select/runtime-20260830/. The title screenshot
 has no paired title RAM dump: the attempted later dump encountered the overlay

@@ -61,7 +61,9 @@ def metadata():
         require(f["native_owner"] and f["scope"], "missing semantic owner/scope")
         totals[f["scope"]] = totals.get(f["scope"], 0) + f["instructions_total"]
     require(totals == ledger["instruction_denominators"] == DENOMINATORS and len(seen)==33, "ledger totals drifted")
-    require(ledger["evidence"]["original_team_select_runtime"] == "pending", "retail status needs explicit new evidence")
+    # This is the full scenario tier; separately recorded arrow-construction
+    # observations do not complete navigation, flash, timing or exit coverage.
+    require(ledger["evidence"]["original_team_select_runtime"] == "pending", "full retail status needs explicit new evidence")
     user = read(ROOT / "config/decomp/user_setup.json")
     seen, totals = set(), {}
     for f in user["functions"]:
@@ -337,7 +339,7 @@ def capture(first, second, contract, fixture):
         require("TEAM-HANDOFF" in trace and "USER-ENTRY" in trace and
                 "MATCH-HANDOFF-PENDING" in trace and "TEAM-CAPTURE PASS:" in trace, "missing boundary/pass trace")
     print(f"TEAM NATIVE PASS: {len(states)}/{len(states)} deterministic frames + host state + isolated saved-roster adapter")
-    print("PENDING: original state3/5 runtime, visuals/timing/audio, physical controls/topology cadence, text/arrow lifecycle and gameplay")
+    print("PENDING: full original state3/5 runtime scenarios, visuals/timing/audio, physical controls/topology cadence, general text/arrow lifecycle and gameplay")
 
 
 def main():

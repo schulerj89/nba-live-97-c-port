@@ -88,11 +88,14 @@ nodes, controller arrow records, manager/pool/scan hint and primitive pages make
 that capture auditable. Other routes still need their own history or a complete
 producer trace from a known snapshot.
 
-Upstream focus-reset and palette-table helpers have been excluded as text
-producers. Computed/resource callbacks around `31A88 -> 2FB00/38BD4`, the
-`31F48` callees and initial `39574 -> 38E84` still need closure before inferring
-color history from an early pool snapshot. General Help/menu visits remain
-additional producers; the state3 entry fixture cannot stand in for them.
+The subsequent upstream audit closes ordinary resource callbacks and identifies
+the earlier press-start text producer. A direct successful route from a known
+empty, zero-RGB pool conditionally preserves zero arrow start colors, but that
+is not a universal initializer or an observed continuation. The later actual
+demo-return Setup dump has50 nonzero stored RGB triples despite all200 slots
+being free. See team_select_text_history_workflow.md for the source proof and
+strict arrow-construction capture tool. General Help/menu/warm visits still
+require their own history; the state3 entry fixture cannot stand in for them.
 
 ## Source owners and verification
 
