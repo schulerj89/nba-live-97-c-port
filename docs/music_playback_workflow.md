@@ -72,7 +72,10 @@ ED2AC selects200 or105 stereo slots. It therefore queues key-off at entry into
 the last full slot, not at return of that slot's final sample. Native output
 supplies an initial slot0 event and then slot-entry events after each completed
 1792-frame prefix. A completed WinMM submission is progress; a queued submission
-is not. The physical WinMM buffers contain256 frames, four at a time.
+is not. The recovered source still advances in 256-frame quanta, while the
+host WinMM queue uses four 1024-frame buffers. Keeping the source quantum and
+host-device queue depth separate avoids audible starvation from ordinary
+Windows scheduler jitter without changing decoded PCM or source cadence.
 
 The source signed `read_index == write_index - 1` bug is retained. If final
 write_index is0, PCM exhaustion does not set FINISHED or repair the comparison.
@@ -107,7 +110,7 @@ WinMM has no original SPU ADSR register, ADPCM prefetch or IRQ latency. The
 adapter substitutes logical slot entry for the source slot+8 interrupt and
 native drain for released ADSR level0. These are explicit platform policies,
 not exact hardware equivalence. Gain applies to subsequently filled buffers;
-up to1024 already queued frames, about23.2ms at44100Hz, retain prior gain,
+up to4096 already queued frames, about92.9ms at44100Hz, retain prior gain,
 plus any driver/device latency. Negative source stop-target gain is rendered
 as native silence while the recovered stop request still waits for a slot.
 Exact SPU mixing, release waveform and starvation waveform remain unverified.

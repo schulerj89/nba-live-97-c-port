@@ -86,12 +86,12 @@ the ball/shadow pass after making both released source containers unavailable;
 the rendering owners do not read those containers again. A native packet-reader
 fix now permits unknown unused UV padding while still requiring every consumed
 packet byte; it does not initialize or change the retained source RAM.
-The new [frame driver](docs/game_match_frame_workflow.md) preserves the full
-original render-pass order and conditionally calls the native
-[ball attachment](docs/game_ball_attachment_workflow.md) owners. Its C++ adapter
-shares retained memory and projection state with the [net pass](docs/game_net_workflow.md),
-players and ball. Pose, camera, court, label and platform services still need
-connected providers; this does not launch gameplay from User Setup.
+The [frame driver](docs/game_match_frame_workflow.md) preserves the full
+original render-pass order and calls the native pose, net, player, court,
+[ball attachment](docs/game_ball_attachment_workflow.md), ball, label and marker
+owners through shared retained memory and projection state. Camera, display,
+synchronization and submission services still need connected providers; this
+does not launch gameplay from User Setup.
 The recovered
 [camera/controller path](docs/game_camera_workflow.md) produces camera state
 under explicit inputs; timing, pad/device and monitor effects still require
@@ -101,9 +101,13 @@ private XATL image data into retained VRAM. The separate
 [court-resource tail](docs/game_court_resources_workflow.md) normalizes loaded
 court data and prepares edge storage using the recovered allocator; neither
 slice implements the full court loader. The new
-[court startup bridge](docs/game_court_startup_workflow.md) recovers the
-intervening selection/load/sync/free order and composes the actual native heap
-release; preceding roster/context setup and real loading remain required.
+[court startup bridge](docs/game_court_startup_workflow.md), roster prefix,
+interactive branch and packet-startup owners recover the complete bounded
+`479B8..48744` prefix plus the later selection/load/sync/free order. A reusable
+exact page-offset service preserves `9BF98`'s live graphics-mode reads. A
+canonical C source-order owner now composes the complete `479B8..48D5C` body.
+Real loading/GPU services, allocation-registry population and the outer
+`52C20` resource producers remain required.
 These components are not yet connected
 into a live court or playable frame. Diagnostic renders use fixture camera,
 entity and ordering state; they are **not gameplay captures**.
@@ -187,17 +191,16 @@ ctest --test-dir build-core -C Debug --output-on-failure
 python tools/report_progress.py --check
 ```
 
-Checkpoint 29 passes all **141 Windows CTests** in both Debug and
-RelWithDebInfo, and all **137 Linux core CTests** locally. Its GitHub run is
-pending publication; checkpoint 28 (`5f76fec`) passed 131 core tests in
-[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33435766647).
+Checkpoint 30 local verification passes all **153 Windows CTests** in Debug,
+RelWithDebInfo and Release and all **149 Linux core CTests** locally. Checkpoint 29
+(`5b080f4`) passed 137 core tests in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33439288924).
 The counts differ because four tests are Windows-specific. These are bounded
 regression results, not complete-game acceptance or new original-game captures.
-The frame driver, net, attachment and court-startup additions have separate
-source comparisons and bounded native integration checks. The frame sequencing
-comparison supplies explicit child-call fixtures; it does not prove a complete
-native frame. The Windows release build passed after retrying a system memory
-limit during linking with a serial build; no source change was needed.
+The frame, simulation/scoring and court-startup additions have separate source
+comparisons and bounded native integration checks. The frame sequencing
+comparison supplies explicit platform fixtures; it does not prove a complete
+native frame or gameplay launch.
 
 ## Keyboard controls
 

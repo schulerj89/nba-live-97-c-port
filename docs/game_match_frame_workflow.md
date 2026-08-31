@@ -3,16 +3,19 @@
 `game_match_frame.c` implements the complete CPU sequencing of GAME `49018`,
 including its `535C8` scratch guard and `55F0C` reads. This connects the order
 of the recovered render passes without inventing their required inputs.
-`GameMatchFrame` calls the actual native net, player, attachment, ball and
-ball-shadow owners through one borrowed `GamePlayerFrame` memory owner.
-It also implements the `56074` and `5605C` geometry-control writes.
+`GameMatchFrame` calls the actual native pose, net, player, court, attachment,
+ball, ball-shadow, label and marker owners through one borrowed
+`GamePlayerFrame` memory owner. It also implements the `56074` and `5605C`
+geometry-control writes. The court adapter transports the preceding shared
+player/net projection geometry, ZSF4 and independent LZCR state and exports
+every retained prefix on refusal.
 
 This is not a playable match or a complete render-service backend. Remaining
-pose, camera, court, label and platform calls require real implementations
-through `Nba97MatchFrameIo`. A missing service stops at the reached original
-call. The Windows application's `MATCH-HANDOFF-PENDING` behavior is unchanged.
-The new owners and tests are registered in CMake; linking them into the
-application does not establish execution from its frontend.
+camera, display, synchronization, ordering-table submission and other platform
+calls require real implementations through `Nba97MatchFrameIo`. A missing
+service stops at the reached original call. The Windows application's
+`MATCH-HANDOFF-PENDING` behavior is unchanged: linking this frame owner does
+not establish the earlier frontend-to-startup resource path.
 
 ## Original order
 
@@ -72,11 +75,12 @@ requires cloning and rebinding the complete memory, geometry and platform
 state outside this adapter.
 
 `48FF4` must return the actual known captured status; other original call
-returns are unused. The remaining external entries are `530FC`, `48FF4`,
-`4900C`, `99960`, `51098`, `75D40`, `4AC68`, `35BEC`, `994F4`, `4A044`,
-`99CA4`, `99ACC`, `99A58` and `319B0`. Existing recovered owners should be
-composed for their effects. A callback returning success without performing
-those effects is only a test fixture, never a production implementation.
+returns are unused. The remaining external entries are `48FF4`, `4900C`,
+`99960`, `51098`, `75D40`, `994F4`, `99CA4`, `99ACC`, `99A58` and `319B0`.
+Existing recovered owners should be composed for their effects. A callback
+returning success without performing those effects is only a test fixture,
+never a production implementation. `530FC`, `4AC68`, `35BEC` and `4A044` now
+dispatch directly to their native owners.
 
 ## Verification and limits
 
@@ -104,6 +108,10 @@ player input and stops. It checks deliberately unusable serialized resource
 pointers, normalized references, untouched packet knowledge, separate ZSF3
 and ZSF4, and geometry retained after a partial net failure. It does not
 claim a complete native frame or an all-child original/native comparison.
+The separate court-compose test adds 845 checks per strict configuration and
+compares retained memory, access order, geometry, knownness and progress with
+the complete C `4AC68` owner. It does not make the backend fixture's unavailable
+player state into a reached court call.
 
 The [net](game_net_workflow.md), [player](game_player_frame_workflow.md),
 [attachment](game_ball_attachment_workflow.md) and

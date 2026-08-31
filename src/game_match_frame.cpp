@@ -14,6 +14,15 @@ int GameMatchFrame::call(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriod
     auto& owner=*static_cast<GameMatchFrame*>(user);auto& frame=owner.frame_;
     *value={};owner.last_native_entry=q->entry;
     switch(q->entry){
+    case 0x800530fc:
+        return nba97_game_pose_frame(&owner.memory_,&owner.pose_progress);
+    case 0x80035bec:
+        return nba97_game_player_label_frame(&owner.memory_,&owner.label_progress);
+    case 0x8004a044:{
+        GamePlayerMarkerUpdate marker;marker.memory=owner.memory_;
+        marker.io=owner.marker_io;marker.user=owner.marker_user;
+        return marker.run(owner.child_operation_budget,owner.marker_progress);
+    }
     case 0x80056074:{
         auto& h=frame.geometry.root.distance;if(!canonical(h))return NBA97_BODY_ARGUMENT;
         // CTC2 H is sign-extended when read as a register, unsigned16 in RTPS.
@@ -33,6 +42,19 @@ int GameMatchFrame::call(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriod
         frame.geometry=net.geometry.player;owner.average_scale4=net.geometry.average_scale4;
         return result;
     }
+    case 0x8004ac68:{
+        GameCourtFrameCompose court;court.memory=owner.memory_;
+        court.geometry.player=frame.geometry;
+        court.geometry.average_scale4=owner.average_scale4;
+        court.leading_bits=owner.leading_bits;
+        const int result=court.run(owner.child_operation_budget,owner.court_progress);
+        // 4AC68 shares the preceding net/player GTE state. Preserve every
+        // retained geometry prefix even when the recovered owner refuses.
+        frame.geometry=court.geometry.player;
+        owner.average_scale4=court.geometry.average_scale4;
+        owner.leading_bits=court.leading_bits;
+        return result;
+    }
     case 0x80052914:return frame.run(owner.child_operation_budget,owner.pass_progress);
     case NBA97_BALL_ATTACH_BLEND:case NBA97_BALL_ATTACH_PRIMARY:case NBA97_BALL_ATTACH_SECONDARY:
         return frame.attachment(q->entry,owner.child_operation_budget,*value,owner.pass_progress);
@@ -42,7 +64,7 @@ int GameMatchFrame::call(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriod
     }
 }
 int GameMatchFrame::run(std::size_t budget,Nba97MatchFrameProgress& progress){
-    progress={};pass_progress={};net_progress={};last_native_entry=0;
+    progress={};pass_progress={};pose_progress={};label_progress={};marker_progress={};net_progress={};court_progress={};last_native_entry=0;
     const int result=frame_.bindContext(child_operation_budget,memory_);if(result!=NBA97_BODY_OK)return result;
     Nba97MatchFrameContext input{access,call,this,budget};return nba97_game_match_frame(&input,&progress);
 }

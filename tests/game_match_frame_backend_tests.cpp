@@ -22,7 +22,7 @@ struct Fixture {
     std::vector<U> calls;
     U stop=0,status=0x12345601;
     Fixture(){player.buffers=&buffer;player.buffer_count=1;player.addresses=&address;player.address_count=1;
-        owner.io=io;owner.user=this;put(0x8001ede8,0);put(0x800b729c,384);}
+        owner.io=io;owner.user=this;put(0x8001ede8,0);put(0x800b729c,384);pose();}
     void put(U a,U v,unsigned n=4){for(unsigned i=0;i<n;++i){bytes[a-0x80000000+i]=std::uint8_t(v>>(8*i));known[a-0x80000000+i]=1;}}
     U get(U a,unsigned n=4)const{U v=0;for(unsigned i=0;i<n;++i)v|=U(bytes[a-0x80000000+i])<<(8*i);return v;}
     void pointer(U a,U target){put(a,0);cells[(a-0x80000000)/4]={{0,target-0x80000000,1},1};}
@@ -37,6 +37,15 @@ struct Fixture {
         if(q->entry==0x8004b1a4||q->entry==0x80052914||q->entry==0x80049300||q->entry==0x80049d34||
            q->entry==0x80057f5c||q->entry==0x80058120||q->entry==0x800581c0)return NBA97_BODY_ARGUMENT;
         return NBA97_BODY_OK;
+    }
+    void pose(){
+        put(0x800f0ed8,0x80110000);put(0x800fc654,0x801c0000);
+        put(0x8001ec98,0x801d0000);put(0x800170c8,0x801d0040);
+        put(0x801d0008,0x80140000);put(0x801d0048,0x80150000);
+        for(unsigned i=0;i<10;++i){const U entity=0x801c0000+i*244;
+            for(U offset:{0x84u,0x88u,0x8cu,0x8eu,0x90u,0x92u,0x94u,0x96u,0x9au})put(entity+offset,0,2);
+            put(entity+0x86,0xffff,2);put(entity+0x8a,0xffff,2);
+        }
     }
     void net(){
         pointer(0x80103f44,0x80120000);put(0x800288b4,0x800a46cc);
@@ -65,8 +74,8 @@ struct Fixture {
 };
 void controls(){
     Fixture missing;missing.owner.io=nullptr;
-    check(missing.owner.run(10000,missing.progress)==NBA97_MATCH_FRAME_IO_REQUIRED,"missing pose callback refuses");
-    check(missing.progress.stores==0&&missing.progress.stopped_entry==0x800530fc,"no fabricated entry prefix");
+    check(missing.owner.run(10000,missing.progress)==NBA97_MATCH_FRAME_IO_REQUIRED,"missing platform callback refuses after native pose");
+    check(missing.owner.pose_progress.completed&&missing.progress.stores==3&&missing.progress.stopped_entry==0x80048ff4,"native pose completes before the first missing platform service");
     for(U h:{384u,0x8000u,0xffffffffu}){Fixture f;f.stop=0x80075d40;f.put(0x800b729c,h);
         check(f.owner.run(10000,f.progress)==NBA97_BODY_BOUNDS,"stop after actual geometry control writes");
         const auto low=h&65535u;check(f.player.geometry.root.distance.word==(low&0x8000u?low|0xffff0000u:low),"H sign extends register, preserving low16");
@@ -99,8 +108,8 @@ void shared_native_passes(){
     check(partial.player.geometry.root.vector.rotation[0].known&&partial.player.geometry.root.vector.rotation[0].word==4096,"partial net geometry exports even on refusal");
     check(!partial.player.geometry.root.vector.translation[0].known&&!partial.owner.net_progress.completed,"unreached geometry stays unknown");
     Fixture child_limit;child_limit.net();child_limit.owner.child_operation_budget=0;
-    check(child_limit.owner.run(10000,child_limit.progress)==NBA97_BODY_JOURNAL_LIMIT&&child_limit.progress.stopped_entry==0x8004b1a4,"child bound stops before native net mutation");
-    check(child_limit.get(0x800b72dc)==1&&child_limit.player.geometry.root.offset_x.known,"child refusal retains earlier geometry controls");
+    check(child_limit.owner.run(10000,child_limit.progress)==NBA97_BODY_JOURNAL_LIMIT&&child_limit.progress.stopped_entry==0x800530fc,"child bound stops at the first native pose access");
+    check(child_limit.owner.pose_progress.operations==0&&child_limit.get(0x8001ede8)==0,"zero child budget prevents pose and later frame mutation");
 }
 }
 int main(){try{controls();shared_native_passes();std::cout<<checks<<" match-frame backend checks passed\n";return 0;}

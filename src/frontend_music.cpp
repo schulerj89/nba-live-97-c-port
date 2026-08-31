@@ -15,7 +15,13 @@
 
 namespace nba97 {
 namespace {
-constexpr std::size_t buffer_frames = 256, buffer_count = 4;
+// PORT fix: the recovered stream advances in 256-frame source quanta, but that
+// is not a safe host-device queue depth.  Coupling the WinMM buffers to that
+// quantum reduced the previously stable queue from about 93 ms to 23 ms and
+// made ordinary scheduler jitter audible as severe starvation.  Buffering is
+// a platform substitution only: it does not change source routing, frame
+// limits, decoded PCM, gain, or the original 256-frame stream cadence.
+constexpr std::size_t buffer_frames = 1024, buffer_count = 4;
 void check(MMRESULT result, const char* operation) {
     if (result != MMSYSERR_NOERROR)
         throw std::runtime_error(std::string(operation) + ": " + std::to_string(result));
