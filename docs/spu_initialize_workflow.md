@@ -87,7 +87,7 @@ travels through the recovered controller handler, DMA dispatcher, registered
 SPU ISR and native event registry. This proves source ordering and native byte
 ownership under those conditions, not physical PS1 timing or natural host boot.
 
-The larger game entry `700B0` also calls the common attribute setter, music
-initialization and timer callback registration. Those remaining producers,
-resource allocation/padding, synthesis, real frame scheduling and full playable
-matches are not established by this initialization module.
+The larger game entry `700B0`, its common attribute setter, music reset and timer
+callback registration are composed in [audio startup](audio_startup_workflow.md).
+Natural timer dispatch, resource allocation/padding, synthesis, real frame
+scheduling and full playable matches are not established by this module.
