@@ -75,3 +75,8 @@ initialization now joins the accepted snapshot. Selection, motion and music
 cores have separate source-instruction evidence and are not yet a gameplay or
 multi-track host playback claim. Supported debugger address entry remains
 blocked; no fresh live original gameplay capture was manufactured or credited.
+
+The next checkpoint adds646A8 direct binding effects, including its observable
+divide-trap prefix, and65140/65070 lineup recovery with synchronous substitution
+boundaries. Both builds pass59/59 CTests. Tail helpers/substitution dependencies
+and host integration remain open; this does not advance the complete-match gate.

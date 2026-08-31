@@ -10,6 +10,16 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_lineup_recovery_tests tests/game_lineup_recovery_tests.cpp
+        src/recovered/game_lineup_recovery.c)
+    target_compile_features(nba97_game_lineup_recovery_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_lineup_recovery_tests PRIVATE src)
+    add_test(NAME game_lineup_recovery COMMAND nba97_game_lineup_recovery_tests)
+    add_executable(nba97_game_player_bindings_tests tests/game_player_bindings_tests.cpp
+        src/recovered/game_player_bindings.c)
+    target_compile_features(nba97_game_player_bindings_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_bindings_tests PRIVATE src)
+    add_test(NAME game_player_bindings COMMAND nba97_game_player_bindings_tests)
     add_executable(nba97_game_controller_selection_tests tests/game_controller_selection_tests.cpp
         src/recovered/game_controller_selection.c)
     target_compile_features(nba97_game_controller_selection_tests PRIVATE c_std_99 cxx_std_17)
@@ -411,6 +421,7 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select_poll.c src/re
 target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/match_setup.c src/recovered/match_strategy.c src/recovered/team_header.c src/recovered/match_controls.c
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp
     src/recovered/game_controllers.c src/recovered/game_controller_selection.c
+    src/recovered/game_player_bindings.c src/recovered/game_lineup_recovery.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)
