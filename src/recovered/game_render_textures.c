@@ -34,8 +34,10 @@ static int upload(Nba97GameRenderImage image,int32_t x,int32_t y,int32_t cx,int3
 static unsigned glyph(uint8_t c) {
     return c>='a'&&c<='z'?(unsigned)(c-'a'):c>='A'&&c<='Z'?(unsigned)(c-'A'):26u;
 }
-int nba97_game_render_name(Nba97GameRenderTextures* s,unsigned i,Nba97GameRenderIo io,void* ctx) {
+int nba97_game_render_name_tracked(Nba97GameRenderTextures* s,unsigned i,Nba97GameRenderIo io,void* ctx,uint8_t* centers_written) {
     Nba97GameRenderBuffer p;uint8_t *out,*g,*poly0,*poly1;unsigned j;int32_t half;
+    if(!centers_written)return NBA97_RENDER_ARGUMENT;
+    *centers_written=0;
     if(!s||!io||i>=10)return NBA97_RENDER_ARGUMENT;
     out=at(s->name_scratch,16,1500);if(!out)return NBA97_RENDER_RESOURCE;
     memset(out,255,1500);s->name_position=0;s->name_cursor=0;s->name_zero=0;s->name_spacing=0;
@@ -55,14 +57,17 @@ int nba97_game_render_name(Nba97GameRenderTextures* s,unsigned i,Nba97GameRender
     half=sar(s32(s->name_cursor),1);s->name_cursor=(uint32_t)half;
     for(j=0;j<4;j+=2) {
         if(s->bypass_name_uv) {
-            s->name_center[i][j]=(uint32_t)half;s->name_center[i][j+1]=(uint32_t)half;
+            s->name_center[i][j]=(uint32_t)half;*centers_written|=(uint8_t)(1u<<j);
+            s->name_center[i][j+1]=(uint32_t)half;*centers_written|=(uint8_t)(1u<<(j+1));
         }else {
             if(!fits(s->name_polygon[i][j],0,29)||!fits(s->name_polygon[i][j+1],0,29))return NBA97_RENDER_RESOURCE;
             poly0=s->name_polygon[i][j].data;poly1=s->name_polygon[i][j+1].data;
             /* Both centers read before this pair's writes. A later pair can
              * alias an earlier pair and must observe its changed UVs. */
             s->name_center[i][j]=(uint32_t)(sar((int32_t)poly0[28]-poly0[12],1)+poly0[12]+1);
+            *centers_written|=(uint8_t)(1u<<j);
             s->name_center[i][j+1]=(uint32_t)(sar((int32_t)poly1[28]-poly1[12],1)+poly1[12]+1);
+            *centers_written|=(uint8_t)(1u<<(j+1));
             poly0[12]=(uint8_t)(s->name_center[i][j]-(uint32_t)half);
             poly0[20]=(uint8_t)(s->name_center[i][j]-(uint32_t)half);
             poly0[28]=(uint8_t)(s->name_center[i][j]+(uint32_t)half-1);
@@ -104,6 +109,10 @@ int nba97_game_render_name(Nba97GameRenderTextures* s,unsigned i,Nba97GameRender
     /* 4EA50 deliberately clears upper24 bits; do not retain authored flags. */
     pw(out,out[0]);
     return upload(s->name_scratch,s->name_xy[i][0],s->name_xy[i][1],0,0,io,ctx);
+}
+int nba97_game_render_name(Nba97GameRenderTextures* s,unsigned i,Nba97GameRenderIo io,void* ctx) {
+    uint8_t centers_written;
+    return nba97_game_render_name_tracked(s,i,io,ctx,&centers_written);
 }
 static int number_digit(Nba97GameRenderTextures* s,unsigned side,int32_t digit,int32_t x,int32_t y,Nba97GameRenderIo io,void* ctx) {
     if(digit<0||digit>=10)return NBA97_RENDER_RESOURCE;

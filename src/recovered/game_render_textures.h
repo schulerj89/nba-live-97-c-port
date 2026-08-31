@@ -45,6 +45,12 @@ typedef struct Nba97GameRenderTextures {
  * those unowned table entries refuse, rather than becoming positive jerseys.
  * Inputs are live; callback side effects must be reflected in this state. */
 int nba97_game_render_name(Nba97GameRenderTextures*,unsigned,Nba97GameRenderIo,void*);
+/* Same4E3CC owner with a native write receipt for the four center words.
+ * Bitj is set only AFTER name_center[player][j] is actually written. This
+ * lets an adapter retain unknown incoming centers across an early refusal,
+ * including the bypass path that computes widths before body loading.
+ * The receipt must be separate from all source state/buffers. */
+int nba97_game_render_name_tracked(Nba97GameRenderTextures*,unsigned,Nba97GameRenderIo,void*,uint8_t* centers_written);
 int nba97_game_render_number(Nba97GameRenderTextures*,unsigned,Nba97GameRenderIo,void*);
 int nba97_game_render_palette(Nba97GameRenderTextures*,unsigned,Nba97GameRenderIo,void*);
 int nba97_game_render_patch(Nba97GameRenderTextures*,unsigned,unsigned,Nba97GameRenderIo,void*);

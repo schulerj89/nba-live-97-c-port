@@ -10,6 +10,20 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_body_names_tests tests/game_body_names_tests.cpp src/recovered/game_body_names.c)
+    target_compile_features(nba97_game_body_names_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_body_names_tests PRIVATE src)
+    add_test(NAME game_body_names COMMAND nba97_game_body_names_tests)
+    add_executable(nba97_game_body_names_backend_tests tests/game_body_names_backend_tests.cpp src/game_body_names.cpp
+        src/game_body_resources.cpp src/game_render_backend.cpp src/recovered/game_body_geometry.c
+        src/recovered/game_body_names.c src/recovered/game_render_textures.c src/recovered/game_image_upload.c)
+    target_compile_features(nba97_game_body_names_backend_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_body_names_backend_tests PRIVATE src)
+    add_test(NAME game_body_names_backend COMMAND nba97_game_body_names_backend_tests)
+    add_executable(nba97_game_font_loader_tests tests/game_font_loader_tests.cpp src/recovered/game_font_loader.c)
+    target_compile_features(nba97_game_font_loader_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_font_loader_tests PRIVATE src)
+    add_test(NAME game_font_loader COMMAND nba97_game_font_loader_tests)
     add_executable(nba97_game_body_geometry_tests tests/game_body_geometry_tests.cpp src/recovered/game_body_geometry.c)
     target_compile_features(nba97_game_body_geometry_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_body_geometry_tests PRIVATE src)
@@ -636,13 +650,13 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_jump.c src/recovered/game_player_input.c src/match_input_edges.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
-    src/recovered/game_text_objects.c src/game_player_label_backend.cpp
+    src/recovered/game_text_objects.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c
     src/recovered/game_render_textures.c src/recovered/game_head_cache.c src/recovered/game_player_labels.c
     src/game_render_backend.cpp src/recovered/game_image_upload.c
-    src/recovered/game_body_geometry.c src/game_body_resources.cpp
+    src/recovered/game_body_geometry.c src/game_body_resources.cpp src/recovered/game_body_names.c src/game_body_names.cpp
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
