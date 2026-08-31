@@ -54,12 +54,24 @@ if(BUILD_TESTING)
     target_compile_features(nba97_voice_patl_upload_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_voice_patl_upload_tests PRIVATE src)
     add_test(NAME voice_patl_upload COMMAND nba97_voice_patl_upload_tests)
+    add_executable(nba97_spu_event_backend_tests tests/spu_event_backend_tests.cpp
+        src/spu_event_backend.cpp src/spu_sample_backend.cpp src/recovered/spu_events.c
+        src/recovered/spu_transfer.c src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
+    target_compile_features(nba97_spu_event_backend_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_spu_event_backend_tests PRIVATE src)
+    add_test(NAME spu_event_backend COMMAND nba97_spu_event_backend_tests)
+    add_executable(nba97_spu_events_tests tests/spu_events_tests.cpp src/recovered/spu_events.c
+        src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
+    target_compile_features(nba97_spu_events_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_spu_events_tests PRIVATE src)
+    add_test(NAME spu_events COMMAND nba97_spu_events_tests)
     add_executable(nba97_spu_sample_backend_tests tests/spu_sample_backend_tests.cpp src/spu_sample_backend.cpp
         src/recovered/spu_transfer.c src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
     target_compile_features(nba97_spu_sample_backend_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_spu_sample_backend_tests PRIVATE src)
     add_test(NAME spu_sample_backend COMMAND nba97_spu_sample_backend_tests)
-    add_executable(nba97_spu_transfer_mapping_tests tests/spu_transfer_mapping_tests.cpp src/spu_sample_backend.cpp
+    add_executable(nba97_spu_transfer_mapping_tests tests/spu_transfer_mapping_tests.cpp src/spu_sample_backend.cpp src/spu_event_backend.cpp
+        src/recovered/spu_events.c
         src/recovered/spu_transfer_mapping.c src/recovered/spu_transfer.c
         src/recovered/spu_heap_mapping.c src/recovered/spu_heap.c src/recovered/voice_mapping.c
         src/recovered/voice_patl_upload.c src/recovered/voice_mapping_table.c)
@@ -702,7 +714,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c
-    src/recovered/spu_transfer.c src/recovered/spu_transfer_mapping.c src/spu_sample_backend.cpp
+    src/recovered/spu_transfer.c src/recovered/spu_transfer_mapping.c src/spu_sample_backend.cpp src/recovered/spu_events.c src/spu_event_backend.cpp
     src/recovered/game_text_objects.c src/recovered/game_text_pools.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
     src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
     src/recovered/game_substitution_support.c

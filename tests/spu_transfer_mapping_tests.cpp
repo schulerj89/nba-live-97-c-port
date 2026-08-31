@@ -1,6 +1,7 @@
 #include "recovered/spu_transfer_mapping.h"
 #include "recovered/spu_heap_mapping.h"
 #include "spu_sample_backend.hpp"
+#include "spu_event_backend.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -29,13 +30,17 @@ struct Fixture {
     Nba97VoiceMapping mapping{};
     Nba97VoiceMappingProgress progress{};
     Backend device;
+    nba97::SpuEventBackend events;
     nba97::SpuSampleIoContext binding{&device,1,nullptr,nullptr};
+    nba97::SpuEventIoContext eventBinding{&events,&device,1,nullptr,nullptr};
+    std::array<Nba97SpuEventsEvent,128> eventJournal{};
+    Nba97SpuEventsProgress eventProgress{};
     uint32_t handle=0;
     bool service=true;
     unsigned copied=0,interrupts=0;
     Fixture() {
         const uint32_t bases[]={0x800c7500u,Descriptors,0x800c6d2cu,0x800f9600u,Map,Body};
-        const size_t sizes[]={0x600,129*8,2,4,64,128};
+        const size_t sizes[]={0xa00,129*8,2,4,64,128};
         for(size_t i=0;i<spans.size();++i) {
             bytes[i].assign(sizes[i],0xcd);known[i].assign(sizes[i],0);
             spans[i]={bytes[i].data(),known[i].data(),sizes[i],bases[i],1,1,0};
@@ -45,8 +50,9 @@ struct Fixture {
         transferBridge.io=io;transferBridge.io_context=this;transferBridge.access_budget=10000;
         transferBridge.journal=transferJournal.data();transferBridge.journal_capacity=transferJournal.size();
         mapping={{spans.data(),spans.size()},nba97_spu_heap_mapping_invoke,&heapBridge,10000};
-        // Declared retained entry state and owned padding for this composition.
-        // No claim that original hardware/interrupt startup already executed.
+        // Declared earlier controller/device entry and owned padding. Actual
+        // SPU event startup executes below; full ResetCallback/hardware startup
+        // remains separate and is not implied by these incoming values.
         put(0x800c75ecu,3);put(0x800c75f4u,7);put(0x800c762cu,0);
         put(0x800c75e8u,1);put(0x800c75f0u,8);put(0x800c75f8u,0);
         put(0x800c75fcu,0);put(0x800c6d2cu,0,1);put(0x800f9600u,0);
@@ -62,11 +68,23 @@ struct Fixture {
         check(device.importRegister(Backend::TransferControl,2,{4,1}));
         check(device.importRegister(Backend::Dpcr,4,{0x80000,1}));
         check(device.importRegister(Backend::BusDelay,4,{0,1}));
-        check(device.openEvent(0xf0000009,0x20,0x2000,0,handle));
-        check(handle!=0&&device.enableEvent(handle));put(0x800c7678u,handle);
+        put(0x800c7a80u,0);put(0x800c7dc4u,0x800c7dacu);put(0x800c7db0u,0x8007fdb8u);
+        put(0x800c7e38u,1,2);put(0x800c7e4cu,0);
+        put(0x800c7e30u,nba97::SpuEventBackend::IrqMask);put(0x800c7e5cu,nba97::SpuEventBackend::Dicr);
+        check(events.importRegister(nba97::SpuEventBackend::IrqMask,2,{0x7ff,1}));
+        check(events.importRegister(nba97::SpuEventBackend::Dicr,4,{0,1}));
+        check(eventOperation(NBA97_SPU_EVENTS_INITIALIZE_7E4C4)==1);
+        handle=get(0x800c7678u);
+        check(handle!=0&&get(0x800c7e4cu)==0x8007d668u&&get(0x800c7a80u)==1);
+        check(eventProgress.completed&&!eventProgress.returned.known);
+        check(events.criticalEnabled().known&&events.criticalEnabled().word==1);
     }
     void put(uint32_t at,uint32_t value,uint32_t width=4) { check(nba97_voice_patl_write(&mapping.memory,at,width,value)==1); }
     uint32_t get(uint32_t at,uint32_t width=4) { uint32_t value=0;check(nba97_voice_patl_read(&mapping.memory,at,width,&value)==1);return value; }
+    int eventOperation(Nba97SpuEventsOperation operation) {
+        Nba97SpuEvents owner{mapping.memory,nba97::SpuEventBackend::io,&eventBinding,10000};
+        return nba97_spu_events(&owner,operation,0,0,0,0,eventJournal.data(),eventJournal.size(),&eventProgress);
+    }
     static int io(void* opaque,const Nba97VoicePatlMemory* memory,const Nba97SpuTransferEvent* event,Nba97SpuTransferValue* result) {
         auto& f=*static_cast<Fixture*>(opaque);
         check(memory->spans==f.mapping.memory.spans&&memory->count==f.mapping.memory.count);
@@ -103,6 +121,15 @@ void actual_upload_and_unload() {
     f.heapBridge.progress={};result=nba97_voice_mapping_unload(&f.mapping,Map,&f.progress);
     check(result.completion==1&&result.value==0&&f.get(Descriptors)==0x40001010);
     check(f.device.samples()==samples&&f.device.known()==known&&f.get(Map+0x2c)==0x1010);
+    check(f.eventOperation(NBA97_SPU_EVENTS_SHUTDOWN_7E81C)==1);
+    check(f.events.closedHandle(f.handle)&&f.get(0x800c7678u)==f.handle);
+    check(f.get(0x800c7a80u)==0&&f.get(0x800c7e4cu)==0&&f.events.criticalEnabled().word==1);
+    check(f.device.testEvent(f.handle,event).status==nba97::SpuSampleStatus::InvalidEvent);
+    check(f.device.samples()==samples&&f.device.known()==known);
+    auto oldHandle=f.handle;
+    check(f.eventOperation(NBA97_SPU_EVENTS_INITIALIZE_7E4C4)==1);
+    f.handle=f.get(0x800c7678u);
+    check(f.handle!=oldHandle&&f.device.testEvent(f.handle,event)&&event==0);
 }
 void stereo_rounding_and_source_failure() {
     {Fixture f;f.put(Map+6,2,1);auto result=f.upload();
