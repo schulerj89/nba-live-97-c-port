@@ -10,6 +10,10 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_plate_tests tests/frontend_plate_test.cpp src/frontend_plate.cpp)
+    target_compile_features(nba97_frontend_plate_tests PRIVATE cxx_std_17)
+    target_include_directories(nba97_frontend_plate_tests PRIVATE src)
+    add_test(NAME frontend_plate COMMAND nba97_frontend_plate_tests)
     add_executable(nba97_team_select_text_tests tests/team_select_text_test.cpp
         src/recovered/team_select_text.c src/recovered/roster_reorder.c
         src/recovered/roster_lists.c)
@@ -217,7 +221,7 @@ if(BUILD_TESTING)
         src/recovered/reorder_screen.c src/recovered/roster_reorder.c
         src/recovered/roster_lists.c src/recovered/create_player.c
         src/recovered/semantic_trace.c)
-    target_sources(nba97_reorder_child_tests PRIVATE src/recovered/match_setup.c src/recovered/team_select.c src/roster_ratings.cpp)
+    target_sources(nba97_reorder_child_tests PRIVATE src/recovered/match_setup.c src/recovered/team_select.c src/roster_ratings.cpp src/frontend_plate.cpp)
     target_compile_features(nba97_reorder_child_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_reorder_child_tests PRIVATE src)
     target_sources(nba97_reorder_child_tests PRIVATE src/recovered/roster_compare.c)
@@ -365,7 +369,7 @@ endif()
 target_compile_features(nba97_boot_decomp PRIVATE c_std_99 cxx_std_17)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select_poll.c src/recovered/team_select_placement.c
     src/recovered/team_select_text.c)
-target_sources(nba97_boot_decomp PRIVATE src/recovered/match_setup.c src/recovered/match_controls.c
+target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/match_setup.c src/recovered/match_controls.c
     src/match_controls.cpp src/match_assets.cpp src/match_snapshot.cpp src/roster_ratings.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)

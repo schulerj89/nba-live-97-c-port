@@ -27,6 +27,7 @@
     "audio_source_comparison": "Cursor u7 gain and integer pitch match2401 source pitch values,1352 synthetic gain cases and132 actual-bank cases. Four hand-seeded actual cue/Circle dispatches match original first-candidate state including rejections. See docs/cursor_audio_workflow.md; allocation acceptance assumed, full history and SPU output pending.",
     "native_audio": "36 independent export cases/640440 samples match declared native ADPCM + source scalars + linear interpolation; speech behavior unchanged; not original hardware waveform equivalence",
     "original_visual_timing_audio": "pending",
+    "plate_sampling": "Original both-page XY/UV equality and opaque foreground order verified; identity samples replace rectangular warping. Missing edge samples require actual opaque frame coverage; exact GPU raster/VRAM/full-frame equivalence pending. Shared helper and authored-pixel checks: docs/frontend_plate_workflow.md. Zero new instruction credit.",
     "live_physical_walkthrough": "pending",
     "state5_confirmation": "assignment/editor/Help/warnings/delete, v2 transactions and owned partial snapshot implemented; see user_setup.json and match_setup.json; original runtime and gameplay pending"
   },

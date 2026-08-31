@@ -1,6 +1,7 @@
 #include "main_menu.hpp"
 #include "create_player_preview.hpp"
 #include "frontend_title.hpp"
+#include "frontend_plate.hpp"
 #include "team_select_assets.hpp"
 #include "user_setup_assets.hpp"
 #include "recovered/semantic_trace.h"
@@ -88,31 +89,6 @@ void blitRotatedClockwise(PshImage& destination, const PshImage& source,
             const int dy = target_y + sx;
             putPixel(destination, dx, dy, source.rgba[from], source.rgba[from + 1],
                      source.rgba[from + 2], source.rgba[from + 3]);
-        }
-    }
-}
-
-void blitReorderPlate(PshImage& destination, const PshImage& source, int x, int y, int side) {
-    // 8009370C/80093714, interpreted by 80034A5C: two fixed, four-corner
-    // plate shapes. Ordinary native textured triangles, not a GPU emulator.
-    static constexpr int quads[2][8] = {{0,0,86,10,0,58,106,60}, {20,10,106,0,0,60,106,58}};
-    const auto& q = quads[side];
-    static constexpr int triangles[2][3] = {{0,1,2}, {1,3,2}};
-    for (const auto& t : triangles) {
-        const int a=t[0], b=t[1], c=t[2];
-        const double denominator = (q[2*b+1]-q[2*c+1])*(q[2*a]-q[2*c]) +
-                                   (q[2*c]-q[2*b])*(q[2*a+1]-q[2*c+1]);
-        for (int yy=0; yy<60; ++yy) for (int xx=0; xx<106; ++xx) {
-            const double u=((q[2*b+1]-q[2*c+1])*(xx+0.5-q[2*c]) +
-                            (q[2*c]-q[2*b])*(yy+0.5-q[2*c+1]))/denominator;
-            const double v=((q[2*c+1]-q[2*a+1])*(xx+0.5-q[2*c]) +
-                            (q[2*a]-q[2*c])*(yy+0.5-q[2*c+1]))/denominator;
-            const double w=1-u-v;
-            if (u<0 || v<0 || w<0) continue;
-            const int sx=std::clamp(static_cast<int>((u*(a&1)+v*(b&1)+w*(c&1))*source.width),0,int(source.width)-1);
-            const int sy=std::clamp(static_cast<int>((u*(a>>1)+v*(b>>1)+w*(c>>1))*source.height),0,int(source.height)-1);
-            const auto at=(static_cast<std::size_t>(sy)*source.width+sx)*4;
-            if(source.rgba[at+3]) putPixel(destination,x+xx,y+yy,source.rgba[at],source.rgba[at+1],source.rgba[at+2]);
         }
     }
 }
@@ -641,16 +617,21 @@ PshImage renderTeamSelect(const Nba97TeamSelect& state, const Nba97TeamRanks& ra
     PshImage image;image.width=512;image.height=240;image.tag="TSEL";
     image.rgba.resize(512*240*4);
     assets.backgrounds().draw(image,palette);
-    for(int z=4;z>=1;--z) {
-        for(unsigned i=4;i<18;++i) {
+    for(int z=17;z>=1;--z) {
+        // 6763C prepends within a depth bucket: logos19/18 precede title5.
+        if(z==3) {
+            for(int side=1;side>=0;--side) {
+                const auto& frame=assets.layout()[16+side];
+                if(frame.z>=3)throw std::runtime_error("Team Select plate needs a later foreground frame");
+                drawFrontendPlate(image,sprites.at(assets.team(state.team[side]).logo),side?40:370,16,side?0:1,
+                                  sprites.at(frame.tag),frame.x,frame.y);
+            }
+        }
+        for(int i=17;i>=4;--i) {
             const auto& item=assets.layout()[i];if(item.z!=z) continue;
             const auto& texture=sprites.at(item.tag);
             if(i==5 && title_corners) drawFrontendTitle(image,texture,title_corners);
             else blitAt(image,sprites,item.tag.c_str(),item.x,item.y);
-        }
-        if(z==3) {
-            blitReorderPlate(image,sprites.at(assets.team(state.team[0]).logo),370,16,1);
-            blitReorderPlate(image,sprites.at(assets.team(state.team[1]).logo),40,16,0);
         }
     }
     const auto text=[&](const PshFont& face,const std::string& value,int x,int y,
@@ -699,21 +680,24 @@ PshImage renderUserSetup(const Nba97UserSetup& state,const Nba97UserNames& names
                         const int16_t* title_corners,const std::array<Nba97ReorderTint,8>* editor_tints,bool edit_help) {
     PshImage image;image.width=512;image.height=240;image.tag="USER";image.rgba.resize(512*240*4);
     teams.backgrounds().draw(image,palette);
-    for(int z=4;z>=1;--z) {
-        for(unsigned i=4;i<18;++i) {
+    // State5 uses its own source depths: border13, logos9, frames8,
+    // markers/title3 and Help1. 31F48 copies these without normalization.
+    // Retained marker positions remain authoritative within their bucket.
+    for(int z=17;z>=1;--z) {
+        for(int i=34;i>=4;--i) {
             const auto& item=assets.layout()[i];if(item.z!=z) continue;
-            if(i==5 && title_corners) drawFrontendTitle(image,sprites.at(item.tag),title_corners);
+            if(i>=33) {
+                const int side=i-33;
+                const auto& frame=assets.layout()[16+side];
+                if(frame.z>=item.z)throw std::runtime_error("User Setup plate needs a later foreground frame");
+                drawFrontendPlate(image,sprites.at(teams.team(side?away:home).logo),item.x,item.y,side?0:1,
+                                  sprites.at(frame.tag),frame.x,frame.y);
+            }
+            else if(i>=18) blitAt(image,sprites,item.tag.c_str(),placement.marker_x[i-18],placement.marker_y[i-18]);
+            else if(i==5 && title_corners) drawFrontendTitle(image,sprites.at(item.tag),title_corners);
             else blitAt(image,sprites,i==4 && edit_help ? "hel2":item.tag.c_str(),item.x,item.y);
         }
-        if(z==3) {
-            blitReorderPlate(image,sprites.at(teams.team(home).logo),370,16,1);
-            blitReorderPlate(image,sprites.at(teams.team(away).logo),40,16,0);
-        }
     }
-    // Retained source placements are authoritative. A physical disconnect or
-    // early input mutation cannot bypass the timed/current-row tail boundary.
-    for(unsigned i=0;i<15;++i)
-        blitAt(image,sprites,assets.layout()[18+i].tag.c_str(),placement.marker_x[i],placement.marker_y[i]);
     const unsigned count=nba97_user_setup_row_count(topology);
     for(unsigned row=0;row<count;++row) {
         const auto p=static_cast<unsigned>(nba97_user_setup_physical(topology,row));
@@ -2385,7 +2369,7 @@ PshImage renderCompareScreen(const Nba97CompareRefresh& refresh, const RosterDat
         const auto* player=db.player(s.player[side]);
         if(!frame || !plate || !player || portraits[side].width!=87 || portraits[side].height!=51)
             throw std::runtime_error("missing original Compare portrait/frame/player");
-        blitReorderPlate(image,*plate,side ? 370 : 40,16,side);
+        drawFrontendPlate(image,*plate,side ? 370 : 40,16,side,*frame,side ? 368 : 30,15);
         blitInsideFrame(image,portraits[side],*frame,side ? 386 : 54,22,side ? 368 : 30,15);
         blitAt(image,sprites,side ? "frmr" : "frml",side ? 368 : 30,15);
         // 5A280 stores object x256/512; 3B26C adds manager x-offset -128
@@ -2466,7 +2450,7 @@ PshImage renderReorderScreen(const Nba97ReorderScreen& screen,
         // 54/386,22. Objects 20/21 are the authored plate underneath it.
         const auto* plate = sprite(sprites, p ? "111p" : "110p");
         if (!plate) throw std::runtime_error("missing Re-order plate");
-        blitReorderPlate(image, *plate, p ? 370 : 40, 16, p);
+        drawFrontendPlate(image, *plate, p ? 370 : 40, 16, p,*frame,frame_x,15);
         blitInsideFrame(image, portraits[p], *frame, p ? 386 : 54, 22, frame_x, 15);
         blitAt(image, sprites, frame_tag, frame_x, 15);
     }
@@ -2510,7 +2494,7 @@ PshImage renderTradeScreen(const Nba97TradeScreen& s,const MenuSpritePack& sprit
         const auto* frame=sprite(sprites,p?"frmr":"frml");
         const auto* plate=sprite(sprites,p?"111p":"110p");
         if(!frame || !plate) throw std::runtime_error("missing Trade portrait aperture");
-        blitReorderPlate(im,*plate,p?370:40,16,p);
+        drawFrontendPlate(im,*plate,p?370:40,16,p,*frame,p?368:30,15);
         blitInsideFrame(im,portraits[p],*frame,p?386:54,22,p?368:30,15);
         blitAt(im,sprites,p?"frmr":"frml",p?368:30,15);
         for(int down=0;down<2;++down) if(down?s.top[p]<(s.team[p]==29?94:9):s.top[p]>0) {

@@ -5,6 +5,11 @@ pages, capacity/full/duplicate warnings, delete choices and native profile
 transactions. This does not complete Team Select or gameplay. Original runtime,
 visual, timing, audio and physical-input comparisons remain pending.
 
+The later [frontend plate checkpoint](frontend_plate_workflow.md) restores the
+source depth order (borders13, logos9, frames8, markers/title3, Help1) and corrects
+logo sampling. Earlier deterministic captures did not detect the missing
+high-depth graphics; direct authored-pixel checks now cover that boundary.
+
 ## Recovered behavior
 
 Team Select Start waits for changed input before entering state5 owner80037010.

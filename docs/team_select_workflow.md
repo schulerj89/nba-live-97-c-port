@@ -14,7 +14,7 @@ Quarter/mode/level are session state; style shares FrontendSettings/Rules in
 memory. This work does not extend the settings file format or add autosaving.
 Season/playoff Start routes remain pending and cannot silently enter exhibition.
 
-Team Select uses ZSET1, title ba08, original fonts, layout, deformed logos,
+Team Select uses ZSET1, title ba08, original fonts, layout, shaped logo plates,
 two indexed team palettes, ordinal ranks, tint and Help. Home is RIGHT and starts
 at ID3; away is LEFT and starts at ID24. Name scans use IDs0..30. The other five
 criteria scan category ranks, not numeric team IDs. IDs29/30 are All-Star teams,
@@ -192,6 +192,12 @@ restart retention; that exact altered-cache oracle comparison is separate
 private audit evidence, not original modified-roster runtime equivalence.
 
 ## Evidence tiers and remaining work
+
+The [frontend plate checkpoint](frontend_plate_workflow.md) corrects source UV
+sampling and verifies actual foreground occlusion for unavailable edge texels.
+It also restores User Setup's descriptor depths and missing frames/borders.
+Original primitive and ordering evidence is bounded; full GPU pixels remain
+pending and no additional instruction credit is assigned.
 
 The subsequent [match presentation checkpoint](match_presentation_workflow.md)
 fills the accepted ordinary-exhibition snapshot's21DF4 byte using the existing

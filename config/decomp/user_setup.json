@@ -14,6 +14,7 @@
     "native_rendering": "two-run deterministic frames; original-font inline baseline plus independent retained label/marker target pixel checks",
     "placement_source_comparison": "11895 private compiled-C/original-MIPS target and tint assertions; 7 extracted-host save/delete/modal paths; controlled fixtures, not a live original run",
     "original_visual_timing_audio": "pending",
+    "plate_depth_sampling": "Source descriptor depths restored: borders13, logos9, frames8, markers/title3, Help1, reverse indices per bucket. Identity logo sampling with checked foreground occlusion; direct asset-pixel checks. Full original state5 runtime/GPU equivalence pending; docs/frontend_plate_workflow.md.",
     "live_physical_walkthrough": "pending",
     "editor": "implemented; private independent MIPS comparison4554 valid,17 legacy,33 boundaries; malformed fallback unclaimed",
     "persistence": "v1 readable, v2 fixed slots/control bytes; native exact-name transactions, rollback/CAS/backup tests; not retail memory-card scheduling",

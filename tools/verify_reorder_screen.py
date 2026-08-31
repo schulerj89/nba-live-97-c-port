@@ -141,8 +141,8 @@ def main():
         audio_run=subprocess.run([str(audio_exe),str(ROOT/'.local/assetpacks/menu')],cwd=ROOT,
             capture_output=True,text=True,timeout=30,check=True)
         audio_checks=re.findall(r'^AUDIO PASS (\w+)$',audio_run.stdout,re.MULTILINE)
-        assert audio_checks==['volume_256_inputs','speech_256_settings_and_stop_feedback','synthetic_12_levels_exact_pcm_and_pitch',
-            'mute_skips_bank_and_device','synthetic_cool_fact_reserved_record_and_player_boundary',
+        assert audio_checks==['volume_256_inputs','speech_256_settings_and_stop_feedback','synthetic_168_cursor_levels_double_floor_gain_and_quantized_pitch',
+            'cursor_source_rejections_atomic_info_output_and_mute_callback_guard','synthetic_cool_fact_reserved_record_and_player_boundary',
             'synthetic_speech_24_gain_vectors_and_prepare_isolation','synthetic_speech_truncations_and_invalid_tones',
             'private_144_cue_levels_exact_pcm_and_pitch','private_2465_speech_mappings_and_six_clip_payloads',
             'private_speech_72_gain_vectors'], 'incomplete audio tests'
@@ -164,15 +164,16 @@ def main():
         help_run = subprocess.run([str(help_exe), str(ROOT/'.local/assetpacks')], cwd=ROOT,
             capture_output=True, text=True, timeout=30, check=True)
         help_checks = re.findall(r'^HELP PASS (\w+)$',help_run.stdout,re.MULTILINE)
-        assert len(help_checks)==10 and len(set(help_checks))==10, 'incomplete Help native test run'
+        assert len(help_checks)==11 and len(set(help_checks))==11 and \
+            'invalid_open_leaves_state_untouched' in help_checks, 'incomplete Help native test run'
         database = ROOT / '.local/assetpacks/database/roster.n97db'
         before = sha(database)
         child_exe = ROOT / 'build-windows/Debug/nba97_reorder_child_tests.exe'
         child_run = subprocess.run([str(child_exe),str(database)],cwd=ROOT,
             capture_output=True,text=True,timeout=30,check=True)
         child_checks = re.findall(r'^CHILD PASS (\w+)$',child_run.stdout,re.MULTILINE)
-        assert len(child_checks)==26 and len(set(child_checks))==26, 'incomplete child native test run'
-        assert {'synthetic_view_team_scan_338_slot_retention_cases',
+        assert len(child_checks)==27 and len(set(child_checks))==27, 'incomplete child native test run'
+        assert {'release_card_availability_navigation', 'synthetic_view_team_scan_338_slot_retention_cases',
                 'synthetic_view_layout24_single_group_refresh', 'synthetic_view_empty_team_guard',
                 'synthetic_view_all_normal_team_slots_scan_both_directions',
                 'private_view_all_normal_team_slots_scan_both_directions'} <= set(child_checks), \
@@ -850,6 +851,7 @@ def main():
             original_overlay_sha256=sha(overlay),
             asset_sha256={name:sha(ROOT/'.local/assetpacks'/name) for name in assets},
             source_sha256={name:sha(ROOT/name) for name in ['src/win32_main.cpp','src/main_menu.cpp',
+                'src/frontend_plate.cpp','src/frontend_plate.hpp','tests/frontend_plate_test.cpp',
                 'src/recovered_audio.cpp','src/recovered_audio.hpp','src/psx_adpcm.cpp',
                 'src/recovered/frontend_audio.c','src/recovered/frontend_audio.h',
                 'src/frontend_settings.cpp','src/frontend_settings.hpp','tests/recovered_audio_test.cpp',

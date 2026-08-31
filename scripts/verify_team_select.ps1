@@ -22,7 +22,7 @@ Push-Location $repo
 try {
     if(-not $SkipBuild) { & "$PSScriptRoot/build.ps1" -Configuration $Configuration -AllTargets; if($LASTEXITCODE) {throw 'Build failed'} }
     $exe=Join-Path $repo "build-windows/$Configuration/nba97_boot_decomp.exe"
-    foreach($test in @('team_select','team_select_poll','team_select_placement','team_select_text','team_ratings','user_setup','user_setup_session','user_setup_visibility','user_profiles','match_controls','match_snapshot','match_presentation','frontend_help','frontend_help_presentation','frontend_audio_scalars','win32_keyboard')) {
+    foreach($test in @('team_select','team_select_poll','team_select_placement','team_select_text','team_ratings','user_setup','user_setup_session','user_setup_visibility','user_profiles','match_controls','match_snapshot','match_presentation','frontend_plate','frontend_help','frontend_help_presentation','frontend_audio_scalars','win32_keyboard')) {
         & (Join-Path $repo ("build-windows/{0}/nba97_{1}_tests.exe" -f $Configuration,$test))
         if($LASTEXITCODE) {throw "$test failed"}
     }
@@ -46,6 +46,8 @@ try {
             '--created-players',"$run/created.n97cpl",'--roster-save',"$run/rosters.n97rst",'--trace',"$run/trace.log")
         & $exe @captureArgs *> "$run/stdout.log"
         if($LASTEXITCODE) {Get-Content "$run/stdout.log" -Tail 12;throw "$name capture failed"}
+        python tools/verify_frontend_plate.py --frames "$run/frames" --assets "$repo/.local/assetpacks"
+        if($LASTEXITCODE) {throw "$name authored logo/frame/border pixels failed"}
     }
     $verifyArgs=@('tools/verify_team_select.py','--first',"$root/first/frames",'--second',"$root/second/frames")
     if($OriginalRanks) {$verifyArgs+=@('--original-ranks',$OriginalRanks)}
