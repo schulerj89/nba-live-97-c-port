@@ -33,6 +33,9 @@ public:
     // self-copy is refused until the GPU overlap domain has independent proof.
     GameRenderBackendResult move(Nba97GameImageRect, std::int32_t x, std::int32_t y);
     bool word(std::size_t x, std::size_t y, std::uint16_t& value) const;
+    // A completed native drawing operation establishes exactly one VRAM word.
+    // No implicit clear, mask test, blend, wrapping or invented prior value.
+    bool drawWord(std::size_t x, std::size_t y, std::uint16_t value);
 
 private:
     std::vector<std::uint16_t> words_;

@@ -53,6 +53,10 @@ Result checkSdkLimits(const GameRenderBackend& backend, Nba97GameImageRect rect)
 }
 
 GameVramWords::GameVramWords() : words_(Width * Height), known_(Width * Height) {}
+bool GameVramWords::drawWord(std::size_t x,std::size_t y,std::uint16_t value) {
+    if(x>=Width||y>=Height)return false;
+    words_[y*Width+x]=value;known_[y*Width+x]=1;return true;
+}
 
 Result GameVramWords::upload(Nba97GameImageRect r, const Nba97GameImageReference& source) {
     if (!validRect(r)) return Result::RectangleUnsupported;

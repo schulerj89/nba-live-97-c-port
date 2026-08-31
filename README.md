@@ -66,9 +66,13 @@ The newer [tipoff continuation](docs/game_tipoff_phase_workflow.md) and
 [ball-release owner](docs/game_ball_release_workflow.md) compose in source
 comparisons, ending with a loose ball in phase `82`, not completed possession.
 The [court pass](docs/game_court_packets_workflow.md) calculates projected
-coordinates and builds draw packets using native integer geometry; it does not
-rasterize a court or produce a playable frame. Its checkpoint passes 125 Windows
-and 121 Linux core tests locally; those tests do not establish live gameplay.
+coordinates and builds draw packets using native integer geometry. Its flat and
+textured test packets now reach a [native pixel renderer](docs/game_packet_renderer_workflow.md).
+The [player part-matrix owner](docs/game_player_geometry_workflow.md) also produces
+the original hand endpoints. These components are not yet connected into a
+live court or playable frame; component tests do not establish live gameplay.
+The current checkpoint passes all 127 Windows tests in both build configurations
+and all 123 Linux core tests locally.
 
 Recovered game behavior is moving into portable C modules under
 `src/recovered/`. C++ owns native resources, adapters and the Win32 frontend,

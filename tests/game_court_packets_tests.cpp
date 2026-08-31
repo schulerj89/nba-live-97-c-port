@@ -1,4 +1,5 @@
 #include "game_court_geometry.hpp"
+#include "game_packet_renderer.hpp"
 #include <array>
 #include <cstdint>
 #include <iostream>
@@ -179,6 +180,30 @@ void frameCases(){
     require(bank.run(bp)==1&&bp.quads==0,"special group hidden on zero bank");
     bank.put(0x8001ede8,4,1);require(bank.run(bp)==1&&bp.quads==1,"special group visible on nonzero bank");
 }
+void pixelsFromCourtPackets(){
+    // Explicit camera/resources are fixtures, not a natural match capture.
+    // Projection and packet links below are produced by the recovered owner.
+    for(bool textured:{false,true}){
+        Fixture f;f.put(1024,4,0x00ffffff);f.put(516,4,textured?0x2d808080u:0x280000f8u);
+        if(textured){f.put(524,4,0);f.put(532,4,(0x11au<<16)|32);f.put(540,4,32u<<8);f.put(548,4,0x2020);}
+        Nba97CourtProgress p{};
+        require(f.run(textured?NBA97_COURT_FIXED_TEXTURED_54D4C:NBA97_COURT_FIXED_FLAT_54E50,p)==NBA97_COURT_COMPLETE,"court produces actual linked packets");
+        nba97::GameVramWords vram;nba97::GamePacketRenderer renderer(vram);nba97::GameDrawProgress draw;
+        renderer.state={0,0,0,511|(239u<<10),0,0,63,{true,false,false,0,0,0,0,0}};
+        if(textured)for(unsigned y=0;y<32;++y)for(unsigned x=0;x<32;++x)vram.drawWord(640+x,256+y,std::uint16_t(1+((x+y)&30)));
+        auto read=[](void* user,std::uint32_t low,std::uint32_t& word){
+            Nba97CourtValue v{};const auto status=Fixture::access(user,0,0x80000000u|low,4,0,&v);
+            if(status!=NBA97_COURT_COMPLETE)return nba97::GamePacketResult::PacketUnavailable;
+            if(!v.known)return nba97::GamePacketResult::UnknownState;
+            word=v.word;return nba97::GamePacketResult::Complete;
+        };
+        require(renderer.drawOrderingTable(read,&f,Table&0xffffff,4,draw)==nba97::GamePacketResult::Complete,"native court packets reach pixel backend");
+        require(draw.completed&&draw.links==2&&draw.pixels==1024,"full projected quad rendered once");
+        for(unsigned y=0;y<32;++y)for(unsigned x=0;x<32;++x){std::uint16_t value=0;
+            require(vram.word(240+x,104+y,value)&&value==(textured?1+((x+y)&30):31),"court projection texture and strip ordering compose");}
+        std::uint16_t outside=0;require(!vram.word(272,104,outside)&&!vram.word(240,136,outside),"court quad boundary remains untouched");
+    }
 }
-int main(){try{packetCases();linkCases();mathCases();frameCases();std::cout<<checks<<" court checks passed\n";return 0;}
+}
+int main(){try{packetCases();linkCases();mathCases();frameCases();pixelsFromCourtPackets();std::cout<<checks<<" court checks passed\n";return 0;}
     catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

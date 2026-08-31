@@ -10,8 +10,19 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_player_geometry_tests tests/game_player_geometry_tests.cpp
+        src/recovered/game_player_geometry.c src/game_player_geometry.cpp)
+    target_compile_features(nba97_game_player_geometry_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_geometry_tests PRIVATE src)
+    add_test(NAME game_player_geometry COMMAND nba97_game_player_geometry_tests)
+    add_executable(nba97_game_packet_renderer_tests tests/game_packet_renderer_tests.cpp
+        src/game_packet_renderer.cpp src/game_render_backend.cpp src/recovered/game_image_upload.c)
+    target_compile_features(nba97_game_packet_renderer_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_packet_renderer_tests PRIVATE src)
+    add_test(NAME game_packet_renderer COMMAND nba97_game_packet_renderer_tests)
     add_executable(nba97_game_court_packets_tests tests/game_court_packets_tests.cpp
-        src/recovered/game_court_packets.c src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp)
+        src/recovered/game_court_packets.c src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp
+        src/game_packet_renderer.cpp src/game_render_backend.cpp src/recovered/game_image_upload.c)
     target_compile_features(nba97_game_court_packets_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_court_packets_tests PRIVATE src)
     add_test(NAME game_court_packets COMMAND nba97_game_court_packets_tests)
@@ -768,6 +779,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_jump.c src/recovered/game_player_input.c src/match_input_edges.cpp
     src/recovered/game_tipoff_phase.c src/recovered/game_ball_release.c
     src/recovered/game_court_packets.c src/game_court_geometry.cpp
+    src/recovered/game_player_geometry.c src/game_player_geometry.cpp src/game_packet_renderer.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c
