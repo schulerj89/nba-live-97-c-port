@@ -111,6 +111,7 @@ int GamePlayerFrame::accessCallback(void* u,uint32_t pc,uint32_t a,unsigned w,un
 int GamePlayerFrame::childCallback(void* u,uint32_t,uint32_t entry){return u?static_cast<GamePlayerFrame*>(u)->child(entry):NBA97_BODY_ARGUMENT;}
 int GamePlayerFrame::mathCallback(void* u,const Nba97PlayerMathRequest* q,Nba97GamePeriodValue* v){if(!u||!q||!v)return NBA97_BODY_ARGUMENT;return static_cast<GamePlayerFrame*>(u)->math(*q,*v);}
 Nba97PlayerFrameContext GamePlayerFrame::context(std::size_t budget){return {accessCallback,mathCallback,childCallback,this,budget};}
+int GamePlayerFrame::bindContext(std::size_t budget,Nba97PlayerFrameContext& out){out={};int status=validateAddresses();if(status==NBA97_BODY_OK)out=context(budget);return status;}
 void GamePlayerFrame::resetProgress(){last_child=0;last_child_writes.clear();part_progress={};root_progress={};projection_progress={};}
 int GamePlayerFrame::run(std::size_t b,Nba97PlayerFrameProgress& p){p={};resetProgress();int s=validateAddresses();if(s!=NBA97_BODY_OK)return s;auto c=context(b);return nba97_game_player_frame(&c,&p);}
 int GamePlayerFrame::shadow(std::size_t b,Nba97PlayerFrameProgress& p){p={};resetProgress();int s=validateAddresses();if(s!=NBA97_BODY_OK)return s;auto c=context(b);return nba97_game_player_shadow(&c,&p);}

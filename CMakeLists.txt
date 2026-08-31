@@ -10,6 +10,54 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_frame_tests tests/game_match_frame_tests.cpp
+        src/recovered/game_match_frame.c)
+    target_compile_features(nba97_game_match_frame_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_frame_tests PRIVATE src)
+    add_test(NAME game_match_frame COMMAND nba97_game_match_frame_tests)
+    add_executable(nba97_game_match_frame_backend_tests tests/game_match_frame_backend_tests.cpp
+        src/recovered/game_match_frame.c src/game_match_frame.cpp
+        src/recovered/game_net.c src/game_net.cpp
+        src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp
+        src/recovered/game_ball_frame.c src/game_ball_frame.cpp
+        src/recovered/game_player_frame.c src/game_player_frame.cpp
+        src/recovered/game_player_root.c src/game_player_root.cpp
+        src/recovered/game_player_geometry.c src/game_player_geometry.cpp
+        src/recovered/game_player_projection.c src/game_player_projection.cpp
+        src/recovered/game_court_packets.c src/game_court_geometry.cpp
+        src/zdomf_projection.cpp src/zdomf_transform.cpp)
+    target_compile_features(nba97_game_match_frame_backend_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_frame_backend_tests PRIVATE src)
+    add_test(NAME game_match_frame_backend COMMAND nba97_game_match_frame_backend_tests)
+    add_executable(nba97_game_net_tests tests/game_net_tests.cpp
+        src/recovered/game_net.c src/game_net.cpp src/recovered/game_court_packets.c
+        src/game_player_projection.cpp src/game_player_root.cpp src/game_player_geometry.cpp
+        src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp)
+    target_compile_features(nba97_game_net_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_net_tests PRIVATE src)
+    add_test(NAME game_net COMMAND nba97_game_net_tests)
+    add_executable(nba97_game_ball_attachment_tests tests/game_ball_attachment_tests.cpp
+        src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp
+        src/recovered/game_player_frame.c src/game_player_frame.cpp
+        src/recovered/game_player_root.c src/game_player_root.cpp
+        src/recovered/game_player_geometry.c src/game_player_geometry.cpp
+        src/recovered/game_player_projection.c src/game_player_projection.cpp
+        src/recovered/game_court_packets.c src/game_court_geometry.cpp
+        src/zdomf_projection.cpp src/zdomf_transform.cpp)
+    target_compile_features(nba97_game_ball_attachment_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_ball_attachment_tests PRIVATE src)
+    add_test(NAME game_ball_attachment COMMAND nba97_game_ball_attachment_tests)
+    add_executable(nba97_game_court_startup_tests tests/game_court_startup_tests.cpp
+        src/recovered/game_court_startup.c)
+    target_compile_features(nba97_game_court_startup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_court_startup_tests PRIVATE src)
+    add_test(NAME game_court_startup COMMAND nba97_game_court_startup_tests)
+    add_executable(nba97_game_court_startup_services_tests tests/game_court_startup_services_tests.cpp
+        src/recovered/game_court_startup.c src/recovered/game_court_startup_services.c
+        src/recovered/game_heap_release.c)
+    target_compile_features(nba97_game_court_startup_services_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_court_startup_services_tests PRIVATE src)
+    add_test(NAME game_court_startup_services COMMAND nba97_game_court_startup_services_tests)
     add_executable(nba97_game_player_marker_resources_tests tests/game_player_marker_resources_tests.cpp
         src/recovered/game_player_marker_resources.c)
     target_compile_features(nba97_game_player_marker_resources_tests PRIVATE c_std_99 cxx_std_17)
@@ -838,6 +886,10 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_player_projection.c src/game_player_projection.cpp src/recovered/game_court_resources.c
     src/recovered/game_camera.c src/recovered/game_player_frame.c src/game_player_frame.cpp
     src/recovered/game_ball_frame.c src/game_ball_frame.cpp src/recovered/game_player_marker_resources.c
+    src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp
+    src/recovered/game_net.c src/game_net.cpp
+    src/recovered/game_court_startup.c src/recovered/game_court_startup_services.c
+    src/recovered/game_match_frame.c src/game_match_frame.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c

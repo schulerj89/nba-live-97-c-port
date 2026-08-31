@@ -80,12 +80,18 @@ ground-shadow packets through the same retained buffers and geometry. The
 [BALL/ASDW initializer](docs/game_player_marker_resources_workflow.md) prepares
 their textures and packet fields, plus player shadows and arrow templates,
 through explicit load, release, upload and synchronization boundaries. This is
-rendering work; natural resource loading, ball simulation, attachment and
-possession remain unconnected. Component tests pass initialized packets into
+rendering work; natural resource loading, ball simulation and possession
+remain unconnected. Component tests pass initialized packets into
 the ball/shadow pass after making both released source containers unavailable;
 the rendering owners do not read those containers again. A native packet-reader
 fix now permits unknown unused UV padding while still requiring every consumed
 packet byte; it does not initialize or change the retained source RAM.
+The new [frame driver](docs/game_match_frame_workflow.md) preserves the full
+original render-pass order and conditionally calls the native
+[ball attachment](docs/game_ball_attachment_workflow.md) owners. Its C++ adapter
+shares retained memory and projection state with the [net pass](docs/game_net_workflow.md),
+players and ball. Pose, camera, court, label and platform services still need
+connected providers; this does not launch gameplay from User Setup.
 The recovered
 [camera/controller path](docs/game_camera_workflow.md) produces camera state
 under explicit inputs; timing, pad/device and monitor effects still require
@@ -94,7 +100,11 @@ real providers. The bounded
 private XATL image data into retained VRAM. The separate
 [court-resource tail](docs/game_court_resources_workflow.md) normalizes loaded
 court data and prepares edge storage using the recovered allocator; neither
-slice implements the full court loader. These components are not yet connected
+slice implements the full court loader. The new
+[court startup bridge](docs/game_court_startup_workflow.md) recovers the
+intervening selection/load/sync/free order and composes the actual native heap
+release; preceding roster/context setup and real loading remain required.
+These components are not yet connected
 into a live court or playable frame. Diagnostic renders use fixture camera,
 entity and ordering state; they are **not gameplay captures**.
 Six private ball/reflection/shadow views now render from actual initialized
@@ -177,15 +187,17 @@ ctest --test-dir build-core -C Debug --output-on-failure
 python tools/report_progress.py --check
 ```
 
-Checkpoint 28 passes all **135 Windows CTests** in both Debug and
-RelWithDebInfo, and all **131 Linux core CTests** locally. Its GitHub run is
-pending publication; the preceding checkpoint, 27 (`90a0bcc`), passed 129 core tests in
-[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33431996636).
+Checkpoint 29 passes all **141 Windows CTests** in both Debug and
+RelWithDebInfo, and all **137 Linux core CTests** locally. Its GitHub run is
+pending publication; checkpoint 28 (`5f76fec`) passed 131 core tests in
+[GitHub Actions](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33435766647).
 The counts differ because four tests are Windows-specific. These are bounded
 regression results, not complete-game acceptance or new original-game captures.
-The ball-rendering and marker-resource updates also have separate original-source
-and initialized-packet composition comparisons, with their limits documented above.
-The local totals include fresh full-suite validation after the packet-reader fix.
+The frame driver, net, attachment and court-startup additions have separate
+source comparisons and bounded native integration checks. The frame sequencing
+comparison supplies explicit child-call fixtures; it does not prove a complete
+native frame. The Windows release build passed after retrying a system memory
+limit during linking with a serial build; no source change was needed.
 
 ## Keyboard controls
 

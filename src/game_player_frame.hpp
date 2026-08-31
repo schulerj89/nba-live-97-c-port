@@ -30,6 +30,12 @@ public:
     // Subsequent49300/49D34 passes share these exact buffers and geometry.
     int ball(std::size_t operation_budget,Nba97PlayerFrameProgress&);
     int ballShadow(std::size_t operation_budget,Nba97PlayerFrameProgress&);
+    int attachment(uint32_t entry,std::size_t operation_budget,
+                   Nba97GamePeriodValue& return_value,Nba97PlayerFrameProgress&);
+    // Borrow this owner's exact address/reference/knownness and math adapters
+    // for another recovered pass. Does not clear RAM, geometry or progress.
+    // The owner, descriptors and storage must outlive synchronous context use.
+    int bindContext(std::size_t operation_budget,Nba97PlayerFrameContext&);
 private:
     int validateAddresses() const;
     int locate(uint32_t,unsigned,Nba97GameBodyReference&) const;
