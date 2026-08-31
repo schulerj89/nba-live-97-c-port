@@ -7,7 +7,8 @@
 
 namespace nba97 {
 MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceView& source,
-        const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults) {
+        const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
+        const std::array<uint32_t,6>& frontend_rng) {
     if(request.users.result!=6 || nba97_user_setup_busy(&request.users))
         throw std::runtime_error("match snapshot requires accepted state5 result6");
     if(request.setup[0]>3 || request.setup[1]>2 || request.setup[2]>2 || request.setup[3]>2)
@@ -66,11 +67,18 @@ MatchSnapshot buildMatchSnapshot(const MatchRequest& request,const MatchSourceVi
         if(!nba97_match_roster_indices(&out.indices,count))
             throw std::runtime_error("match snapshot: invalid roster count");
     }
-    result.rules=source.settings.effectiveRules();result.custom_rules=source.settings.customRules();
-    for(unsigned i=0;i<11;++i)result.options[i]=source.settings.option(int(i));
     std::array<int8_t,8> selectors;
     std::copy_n(request.users.profile,8,selectors.begin());
     result.controls=finalizeMatchControls(live,selectors,source.profiles,defaults);
+    // Accepted ordinary exhibition: 61674(0), then46D24, then3E7A8.
+    // Preparation uses a copy; a refused native snapshot consumes no live RNG.
+    result.frontend_rng_before=frontend_rng;
+    result.frontend_rng_after=result.frontend_rng_before;
+    if(!nba97_match_presentation(&result.presentation,result.frontend_rng_after.data(),0,0))
+        throw std::runtime_error("match snapshot: presentation selection refused");
+    result.pending&=~MatchPresentationVariant;
+    result.rules=source.settings.effectiveRules();result.custom_rules=source.settings.customRules();
+    for(unsigned i=0;i<11;++i)result.options[i]=source.settings.option(int(i));
     return result;
 }
 
@@ -83,11 +91,13 @@ void MatchSession::initialize(const std::array<uint8_t,59>& defaults) {
     const auto initial=finalizeMatchControls({},none,{},defaults,true);
     defaults_=defaults;live_=initial.controls;initialized_=true;
 }
-const MatchSnapshot& MatchSession::capture(const MatchRequest& request,const MatchSourceView& source) {
+const MatchSnapshot& MatchSession::capture(const MatchRequest& request,const MatchSourceView& source,
+                                         std::array<uint32_t,6>& frontend_rng) {
     if(!initialized_)throw std::runtime_error("match controls: cold defaults not initialized");
     if(revision_==(std::numeric_limits<uint64_t>::max)())throw std::runtime_error("match snapshot revision exhausted");
-    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_));
+    auto next=std::make_unique<MatchSnapshot>(buildMatchSnapshot(request,source,live_,defaults_,frontend_rng));
     // All validation and allocation finished. Publication cannot fail.
+    frontend_rng=next->frontend_rng_after;
     live_=next->controls.controls;snapshot_=std::move(next);++revision_;return *snapshot_;
 }
 std::string matchSnapshotReceipt(const MatchSnapshot& s) {
@@ -98,7 +108,12 @@ std::string matchSnapshotReceipt(const MatchSnapshot& s) {
         out<<']';
     };
     out<<"{\"scope\":\"partial ordinary exhibition snapshot\",\"pending\":"<<s.pending<<
-        ",\"venue\":"<<unsigned(s.venue_selector)<<",\"launch_control\":"<<unsigned(s.launch_control)<<",\"setup\":";
+        ",\"venue\":"<<unsigned(s.venue_selector)<<",\"launch_control\":"<<unsigned(s.launch_control)<<
+        ",\"presentation\":{\"value\":"<<unsigned(s.presentation.value)<<
+        ",\"from_schedule\":"<<unsigned(s.presentation.from_schedule)<<
+        ",\"rng_draws\":"<<s.presentation.rng_draws<<",\"rejected_draws\":"<<s.presentation.rejected_draws<<
+        ",\"rng_before\":";array(s.frontend_rng_before);
+    out<<",\"rng_after\":";array(s.frontend_rng_after);out<<"},\"setup\":";
     array(s.request.setup);out<<",\"assignments\":";array(s.request.users.assignment);
     out<<",\"selectors\":";array(s.request.users.profile);
     out<<",\"controls_source\":";array(s.controls.provenance);

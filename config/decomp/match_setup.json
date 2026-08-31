@@ -4,7 +4,8 @@
   "instruction_policy": "Bounded full-function inventory for projections, not a transitive graph or additive whole-game progress. All credit remains zero. Previously inventoried controller/rating helpers are referenced, not counted again; existing rule-function records share ownership.",
   "instruction_denominators": {
     "roster_dependency": 253,
-    "rules_dependency": 148
+    "rules_dependency": 148,
+    "presentation_dependency": 30
   },
   "shared_inventory_references": [
     {
@@ -31,15 +32,29 @@
   ],
   "evidence": {
     "instruction_accounting": "pending per-block assignment",
-    "native_unit": "tests/match_snapshot_test.cpp and tests/match_controls_test.cpp",
-    "host_integration": "76 isolated Team Select/User Setup frames, two owned snapshot artifacts and explicit unsupported special-team refusal",
+    "native_unit": "tests/match_snapshot_test.cpp, tests/match_controls_test.cpp and tests/match_presentation_test.cpp",
+    "host_integration": "98 isolated Team Select/User Setup frames, four owned snapshot artifacts and explicit unsupported special-team refusal; presentation uses the existing shared RNG only after successful preparation",
     "original_isolated_instructions": "private raw-MIPS source oracle;544 roster and768 rule comparisons,1272 guard/alias checks,13 option mapping checks; no mismatches",
     "original_runtime": "pending",
     "original_visual_timing_audio": "pending",
     "live_physical_walkthrough": "pending",
-    "gameplay": "pending extension/presentation settings, special/created membership, gameplay side/overlay/scene initialization"
+    "presentation_source": "FEONLY46D24 scalar branch and shared7A538 effects implemented. Independent source comparisons: B23760 assertions/1584 cases; A625433 checks/78192 cases plus128 checks/16 accepted-Start cue/selection cases. C13 publication assertions and12 paired receipt mutations rejected. Debug/release48 CTests,98 host frames,264 flash frames and27 Create Player scenarios pass. Source and native evidence remain separate from live runtime; docs/match_presentation_workflow.md",
+    "gameplay": "pending extension settings, special/created membership, gameplay side/overlay/scene initialization"
   },
   "functions": [
+    {
+      "binary": "feonly",
+      "address": "0x80046D24",
+      "end_exclusive": "0x80046D9C",
+      "name": "Select match presentation byte",
+      "scope": "presentation_dependency",
+      "instructions_accounted": 0,
+      "instructions_total": 30,
+      "native_owner": "nba97_match_presentation; MatchSession ordinary exhibition publication",
+      "shared_dependencies": ["0x8007A538"],
+      "tests_evidence": ["tests/match_presentation_test.cpp", "tests/match_snapshot_test.cpp", "docs/match_presentation_workflow.md"],
+      "remaining_uncertainty": "Scalar mask/rejection and exact unsigned mode branch implemented. Mode1 schedule pointer resolution, complete frontend RNG history, live original acceptance and gameplay interpretation remain pending. The shared52-instruction RNG is not re-credited."
+    },
     {
       "binary": "gameonly",
       "address": "0x80063D58",

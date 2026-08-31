@@ -33,6 +33,12 @@ Success returns6. Dispatcher calls80061674,80046D24,8003E7A8 and finishes the
 frontend.80061674(0) retains previous control settings for FE/FF profile
 sentinels; it does not always install defaults.
 
+The ordinary-exhibition snapshot now also implements80046D24's presentation
+byte21DF4, including rejected shared-RNG draws and atomic native publication.
+The accepted Start cue precedes this selection. No seed is installed at this
+boundary. See match_presentation_workflow.md; original runtime acceptance and
+the presentation byte's later gameplay interpretation remain pending.
+
 The independent owner61674 (77 instructions) now has a pure C implementation
 and read-only fixed-slot adapter; see match_controls_workflow.md. It clears36 statistic bytes
 per controller; retain all59 live control bytes for FE/FF; copy saved controls

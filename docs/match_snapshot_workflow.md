@@ -32,6 +32,9 @@ The snapshot contains:
   object is not mutated by capture.
 - Owned live maps/provenance, selected stable profile IDs, and the complete
   created-player catalogue with an explicit unresolved-membership flag.
+- The source-selected presentation byte and owned before/after shared RNG
+  words, committed only after successful preparation. See
+  [presentation selection](match_presentation_workflow.md).
 
 Ordinary exhibition retains source venue selector8001EC94=0 (u32), launch
 control8001EDEC=0 (u16) and injury slotsFF/FF. These named invariants do not
@@ -127,9 +130,11 @@ checkpoint only.
 
 ## Remaining dependencies
 
-The snapshot always marks extension settings and presentation variant pending.
-Seven paired team settings21DE6..21DF3, presentation variant21DF4 and unowned
-extension bytes21D80/85/96..21DA2 are not fabricated. Created-player catalogue
+The snapshot still marks extension settings pending. The subsequent
+[presentation checkpoint](match_presentation_workflow.md) implements21DF4 for
+ordinary exhibition using the existing RNG. Seven paired team
+settings21DE6..21DF3 and unowned extension bytes21D80/85/96..21DA2 are not
+fabricated. Created-player catalogue
 membership/resolution and relative-rank effects remain a separate bridge.
 Special-team rosters/jerseys, season/playoffs, raw absent-player copy behavior,
 gameplay side/header/controller initialization and court/model/camera lifetimes

@@ -1,4 +1,5 @@
 #include "match_setup.h"
+#include "team_select.h"
 #include <string.h>
 
 int nba97_match_roster_indices(Nba97MatchRosterIndices* out,unsigned count) {
@@ -24,4 +25,20 @@ uint32_t nba97_match_option_address(unsigned index) {
     static const uint32_t addresses[11]={0x80021d86,0x80021d7c,0x80021d7d,0x80021d7e,
         0x80021d7f,0x80021d95,0x80021d81,0x80021d82,0x80021d83,0x80021d84,0x80021d99};
     return index<11 ? addresses[index]:0;
+}
+
+int nba97_match_presentation(Nba97MatchPresentation* out,uint32_t rng[6],
+                             uint16_t mode,uint8_t schedule_flags) {
+    Nba97MatchPresentation next;
+    if(!out || !rng) return 0;
+    memset(&next,0,sizeof(next));
+    if(mode==1) next.value=(uint8_t)(schedule_flags&0x60);
+    next.from_schedule=(uint8_t)(next.value!=0);
+    while(!next.value) {
+        next.value=(uint8_t)(nba97_team_select_rng_step(rng)&0x60);
+        ++next.rng_draws;
+        if(!next.value) ++next.rejected_draws;
+    }
+    *out=next;
+    return 1;
 }

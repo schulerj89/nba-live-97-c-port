@@ -1104,10 +1104,22 @@ private:
         key(VK_RETURN);require(user_setup_.state().profile[0]==-2 && user_setup_.names().name[0][0]=='C',
             "reentry retains accepted profile only");
         userKey(VK_LEFT); // Abandoned pre-confirmation assignment was neutral.
+        std::ofstream match_inputs(output/"match_presentation_inputs.json");match_inputs<<'[';
+        unsigned match_input_count=0;
+        auto recordMatchInput=[&](const char* id,const std::array<uint32_t,6>& before,uint64_t cues) {
+            if(match_input_count++)match_inputs<<',';
+            match_inputs<<"{\"id\":\""<<id<<"\",\"rng_before\":[";
+            for(unsigned i=0;i<6;++i) {if(i)match_inputs<<',';match_inputs<<before[i];}
+            match_inputs<<"],\"cursor_draws\":"<<cursor_rng_draws_-cues<<'}';
+        };
+        const auto first_match_rng=team_select_rng_;const auto first_match_cues=cursor_rng_draws_;
         userKey(VK_RETURN);require(user_setup_.state().assignment[0]==2,"state5 acceptance maps away to2");frame("match-handoff-pending");
         require(match_session_.revision()==1 && match_session_.snapshot() &&
             match_session_.snapshot()->accepted_slots==slots && match_session_.snapshot()->request.teams[0]==team_select_.team[0] &&
             match_session_.snapshot()->rules==settings_.effectiveRules(),"actual result6 captures accepted roster/settings");
+        require(match_session_.snapshot()->frontend_rng_after==team_select_rng_,
+            "actual result6 commits the presentation RNG");
+        recordMatchInput("match-handoff-pending",first_match_rng,first_match_cues);
         std::ofstream(output/"match_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
@@ -1181,32 +1193,46 @@ private:
         userKey('C');userTicks(20);
         userKey(VK_UP); // From unresolved FF to the first saved fixed slot.
         require(user_setup_.state().profile[0]==0,"full catalogue saved selector");
+        const auto profile_match_rng=team_select_rng_;const auto profile_match_cues=cursor_rng_draws_;
         userKey(VK_RETURN);
         require(match_session_.revision()==2 && match_session_.snapshot()->controls.profile_ids[0]==first_id &&
             match_session_.snapshot()->controls.provenance[0]==NBA97_CONTROLS_DEFAULT,
             "saved profile with disabled controls selects defaults");frame("match-profile-snapshot");
+        require(match_session_.snapshot()->frontend_rng_after==team_select_rng_,"profile handoff RNG continuation");
+        recordMatchInput("match-profile-snapshot",profile_match_rng,profile_match_cues);
+        std::ofstream(output/"match_profile_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         const auto retained_maps=match_session_.liveControls();
-        userKey(VK_DOWN);userKey(VK_DOWN);userKey(VK_RETURN);
+        userKey(VK_DOWN);userKey(VK_DOWN);const auto retained_match_rng=team_select_rng_;
+        const auto retained_match_cues=cursor_rng_draws_;userKey(VK_RETURN);
         require(match_session_.revision()==3 && match_session_.snapshot()->controls.provenance[0]==NBA97_CONTROLS_RETAINED &&
             !std::memcmp(retained_maps.map,match_session_.liveControls().map,sizeof(retained_maps.map)),
             "FE handoff retains live controller maps");frame("match-no-profile-retains");
+        require(match_session_.snapshot()->frontend_rng_after==team_select_rng_,"retained-map handoff RNG continuation");
+        recordMatchInput("match-no-profile-retains",retained_match_rng,retained_match_cues);
+        std::ofstream(output/"match_retained_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         userKey(VK_RSHIFT);
         require(match_session_.revision()==3,"cancel changed frozen match");frame("match-cancel-preserved");
         for(unsigned i=0;i<31 && team_select_.team[team_select_.side]!=29;++i)key(VK_RIGHT);
         require(team_select_.team[team_select_.side]==29,"special-team source navigation");
-        key(VK_RETURN);userKey(VK_RETURN);
+        key(VK_RETURN);const auto refused_match_rng=team_select_rng_;
+        const auto refused_match_cues=cursor_rng_draws_;userKey(VK_RETURN);
         require(match_session_.revision()==3,"unsupported special team replaced prior snapshot");frame("match-special-pending");
+        recordMatchInput("match-special-pending",refused_match_rng,refused_match_cues);
         userKey(VK_RSHIFT);key(VK_RIGHT);key(VK_RIGHT); // special29 ->30 -> next regular rank
         auto prior_store=std::move(roster_store_);
         roster_database_.swap(reopened);
         roster_store_=std::make_unique<nba97::RosterSaveStore>(output.parent_path()/"propagation.n97rst");
         roster_store_->load(roster_database_);
-        key(VK_RETURN);userKey(VK_RETURN);
+        key(VK_RETURN);const auto modified_match_rng=team_select_rng_;
+        const auto modified_match_cues=cursor_rng_draws_;userKey(VK_RETURN);
         require(match_session_.revision()==4 && match_session_.snapshot()->accepted_slots==modified_slots &&
             match_session_.snapshot()->roster_generation==1 &&
             !std::memcmp(&match_session_.snapshot()->ranks,&modified_ranks,sizeof(modified_ranks)),
             "host handoff must use accepted reopened roster and fresh ranks");
         frame("match-modified-roster",&modified_slots);
+        require(match_session_.snapshot()->frontend_rng_after==team_select_rng_,"modified roster handoff RNG continuation");
+        recordMatchInput("match-modified-roster",modified_match_rng,modified_match_cues);
+        match_inputs<<']';match_inputs.close();
         std::ofstream(output/"match_modified_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
         roster_database_.swap(reopened);roster_store_=std::move(prior_store);
         // Controlled source-clock placement fixtures, not physical input or
@@ -6104,13 +6130,13 @@ private:
         try {
             snapshot=&match_session_.capture(request,{roster_database_,settings_,profile_store_.profiles(),
                 created_players_,team_select_assets_->ratingAdjustments(),roster_store_ ? roster_store_->accepted().generation:0,
-                profile_store_.generation(),created_player_store_.generation()});
+                profile_store_.generation(),created_player_store_.generation()},team_select_rng_);
         } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-PENDING",e.what());return;}
         // Publication succeeded. A diagnostic allocation failure cannot relabel
         // it as a refused snapshot with an unchanged revision/live map.
         try {
             trace_.log("MATCH-SNAPSHOT","revision="+std::to_string(match_session_.revision())+
-                " source61674/63D58/655B0 subset; "+nba97::matchSnapshotReceipt(*snapshot));
+                " source61674/46D24/63D58/655B0 subset; "+nba97::matchSnapshotReceipt(*snapshot));
         } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-LOG-FAILED",std::string("snapshot retained; ")+e.what());}
     }
     void updateUserSetup() {
@@ -6195,7 +6221,7 @@ private:
                     break;
                 } else if(action.event==NBA97_USER_CONFIRMED) {
                     captureMatchSnapshot();
-                    trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed; bounded snapshot attempted; presentation/extension settings and gameplay initialization pending; no gameplay launched");
+                    trace_.log("MATCH-HANDOFF-PENDING","state5 result6; assignments committed; bounded snapshot/presentation attempted; extension settings and gameplay initialization pending; no gameplay launched");
                     user_setup_.deferMatch();
                 } else if(action.event==NBA97_USER_CAPACITY || action.event==NBA97_USER_PROFILE_FULL ||
                           action.event==NBA97_USER_NAME_DUPLICATE || action.event==NBA97_USER_DELETE_REQUEST) {

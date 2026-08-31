@@ -10,7 +10,7 @@ DENOMINATORS = {"team_select_owner":637, "setup_callback":34,
 MATCH_FUNCTIONS = {("gameonly", "0x80063D58"):97, ("gameonly", "0x800655B0"):156,
                    ("feonly", "0x8003E7A8"):45, ("feonly", "0x8003E698"):31,
                    ("feonly", "0x8003E714"):37, ("feonly", "0x8003E620"):15,
-                   ("feonly", "0x8003A0D8"):20}
+                   ("feonly", "0x8003A0D8"):20, ("feonly", "0x80046D24"):30}
 INPUT_FUNCTIONS = {("feonly", "0x8003B194"):("0x8003B1E8",21),
                    ("feonly", "0x8003F7C8"):("0x80040A1C",1173)}
 INPUT_REFERENCES = {("team_select.json", "0x8003AE4C"):210,
@@ -87,7 +87,7 @@ def metadata():
                 f["remaining_uncertainty"] and f["tests_evidence"], "match setup ownership/credit drift")
         totals[f["scope"]] = totals.get(f["scope"], 0) + f["instructions_total"]
     require(seen == MATCH_FUNCTIONS and totals == match["instruction_denominators"] ==
-            {"roster_dependency":253, "rules_dependency":148}, "match setup denominator drift")
+            {"roster_dependency":253, "rules_dependency":148, "presentation_dependency":30}, "match setup denominator drift")
     require(match["evidence"]["original_runtime"] == "pending", "match original evidence needs explicit review")
     inputs = read(ROOT / "config/decomp/frontend_input.json")
     seen, totals = {}, {}
@@ -142,7 +142,7 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
             ("match_modified_snapshot.json", "match-modified-roster", modified_ranks, 1, 23)):
         s = read(first / name)
         require(s == read(second / name), f"snapshot nondeterminism {name}")
-        require(s["scope"] == "partial ordinary exhibition snapshot" and s["pending"] == 3,
+        require(s["scope"] == "partial ordinary exhibition snapshot" and s["pending"] == 1,
                 f"unowned launch fields silently accepted {name}")
         require(s["setup"] == [0,0,2,0] and s["venue"] == s["launch_control"] == 0,
                 f"Setup/exhibition projection {name}")
@@ -176,7 +176,53 @@ def match_snapshots(first, second, by_id, stock_ranks, modified_ranks):
             "owned match snapshot lost accepted reorder or immutable metadata")
     require(stock_ranks[0][by_id["match-modified-roster"]["away"]] == 1,
             "special29 ->30 -> rank1 navigation changed")
-    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh saved-roster ranks, controls lifetime and pending guards")
+    # Four real host acceptances, not a second hand-seeded presentation path.
+    # Start emits confirmation cue9 first. Compare its single accepted-cue
+    # draw, then every rejected46D24 draw and the committed shared stream.
+    inputs = read(first / "match_presentation_inputs.json")
+    require(inputs == read(second / "match_presentation_inputs.json") and
+            [item["id"] for item in inputs] == ["match-handoff-pending", "match-profile-snapshot",
+                "match-no-profile-retains", "match-special-pending", "match-modified-roster"],
+            "missing or nondeterministic confirmation input receipts")
+    inputs = {item["id"]: item for item in inputs}
+    for name, frame_id in (("match_snapshot.json", "match-handoff-pending"),
+                           ("match_profile_snapshot.json", "match-profile-snapshot"),
+                           ("match_retained_snapshot.json", "match-no-profile-retains"),
+                           ("match_modified_snapshot.json", "match-modified-roster")):
+        s, other = read(first / name), read(second / name)
+        if name == "match_profile_snapshot.json":
+            # Profile identity is generated per isolated store. The host checks
+            # its exact saved/reloaded ID; it is not an original RNG consumer.
+            for receipt in (s, other):
+                ids = receipt["profile_ids"]
+                require(len(ids) == 8 and type(ids[0]) is int and 0 < ids[0] <= 0xffffffffffffffff and
+                        ids[1:] == [0]*7, "saved profile identity shape")
+            require({**s, "profile_ids": None} == {**other, "profile_ids": None},
+                    f"presentation snapshot nondeterminism {name}")
+        else:
+            require(s == other, f"presentation snapshot nondeterminism {name}")
+        p = s["presentation"]
+        source_input = inputs[frame_id]
+        require(source_input["cursor_draws"] == 1 and
+                p["rng_before"] == cursor_rng_step(source_input["rng_before"]),
+                f"confirmation cue must precede presentation selection {name}")
+        state, draws = p["rng_before"], 0
+        require(type(p["rng_draws"]) is int and 1 <= p["rng_draws"] <= 10000,
+                f"invalid native receipt draw count {name}")
+        # The limit protects this artifact reader, not the recovered game loop.
+        for i in range(p["rng_draws"]):
+            state = cursor_rng_step(state)
+            draws += 1
+            require(bool(state[0] & 0x60) == (i+1 == p["rng_draws"]),
+                    f"presentation skipped an accepted draw or stopped at zero {name}")
+        require(p["value"] == (state[0] & 0x60) and p["from_schedule"] == 0 and
+                p["rejected_draws"] == draws-1 and p["rng_after"] == state == by_id[frame_id]["shared_rng"] and
+                s["pending"] == 1, f"presentation/shared RNG boundary {name}")
+    refused = inputs["match-special-pending"]
+    require(refused["cursor_draws"] == 1 and
+            cursor_rng_step(refused["rng_before"]) == by_id["match-special-pending"]["shared_rng"],
+            "unsupported snapshot must consume the confirmation cue only, not presentation draws")
+    print("MATCH SNAPSHOT HOST PASS: owned ordinary inputs, fresh ranks, controls, four presentation/RNG acceptances and pending guards")
 
 
 def arrow_flash_cases(first, second):

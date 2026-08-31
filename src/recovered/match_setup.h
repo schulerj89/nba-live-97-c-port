@@ -17,6 +17,21 @@ int nba97_match_roster_indices(Nba97MatchRosterIndices*,unsigned count);
 int nba97_match_effective_rules(uint8_t out[14],unsigned style,const uint8_t custom[14]);
 /* Frontend option UI order is not a contiguous resident byte array. */
 uint32_t nba97_match_option_address(unsigned index);
+
+typedef struct Nba97MatchPresentation {
+    uint64_t rng_draws,rejected_draws; /* Native receipt; not original fields. */
+    uint8_t value,from_schedule;
+} Nba97MatchPresentation;
+/* FE46D24: mode is the unsigned halfword at frontend context+78.
+ * Exactly mode1 first uses schedule_flags&0x60; schedule_flags is the selected
+ * schedule record's byte+2, not an invented default or a schedule resolver.
+ * Otherwise draw from the existing six-word7A538 stream until draw&0x60!=0.
+ * The resulting byte maps to80021DF4; its presentation meaning stays opaque.
+ * Required out/rng must be distinct valid objects. Null refusal changes neither.
+ * There is no seed, attempt cap, audio event, or16-bit title RNG in this helper.
+ * Caller owns transactional publication and support for the selected mode. */
+int nba97_match_presentation(Nba97MatchPresentation* out,uint32_t rng[6],
+                             uint16_t mode,uint8_t schedule_flags);
 #ifdef __cplusplus
 }
 #endif

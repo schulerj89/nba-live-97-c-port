@@ -193,6 +193,12 @@ private audit evidence, not original modified-roster runtime equivalence.
 
 ## Evidence tiers and remaining work
 
+The subsequent [match presentation checkpoint](match_presentation_workflow.md)
+fills the accepted ordinary-exhibition snapshot's21DF4 byte using the existing
+frontend RNG. It preserves the confirmation cue's preceding draw and native
+atomic refusal; remaining extension/created/special-team and original runtime
+requirements still block a complete match launch.
+
 | Tier | Evidence / limit |
 |---|---|
 | Source structure |14 Team Select owners,637 instructions; separate34 Setup callback instructions,2596 targeted shared-helper instructions,524 rating-helper instructions |

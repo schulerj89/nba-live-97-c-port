@@ -43,6 +43,8 @@ struct MatchSnapshot {
     std::array<uint8_t,2> injury_slot{{255,255}}; // ordinary exhibition source branch.
     uint32_t venue_selector=0; // resident8001EC94; ordinary exhibition only.
     uint16_t launch_control=0; // resident8001EDEC; other launch branches pending.
+    Nba97MatchPresentation presentation{}; // FEONLY46D24 -> resident80021DF4.
+    std::array<uint32_t,6> frontend_rng_before{},frontend_rng_after{};
     MatchControlResult controls;
     Nba97CreatedPlayerCatalog created{}; // retained, never treated as accepted membership.
     uint64_t roster_generation=0,profile_generation=0,created_generation=0;
@@ -51,7 +53,8 @@ struct MatchSnapshot {
 // Pure preparation: owns every published value, no I/O or source mutation.
 // Unsupported branches throw explicitly; a captured subset is not launch-ready.
 MatchSnapshot buildMatchSnapshot(const MatchRequest&,const MatchSourceView&,
-    const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults);
+    const Nba97MatchControls& live,const std::array<uint8_t,59>& defaults,
+    const std::array<uint32_t,6>& frontend_rng);
 std::string matchSnapshotReceipt(const MatchSnapshot&);
 
 class MatchSession {
@@ -60,7 +63,10 @@ public:
     // it must not replace maps retained from a previous successful handoff.
     void initialize(const std::array<uint8_t,59>& defaults);
     bool initialized() const noexcept {return initialized_;}
-    const MatchSnapshot& capture(const MatchRequest&,const MatchSourceView&);
+    // Consumes the caller's existing frontend RNG only after preparation and
+    // allocation succeed. Never installs a new seed on entry or confirmation.
+    const MatchSnapshot& capture(const MatchRequest&,const MatchSourceView&,
+                                std::array<uint32_t,6>& frontend_rng);
     const MatchSnapshot* snapshot() const noexcept {return snapshot_.get();}
     const Nba97MatchControls& liveControls() const noexcept {return live_;}
     uint64_t revision() const noexcept {return revision_;}
