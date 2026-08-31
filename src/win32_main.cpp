@@ -4493,6 +4493,22 @@ private:
             music_info.data_blocks != 2524)
             throw std::runtime_error("frontend SCHl/PSX-ADPCM decoder self-test failed");
         frontend_music_.stop();
+        {
+            const auto saved_settings=settings_;
+            while(settings_.option(1))settings_.adjustOption(1,-1);
+            const auto seed=frontend_rng_;const auto draws=frontend_rng_draws_;
+            const auto team_rng=team_select_rng_;
+            music_clock_origin_ms_=GetTickCount64();music_error_logged_=false;music_generation_logged_=0;
+            frontend_music_.startFrontend(options_.asset_root/"menu",0,0);
+            updateFrontendMusic();updateFrontendMusic();
+            if(music_error_logged_ || frontend_music_.routingPhase()!=3 ||
+               frontend_music_.currentResource()!="ZTMENU1.CNK" || frontend_music_.outputGeneration()!=1 ||
+               frontend_music_.sourceFrameLimit()!=7418880 || frontend_rng_!=seed ||
+               frontend_rng_draws_!=draws || team_select_rng_!=team_rng)
+                throw std::runtime_error("actual host music startup/RNG/finite-prefix self-test failed");
+            frontend_music_.stop();settings_=saved_settings;
+            trace_.log("SELF-TEST","actual host music update PASS: five-source bank, initial menu1, original slot-entry prefix, shared RNG unchanged on initial load/start; native drain substitute only");
+        }
         menu_.reset();
         menu_.setActiveUserProfiles(active_user_profiles_);
         const auto jiggle_a = nba97::renderGameSetupMenu(
@@ -5502,16 +5518,7 @@ private:
     void update() {
         const DWORD now = GetTickCount();
         if (flow_.screen() == nba97::BootScreen::MainMenu) {
-            const auto music_error=frontend_music_.error();
-            if(!music_error.empty()) {
-                trace_.log("MUSIC-ERROR",music_error+"; stopped only the music stream");
-                frontend_music_.stop();
-            }
-            const auto underruns=frontend_music_.underruns();
-            if(underruns>music_underruns_logged_) {
-                trace_.log("MUSIC-UNDERRUN","queued PCM starved count="+std::to_string(underruns)+"; timing reference requires review");
-                music_underruns_logged_=underruns;
-            }
+            updateFrontendMusic();
             menu_elapsed_ms_ += now - previous_tick_;
             if (create_player_editor_active_)
                 nba97_create_editor_tick(&create_player_editor_);
@@ -5838,7 +5845,9 @@ private:
         try {
             const auto recovered_volume =
                 nba97_frontend_music_volume(settings_.option(1));
-            frontend_music_.start(options_.asset_root / "menu" / "ZTMENU1.CNK", recovered_volume);
+            music_clock_origin_ms_=GetTickCount64();
+            music_error_logged_=false;music_generation_logged_=0;
+            frontend_music_.startFrontend(options_.asset_root / "menu",settings_.option(1),0);
             music_underruns_logged_=0;
             const auto& audio = frontend_music_.info();
             trace_.log("MUSIC-DECODER", frontend_music_.decoderName());
@@ -5846,11 +5855,52 @@ private:
                 " rate=" + std::to_string(audio.sample_rate) + "Hz channels=" +
                 std::to_string(audio.channels) + " samples=" + std::to_string(audio.sample_count));
             trace_.log("MUSIC-PLAY", "FUN_8002F258 recovered volume=" +
-                std::to_string(recovered_volume) + "/127; music-only PCM gain; four 1024-frame buffers; no Windows session-volume writes");
+                std::to_string(recovered_volume) + "/127; five original resources and duplicate slots; shared frontend RNG; native120Hz clock; source stream-end quirks retained; WinMM drain is a platform substitution");
         } catch (const std::exception& error) {
+            music_error_logged_=true;
             trace_.log("MUSIC-ERROR", error.what());
         }
         InvalidateRect(window_, nullptr, FALSE);
+    }
+
+    void updateFrontendMusic() {
+        if(music_error_logged_)return;
+        Nba97MusicInputs input{};
+        input.volume=settings_.option(1);
+        const bool view_card=frontend_page_==nba97::FrontendPage::ViewRosters &&
+            roster_viewer_.mode()==nba97::RosterViewMode::PlayerCard;
+        const bool child_card=(isRosterEditor() || frontend_page_==nba97::FrontendPage::ReorderRosters) &&
+            reorder_child_.state==0x24;
+        // Actual View Player resource state24 maps to ED2AC. This is not a
+        // gameplay-Pause guess. The separate31A88 fade/duck caller is pending;
+        // this input only supplies the routing owner's selection/ring branch.
+        input.pause=view_card || child_card;
+        // All five validated resources are resident. No outstanding native CD
+        // selection request or source guard is synthesized from a UI fade.
+        const auto elapsed=GetTickCount64()-music_clock_origin_ms_;
+        const auto clock=static_cast<std::uint32_t>(elapsed*120u/1000u);
+        // UI-thread only: title/Cool Fact and music use this same16-bit stream;
+        // the independent six-word Team Select RNG must never be substituted.
+        frontend_rng_draws_+=frontend_music_.updateFrontend(clock,frontend_rng_,input);
+        const auto error=frontend_music_.error();
+        if(!error.empty()) {
+            music_error_logged_=true;
+            trace_.log("MUSIC-ERROR",error+"; stopped only the music stream");
+            frontend_music_.stop();return;
+        }
+        const auto generation=frontend_music_.outputGeneration();
+        if(generation!=music_generation_logged_) {
+            music_generation_logged_=generation;
+            trace_.log("MUSIC-GENERATION",frontend_music_.currentResource()+" generation="+
+                std::to_string(generation)+" source-slot-entry-frame-limit="+
+                std::to_string(frontend_music_.sourceFrameLimit())+" rng="+
+                std::to_string(frontend_rng_)+" shared-draws="+std::to_string(frontend_rng_draws_));
+        }
+        const auto underruns=frontend_music_.underruns();
+        if(underruns>music_underruns_logged_) {
+            trace_.log("MUSIC-UNDERRUN","queued PCM starved count="+std::to_string(underruns)+"; timing reference requires review");
+            music_underruns_logged_=underruns;
+        }
     }
 
     bool openTeamSelect() {
@@ -7761,7 +7811,7 @@ private:
                 nba97_frontend_music_volume(settings_.option(1));
             frontend_music_.setRecoveredVolume(recovered_volume);
             trace_.log("MUSIC-VOLUME", "FUN_8002F258 value=" +
-                std::to_string(recovered_volume) + "/127 applied to future music PCM only; queued audio <=4096 sample-frames; SFX/speech unaffected");
+                std::to_string(recovered_volume) + "/127 applied to future music PCM only; queued audio <=1024 sample-frames; SFX/speech unaffected");
         }
         rebuildMenuFrame();
         InvalidateRect(window_, nullptr, FALSE);
@@ -7777,6 +7827,8 @@ private:
     nba97::IntroPlayer intro_player_;
     nba97::FrontendMusicPlayer frontend_music_;
     unsigned music_underruns_logged_=0;
+    std::uint64_t music_clock_origin_ms_=0,music_generation_logged_=0;
+    bool music_error_logged_=false;
     nba97::RecoveredAudioPlayer cursor_audio_;
     nba97::RecoveredAudioPlayer cool_fact_audio_;
     Nba97CoolFacts cool_fact_selection_{{0,0,0,0,0},-1,0,0,-1};

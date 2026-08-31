@@ -21,6 +21,7 @@ defects should still be fixed.
 |GAME56FFC force1 path |An in-range old frame/time can survive forced reset; primary mode2 copies secondary values without clamping |`game_player_initialization.c`, initializer/reset tests and workflow |
 |GAME65DB0 lookup |A raw option outside the ordinary five still reads its original adjacent word |Private256-word lookup windows in `GameplaySetup`; no default duration |
 |GAME60EF8 |Already sorted entities keep stale render indices; only actual insertion moves update the index halfword |`game_period_dependencies.c`, exact ordered sort writes and tests |
+|GAME63EDC/51ED8 |Raw rating byte1E values23,24,25 or a zero FDB64 divisor trap after the height and attribute3A writes; raw entity IDs can alias height slots through the original shift wrap |`game_player_attributes.c`, exact trap prefixes and raw-ID source comparisons; no rating clamp |
 |FE2F36C/6B6A0 |Router retains a zero-status branch although the original BUSY helper cannot return zero |`music_routing.c`, source-quirk comment and lifecycle tests |
 |FE2F330 |The sixteen-slot music table permits repeats and includes the special track in ordinary selection |Music extractor/routing workflow; no guessed shuffle |
 |FE7B2BC/7A81C |A long fade can compute step0 and stall; envelope countdownFFFFFFFF decrements and short stages can divide by zero |`music_voice.c`, source service/fade comparisons and workflow |

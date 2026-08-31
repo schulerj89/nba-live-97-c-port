@@ -18,7 +18,7 @@ See the growing [preserved-behavior index](preserved_original_bugs.md).
 | Complete executable/feature/resource inventory | Five known programs:3701 discovered functions; feature/resource catalogue incomplete | Audit all entry points and reachable mode/resources; retain full owners and unresolved branches |
 | Boot, legal, movie, title, Setup | Implemented with scoped checks | Original transition, presentation and audio comparisons; repeated fresh/warm entry |
 | Team Select and User Setup | Implemented bounded frontend path | Complete original input/timing/visual comparison, all controller/profile variants |
-| Accepted current rosters/settings/controls | Owned ordinary snapshot;655B0 and65328 effects before period setup | Close extension/reference fields, created membership, special teams, period/entity bindings and selected-player producer |
+| Accepted current rosters/settings/controls | Owned snapshot and atomic65DB0 composition with actual reached dependencies on verified no-substitution routes | Close natural entry producers, actual substitution, extension/reference fields, created membership and special teams |
 | Gameplay assets and scene | Motion resolver implemented/source-compared; scene absent | Native motion sampling/model/court/camera lifetime and source numerical/frame comparison across teams/courts |
 | Tipoff through first possession | Not implemented | Original phase/input trace and native deterministic possession with no substituted logic |
 | Player/ball simulation and CPU AI | Not implemented | Movement, animation, contact, ball ownership, passes/shots and CPU decisions against original owners/state |
@@ -29,7 +29,7 @@ See the growing [preserved-behavior index](preserved_original_bugs.md).
 | Results/statistics and persistence | Existing frontend stores; no match results | Recovered stats, profile and mode writeback; isolated save/reload and failure tests |
 | Season/playoff and all original modes | Not implemented | Original mode inventory, setup/schedules/progression/save/load and completion paths |
 | Roster transactions and Create Player | Existing bounded frontend implementations | Preserve current editor/model checks; close insertion/resolution/ranking, special teams and injuries |
-| All menu/pause music | Portable five-track decoding and source routing core; host still loops menu1 | Original backend/caller lifecycle, five-track playback/capture; no guessed shuffle |
+| All menu/pause music | Five-track bank and recovered router wired to the host/shared frontend RNG; finite native output and source ending quirks retained | Complete transition/pause callers, full-duration playback/listening, original hardware timing and waveform comparisons |
 | XA music/media | Original containers inventoried only | Channel/index/selection rules, every reachable logical track, synchronization and decode/playback receipts |
 | Gameplay SFX/crowd/announcer | Not implemented | Source events, banks/indexes, voice allocation/overlap/gain/pitch/timing and captured listening checks |
 | Frontend sound and speech | Bounded scalar/decoder checks | Preserve shared RNG and existing regressions; recover remaining allocation/SPU/runtime behavior |
@@ -87,3 +87,20 @@ the actual646A8 role-helper chain,65B18 and its force1 animation dependencies,
 owned original setup resources, and recovered music voice timing/gain/completion
 boundaries. Resource-to-initializer composition is verified; the whole period,
 stream producer, hardware drain timing and native host gameplay remain open.
+
+Checkpoint72ea858 passes69/69 CTests in both configurations. It composes the
+owned period runtime, including actual reached callee effects on supported
+no-substitution routes.84 original65DB0 executions, including two consecutive
+period calls, match known record bytes, globals and references without callee
+hooks. Inputs include synthetic accepted rosters and explicit cleared entry;
+this does not prove the full natural cold loader or a playable scene.
+
+The next music/attributes checkpoint passes71/71 CTests in both builds. The
+actual host starts the five-resource bank on menu1 without changing either
+RNG; isolated host self-tests preserve real save/config bytes and timestamps.
+The source router now controls finite WinMM playback. Logical slot entry and
+native drain explicitly substitute for SPU IRQ/release observations; exact
+hardware waveform and full-duration listening remain unverified. View Player
+transition fades/volume restore and gameplay Pause are still separate owners.
+The63EDC attribute owner retains its original rating/divisor traps. Neither
+this owner nor the period runtime is yet wired into a playable basketball loop.

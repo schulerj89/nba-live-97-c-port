@@ -10,6 +10,15 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_music_playback_tests tests/music_playback_tests.cpp src/music_playback.cpp src/ea_schl.cpp
+        src/recovered/music_routing.c src/recovered/music_voice.c src/recovered/music_stream.c src/recovered/frontend_title.c)
+    target_compile_features(nba97_music_playback_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_music_playback_tests PRIVATE src)
+    add_test(NAME music_playback COMMAND nba97_music_playback_tests)
+    add_executable(nba97_game_player_attributes_tests tests/game_player_attributes_tests.cpp src/recovered/game_player_attributes.c)
+    target_compile_features(nba97_game_player_attributes_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_player_attributes_tests PRIVATE src)
+    add_test(NAME game_player_attributes COMMAND nba97_game_player_attributes_tests)
     add_executable(nba97_game_substitution_support_tests tests/game_substitution_support_tests.cpp src/recovered/game_substitution_support.c)
     target_compile_features(nba97_game_substitution_support_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_substitution_support_tests PRIVATE src)
@@ -385,6 +394,8 @@ if(BUILD_TESTING)
     add_test(NAME frontend_audio_scalars COMMAND nba97_frontend_audio_scalars_tests)
     if(WIN32)
     add_executable(nba97_process_audio_capture_tests tests/process_audio_capture_test.cpp src/process_audio_capture.cpp src/frontend_music.cpp src/ea_schl.cpp)
+    target_sources(nba97_process_audio_capture_tests PRIVATE src/music_playback.cpp
+        src/recovered/music_routing.c src/recovered/music_voice.c src/recovered/music_stream.c src/recovered/frontend_title.c)
         target_compile_features(nba97_process_audio_capture_tests PRIVATE cxx_std_17)
         target_include_directories(nba97_process_audio_capture_tests PRIVATE src)
         target_link_libraries(nba97_process_audio_capture_tests PRIVATE ole32 uuid mmdevapi winmm)
@@ -472,6 +483,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/game_period.c src/recovered/game_substitution.c src/recovered/music_stream.c
     src/recovered/game_period_dependencies.c src/match_runtime.cpp
     src/recovered/game_substitution_support.c
+    src/recovered/game_player_attributes.c src/music_playback.cpp
     src/recovered/game_player_initialization.c src/gameplay_setup.cpp src/recovered/music_voice.c
     src/recovered/game_team_roles.c
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
