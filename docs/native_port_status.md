@@ -1,10 +1,10 @@
 # Native port status
 
-Checkpoint 33 local verification passes 156 Windows tests in Debug, RelWithDebInfo
-and Release and 152 Linux core tests locally. It adds the canonical native GPU
-synchronization/default-dispatch CPU owner and asynchronous backend contract.
-Checkpoint 32 (`988f9c2`) passed 151 Linux core tests in
-[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33451031121).
+Checkpoint 34 local verification passes 157 Windows tests in Debug, RelWithDebInfo
+and Release and 153 Linux core tests locally. It adds the complete outer match
+tick and reached frame-pump CPU owner.
+Checkpoint 33 (`5d6a09b`) passed 152 Linux core tests in
+[GitHub CI](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33452019236).
 This page distinguishes live application paths from tested subsystems; it is
 not an overall completion estimate or a claim of new frontend captures.
 
@@ -52,6 +52,7 @@ its frontend-to-match path.
 | Subsystem | Existing work | What it does not establish |
 |---|---|---|
 | Render-frame sequencing | Complete `49018` CPU order and scratch redraw guard; C++ adapter shares memory/geometry across actual pose, net, player, court, attachment, ball, label and marker owners | Camera/display/sync/submission providers and natural resource state remain required. Separate C++ checks reach native net completion and a player-input refusal; no full frame or gameplay launch is claimed. See [frame driver](game_match_frame_workflow.md). |
+| Outer match tick | Complete `68BF8` simulation loop plus reached `2DD84` frame pump preserves period timing, live global rereads and original incoming-`s6` register quirks; typed child boundaries bind player update, ball simulation, net transform and match frame owners | Thirty-seven other synchronous source services and natural caller state remain required. Compiling the owner does not launch gameplay or prove a court, possession, rendered frame, or full match. See [match tick](game_match_tick_workflow.md). |
 | Net and rim rendering | Complete `4B1A4/4B6C4/4BA84/4C144`, native matrix/projection and actual ZNET codec; original-resource component comparisons | Original loader arrival, surrounding frame services and natural state remain required. See [net workflow](game_net_workflow.md). |
 | Ball attachment | Complete `57F5C/58120/581C0` and `2D37C` hand lookup; actual normalized-memory C++ adapter; frame driver selects the original modes | Does not acquire possession or implement loose-ball physics. Mode one deliberately retains ball height. See [attachment workflow](game_ball_attachment_workflow.md). |
 | Match state and periods | Owned accepted players/teams/controllers, lineup/binding/role helpers and composed period initialization under explicit entry conditions | Natural cold/warm loader completion, every substitution dependency, or a running match. See [match runtime](match_runtime_workflow.md). |
@@ -111,10 +112,10 @@ scope and evidence review; CTest totals are not a substitute denominator.
 
 ## Validation checkpoint and remaining acceptance
 
-Checkpoint 33 local verification passes **156/156 CTests** in Windows Debug,
-RelWithDebInfo and Release and **152/152 core CTests** on Linux. Checkpoint 32 (`988f9c2`)
-passed **151/151 core CTests** in
-[GitHub run 33451031121](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33451031121).
+Checkpoint 34 local verification passes **157/157 CTests** in Windows Debug,
+RelWithDebInfo and Release and **153/153 core CTests** on Linux. Checkpoint 33 (`5d6a09b`)
+passed **152/152 core CTests** in
+[GitHub run 33452019236](https://github.com/schulerj89/nba-live-97-c-port/actions/runs/33452019236).
 The four-test difference is Windows-specific coverage. These results do not
 mean every frontend walkthrough was recaptured, nor that a full match was
 tested. Publication and the exact GitHub CI result are tracked separately from
@@ -166,6 +167,15 @@ device reads plus 26 writes in exact order. A separate 10,000-case native
 backend oracle per configuration covers delayed completion and rejects 228
 fake acknowledgements. This is component/source proof; it does not connect a
 physical GPU, render a match frame, or cross natural startup.
+
+Checkpoint 34 adds the complete 402-instruction outer `68BF8` match tick and
+reached `2DD84` frame pump. The original-CPU comparison passes 512 directed
+cases per configuration across all 402 PCs, with 30,520 ordered events and 966
+exhaustive operation-budget refusal cases retaining 34,218 prefix events. Four
+already recovered children are distinct typed mandatory services; the other
+source calls also refuse rather than accepting a successful no-op. This does
+not supply natural caller/resource state or establish a court, possession,
+rendered frame, or completed match.
 
 Checkpoint 28's separate ball-rendering evidence
 includes 585 original/native C cases per build with 16,111 ordered stores and
