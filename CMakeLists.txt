@@ -10,6 +10,19 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_court_packets_tests tests/game_court_packets_tests.cpp
+        src/recovered/game_court_packets.c src/game_court_geometry.cpp src/zdomf_projection.cpp src/zdomf_transform.cpp)
+    target_compile_features(nba97_game_court_packets_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_court_packets_tests PRIVATE src)
+    add_test(NAME game_court_packets COMMAND nba97_game_court_packets_tests)
+    add_executable(nba97_game_tipoff_phase_tests tests/game_tipoff_phase_tests.cpp src/recovered/game_tipoff_phase.c)
+    target_compile_features(nba97_game_tipoff_phase_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_tipoff_phase_tests PRIVATE src)
+    add_test(NAME game_tipoff_phase COMMAND nba97_game_tipoff_phase_tests)
+    add_executable(nba97_game_ball_release_tests tests/game_ball_release_tests.cpp src/recovered/game_ball_release.c)
+    target_compile_features(nba97_game_ball_release_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_ball_release_tests PRIVATE src)
+    add_test(NAME game_ball_release COMMAND nba97_game_ball_release_tests)
     add_executable(nba97_game_body_names_tests tests/game_body_names_tests.cpp src/recovered/game_body_names.c)
     target_compile_features(nba97_game_body_names_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_body_names_tests PRIVATE src)
@@ -753,6 +766,8 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/gameplay_animation.cpp src/recovered/game_animation_advance.c src/recovered/game_animation_queue.c
     src/recovered/game_player_physics.c src/recovered/game_player_update.c src/match_player_update.cpp
     src/recovered/game_player_jump.c src/recovered/game_player_input.c src/match_input_edges.cpp
+    src/recovered/game_tipoff_phase.c src/recovered/game_ball_release.c
+    src/recovered/game_court_packets.c src/game_court_geometry.cpp
     src/recovered/voice_handles.c src/recovered/voice_channels.c
     src/recovered/voice_allocation.c src/recovered/voice_programs.c src/recovered/voice_patl_upload.c
     src/recovered/voice_mapping.c src/recovered/voice_mapping_table.c src/recovered/spu_heap.c src/recovered/spu_heap_mapping.c
