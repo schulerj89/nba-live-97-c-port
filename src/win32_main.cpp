@@ -24,6 +24,7 @@
 #include "recovered/game_reset_callback.h"
 #include "recovered/game_controller_resume.h"
 #include "recovered/game_reset_graph.h"
+#include "recovered/game_graph_debug_set.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6242,8 +6243,10 @@ private:
             std::array<Nba97GameControllerResumeProgress,2> controller_resume_progress{};
             Nba97GameResetGraphProgress reset_graph_progress{};
             Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
+            Nba97GameGraphDebugSetProgress graph_debug_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
+            std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6262,6 +6265,7 @@ private:
             unsigned reset_graph_calls=0;
             unsigned reset_graph_child_callbacks=0;
             unsigned reset_graph_reset_children=0;
+            unsigned graph_debug_calls=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6592,6 +6596,27 @@ private:
                    !fixture.reset_graph_progress.completed)return 0;
                 *value={fixture.reset_graph_progress.return_v0,
                     fixture.reset_graph_progress.return_v0_known};
+            } else if(event->entry==0x800992c4u) {
+                ++fixture.graph_debug_calls;
+                const auto diagnostic=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GameGraphDebugSetEvent* debug_event)->int {
+                    auto& state=*static_cast<State*>(user);
+                    state.graph_debug_events.push_back(*debug_event);
+                    return debug_event->pc==0x80099310u &&
+                        debug_event->entry==0x8009cb2cu &&
+                        debug_event->return_address==0x80099318u &&
+                        debug_event->argument_count==4 &&
+                        debug_event->argument[0]==0x80028250u;
+                };
+                Nba97GameGraphDebugSetContext debug_context{*memory,20,
+                    event->argument[0],event->stack_pointer,event->return_address,
+                    event->saved_register[0],diagnostic,&fixture};
+                if(nba97_game_graph_debug_set(&debug_context,
+                       &fixture.graph_debug_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.graph_debug_progress.completed)return 0;
+                *value={fixture.graph_debug_progress.return_v0,
+                    fixture.graph_debug_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6745,6 +6770,24 @@ private:
             state.reset_graph_events[4].pc!=0x800990d0u ||
             state.reset_graph_events[4].entry!=0x8009b878u ||
             state.reset_graph_events[4].argument[0]!=1 ||
+            state.graph_debug_calls!=1 || !state.graph_debug_events.empty() ||
+            !state.graph_debug_progress.completed ||
+            state.graph_debug_progress.operations!=6 ||
+            state.graph_debug_progress.accesses!=6 ||
+            state.graph_debug_progress.reads!=3 ||
+            state.graph_debug_progress.stores!=3 ||
+            state.graph_debug_progress.callbacks_completed!=0 ||
+            state.graph_debug_progress.requested_level!=0 ||
+            state.graph_debug_progress.previous_level!=0 ||
+            !state.graph_debug_progress.previous_level_known ||
+            state.graph_debug_progress.published_level!=0 ||
+            state.graph_debug_progress.diagnostic_called ||
+            state.graph_debug_progress.return_v0!=0 ||
+            !state.graph_debug_progress.return_v0_known ||
+            state.graph_debug_progress.frame_stack_pointer!=0x807fffb8u ||
+            state.graph_debug_progress.stack_pointer!=0x807fffd0u ||
+            state.graph_debug_progress.restored_return_address!=0x80029a30u ||
+            state.graph_debug_progress.restored_saved_register_s0!=1 ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
@@ -6753,6 +6796,7 @@ private:
             state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029a38u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
+            state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
             state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
@@ -6868,6 +6912,22 @@ private:
             "\"reset_result_truncated_to_byte\": true, \"unchecked_reset_type_index\": true, "
             "\"unguarded_driver_dispatch\": true}, \"visual_effect\": \"none\", "
             "\"status\": \"initialized-mapped-ps1-gpu-state\"},\n"
+            "  \"graph_debug_set\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800992C4\", "
+            "\"end_exclusive\": \"0x80099330\", \"instructions\": 27, "
+            "\"call_pc\": \"0x80029A28\", \"api\": \"SetGraphDebug\", "
+            "\"level_global\": \"0x800C55C2\", \"callback_global\": \"0x800C55BC\", "
+            "\"requested_level\": "<<state.graph_debug_progress.requested_level<<
+            ", \"previous_level\": "<<unsigned(state.graph_debug_progress.previous_level)<<
+            ", \"published_level\": "<<unsigned(state.graph_debug_progress.published_level)<<
+            ", \"diagnostic_calls\": "<<state.graph_debug_progress.callbacks_completed<<
+            ", \"return_value\": "<<state.graph_debug_progress.return_v0<<
+            ", \"operations\": "<<state.graph_debug_progress.operations<<", \"accesses\": "<<
+            state.graph_debug_progress.accesses<<", \"reads\": "<<
+            state.graph_debug_progress.reads<<", \"stores\": "<<
+            state.graph_debug_progress.stores<<", \"source_quirks\": {"
+            "\"argument_truncated_to_byte\": true, \"zero_low_byte_skips_diagnostic\": true, "
+            "\"unguarded_diagnostic_dispatch\": true, \"callback_return_ignored\": true}, "
+            "\"visual_effect\": \"none\", \"status\": \"debug-disabled\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6882,6 +6942,14 @@ private:
         }
         json<<"\n  ]\n}\n";
         trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; ninth recovered startup callee 0x80099058 executed PsyQ ResetGraph(3), cleared 128 bookkeeping bytes, nested ResetCallback to 0x80098714, called BIOS A0:49 with 0x000C5578, reset the GPU service with argument 1, published reset type 0 and 1024x512 limits at 0x800C55C0, and filled 112 cached environment bytes with 0xFF; the native renderer and captured pixels were unchanged; original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain; 66 remaining acknowledged outer test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x800992C4 executed PsyQ SetGraphDebug(0): "
+            "stored debug level 0 at 0x800C55C2, returned previous level 0, and skipped "
+            "the 0x800C55BC diagnostic pointer because the stored low byte was zero; "
+            "original byte truncation, zero-low-byte alias, ignored callback return and "
+            "unguarded nonzero dispatch quirks remain; mapped PS1 debug bookkeeping changed, "
+            "but native logging, renderer and captured pixels were unchanged; 65 remaining "
+            "acknowledged outer test boundaries");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

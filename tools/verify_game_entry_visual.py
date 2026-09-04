@@ -175,6 +175,22 @@ def main():
                 "visual_effect": "none",
                 "status": "initialized-mapped-ps1-gpu-state"},
             "recovered 0x80099058 ResetGraph receipt drifted")
+    require(receipt["graph_debug_set"] == {
+                "binary": "GAMEONLY", "address": "0x800992C4",
+                "end_exclusive": "0x80099330", "instructions": 27,
+                "call_pc": "0x80029A28", "api": "SetGraphDebug",
+                "level_global": "0x800C55C2",
+                "callback_global": "0x800C55BC",
+                "requested_level": 0, "previous_level": 0,
+                "published_level": 0, "diagnostic_calls": 0,
+                "return_value": 0, "operations": 6, "accesses": 6,
+                "reads": 3, "stores": 3, "source_quirks": {
+                    "argument_truncated_to_byte": True,
+                    "zero_low_byte_skips_diagnostic": True,
+                    "unguarded_diagnostic_dispatch": True,
+                    "callback_return_ignored": True},
+                "visual_effect": "none", "status": "debug-disabled"},
+            "recovered 0x800992C4 SetGraphDebug receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -205,6 +221,8 @@ def main():
             "controller-resume call boundaries drifted")
     require(calls[9]["pc"] == "0x80029A20" and calls[9]["entry"] == "0x80099058",
             "ResetGraph call boundary drifted")
+    require(calls[10]["pc"] == "0x80029A28" and calls[10]["entry"] == "0x800992C4",
+            "SetGraphDebug call boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -258,6 +276,12 @@ def main():
             "filled 112 cached environment bytes with 0xFF" in trace and
             "original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain" in trace and
             "native renderer and captured pixels were unchanged" in trace and
+            "0x800992C4 executed PsyQ SetGraphDebug(0)" in trace and
+            "stored debug level 0 at 0x800C55C2" in trace and
+            "returned previous level 0" in trace and
+            "skipped the 0x800C55BC diagnostic pointer" in trace and
+            "original byte truncation, zero-low-byte alias, ignored callback return and unguarded nonzero dispatch quirks remain" in trace and
+            "native logging, renderer and captured pixels were unchanged" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -273,6 +297,8 @@ def main():
           "native controller-resume 0x8008F1D4 initialized input once, then took its already-active fast path; "
           "native PsyQ ResetGraph 0x80099058 initialized mapped GPU state and retained source quirks "
           "without changing captured pixels; "
+          "native PsyQ SetGraphDebug 0x800992C4 disabled mapped diagnostics, returned the prior level, "
+          "and retained byte-alias/unguarded-dispatch quirks without changing captured pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

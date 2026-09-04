@@ -10,6 +10,7 @@
 #include "recovered/game_reset_callback.h"
 #include "recovered/game_controller_resume.h"
 #include "recovered/game_reset_graph.h"
+#include "recovered/game_graph_debug_set.h"
 
 #include <array>
 #include <cstdint>
@@ -68,6 +69,7 @@ struct Fixture {
     std::array<Nba97GameControllerResumeProgress,2> controller_resume_progress{};
     Nba97GameResetGraphProgress reset_graph_progress{};
     Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
+    Nba97GameGraphDebugSetProgress graph_debug_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -77,6 +79,7 @@ struct Fixture {
     std::vector<Nba97GameControllerResumeEvent> controller_resume_calls;
     std::vector<Nba97GameResetGraphEvent> reset_graph_calls;
     std::vector<Nba97GameResetCallbackEvent> reset_graph_reset_callback_calls;
+    std::vector<Nba97GameGraphDebugSetEvent> graph_debug_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     bool compose_static = false;
@@ -89,6 +92,7 @@ struct Fixture {
     bool compose_reset_callback = false;
     bool compose_controller_resume = false;
     bool compose_reset_graph = false;
+    bool compose_graph_debug = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -291,6 +295,12 @@ struct Fixture {
         }
         return 0;
     }
+    static int graphDebugIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameGraphDebugSetEvent* event) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.graph_debug_calls.push_back(*event);
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -376,6 +386,16 @@ struct Fixture {
                 return 0;
             *value={f.reset_graph_progress.return_v0,
                 f.reset_graph_progress.return_v0_known};
+        }
+        if (f.compose_graph_debug && event->entry == 0x800992c4u) {
+            Nba97GameGraphDebugSetContext context{*memory,20,
+                event->argument[0],event->stack_pointer,event->return_address,
+                event->saved_register[0],graphDebugIo,&f};
+            if (nba97_game_graph_debug_set(&context,&f.graph_debug_progress) !=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.graph_debug_progress.return_v0,
+                f.graph_debug_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -565,6 +585,7 @@ struct Composition {
         game.compose_reset_callback = true;
         game.compose_controller_resume = true;
         game.compose_reset_graph = true;
+        game.compose_graph_debug = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -748,6 +769,28 @@ void overlay_composition() {
         c.game.reset_graph_reset_callback_progress.restored_return_address ==
             0x800990b8u &&
         c.game.reset_graph_reset_callback_calls.size() == 1);
+    check(c.game.graph_debug_progress.completed &&
+        c.game.graph_debug_progress.operations == 6 &&
+        c.game.graph_debug_progress.accesses == 6 &&
+        c.game.graph_debug_progress.reads == 3 &&
+        c.game.graph_debug_progress.stores == 3 &&
+        c.game.graph_debug_progress.callbacks_completed == 0 &&
+        c.game.graph_debug_progress.requested_level == 0 &&
+        c.game.graph_debug_progress.previous_level == 0 &&
+        c.game.graph_debug_progress.previous_level_known &&
+        c.game.graph_debug_progress.published_level == 0 &&
+        !c.game.graph_debug_progress.diagnostic_called &&
+        c.game.graph_debug_progress.return_v0 == 0 &&
+        c.game.graph_debug_progress.return_v0_known);
+    check(c.game.graph_debug_progress.frame_stack_pointer == FrameSp-0x18u &&
+        c.game.graph_debug_progress.stack_pointer == FrameSp &&
+        c.game.graph_debug_progress.restored_return_address == 0x80029a30u &&
+        c.game.graph_debug_progress.restored_saved_register_s0 == 1 &&
+        c.game.graph_debug_calls.empty() && c.game.get(0x800c55c2u,1) == 0);
+    check(c.game.calls[10].pc == 0x80029a28u &&
+        c.game.calls[10].entry == 0x800992c4u &&
+        c.game.calls[10].argument_count == 1 &&
+        c.game.calls[10].argument[0] == 0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
