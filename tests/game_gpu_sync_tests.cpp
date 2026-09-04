@@ -28,6 +28,10 @@ struct Fixture {
     unsigned dma_busy_reads=0,gpu_not_ready_reads=0;
     bool debug_mutates_table=false,debug_submits=false,handler_mutates_index=false;
     bool handler_submits=false,completion_after_restore=false,complete_backend_on_gpu_ready=false;
+    bool mutate_abi_on_first_read=false;
+    bool invalidate_abi_ra_on_first_read=false;
+    std::uint8_t *abi_data=nullptr,*abi_known=nullptr;
+    std::uint32_t abi_base=0,abi_s0_slot=0,abi_ra_slot=0;
     std::uint32_t tick_advance_on_timer=0;
     std::size_t poll_budget=64,source_budget=2000000;
     std::vector<Nba97GameGpuSyncAccess> read_events;
@@ -38,6 +42,19 @@ struct Fixture {
             Nba97GameGpuSyncWord *value){
         auto& f=*static_cast<Fixture*>(user);++f.reads;f.read_events.push_back(*access);
         if(f.refuse_read_at&&static_cast<int>(f.reads)==f.refuse_read_at)return -71;
+        if(f.mutate_abi_on_first_read&&f.reads==1&&f.abi_data){
+            const auto put=[&](std::uint32_t address,std::uint32_t word){
+                const auto offset=address-f.abi_base;
+                for(unsigned i=0;i<4;++i)f.abi_data[offset+i]=
+                    static_cast<std::uint8_t>(word>>(i*8u));
+            };
+            put(f.abi_s0_slot,0x13579bdfu);
+            put(f.abi_ra_slot,0x2468ace0u);
+        }
+        if(f.invalidate_abi_ra_on_first_read&&f.reads==1&&f.abi_known){
+            const auto offset=f.abi_ra_slot-f.abi_base;
+            for(unsigned i=0;i<4;++i)f.abi_known[offset+i]=0;
+        }
         value->known_mask=access->width==2?0xffffu:0xffffffffu;
         if(access->address==IMASK){value->word=f.imask;value->known_mask=f.imask_known;}
         else if(access->address==DMA){
@@ -95,7 +112,8 @@ struct Fixture {
         if(f.refuse_observe_at&&static_cast<int>(f.observes)==f.refuse_observe_at)return -75;
         *backend={f.submitted,f.completed,static_cast<std::uint8_t>(f.backend_idle),1};return 1;
     }
-    Nba97GameGpuSyncContext context(){return {read_device,write_device,resolve,invoke,observe,this,poll_budget,source_budget};}
+    Nba97GameGpuSyncContext context(){return {read_device,write_device,resolve,
+        invoke,observe,this,poll_budget,source_budget,nullptr};}
 };
 
 Nba97GameGpuSyncState base_state(){
@@ -271,6 +289,56 @@ int main(){
         check(nba97_game_gpu_sync(&c,nullptr,0,&result,&p)==NBA97_GAME_GPU_SYNC_ARGUMENT);
         check(nba97_game_gpu_sync(&c,&s,0,nullptr,&p)==NBA97_GAME_GPU_SYNC_ARGUMENT);
         check(nba97_game_gpu_sync(&c,&s,0,&result,nullptr)==NBA97_GAME_GPU_SYNC_ARGUMENT);
+    }
+    {
+        /* Natural GAMEONLY composition maps 800994F4's real 0x18-byte o32
+           frame. A device boundary mutates both saved words to prove that the
+           epilogue reloads live mapped bytes rather than native temporaries. */
+        constexpr std::uint32_t base=0x807fffc0u,sp=0x807ffff0u;
+        std::uint8_t bytes[0x40]{},known[0x40];
+        for(auto& byte:known)byte=1;
+        Nba97GameTextRegion region{base,bytes,known,sizeof bytes};
+        Nba97GameGpuSyncAbi abi{{&region,1},sp,0x80029ab4u,0x11223344u};
+        auto s=base_state();Fixture f;auto c=f.context();
+        f.abi_data=bytes;f.abi_base=base;
+        f.abi_s0_slot=sp-8u;f.abi_ra_slot=sp-4u;
+        f.mutate_abi_on_first_read=true;f.state=&s;c.abi=&abi;
+        Nba97GameGpuSyncWord result{};Nba97GameGpuSyncProgress p{};
+        check(nba97_game_gpu_sync(&c,&s,0,&result,&p)==1);
+        check(result.word==0&&result.known_mask==0xffffffffu);
+        check(p.abi_completed&&p.frame_stack_pointer==sp-0x18u&&
+            p.stack_pointer==sp&&p.stack_writes==2&&p.stack_reads==2);
+        check(p.restored_saved_register_s0==0x13579bdfu&&
+            p.restored_return_address==0x2468ace0u);
+        /* The host-only completion fence runs after the source epilogue. A
+           fake backend acknowledgement may reject native completion, but it
+           cannot erase the source routine's already-restored ABI state. */
+        s=base_state();f={};f.state=&s;f.submitted=2;f.completed=1;
+        f.backend_idle=false;c=f.context();c.abi=&abi;result={};p={};
+        check(nba97_game_gpu_sync(&c,&s,0,&result,&p)==
+            NBA97_GAME_GPU_SYNC_DEVICE_INCOMPLETE);
+        check(p.source_completed&&p.abi_completed&&p.stack_pointer==sp&&
+            p.restored_saved_register_s0==0x11223344u&&
+            p.restored_return_address==0x80029ab4u);
+        f={};f.state=&s;f.abi_known=known;f.abi_base=base;
+        f.abi_ra_slot=sp-4u;f.invalidate_abi_ra_on_first_read=true;
+        c=f.context();c.abi=&abi;result={};p={};
+        check(nba97_game_gpu_sync(&c,&s,0,&result,&p)==
+            NBA97_GAME_GPU_SYNC_STACK_UNKNOWN);
+        check(p.source_completed&&!p.abi_completed&&p.stack_writes==2&&
+            p.stack_reads==0&&p.stopped_pc==0x8009954cu&&
+            p.stopped_address==sp-4u);
+        for(auto& byte:known)byte=1;
+        abi.stack_pointer=sp+2u;f={};f.state=&s;c=f.context();c.abi=&abi;p={};
+        check(nba97_game_gpu_sync(&c,&s,0,&result,&p)==
+            NBA97_GAME_GPU_SYNC_STACK_ALIGNMENT && p.stack_writes==0 &&
+            p.stopped_pc==0x80099500u);
+        Nba97GameTextRegion remote{0x80001000u,bytes,known,sizeof bytes};
+        abi={{&remote,1},sp,0x80029ab4u,0x11223344u};
+        f={};f.state=&s;c=f.context();c.abi=&abi;p={};
+        check(nba97_game_gpu_sync(&c,&s,0,&result,&p)==
+            NBA97_GAME_GPU_SYNC_STACK_RESOURCE && p.stack_writes==0 &&
+            p.stopped_pc==0x80099500u);
     }
     std::printf("%u checks, %u failures\n",checks,failures);
     return failures?1:0;

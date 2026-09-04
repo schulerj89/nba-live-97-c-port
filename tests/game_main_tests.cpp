@@ -18,6 +18,7 @@
 #include "recovered/game_presentation_wait.h"
 #include "recovered/game_video_environment_initialize.h"
 #include "recovered/game_move_image.h"
+#include "recovered/game_gpu_sync.h"
 
 #include <array>
 #include <cstdint>
@@ -86,6 +87,9 @@ struct Fixture {
     std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
     Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
     std::array<Nba97GameMoveImageProgress,2> move_image_progress{};
+    Nba97GameGpuSyncState gpu_sync_state{};
+    Nba97GameGpuSyncProgress gpu_sync_progress{};
+    Nba97GameGpuSyncWord gpu_sync_source_v0{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -102,6 +106,9 @@ struct Fixture {
     std::vector<Nba97GamePresentationWaitEvent> presentation_wait_calls;
     std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_calls;
     std::vector<Nba97GameMoveImageEvent> move_image_calls;
+    std::vector<Nba97GameGpuSyncAccess> gpu_sync_reads;
+    std::vector<Nba97GameGpuSyncWrite> gpu_sync_writes;
+    std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
@@ -110,6 +117,20 @@ struct Fixture {
     unsigned video_environment_child_callbacks = 0;
     unsigned move_image_invocations = 0;
     unsigned move_image_child_callbacks = 0;
+    unsigned gpu_sync_invocations = 0;
+    unsigned gpu_sync_dispatch_resolutions = 0;
+    unsigned gpu_sync_backend_observations = 0;
+    unsigned gpu_sync_dma_busy_reads = 0;
+    std::uint64_t gpu_submitted = 0;
+    std::uint64_t gpu_completed = 0;
+    bool gpu_idle = true;
+    std::uint32_t gpu_i_mask = 0;
+    std::uint32_t gpu_dma_chcr = 0;
+    std::uint32_t gpu_status = 0x04000000u;
+    std::uint32_t gpu_read = 0;
+    std::uint32_t gpu_dpcr = 0;
+    std::uint32_t gpu_timer_status = 0;
+    std::uint32_t gpu_timer_count = 0;
     std::uint32_t active_display_environment = 0;
     std::uint32_t active_draw_environment = 0;
     bool video_environment_synchronized = false;
@@ -138,6 +159,7 @@ struct Fixture {
     bool compose_presentation_wait = false;
     bool compose_video_environment = false;
     bool compose_move_image = false;
+    bool compose_gpu_sync = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -561,11 +583,85 @@ struct Fixture {
                f.get(0x800c5674u)!=(invocation ? 0x01000000u : 0u) ||
                f.get(0x800c5678u)!=0x01000200u)
                 return 0;
+            /* The source GPU dispatch is asynchronous. Leave one observable
+               DMA-busy sample for the following DrawSync(0), which owns the
+               wait and completes both submitted packets. */
+            if(f.compose_gpu_sync) {
+                ++f.gpu_submitted;
+                f.gpu_idle=false;
+                f.gpu_sync_dma_busy_reads=1;
+            }
             *value={0,1};
         }
         ++f.move_image_child_callbacks;
         f.move_image_calls.push_back(*event);
         return 1;
+    }
+    static int gpuSyncRead(void* user,const Nba97GameGpuSyncAccess* access,
+        Nba97GameGpuSyncWord* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.gpu_sync_reads.push_back(*access);
+        value->known_mask=access->width==2 ? 0xffffu : 0xffffffffu;
+        if(access->address==f.gpu_sync_state.c56a0_dma2_chcr_ptr) {
+            if(f.gpu_sync_dma_busy_reads) {
+                value->word=f.gpu_dma_chcr|0x01000000u;
+                --f.gpu_sync_dma_busy_reads;
+                /* Completion occurs after this read has sampled BUSY, so the
+                   recovered source loop must execute its timeout check and
+                   poll DMA again before it may return. */
+                f.gpu_completed=f.gpu_submitted;
+                f.gpu_idle=true;
+            } else value->word=f.gpu_dma_chcr&~0x01000000u;
+        } else if(access->address==f.gpu_sync_state.c5694_gpu_status_ptr)
+            value->word=f.gpu_status;
+        else if(access->address==f.gpu_sync_state.c5698_gpu_read_ptr)
+            value->word=f.gpu_read;
+        else if(access->address==f.gpu_sync_state.c56b0_dpcr_ptr)
+            value->word=f.gpu_dpcr;
+        else if(access->address==f.gpu_sync_state.c5714_timer_status_ptr)
+            value->word=f.gpu_timer_status;
+        else if(access->address==f.gpu_sync_state.c5718_timer_counter_ptr)
+            value->word=f.gpu_timer_count;
+        else if(access->address==f.gpu_sync_state.c5534_i_mask_ptr)
+            value->word=f.gpu_i_mask;
+        else return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        return NBA97_GAME_GPU_SYNC_OK;
+    }
+    static int gpuSyncWrite(void* user,const Nba97GameGpuSyncWrite* write) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.gpu_sync_writes.push_back(*write);
+        if(write->address==f.gpu_sync_state.c56a0_dma2_chcr_ptr)
+            f.gpu_dma_chcr=write->value.word;
+        else if(write->address==f.gpu_sync_state.c5694_gpu_status_ptr)
+            f.gpu_status=write->value.word;
+        else if(write->address==f.gpu_sync_state.c56b0_dpcr_ptr)
+            f.gpu_dpcr=write->value.word;
+        else if(write->address==f.gpu_sync_state.c5534_i_mask_ptr)
+            f.gpu_i_mask=write->value.word&0xffffu;
+        else return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        return NBA97_GAME_GPU_SYNC_OK;
+    }
+    static int gpuSyncResolve(void* user,std::uint32_t pc,
+        std::uint32_t table,std::uint32_t offset,Nba97GameGpuSyncWord* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.gpu_sync_dispatch_resolutions;
+        if(pc!=0x8009953cu || table!=0x800c5578u || offset!=0x3cu)
+            return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        *value={0x8009b9b4u,0xffffffffu};
+        return NBA97_GAME_GPU_SYNC_OK;
+    }
+    static int gpuSyncInvoke(void* user,const Nba97GameGpuSyncCall* call,
+        Nba97GameGpuSyncState*) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.gpu_sync_callbacks.push_back(*call);
+        return NBA97_GAME_GPU_SYNC_OK;
+    }
+    static int gpuSyncObserve(void* user,Nba97GameGpuSyncBackend* backend) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.gpu_sync_backend_observations;
+        *backend={f.gpu_submitted,f.gpu_completed,
+            static_cast<std::uint8_t>(f.gpu_idle),1};
+        return NBA97_GAME_GPU_SYNC_OK;
     }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
@@ -742,6 +838,31 @@ struct Fixture {
                     NBA97_TEXT_COMPLETE)
                 return 0;
             *value={move_progress.return_v0,move_progress.return_v0_known};
+        }
+        if (f.compose_gpu_sync && event->entry == 0x800994f4u) {
+            if(event->pc!=0x80029aacu || event->argument_count!=1 ||
+               event->argument[0]!=0 || event->stack_pointer!=FrameSp ||
+               event->return_address!=0x80029ab4u)
+                return 0;
+            ++f.gpu_sync_invocations;
+            /* The wrapper reloads these globals after any debug callback.
+               Refresh them from the same retained RAM mutated by the earlier
+               ResetGraph/SetGraphDebug owners. */
+            f.gpu_sync_state.c55c2_debug_level=
+                static_cast<std::uint8_t>(f.get(0x800c55c2u,1));
+            f.gpu_sync_state.c55bc_debug_callback=f.get(0x800c55bcu);
+            f.gpu_sync_state.c55b8_dispatch_table=f.get(0x800c55b8u);
+            Nba97GameGpuSyncAbi abi{*memory,event->stack_pointer,
+                event->return_address,event->saved_register[0]};
+            Nba97GameGpuSyncContext context{gpuSyncRead,gpuSyncWrite,
+                gpuSyncResolve,gpuSyncInvoke,gpuSyncObserve,&f,64,1000,&abi};
+            if(nba97_game_gpu_sync(&context,&f.gpu_sync_state,
+                   event->argument[0],&f.gpu_sync_source_v0,
+                   &f.gpu_sync_progress)!=NBA97_GAME_GPU_SYNC_OK)
+                return 0;
+            *value={f.gpu_sync_source_v0.word,
+                static_cast<std::uint8_t>(
+                    f.gpu_sync_source_v0.known_mask==0xffffffffu)};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -923,6 +1044,13 @@ struct Composition {
         game.put(0x800c566cu,0x80000000u);
         game.put(0x800c5640u,0x400u,2);
         game.put(0x800c5654u,0x200u,2);
+        game.gpu_sync_state.c5534_i_mask_ptr=0x1f801074u;
+        game.gpu_sync_state.c5694_gpu_status_ptr=0x1f801814u;
+        game.gpu_sync_state.c5698_gpu_read_ptr=0x1f801810u;
+        game.gpu_sync_state.c56a0_dma2_chcr_ptr=0x1f8010a8u;
+        game.gpu_sync_state.c56b0_dpcr_ptr=0x1f8010f0u;
+        game.gpu_sync_state.c5714_timer_status_ptr=0x1f801124u;
+        game.gpu_sync_state.c5718_timer_counter_ptr=0x1f801120u;
         game.putText(0x800247e4u,"cdrom:");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
@@ -955,6 +1083,7 @@ struct Composition {
         game.compose_presentation_wait = true;
         game.compose_video_environment = true;
         game.compose_move_image = true;
+        game.compose_gpu_sync = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1447,6 +1576,50 @@ void overlay_composition() {
         c.game.get(0x800c5670u)==0x00000200u &&
         c.game.get(0x800c5674u)==0x01000000u &&
         c.game.get(0x800c5678u)==0x01000200u);
+    check(c.game.gpu_sync_invocations==1 &&
+        c.game.gpu_sync_dispatch_resolutions==1 &&
+        c.game.gpu_sync_backend_observations==2 &&
+        c.game.gpu_submitted==2 && c.game.gpu_completed==2 &&
+        c.game.gpu_idle && c.game.gpu_sync_dma_busy_reads==0);
+    check(c.game.gpu_sync_progress.source_completed &&
+        c.game.gpu_sync_progress.synchronized &&
+        !c.game.gpu_sync_progress.source_timed_out &&
+        c.game.gpu_sync_progress.abi_completed &&
+        c.game.gpu_sync_progress.device_reads==7 &&
+        c.game.gpu_sync_progress.device_writes==0 &&
+        c.game.gpu_sync_progress.calls==0 &&
+        c.game.gpu_sync_progress.dispatch_resolutions==1 &&
+        c.game.gpu_sync_progress.backend_observations==2 &&
+        c.game.gpu_sync_progress.gpu_polls==0 &&
+        c.game.gpu_sync_progress.source_steps==4 &&
+        c.game.gpu_sync_progress.stack_writes==2 &&
+        c.game.gpu_sync_progress.stack_reads==2 &&
+        c.game.gpu_sync_progress.queued_through==2 &&
+        c.game.gpu_sync_progress.frame_stack_pointer==FrameSp-0x18u &&
+        c.game.gpu_sync_progress.stack_pointer==FrameSp &&
+        c.game.gpu_sync_progress.restored_return_address==0x80029ab4u &&
+        c.game.gpu_sync_progress.restored_saved_register_s0==1);
+    check(c.game.gpu_sync_source_v0.word==0 &&
+        c.game.gpu_sync_source_v0.known_mask==0xffffffffu &&
+        c.game.gpu_sync_state.c55c2_debug_level==0 &&
+        c.game.gpu_sync_state.c55bc_debug_callback==0x8009cb2cu &&
+        c.game.gpu_sync_state.c55b8_dispatch_table==0x800c5578u &&
+        c.game.gpu_sync_state.c56d8_deadline==0xf0u &&
+        c.game.gpu_sync_state.c56dc_poll_count==1 &&
+        c.game.gpu_sync_callbacks.empty() && c.game.gpu_sync_writes.empty());
+    check(c.game.gpu_sync_reads.size()==7 &&
+        c.game.gpu_sync_reads[0].pc==0x8009bdd4u &&
+        c.game.gpu_sync_reads[1].pc==0x8009bdd8u &&
+        c.game.gpu_sync_reads[2].pc==0x8009ba2cu &&
+        c.game.gpu_sync_reads[3].pc==0x8009bdd4u &&
+        c.game.gpu_sync_reads[4].pc==0x8009bdd8u &&
+        c.game.gpu_sync_reads[5].pc==0x8009ba2cu &&
+        c.game.gpu_sync_reads[6].pc==0x8009ba4cu);
+    check(c.game.calls[20].pc==0x80029aacu &&
+        c.game.calls[20].entry==0x800994f4u &&
+        c.game.calls[20].return_address==0x80029ab4u &&
+        c.game.calls[20].argument_count==1 &&
+        c.game.calls[20].argument[0]==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -1454,10 +1627,10 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* All 41 0x80029BDC invocations reuse MoveImage's saved-s2 slot; its
-           saved-ra slot remains the second 0x800997E4 caller return address. */
+        /* All 41 0x80029BDC invocations reuse DrawSync's saved-s0 slot. Its
+           saved-ra slot retains the later 0x800994F4 caller return address. */
         c.game.get(FrameSp - 8u) == 0x80029b58u &&
-        c.game.get(FrameSp - 4u) == 0x80029aacu);
+        c.game.get(FrameSp - 4u) == 0x80029ab4u);
     check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
         c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7b3cu)==0 &&
         c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);

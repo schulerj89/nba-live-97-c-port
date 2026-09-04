@@ -61,6 +61,19 @@ def main():
             move_hashes["move-image-buffer0"] ==
             move_hashes["move-image-buffer1"],
             "MoveImage did not reproduce its source in both retained VRAM buffers")
+    sync_hashes = {
+        name: ppm_hash(args.frames / f"{name}.ppm")
+        for name in ["draw-sync-before-buffer0", "draw-sync-after-buffer0"]}
+    require(sync_hashes["draw-sync-before-buffer0"] ==
+            move_hashes["move-image-before-buffer0"],
+            "MoveImage packets became visible before DrawSync")
+    require(sync_hashes["draw-sync-before-buffer0"] !=
+            sync_hashes["draw-sync-after-buffer0"],
+            "DrawSync did not produce a visible retained-VRAM transition")
+    require(sync_hashes["draw-sync-after-buffer0"] ==
+            move_hashes["move-image-source"] ==
+            move_hashes["move-image-buffer0"],
+            "DrawSync completion does not match the submitted MoveImage source")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -350,6 +363,8 @@ def main():
                 "reads_per_call": 11, "stores_per_call": 7,
                 "pixel_words_per_copy": 131072,
                 "pixel_words_copied": 262144,
+                "submitted_packets": 2,
+                "completion_owner": "0x800994F4",
                 "source_quirks": {
                     "diagnostic_precedes_extent_check": True,
                     "only_zero_extent_is_rejected": True,
@@ -362,9 +377,35 @@ def main():
                              "move-image-source.ppm",
                              "move-image-buffer0.ppm",
                              "move-image-buffer1.ppm"],
-                "visual_effect": "diagnostic source copied to both retained PS1 buffers; native frontend unchanged",
-                "status": "both-vram-pages-seeded"},
+                "visual_effect": "two diagnostic VRAM copies submitted; following DrawSync completed both; native frontend unchanged",
+                "status": "both-vram-copy-packets-submitted"},
             "recovered 0x800997E4 MoveImage receipt drifted")
+    require(receipt["gpu_sync"] == {
+                "binary": "GAMEONLY", "address": "0x800994F4",
+                "end_exclusive": "0x80099560", "instructions": 27,
+                "api": "DrawSync", "call_pc": "0x80029AAC", "mode": 0,
+                "driver_table_global": "0x800C55B8",
+                "driver_table": "0x800C5578", "dispatch_offset": "0x3C",
+                "dispatch_entry": "0x8009B9B4", "submitted_before": 2,
+                "completed_before": 0, "completed_after": 2,
+                "queued_through": 2, "dma_busy_samples": 1,
+                "timer_reads": 4, "device_reads": 7,
+                "backend_observations": 2, "source_steps": 4,
+                "stack_reads": 2, "stack_writes": 2,
+                "source_v0": 0, "synchronized": True,
+                "source_quirks": {
+                    "debug_callback_precedes_live_table_reload": True,
+                    "indirect_dispatch_is_unguarded": True,
+                    "signed_timeout_comparisons": True,
+                    "timeout_poll_counter_postincrements": True,
+                    "timeout_returns_minus_one_after_reset": True,
+                    "live_o32_epilogue_reload": True},
+                "visual_fixture": "generated diagnostic grid, not retail pixels",
+                "captures": ["draw-sync-before-buffer0.ppm",
+                             "draw-sync-after-buffer0.ppm"],
+                "visual_effect": "pending MoveImage packets became visible in both retained VRAM buffers during DrawSync; native frontend unchanged",
+                "status": "gpu-submissions-completed"},
+            "recovered 0x800994F4 DrawSync receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -419,6 +460,9 @@ def main():
             calls[19]["pc"] == "0x80029AA4" and
             calls[19]["entry"] == "0x800997E4",
             "two MoveImage startup boundaries drifted")
+    require(calls[20]["pc"] == "0x80029AAC" and
+            calls[20]["entry"] == "0x800994F4",
+            "DrawSync startup boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -531,9 +575,8 @@ def main():
             "does not draw, so none of the 98 natively captured frontend frames changed" in trace and
             "0x800997E4 executed PsyQ MoveImage twice" in trace and
             "call PCs 0x80029A94 and 0x80029AA4" in trace and
-            "RECT(512,0,512,256) copied" in trace and
+            "RECT(512,0,512,256) submitted copies" in trace and
             "first to (0,0), then to (0,256)" in trace and
-            "262144 total 16-bit pixel words" in trace and
             "unconditional 0x80099560 diagnostic boundary" in trace and
             "retained packet header words 0x04FFFFFF/0x80000000" in trace and
             "wrote source/destination/extent at 0x800C5670..0x800C5678" in trace and
@@ -542,6 +585,21 @@ def main():
             "low-16-bit destination truncation" in trace and
             "move-image-before-buffer0.ppm" in trace and
             "generated retained-VRAM test grid, not retail art" in trace and
+            "0x800994F4 ran PsyQ DrawSync(0)" in trace and
+            "call PC 0x80029AAC" in trace and
+            "recovered 27-instruction wrapper and default 0x8009B9B4 closure" in trace and
+            "live table 0x800C5578 slot +0x3C resolved to 0x8009B9B4" in trace and
+            "2 submitted MoveImage packets and 0 completed" in trace and
+            "DMA2 reported busy once" in trace and
+            "four timer-register reads preserved timeout accounting" in trace and
+            "second observation required both packets complete" in trace and
+            "262144 16-bit words became visible" in trace and
+            "draw-sync-before-buffer0.ppm" in trace and
+            "debug-before-table-reload" in trace and
+            "signed timeout comparisons" in trace and
+            "post-incremented poll counter" in trace and
+            "timeout reset/-1 return" in trace and
+            "live o32 epilogue quirks remain" in trace and
             "native frontend renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
@@ -572,8 +630,9 @@ def main():
           "acknowledged source VBlank state without host timing, retained its unbounded wait, and changed no pixels; "
           "native video-environment initializer 0x80029F20 configured both original 512x240 PS1 buffer pairs, "
           "retained its asymmetric DRAWENV writes and selector mismatch, and changed no pixels; "
-          "native PsyQ MoveImage 0x800997E4 copied the diagnostic right-hand VRAM page into both "
-          "framebuffer pages and emitted four directly comparable PPM proofs while leaving frontend pixels unchanged; "
+          "native PsyQ MoveImage 0x800997E4 submitted two diagnostic VRAM copies; "
+          "native PsyQ DrawSync 0x800994F4 waited for and completed both packets, emitted before/after "
+          "PPM proof, and preserved its timeout/dispatch quirks while leaving frontend pixels unchanged; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

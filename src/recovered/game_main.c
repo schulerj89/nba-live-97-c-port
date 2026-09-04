@@ -279,6 +279,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
         0, 0, &value));
     TRY(direct_call(run, 0x80029aa4u, 0x800997e4u, 3, run->sp + 0x10u,
         0, 0x100u, &value));
+    /* GAMEONLY 0x80029AAC -> 0x800994F4 is the recovered PsyQ DrawSync
+     * owner. Mode zero waits until the two MoveImage GPU submissions above,
+     * the SDK queue, DMA2, and GPU readiness are complete. Its live debug
+     * callback/table reload, signed timeout/reset oddities, raw v0, and o32
+     * stack reload remain source behavior rather than host normalization. */
     TRY(direct_call(run, 0x80029aacu, 0x800994f4u, 1, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029ab4u, 0x80099458u, 1, 1, 0, 0, &value));
     TRY(direct_call(run, 0x80029abcu, 0x800a3e20u, 0, 0, 0, 0, &value));

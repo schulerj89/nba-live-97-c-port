@@ -32,6 +32,7 @@
 #include "recovered/game_presentation_wait.h"
 #include "recovered/game_video_environment_initialize.h"
 #include "recovered/game_move_image.h"
+#include "recovered/game_gpu_sync.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6260,6 +6261,9 @@ private:
             std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
             Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
             std::array<Nba97GameMoveImageProgress,2> move_image_progress{};
+            Nba97GameGpuSyncState gpu_sync_state{};
+            Nba97GameGpuSyncProgress gpu_sync_progress{};
+            Nba97GameGpuSyncWord gpu_sync_source_v0{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6269,9 +6273,20 @@ private:
             std::vector<Nba97GamePresentationWaitEvent> presentation_wait_events;
             std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_events;
             std::vector<Nba97GameMoveImageEvent> move_image_events;
+            std::vector<Nba97GameGpuSyncAccess> gpu_sync_reads;
+            std::vector<Nba97GameGpuSyncWrite> gpu_sync_writes;
+            std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
+            struct PendingMove {
+                unsigned sx,sy,dx,dy,width,height;
+            };
+            std::vector<PendingMove> pending_moves;
             std::vector<std::uint16_t> diagnostic_vram=
                 std::vector<std::uint16_t>(1024u*512u);
             std::vector<std::uint16_t> move_image_before_top=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> draw_sync_before_top=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> draw_sync_after_top=
                 std::vector<std::uint16_t>(512u*240u);
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6306,7 +6321,25 @@ private:
             unsigned video_environment_child_callbacks=0;
             unsigned move_image_calls=0;
             unsigned move_image_child_callbacks=0;
+            unsigned gpu_sync_calls=0;
+            unsigned gpu_sync_dispatch_resolutions=0;
+            unsigned gpu_sync_backend_observations=0;
+            unsigned gpu_sync_dma_busy_samples=0;
+            unsigned gpu_sync_timer_reads=0;
             std::uint64_t move_image_pixel_words=0;
+            std::uint64_t gpu_submitted=0;
+            std::uint64_t gpu_completed=0;
+            std::uint64_t gpu_sync_submitted_before=0;
+            std::uint64_t gpu_sync_completed_before=0;
+            bool gpu_idle=true;
+            std::uint32_t gpu_i_mask=0;
+            std::uint32_t gpu_dma_chcr=0;
+            std::uint32_t gpu_status=0x04000000u;
+            std::uint32_t gpu_read=0;
+            std::uint32_t gpu_dpcr=0;
+            std::uint32_t gpu_timer_status=0;
+            std::uint32_t gpu_timer_count=0;
+            unsigned gpu_dma_busy_reads=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6364,6 +6397,13 @@ private:
                 put(0x800c566cu,0x80000000u);
                 put(0x800c5640u,0x00000400u);
                 put(0x800c5654u,0x00000200u);
+                gpu_sync_state.c5534_i_mask_ptr=0x1f801074u;
+                gpu_sync_state.c5694_gpu_status_ptr=0x1f801814u;
+                gpu_sync_state.c5698_gpu_read_ptr=0x1f801810u;
+                gpu_sync_state.c56a0_dma2_chcr_ptr=0x1f8010a8u;
+                gpu_sync_state.c56b0_dpcr_ptr=0x1f8010f0u;
+                gpu_sync_state.c5714_timer_status_ptr=0x1f801124u;
+                gpu_sync_state.c5718_timer_counter_ptr=0x1f801120u;
                 /* Sentinels in the two DRAWENVs that 0x80029F20 never passes
                    to SetDefDrawEnv make its asymmetric direct writes visible. */
                 putByte(0x80021fbau,0xa2u);putByte(0x80021fbbu,0xb2u);
@@ -6372,8 +6412,8 @@ private:
                 putByte(0x80022018u,0xc3u);putByte(0x80022019u,0xd3u);
                 /* Visual-only retained VRAM fixture. The right 512x256 page
                    gets a conspicuous diagnostic grid; the two left pages
-                   start with different flat colors. MoveImage itself, not
-                   the native renderer, must make both destinations match. */
+                   start with different flat colors. MoveImage submits the
+                   copies and the following DrawSync must complete them. */
                 for(unsigned y=0;y<512;++y)for(unsigned x=0;x<512;++x)
                     diagnostic_vram[y*1024u+x]=y<256 ? 0x0010u : 0x4000u;
                 for(unsigned y=0;y<256;++y)for(unsigned x=0;x<512;++x) {
@@ -6441,6 +6481,24 @@ private:
                     return value;
                 }
                 throw std::runtime_error("game-entry diagnostic read escaped declared source memory");
+            }
+            void completeGpuWork() {
+                for(const auto& command:pending_moves) {
+                    std::vector<std::uint16_t> pixels(
+                        command.width*command.height);
+                    for(unsigned y=0;y<command.height;++y)
+                        for(unsigned x=0;x<command.width;++x)
+                            pixels[y*command.width+x]=diagnostic_vram[
+                                (command.sy+y)*1024u+command.sx+x];
+                    for(unsigned y=0;y<command.height;++y)
+                        for(unsigned x=0;x<command.width;++x)
+                            diagnostic_vram[(command.dy+y)*1024u+
+                                command.dx+x]=pixels[y*command.width+x];
+                    move_image_pixel_words+=pixels.size();
+                }
+                pending_moves.clear();
+                gpu_completed=gpu_submitted;
+                gpu_idle=true;
             }
         } state;
         const auto callback=[](void* user,const Nba97GameTextMemory* memory,const Nba97GameMainEvent* event,
@@ -7099,17 +7157,14 @@ private:
                            sy+height>512u || dy+height>512u ||
                            sx!=512u || sy!=0 || dx!=0 || width!=512u ||
                            height!=256u || dy!=(invocation ? 256u : 0u))return 0;
-                        /* A temporary retains deterministic overlap behavior
-                           for this synchronous GPU fixture. No host window or
-                           frontend framebuffer participates in the copy. */
-                        std::vector<std::uint16_t> pixels(width*height);
-                        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
-                            pixels[y*width+x]=state.diagnostic_vram[
-                                (sy+y)*1024u+sx+x];
-                        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
-                            state.diagnostic_vram[(dy+y)*1024u+dx+x]=
-                                pixels[y*width+x];
-                        state.move_image_pixel_words+=pixels.size();
+                        /* GPU dispatch submits work; it does not make the
+                           destination immediately visible. The following
+                           recovered DrawSync owns completion and observation. */
+                        state.pending_moves.push_back(
+                            {sx,sy,dx,dy,width,height});
+                        ++state.gpu_submitted;
+                        state.gpu_idle=false;
+                        state.gpu_dma_busy_reads=1;
                         *move_value={0,1};
                     }
                     ++state.move_image_child_callbacks;
@@ -7127,6 +7182,118 @@ private:
                 if(nba97_game_move_image(&move_context,&move_progress)!=
                        NBA97_TEXT_COMPLETE || !move_progress.completed)return 0;
                 *value={move_progress.return_v0,move_progress.return_v0_known};
+            } else if(event->entry==0x800994f4u) {
+                if(event->pc!=0x80029aacu || event->argument_count!=1 ||
+                   event->argument[0]!=0 || event->stack_pointer!=0x807fffd0u ||
+                   event->return_address!=0x80029ab4u)return 0;
+                ++fixture.gpu_sync_calls;
+                for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x)
+                    fixture.draw_sync_before_top[y*512u+x]=
+                        fixture.diagnostic_vram[y*1024u+x];
+                fixture.gpu_sync_state.c55c2_debug_level=
+                    fixture.getByte(0x800c55c2u);
+                fixture.gpu_sync_state.c55bc_debug_callback=
+                    fixture.get(0x800c55bcu);
+                fixture.gpu_sync_state.c55b8_dispatch_table=
+                    fixture.get(0x800c55b8u);
+                const auto read=[](void* user,
+                    const Nba97GameGpuSyncAccess* access,
+                    Nba97GameGpuSyncWord* word)->int {
+                    auto& state=*static_cast<State*>(user);
+                    state.gpu_sync_reads.push_back(*access);
+                    word->known_mask=access->width==2 ? 0xffffu : 0xffffffffu;
+                    if(access->address==state.gpu_sync_state.c56a0_dma2_chcr_ptr) {
+                        if(state.gpu_dma_busy_reads) {
+                            word->word=state.gpu_dma_chcr|0x01000000u;
+                            --state.gpu_dma_busy_reads;
+                            ++state.gpu_sync_dma_busy_samples;
+                            /* Complete after reporting BUSY once. The source
+                               must run timeout accounting and poll DMA again. */
+                            state.completeGpuWork();
+                        } else word->word=state.gpu_dma_chcr&~0x01000000u;
+                    } else if(access->address==
+                            state.gpu_sync_state.c5694_gpu_status_ptr)
+                        word->word=state.gpu_status;
+                    else if(access->address==
+                            state.gpu_sync_state.c5698_gpu_read_ptr)
+                        word->word=state.gpu_read;
+                    else if(access->address==
+                            state.gpu_sync_state.c56b0_dpcr_ptr)
+                        word->word=state.gpu_dpcr;
+                    else if(access->address==
+                            state.gpu_sync_state.c5714_timer_status_ptr) {
+                        word->word=state.gpu_timer_status;
+                        ++state.gpu_sync_timer_reads;
+                    } else if(access->address==
+                            state.gpu_sync_state.c5718_timer_counter_ptr) {
+                        word->word=state.gpu_timer_count;
+                        ++state.gpu_sync_timer_reads;
+                    } else if(access->address==
+                            state.gpu_sync_state.c5534_i_mask_ptr)
+                        word->word=state.gpu_i_mask;
+                    else return NBA97_GAME_GPU_SYNC_ARGUMENT;
+                    return NBA97_GAME_GPU_SYNC_OK;
+                };
+                const auto write=[](void* user,
+                    const Nba97GameGpuSyncWrite* event)->int {
+                    auto& state=*static_cast<State*>(user);
+                    state.gpu_sync_writes.push_back(*event);
+                    if(event->address==state.gpu_sync_state.c56a0_dma2_chcr_ptr)
+                        state.gpu_dma_chcr=event->value.word;
+                    else if(event->address==
+                            state.gpu_sync_state.c5694_gpu_status_ptr)
+                        state.gpu_status=event->value.word;
+                    else if(event->address==state.gpu_sync_state.c56b0_dpcr_ptr)
+                        state.gpu_dpcr=event->value.word;
+                    else if(event->address==state.gpu_sync_state.c5534_i_mask_ptr)
+                        state.gpu_i_mask=event->value.word&0xffffu;
+                    else return NBA97_GAME_GPU_SYNC_ARGUMENT;
+                    return NBA97_GAME_GPU_SYNC_OK;
+                };
+                const auto resolve=[](void* user,std::uint32_t pc,
+                    std::uint32_t table,std::uint32_t offset,
+                    Nba97GameGpuSyncWord* target)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.gpu_sync_dispatch_resolutions;
+                    if(pc!=0x8009953cu || table!=0x800c5578u ||
+                       offset!=0x3cu)return NBA97_GAME_GPU_SYNC_ARGUMENT;
+                    *target={0x8009b9b4u,0xffffffffu};
+                    return NBA97_GAME_GPU_SYNC_OK;
+                };
+                const auto invoke=[](void* user,
+                    const Nba97GameGpuSyncCall* event,
+                    Nba97GameGpuSyncState*)->int {
+                    auto& state=*static_cast<State*>(user);
+                    state.gpu_sync_callbacks.push_back(*event);
+                    return NBA97_GAME_GPU_SYNC_OK;
+                };
+                const auto observe=[](void* user,
+                    Nba97GameGpuSyncBackend* backend)->int {
+                    auto& state=*static_cast<State*>(user);
+                    if(!state.gpu_sync_backend_observations) {
+                        state.gpu_sync_submitted_before=state.gpu_submitted;
+                        state.gpu_sync_completed_before=state.gpu_completed;
+                    }
+                    ++state.gpu_sync_backend_observations;
+                    *backend={state.gpu_submitted,state.gpu_completed,
+                        static_cast<std::uint8_t>(state.gpu_idle),1};
+                    return NBA97_GAME_GPU_SYNC_OK;
+                };
+                Nba97GameGpuSyncAbi abi{*memory,event->stack_pointer,
+                    event->return_address,event->saved_register[0]};
+                Nba97GameGpuSyncContext gpu_context{read,write,resolve,invoke,
+                    observe,&fixture,64,1000,&abi};
+                if(nba97_game_gpu_sync(&gpu_context,&fixture.gpu_sync_state,
+                       event->argument[0],&fixture.gpu_sync_source_v0,
+                       &fixture.gpu_sync_progress)!=NBA97_GAME_GPU_SYNC_OK ||
+                   !fixture.gpu_sync_progress.source_completed ||
+                   !fixture.gpu_sync_progress.synchronized)return 0;
+                for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x)
+                    fixture.draw_sync_after_top[y*512u+x]=
+                        fixture.diagnostic_vram[y*1024u+x];
+                *value={fixture.gpu_sync_source_v0.word,
+                    static_cast<std::uint8_t>(
+                        fixture.gpu_sync_source_v0.known_mask==0xffffffffu)};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7215,6 +7382,60 @@ private:
                     state.diagnostic_vram[y*1024u+512u+x] &&
                 state.diagnostic_vram[(y+256u)*1024u+x]==
                     state.diagnostic_vram[y*1024u+512u+x];
+        const bool gpu_sync_complete=state.gpu_sync_calls==1 &&
+            state.gpu_sync_dispatch_resolutions==1 &&
+            state.gpu_sync_backend_observations==2 &&
+            state.gpu_sync_dma_busy_samples==1 &&
+            state.gpu_sync_timer_reads==4 &&
+            state.gpu_sync_submitted_before==2 &&
+            state.gpu_sync_completed_before==0 &&
+            state.gpu_submitted==2 && state.gpu_completed==2 &&
+            state.gpu_idle && state.gpu_dma_busy_reads==0 &&
+            state.pending_moves.empty() &&
+            state.gpu_sync_progress.source_completed &&
+            state.gpu_sync_progress.synchronized &&
+            !state.gpu_sync_progress.source_timed_out &&
+            state.gpu_sync_progress.abi_completed &&
+            state.gpu_sync_progress.device_reads==7 &&
+            state.gpu_sync_progress.device_writes==0 &&
+            state.gpu_sync_progress.calls==0 &&
+            state.gpu_sync_progress.dispatch_resolutions==1 &&
+            state.gpu_sync_progress.backend_observations==2 &&
+            state.gpu_sync_progress.gpu_polls==0 &&
+            state.gpu_sync_progress.source_steps==4 &&
+            state.gpu_sync_progress.stack_reads==2 &&
+            state.gpu_sync_progress.stack_writes==2 &&
+            state.gpu_sync_progress.queued_through==2 &&
+            state.gpu_sync_progress.frame_stack_pointer==0x807fffb8u &&
+            state.gpu_sync_progress.stack_pointer==0x807fffd0u &&
+            state.gpu_sync_progress.restored_return_address==0x80029ab4u &&
+            state.gpu_sync_progress.restored_saved_register_s0==1 &&
+            state.gpu_sync_source_v0.word==0 &&
+            state.gpu_sync_source_v0.known_mask==0xffffffffu &&
+            state.gpu_sync_state.c55c2_debug_level==0 &&
+            state.gpu_sync_state.c55bc_debug_callback==0x8009cb2cu &&
+            state.gpu_sync_state.c55b8_dispatch_table==0x800c5578u &&
+            state.gpu_sync_state.c56d8_deadline==0xf0u &&
+            state.gpu_sync_state.c56dc_poll_count==1 &&
+            state.gpu_sync_callbacks.empty() && state.gpu_sync_writes.empty() &&
+            state.gpu_sync_reads.size()==7 &&
+            state.gpu_sync_reads[0].pc==0x8009bdd4u &&
+            state.gpu_sync_reads[1].pc==0x8009bdd8u &&
+            state.gpu_sync_reads[2].pc==0x8009ba2cu &&
+            state.gpu_sync_reads[3].pc==0x8009bdd4u &&
+            state.gpu_sync_reads[4].pc==0x8009bdd8u &&
+            state.gpu_sync_reads[5].pc==0x8009ba2cu &&
+            state.gpu_sync_reads[6].pc==0x8009ba4cu;
+        bool draw_sync_visual_transition=true;
+        for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x) {
+            const auto at=y*512u+x;
+            draw_sync_visual_transition=draw_sync_visual_transition &&
+                state.draw_sync_before_top[at]==state.move_image_before_top[at] &&
+                state.draw_sync_after_top[at]==
+                    state.diagnostic_vram[y*1024u+512u+x];
+        }
+        draw_sync_visual_transition=draw_sync_visual_transition &&
+            state.draw_sync_before_top!=state.draw_sync_after_top;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7560,6 +7781,7 @@ private:
             state.active_draw_environment!=0x80021f48u ||
             !state.video_environment_synchronized ||
             !move_images_complete || !move_image_vram_matches ||
+            !gpu_sync_complete || !draw_sync_visual_transition ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -7579,7 +7801,7 @@ private:
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
             state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029b58u ||
-            state.get(0x807fffccu)!=0x80029aacu ||
+            state.get(0x807fffccu)!=0x80029ab4u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
@@ -7602,6 +7824,8 @@ private:
             state.calls[19].argument_count!=3 ||
             state.calls[19].argument[0]!=0x807fffe0u ||
             state.calls[19].argument[1]!=0 || state.calls[19].argument[2]!=0x100u ||
+            state.calls[20].pc!=0x80029aacu || state.calls[20].entry!=0x800994f4u ||
+            state.calls[20].argument_count!=1 || state.calls[20].argument[0]!=0 ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
@@ -7626,6 +7850,10 @@ private:
         writePpm(vram_frame(512,0,nullptr),capture_root/"move-image-source.ppm");
         writePpm(vram_frame(0,0,nullptr),capture_root/"move-image-buffer0.ppm");
         writePpm(vram_frame(0,256,nullptr),capture_root/"move-image-buffer1.ppm");
+        writePpm(vram_frame(0,0,&state.draw_sync_before_top),
+            capture_root/"draw-sync-before-buffer0.ppm");
+        writePpm(vram_frame(0,0,&state.draw_sync_after_top),
+            capture_root/"draw-sync-after-buffer0.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -7893,7 +8121,9 @@ private:
             "\"operations_per_call\": 20, \"accesses_per_call\": 18, "
             "\"reads_per_call\": 11, \"stores_per_call\": 7, "
             "\"pixel_words_per_copy\": 131072, \"pixel_words_copied\": "<<
-            state.move_image_pixel_words<<", \"source_quirks\": {"
+            state.move_image_pixel_words<<", \"submitted_packets\": "<<
+            state.gpu_submitted<<", \"completion_owner\": \"0x800994F4\", "
+            "\"source_quirks\": {"
             "\"diagnostic_precedes_extent_check\": true, "
             "\"only_zero_extent_is_rejected\": true, "
             "\"destination_coordinates_truncate_to_16_bits\": true, "
@@ -7904,8 +8134,36 @@ private:
             "\"captures\": [\"move-image-before-buffer0.ppm\", "
             "\"move-image-source.ppm\", \"move-image-buffer0.ppm\", "
             "\"move-image-buffer1.ppm\"], "
-            "\"visual_effect\": \"diagnostic source copied to both retained PS1 buffers; native frontend unchanged\", "
-            "\"status\": \"both-vram-pages-seeded\"},\n"
+            "\"visual_effect\": \"two diagnostic VRAM copies submitted; following DrawSync completed both; native frontend unchanged\", "
+            "\"status\": \"both-vram-copy-packets-submitted\"},\n"
+            "  \"gpu_sync\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800994F4\", "
+            "\"end_exclusive\": \"0x80099560\", \"instructions\": 27, "
+            "\"api\": \"DrawSync\", \"call_pc\": \"0x80029AAC\", \"mode\": 0, "
+            "\"driver_table_global\": \"0x800C55B8\", \"driver_table\": \"0x800C5578\", "
+            "\"dispatch_offset\": \"0x3C\", \"dispatch_entry\": \"0x8009B9B4\", "
+            "\"submitted_before\": "<<state.gpu_sync_submitted_before<<
+            ", \"completed_before\": "<<state.gpu_sync_completed_before<<
+            ", \"completed_after\": "<<state.gpu_completed<<
+            ", \"queued_through\": "<<state.gpu_sync_progress.queued_through<<
+            ", \"dma_busy_samples\": "<<state.gpu_sync_dma_busy_samples<<
+            ", \"timer_reads\": "<<state.gpu_sync_timer_reads<<
+            ", \"device_reads\": "<<state.gpu_sync_progress.device_reads<<
+            ", \"backend_observations\": "<<state.gpu_sync_progress.backend_observations<<
+            ", \"source_steps\": "<<state.gpu_sync_progress.source_steps<<
+            ", \"stack_reads\": "<<state.gpu_sync_progress.stack_reads<<
+            ", \"stack_writes\": "<<state.gpu_sync_progress.stack_writes<<
+            ", \"source_v0\": 0, \"synchronized\": true, \"source_quirks\": {"
+            "\"debug_callback_precedes_live_table_reload\": true, "
+            "\"indirect_dispatch_is_unguarded\": true, "
+            "\"signed_timeout_comparisons\": true, "
+            "\"timeout_poll_counter_postincrements\": true, "
+            "\"timeout_returns_minus_one_after_reset\": true, "
+            "\"live_o32_epilogue_reload\": true}, "
+            "\"visual_fixture\": \"generated diagnostic grid, not retail pixels\", "
+            "\"captures\": [\"draw-sync-before-buffer0.ppm\", "
+            "\"draw-sync-after-buffer0.ppm\"], "
+            "\"visual_effect\": \"pending MoveImage packets became visible in both retained VRAM buffers during DrawSync; native frontend unchanged\", "
+            "\"status\": \"gpu-submissions-completed\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7998,9 +8256,9 @@ private:
             "remaining outer calls are still acknowledged fixtures");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered startup callee 0x800997E4 executed PsyQ MoveImage twice "
-            "from call PCs 0x80029A94 and 0x80029AA4: RECT(512,0,512,256) copied "
-            "the staged right-hand VRAM page first to (0,0), then to (0,256), for "
-            "262144 total 16-bit pixel words; both calls emitted the unconditional "
+            "from call PCs 0x80029A94 and 0x80029AA4: RECT(512,0,512,256) submitted "
+            "copies of the staged right-hand VRAM page first to (0,0), then to (0,256); "
+            "both calls emitted the unconditional "
             "0x80099560 diagnostic boundary, retained packet header words 0x04FFFFFF/"
             "0x80000000, wrote source/destination/extent at 0x800C5670..0x800C5678, "
             "and dispatched the 20-byte packet through live table 0x800C5578 target "
@@ -8012,6 +8270,22 @@ private:
             "retained-VRAM test grid, not retail art; the native frontend renderer and "
             "its 98 click-through frames were unchanged; 17 remaining outer calls are "
             "still acknowledged fixtures");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next executed startup callee 0x800994F4 ran PsyQ DrawSync(0) from call "
+            "PC 0x80029AAC through its recovered 27-instruction wrapper and default "
+            "0x8009B9B4 closure: live table 0x800C5578 slot +0x3C resolved to "
+            "0x8009B9B4; the first backend observation saw 2 submitted MoveImage "
+            "packets and 0 completed, DMA2 reported busy once, four timer-register "
+            "reads preserved timeout accounting, the source polled DMA2 again and GPU "
+            "ready once, and the second observation required both packets complete "
+            "before returning v0=0; 262144 16-bit words became visible across the two "
+            "retained framebuffer pages; draw-sync-before-buffer0.ppm and "
+            "draw-sync-after-buffer0.ppm show the pending-to-complete transition using "
+            "the generated grid, not retail art; original debug-before-table-reload, "
+            "unguarded indirect dispatch, signed timeout comparisons, post-incremented "
+            "poll counter, timeout reset/-1 return, and live o32 epilogue quirks remain; "
+            "the native frontend renderer and its 98 click-through frames were unchanged; "
+            "16 remaining outer calls are still acknowledged fixtures");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

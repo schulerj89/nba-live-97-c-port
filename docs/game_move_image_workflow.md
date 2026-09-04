@@ -63,21 +63,24 @@ No compatibility cleanup was added:
 Select, and User Setup exclusively through recovered native input handlers. It
 captures the existing 98 frontend PPM frames and, after match acceptance,
 executes both `MoveImage` calls against an isolated 1024x512 retained-VRAM test
-fixture. The fixture contains a generated diagnostic grid rather than inferred
-retail art and produces four additional proof images:
+fixture, then executes the naturally following recovered `DrawSync(0)` owner.
+The fixture leaves each dispatch pending until that synchronization call. It
+contains a generated diagnostic grid rather than inferred retail art and
+produces four MoveImage proof images:
 
 - `move-image-before-buffer0.ppm`
 - `move-image-source.ppm`
 - `move-image-buffer0.ppm`
 - `move-image-buffer1.ppm`
 
-The verifier requires the old buffer to differ from the source and both final
-buffers to exactly equal the source. This visualizes the recovered copy while
+The verifier requires the old buffer to differ from the source, the separate
+pre-DrawSync capture to remain unchanged, and both final buffers to exactly
+equal the source. This visualizes submission plus synchronization while
 keeping the scope honest: the diagnostic does not replace or modify the native
 frontend renderer, and it does not claim a synthesized court or possession.
 The receipt and semantic log record both source call PCs, packet words, live
-driver target, two diagnostic calls, two GPU dispatches, and all 262,144 copied
-16-bit words.
+driver target, two diagnostic calls, two GPU dispatches, and the following
+DrawSync completion of all 262,144 copied 16-bit words.
 
 The standalone test covers both startup destinations, all 20 successful-path
 operation-budget stops, zero and negative extents, coordinate truncation,

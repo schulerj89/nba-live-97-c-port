@@ -268,7 +268,8 @@ if(BUILD_TESTING)
         src/recovered/game_clock_delta.c
         src/recovered/game_presentation_wait.c
         src/recovered/game_video_environment_initialize.c
-        src/recovered/game_move_image.c)
+        src/recovered/game_move_image.c
+        src/recovered/game_gpu_sync.c)
     target_compile_features(nba97_game_main_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_main_tests PRIVATE src)
     add_test(NAME game_main COMMAND nba97_game_main_tests)

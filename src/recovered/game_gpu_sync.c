@@ -10,6 +10,81 @@
 #define DMA_BUSY UINT32_C(0x01000000)
 #define GPU_READY UINT32_C(0x04000000)
 
+static int validate_abi(const Nba97GameGpuSyncAbi *abi)
+{
+    size_t i,j;
+    if(!abi)return NBA97_GAME_GPU_SYNC_OK;
+    if(!abi->memory.region&&abi->memory.count)return NBA97_GAME_GPU_SYNC_ARGUMENT;
+    for(i=0;i<abi->memory.count;++i){
+        const Nba97GameTextRegion *a=&abi->memory.region[i];
+        if(!a->data||!a->size||a->size>UINT64_C(0x100000000)||
+                (uint64_t)a->base+a->size>UINT64_C(0x100000000))
+            return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        for(j=0;j<i;++j){
+            const Nba97GameTextRegion *b=&abi->memory.region[j];
+            if((uint64_t)a->base<(uint64_t)b->base+b->size&&
+                    (uint64_t)b->base<(uint64_t)a->base+a->size)
+                return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        }
+    }
+    return NBA97_GAME_GPU_SYNC_OK;
+}
+
+static int locate_stack(Nba97GameGpuSyncContext *context,
+    Nba97GameGpuSyncProgress *progress,uint32_t pc,uint32_t address,
+    uint8_t **data,uint8_t **known)
+{
+    size_t i;
+    unsigned j;
+    Nba97GameGpuSyncAbi *abi=context->abi;
+    progress->stopped_pc=pc;progress->stopped_address=address;
+    if(address&3u)return NBA97_GAME_GPU_SYNC_STACK_ALIGNMENT;
+    for(i=0;i<abi->memory.count;++i){
+        Nba97GameTextRegion *region=&abi->memory.region[i];
+        uint64_t offset=(uint64_t)address-region->base;
+        if(address<region->base||offset>region->size||
+                4u>region->size-(size_t)offset)continue;
+        *data=region->data+(size_t)offset;
+        *known=region->known?region->known+(size_t)offset:0;
+        if(*known)for(j=0;j<4;++j)
+            if((*known)[j]>1u)return NBA97_GAME_GPU_SYNC_ARGUMENT;
+        return NBA97_GAME_GPU_SYNC_OK;
+    }
+    return NBA97_GAME_GPU_SYNC_STACK_RESOURCE;
+}
+
+static int write_stack(Nba97GameGpuSyncContext *context,
+    Nba97GameGpuSyncProgress *progress,uint32_t pc,uint32_t address,
+    uint32_t word)
+{
+    uint8_t *data,*known;
+    unsigned i;
+    int status=locate_stack(context,progress,pc,address,&data,&known);
+    if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+    for(i=0;i<4;++i){
+        data[i]=(uint8_t)(word>>(i*8u));
+        if(known)known[i]=1;
+    }
+    ++progress->stack_writes;
+    return NBA97_GAME_GPU_SYNC_OK;
+}
+
+static int read_stack(Nba97GameGpuSyncContext *context,
+    Nba97GameGpuSyncProgress *progress,uint32_t pc,uint32_t address,
+    uint32_t *word)
+{
+    uint8_t *data,*known;
+    uint32_t result=0;
+    unsigned i;
+    int status=locate_stack(context,progress,pc,address,&data,&known);
+    if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+    if(known)for(i=0;i<4;++i)
+        if(!known[i])return NBA97_GAME_GPU_SYNC_STACK_UNKNOWN;
+    for(i=0;i<4;++i)result|=(uint32_t)data[i]<<(i*8u);
+    *word=result;++progress->stack_reads;
+    return NBA97_GAME_GPU_SYNC_OK;
+}
+
 static uint32_t width_mask(uint8_t width)
 {
     if(width==1u)return UINT32_C(0xff);
@@ -421,8 +496,26 @@ int nba97_game_gpu_sync(Nba97GameGpuSyncContext *context,
     memset(progress,0,sizeof *progress);
     if(!context||!state||!source_v0)return NBA97_GAME_GPU_SYNC_ARGUMENT;
 
+    status=validate_abi(context->abi);
+    if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+
     status=step(context,progress,UINT32_C(0x800994f8));
     if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+    if(context->abi){
+        /* 800994FC..80099510: sp adjustment and both live o32 saves. The ra
+         * store is the branch-delay instruction and therefore happens on
+         * both debug paths before any callback can inspect/alias the frame. */
+        progress->frame_stack_pointer=context->abi->stack_pointer-UINT32_C(0x18);
+        progress->stack_pointer=progress->frame_stack_pointer;
+        status=write_stack(context,progress,UINT32_C(0x80099500),
+            progress->frame_stack_pointer+UINT32_C(0x10),
+            context->abi->saved_register_s0);
+        if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+        status=write_stack(context,progress,UINT32_C(0x80099510),
+            progress->frame_stack_pointer+UINT32_C(0x14),
+            context->abi->return_address);
+        if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+    }
     if(state->c55c2_debug_level>=2u){
         args[0]=DEBUG_TEXT;args[1]=mode;
         status=invoke(context,state,progress,UINT32_C(0x80099528),
@@ -456,6 +549,22 @@ int nba97_game_gpu_sync(Nba97GameGpuSyncContext *context,
     source_v0->known_mask=UINT32_MAX;
     progress->source_completed=1;
 
+    if(context->abi){
+        /* 8009954C..80099558 reloads live words after the indirect call.
+         * Do not restore from sanitized native temporaries: callbacks and
+         * mapped aliasing are allowed to change the saved values. This source
+         * epilogue precedes the native-only backend integrity fence below. */
+        status=read_stack(context,progress,UINT32_C(0x8009954c),
+            progress->frame_stack_pointer+UINT32_C(0x14),
+            &progress->restored_return_address);
+        if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+        status=read_stack(context,progress,UINT32_C(0x80099550),
+            progress->frame_stack_pointer+UINT32_C(0x10),
+            &progress->restored_saved_register_s0);
+        if(status!=NBA97_GAME_GPU_SYNC_OK)return status;
+        progress->stack_pointer=context->abi->stack_pointer;
+        progress->abi_completed=1;
+    }
     if(mode==0&&source_word==0){
         status=observe_backend(context,progress,UINT32_C(0x8009954c),&after);
         if(status!=NBA97_GAME_GPU_SYNC_OK)return status;

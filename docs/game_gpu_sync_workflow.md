@@ -73,6 +73,29 @@ RAM or source `V0`. A fake synchronous acknowledgement therefore yields
 `NBA97_GAME_GPU_SYNC_DEVICE_INCOMPLETE`, while delayed DMA/GPU readiness keeps
 the recovered source loop active until the deterministic backend completes.
 
+## Natural GAMEONLY startup composition
+
+GAMEONLY calls this owner at `0x80029AAC` with mode zero, immediately after the
+two `MoveImage` calls at `0x80029A94` and `0x80029AA4`. The native game-entry
+diagnostic now connects that exact boundary instead of acknowledging it as an
+opaque callback. Its retained backend deliberately leaves both VRAM-copy
+packets pending. `DrawSync` observes two submitted and zero completed packets,
+samples DMA2 busy once, performs the original timeout-accounting reads, polls
+DMA2 and GPU readiness again, then accepts the second backend observation only
+after both copies are complete.
+
+The optional `Nba97GameGpuSyncAbi` mapping also retains `800994F4`'s real
+24-byte o32 frame. Incoming `s0` and `ra` are stored at the original addresses
+and reloaded from live mapped bytes, including callback mutations. Existing
+standalone users may leave this mapping null.
+
+The self-driving visual test writes `draw-sync-before-buffer0.ppm` while the
+two packets are still pending and `draw-sync-after-buffer0.ppm` after the
+synchronization returns. The former matches the original flat destination;
+the latter matches the generated source grid and both final framebuffer pages.
+This fixture is diagnostic data, not recovered retail art, and it does not
+replace or mutate the native frontend renderer.
+
 ## Verification and claim boundary
 
 Private evidence under `.local/verification/native_completion/game_gpu_sync/`
@@ -83,6 +106,6 @@ timeout reset, and dynamic refusal; all 437 claimed PCs are reached. A separate
 10,000-case backend oracle exercises delayed submission/completion and rejects
 fake acknowledgements. Strict tests pass MSVC Debug/Release and GCC/UBSan.
 
-This is component/source ownership only. There is no production connection,
-natural caller trace, physical PS1 timing claim, rendered match frame, court,
-first possession, or gameplay claim.
+The component now has a natural source-caller trace in the bounded game-entry
+diagnostic. There is still no physical PS1 timing claim, live production GPU
+connection, rendered match frame, court, first possession, or gameplay claim.
