@@ -15,6 +15,7 @@
 #include "recovered/game_clock_initialize.h"
 #include "recovered/game_gte_initialize.h"
 #include "recovered/game_clock_delta.h"
+#include "recovered/game_presentation_wait.h"
 
 #include <array>
 #include <cstdint>
@@ -80,6 +81,7 @@ struct Fixture {
     Nba97GameGteInitializeState gte_state{};
     Nba97GameGteInitializeProgress gte_progress{};
     Nba97GameClockDeltaProgress clock_delta_progress{};
+    std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -93,8 +95,11 @@ struct Fixture {
     std::vector<Nba97GameVblankInitializeEvent> vblank_calls;
     std::vector<Nba97GameClockInitializeEvent> clock_calls;
     std::vector<Nba97GameClockDeltaEvent> clock_delta_calls;
+    std::vector<Nba97GamePresentationWaitEvent> presentation_wait_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
+    unsigned presentation_wait_invocations = 0;
+    unsigned presentation_vblank_signals = 0;
     bool vblank_set_rcnt_rejected = false;
     bool vblank_started_after_rejection = false;
     bool clock_critical_section = false;
@@ -117,6 +122,7 @@ struct Fixture {
     bool compose_clock = false;
     bool compose_gte = false;
     bool compose_clock_delta = false;
+    bool compose_presentation_wait = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -420,6 +426,29 @@ struct Fixture {
         *value={f.get(0x800d7a70u),1};
         return 1;
     }
+    static int presentationWaitIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GamePresentationWaitEvent* event,
+        Nba97GamePresentationWaitValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.presentation_wait_calls.push_back(*event);
+        if(event->kind!=NBA97_GAME_PRESENTATION_WAIT_SERVICE ||
+           event->pc!=0x80029be4u || event->entry!=0x800a9cc0u ||
+           event->return_address!=0x80029becu || event->argument_count ||
+           f.get(event->global_pointer+0x1b4u)!=0 ||
+           f.get(0x800d7a84u)!=0 || f.get(0x800d7b3cu)!=0 ||
+           f.get(0x800d7b40u)!=0)
+            return 0;
+        /* Exact cold/common 0x800A9CC0 service fixture: the child clears the
+           ready word, then an acknowledged source VBlank ISR sets it and
+           increments the retained frame counter. This is not host cadence. */
+        f.put(0x800d7a80u,0);
+        f.put(0x800d7a80u,1);
+        f.put(0x800d7a88u,f.get(0x800d7a88u)+1u);
+        f.put(event->global_pointer+0x1b4u,0);
+        ++f.presentation_vblank_signals;
+        *value={1,1};
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -553,6 +582,20 @@ struct Fixture {
                 return 0;
             *value={f.clock_delta_progress.return_v0,
                 f.clock_delta_progress.return_v0_known};
+        }
+        if (f.compose_presentation_wait && event->entry == 0x80029bdcu) {
+            if(f.presentation_wait_invocations>=f.presentation_wait_progress.size())
+                return 0;
+            auto& wait_progress=
+                f.presentation_wait_progress[f.presentation_wait_invocations];
+            Nba97GamePresentationWaitContext context{*memory,10,
+                event->stack_pointer,event->return_address,event->global_pointer,
+                presentationWaitIo,&f};
+            if(nba97_game_presentation_wait(&context,&wait_progress)!=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            ++f.presentation_wait_invocations;
+            *value={wait_progress.return_v0,wait_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -733,6 +776,13 @@ struct Composition {
         game.putText(0x800247e4u,"cdrom:");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
+        /* Raw BSS state used by 0x800A9CC0's ordinary one-VBlank path. */
+        game.put(0x800d7a80u,0);
+        game.put(0x800d7a84u,0);
+        game.put(0x800d7a88u,0);
+        game.put(0x800d7b3cu,0);
+        game.put(0x800d7b40u,0);
+        game.put(0x800d7b7cu,0);
         for(unsigned i=0;i<32;++i)game.put(0x800d7234u+i*4u,0);
         game.gte_state.cop0_status={0x10900401u,1};
         for(unsigned i=0;i<32;++i)
@@ -752,6 +802,7 @@ struct Composition {
         game.compose_clock = true;
         game.compose_gte = true;
         game.compose_clock_delta = true;
+        game.compose_presentation_wait = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -997,7 +1048,9 @@ void overlay_composition() {
         c.game.vblank_calls[7].entry == 0x800a3e48u);
     for(unsigned i=0;i<8;++i)
         check(c.game.get(0x800d6e0cu+i*4u)==0);
-    check(c.game.get(0x800d7a88u)==0 && c.game.get(0x800d7afcu)==0 &&
+    /* The initializer reset 7A88 to zero; the later 41 acknowledged waits
+       advance it once apiece through their explicit VBlank fixtures. */
+    check(c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7afcu)==0 &&
         c.game.get(0x800d7b00u)==0 && c.game.calls[12].pc==0x80029a38u &&
         c.game.calls[12].entry==0x800a43e8u &&
         c.game.calls[12].argument_count==0);
@@ -1103,6 +1156,36 @@ void overlay_composition() {
         c.game.calls[15].entry==0x800a584cu &&
         c.game.calls[15].argument_count==0 &&
         c.game.calls[15].saved_register[0]==1);
+    check(c.game.presentation_wait_invocations==41 &&
+        c.game.presentation_vblank_signals==41 &&
+        c.game.presentation_wait_calls.size()==41);
+    for(const auto& wait:c.game.presentation_wait_progress)
+        check(wait.completed && wait.operations==3 && wait.accesses==2 &&
+            wait.reads==1 && wait.stores==1 && wait.callbacks_completed==1 &&
+            wait.frame_stack_pointer==FrameSp-0x18u &&
+            wait.stack_pointer==FrameSp && wait.global_pointer==0x800d79c8u &&
+            wait.service_entry==0x800a9cc0u && wait.return_v0==1 &&
+            wait.return_v0_known);
+    check(c.game.presentation_wait_progress[0].restored_return_address==
+            0x80029a6cu &&
+        c.game.presentation_wait_progress[1].restored_return_address==
+            0x80029b28u &&
+        c.game.presentation_wait_progress[20].restored_return_address==
+            0x80029b28u &&
+        c.game.presentation_wait_progress[21].restored_return_address==
+            0x80029b58u &&
+        c.game.presentation_wait_progress[40].restored_return_address==
+            0x80029b58u);
+    check(c.game.presentation_wait_calls[0].pc==0x80029be4u &&
+        c.game.presentation_wait_calls[0].entry==0x800a9cc0u &&
+        c.game.presentation_wait_calls[0].stack_pointer==FrameSp-0x18u &&
+        c.game.presentation_wait_calls[0].return_address==0x80029becu &&
+        c.game.calls[16].pc==0x80029a64u &&
+        c.game.calls[16].entry==0x80029bdcu &&
+        c.game.calls[28].pc==0x80029b20u &&
+        c.game.calls[47].pc==0x80029b20u &&
+        c.game.calls[51].pc==0x80029b50u &&
+        c.game.calls[70].pc==0x80029b50u);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -1110,10 +1193,13 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* The 0x800A584C frame legitimately reuses the prior clock frame's
-           saved-fp slot with main's live s0 before restoring that same word. */
-        c.game.get(FrameSp - 8u) == 1 &&
+        /* All 41 0x80029BDC invocations reuse the clock sampler's saved-s0
+           slot; the final live spill is the second loop's return address. */
+        c.game.get(FrameSp - 8u) == 0x80029b58u &&
         c.game.get(FrameSp - 4u) == 0x80029a64u);
+    check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
+        c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7b3cu)==0 &&
+        c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

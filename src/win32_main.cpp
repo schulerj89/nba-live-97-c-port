@@ -29,6 +29,7 @@
 #include "recovered/game_clock_initialize.h"
 #include "recovered/game_gte_initialize.h"
 #include "recovered/game_clock_delta.h"
+#include "recovered/game_presentation_wait.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6254,12 +6255,14 @@ private:
             Nba97GameGteInitializeState gte_state{};
             Nba97GameGteInitializeProgress gte_progress{};
             Nba97GameClockDeltaProgress clock_delta_progress{};
+            std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
             std::vector<Nba97GameVblankInitializeEvent> vblank_events;
             std::vector<Nba97GameClockInitializeEvent> clock_events;
             std::vector<Nba97GameClockDeltaEvent> clock_delta_events;
+            std::vector<Nba97GamePresentationWaitEvent> presentation_wait_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6286,6 +6289,9 @@ private:
             unsigned gte_calls=0;
             unsigned clock_delta_calls=0;
             unsigned clock_delta_child_callbacks=0;
+            unsigned presentation_wait_calls=0;
+            unsigned presentation_wait_child_callbacks=0;
+            unsigned presentation_vblank_signals=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6317,6 +6323,14 @@ private:
                    table are BSS-zero at cold entry. */
                 put(0x800c4aa4u,0);
                 for(unsigned i=0;i<32;++i)put(0x800d7234u+i*4u,0);
+                /* Cold source state selects 0x800A9CC0's ordinary one-VBlank
+                   path for all 41 startup delay calls in this diagnostic. */
+                put(0x800d7a80u,0);
+                put(0x800d7a84u,0);
+                put(0x800d7a88u,0);
+                put(0x800d7b3cu,0);
+                put(0x800d7b40u,0);
+                put(0x800d7b7cu,0);
                 /* A concrete retained CPU/GTE fixture lets the translated
                    initializer prove both changed and deliberately-live state. */
                 gte_state.cop0_status={0x10900401u,1};
@@ -6856,6 +6870,45 @@ private:
                    !fixture.clock_delta_progress.completed)return 0;
                 *value={fixture.clock_delta_progress.return_v0,
                     fixture.clock_delta_progress.return_v0_known};
+            } else if(event->entry==0x80029bdcu) {
+                if(fixture.presentation_wait_calls>=
+                       fixture.presentation_wait_progress.size())return 0;
+                const auto presentation=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GamePresentationWaitEvent* wait_event,
+                    Nba97GamePresentationWaitValue* wait_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.presentation_wait_child_callbacks;
+                    state.presentation_wait_events.push_back(*wait_event);
+                    if(wait_event->kind!=NBA97_GAME_PRESENTATION_WAIT_SERVICE ||
+                       wait_event->pc!=0x80029be4u ||
+                       wait_event->entry!=0x800a9cc0u ||
+                       wait_event->return_address!=0x80029becu ||
+                       wait_event->argument_count ||
+                       state.get(wait_event->global_pointer+0x1b4u)!=0 ||
+                       state.get(0x800d7a84u)!=0 ||
+                       state.get(0x800d7b3cu)!=0 ||
+                       state.get(0x800d7b40u)!=0)return 0;
+                    /* Concrete 0x800A9CC0 common-path fixture. The child first
+                       clears 7A80; one acknowledged source 0x800A450C ISR then
+                       sets it and increments 7A88. No host clock is sampled. */
+                    state.put(0x800d7a80u,0);
+                    state.put(0x800d7a80u,1);
+                    state.put(0x800d7a88u,state.get(0x800d7a88u)+1u);
+                    state.put(wait_event->global_pointer+0x1b4u,0);
+                    ++state.presentation_vblank_signals;
+                    *wait_value={1,1};
+                    return 1;
+                };
+                auto& wait_progress=fixture.presentation_wait_progress[
+                    fixture.presentation_wait_calls];
+                Nba97GamePresentationWaitContext wait_context{*memory,10,
+                    event->stack_pointer,event->return_address,event->global_pointer,
+                    presentation,&fixture};
+                if(nba97_game_presentation_wait(&wait_context,&wait_progress)!=
+                       NBA97_TEXT_COMPLETE || !wait_progress.completed)return 0;
+                ++fixture.presentation_wait_calls;
+                *value={wait_progress.return_v0,wait_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6874,6 +6927,18 @@ private:
         for(unsigned i=0;i<8;++i)
             clock_slots_cleared=clock_slots_cleared &&
                 state.get(0x800d6decu+i*4u)==0;
+        bool presentation_waits_complete=state.presentation_wait_calls==41 &&
+            state.presentation_wait_child_callbacks==41 &&
+            state.presentation_wait_events.size()==41;
+        for(const auto& wait:state.presentation_wait_progress)
+            presentation_waits_complete=presentation_waits_complete &&
+                wait.completed && wait.operations==3 && wait.accesses==2 &&
+                wait.reads==1 && wait.stores==1 && wait.callbacks_completed==1 &&
+                wait.frame_stack_pointer==0x807fffb8u &&
+                wait.stack_pointer==0x807fffd0u &&
+                wait.global_pointer==0x800d79c8u &&
+                wait.service_entry==0x800a9cc0u && wait.return_v0==1 &&
+                wait.return_v0_known;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7064,7 +7129,7 @@ private:
             !state.vblank_set_rcnt_rejected ||
             !state.vblank_started_after_rejection ||
             !state.vblank_interrupt_installed || state.vblank_critical_section ||
-            !vblank_slots_cleared || state.get(0x800d7a88u)!=0 ||
+            !vblank_slots_cleared || state.get(0x800d7a88u)!=41 ||
             state.get(0x800d7afcu)!=0 || state.get(0x800d7b00u)!=0 ||
             state.vblank_events[0].pc!=0x800a43f8u ||
             state.vblank_events[0].entry!=0x800a4830u ||
@@ -7168,12 +7233,25 @@ private:
             state.clock_delta_events[0].pc!=0x800a585cu ||
             state.clock_delta_events[0].entry!=0x800a5810u ||
             state.clock_delta_events[0].global_pointer!=0x800d79c8u ||
+            !presentation_waits_complete || state.presentation_vblank_signals!=41 ||
+            state.presentation_wait_progress[0].restored_return_address!=0x80029a6cu ||
+            state.presentation_wait_progress[1].restored_return_address!=0x80029b28u ||
+            state.presentation_wait_progress[20].restored_return_address!=0x80029b28u ||
+            state.presentation_wait_progress[21].restored_return_address!=0x80029b58u ||
+            state.presentation_wait_progress[40].restored_return_address!=0x80029b58u ||
+            state.presentation_wait_events[0].pc!=0x80029be4u ||
+            state.presentation_wait_events[0].entry!=0x800a9cc0u ||
+            state.presentation_wait_events[0].stack_pointer!=0x807fffb8u ||
+            state.presentation_wait_events[0].return_address!=0x80029becu ||
+            state.get(0x800d7a80u)!=1 || state.get(0x800d7a84u)!=0 ||
+            state.get(0x800d7b3cu)!=0 || state.get(0x800d7b40u)!=0 ||
+            state.get(0x800d7b7cu)!=0 ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=1 ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029b58u ||
             state.get(0x807fffccu)!=0x80029a64u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
@@ -7185,7 +7263,10 @@ private:
             state.calls[14].pc!=0x80029a54u || state.calls[14].entry!=0x80056678u ||
             state.calls[14].argument_count!=0 ||
             state.calls[15].pc!=0x80029a5cu || state.calls[15].entry!=0x800a584cu ||
-            state.calls[15].argument_count!=0 || state.calls[15].saved_register[0]!=1)
+            state.calls[15].argument_count!=0 || state.calls[15].saved_register[0]!=1 ||
+            state.calls[16].pc!=0x80029a64u || state.calls[16].entry!=0x80029bdcu ||
+            state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
+            state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -7396,6 +7477,22 @@ private:
             "\"gp_relative_snapshot\": true, \"captures_old_before_child\": true, "
             "\"commits_sample_before_return\": true, \"raw_subu_wraparound\": true}, "
             "\"visual_effect\": \"none\", \"status\": \"clock-baseline-refreshed\"},\n"
+            "  \"presentation_wait\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029BDC\", "
+            "\"end_exclusive\": \"0x80029BFC\", \"instructions\": 8, "
+            "\"call_pcs\": [\"0x80029A64\", \"0x80029B20\", \"0x80029B50\"], "
+            "\"invocations\": "<<state.presentation_wait_calls<<
+            ", \"service_entry\": \"0x800A9CC0\", \"service_child_calls\": "<<
+            state.presentation_wait_child_callbacks<<
+            ", \"fixture_path\": \"cold-one-vblank\", \"ready_global\": \"0x800D7A80\", "
+            "\"frame_counter_global\": \"0x800D7A88\", \"vblank_signals\": "<<
+            state.presentation_vblank_signals<<", \"final_frame_counter\": "<<
+            state.get(0x800d7a88u)<<
+            ", \"operations_per_call\": 3, \"accesses_per_call\": 2, "
+            "\"reads_per_call\": 1, \"stores_per_call\": 1, "
+            "\"source_quirks\": {\"live_ra_reload\": true, "
+            "\"child_v0_retained\": true, \"child_wait_has_no_timeout\": true, "
+            "\"child_service_remains_explicit\": true}, \"visual_effect\": \"none\", "
+            "\"status\": \"41-source-vblank-boundaries-acknowledged\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7460,6 +7557,18 @@ private:
             "wraparound remain; no host cadence was invented and none of the 98 "
             "captured frontend frames changed; 61 remaining acknowledged outer test "
             "boundaries");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x80029BDC executed its presentation-wait "
+            "wrapper at call PC 0x80029A64 and in both twenty-iteration loops at "
+            "0x80029B20 and 0x80029B50, for 41 invocations total; every invocation "
+            "saved live ra, crossed explicit synchronization service 0x800A9CC0, "
+            "and reloaded the saved word; the concrete cold-path fixture cleared "
+            "ready flag 0x800D7A80, acknowledged one source 0x800A450C VBlank ISR, "
+            "set the flag, and incremented frame counter 0x800D7A88, ending at 41; "
+            "the child's incidental v0 remained live and no timeout was added, "
+            "preserving the original unbounded-wait behavior; this did not sleep on "
+            "a host clock, drive the native renderer, or change any of the 98 captured "
+            "frontend frames; 20 remaining outer calls are still acknowledged fixtures");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

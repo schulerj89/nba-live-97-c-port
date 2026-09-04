@@ -251,6 +251,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * initializer immediately before it reset both clock words, so natural
      * startup returns zero; this caller deliberately ignores that value. */
     TRY(direct_call(run, 0x80029a5cu, 0x800a584cu, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029A64 -> 0x80029BDC is the recovered presentation-wait
+     * wrapper. It saves live ra and delegates to source synchronization leaf
+     * 0x800A9CC0; that leaf remains an explicit service boundary rather than
+     * being replaced with host sleep or renderer cadence. The same wrapper is
+     * deliberately reused by both twenty-call FELOAD delay loops below. */
     TRY(direct_call(run, 0x80029a64u, 0x80029bdcu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a6cu, 0x80029f20u, 1, 0, 0, 0, &value));
 
@@ -291,6 +296,7 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     TRY(write_word(run, 0x800d7af8u, 0x80029b1cu, 0));
     for (i = 0; i < 20; ++i) {
         ++run->s0; /* 0x80029B24 delay slot executes before the callee. */
+        /* Each source iteration crosses the recovered 0x80029BDC wrapper. */
         TRY(direct_call(run, 0x80029b20u, 0x80029bdcu, 0, 0, 0, 0, &value));
     }
     TRY(direct_call(run, 0x80029b34u, 0x8009dba0u, 2, 0, 0, 0, &value));
@@ -299,6 +305,7 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     run->s0 = 0;
     for (i = 0; i < 20; ++i) {
         ++run->s0; /* 0x80029B54 delay slot executes before the callee. */
+        /* Preserve the second twenty-presentation delay independently. */
         TRY(direct_call(run, 0x80029b50u, 0x80029bdcu, 0, 0, 0, 0, &value));
     }
     TRY(direct_call(run, 0x80029b64u, 0x800a44d4u, 0, 0, 0, 0, &value));

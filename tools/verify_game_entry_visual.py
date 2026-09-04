@@ -30,6 +30,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
+    require(len(states) == 98, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
@@ -271,6 +272,24 @@ def main():
                                   "raw_subu_wraparound": True},
                 "visual_effect": "none", "status": "clock-baseline-refreshed"},
             "recovered 0x800A584C clock-delta receipt drifted")
+    require(receipt["presentation_wait"] == {
+                "binary": "GAMEONLY", "address": "0x80029BDC",
+                "end_exclusive": "0x80029BFC", "instructions": 8,
+                "call_pcs": ["0x80029A64", "0x80029B20", "0x80029B50"],
+                "invocations": 41, "service_entry": "0x800A9CC0",
+                "service_child_calls": 41, "fixture_path": "cold-one-vblank",
+                "ready_global": "0x800D7A80",
+                "frame_counter_global": "0x800D7A88",
+                "vblank_signals": 41, "final_frame_counter": 41,
+                "operations_per_call": 3, "accesses_per_call": 2,
+                "reads_per_call": 1, "stores_per_call": 1,
+                "source_quirks": {"live_ra_reload": True,
+                                  "child_v0_retained": True,
+                                  "child_wait_has_no_timeout": True,
+                                  "child_service_remains_explicit": True},
+                "visual_effect": "none",
+                "status": "41-source-vblank-boundaries-acknowledged"},
+            "recovered 0x80029BDC presentation-wait receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -311,6 +330,12 @@ def main():
             "GTE initialization boundary drifted")
     require(calls[15]["pc"] == "0x80029A5C" and calls[15]["entry"] == "0x800A584C",
             "clock-delta boundary drifted")
+    require(calls[16]["pc"] == "0x80029A64" and calls[16]["entry"] == "0x80029BDC" and
+            all(call["pc"] == "0x80029B20" and call["entry"] == "0x80029BDC"
+                for call in calls[28:48]) and
+            all(call["pc"] == "0x80029B50" and call["entry"] == "0x80029BDC"
+                for call in calls[51:71]),
+            "presentation-wait boundaries drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -402,6 +427,15 @@ def main():
             "returned delta 0" in trace and
             "original pre-child capture, commit-before-return, gp-relative addressing and raw 32-bit SUBU wraparound remain" in trace and
             "no host cadence was invented" in trace and
+            "0x80029BDC executed its presentation-wait wrapper" in trace and
+            "both twenty-iteration loops at 0x80029B20 and 0x80029B50" in trace and
+            "for 41 invocations total" in trace and
+            "explicit synchronization service 0x800A9CC0" in trace and
+            "ready flag 0x800D7A80" in trace and
+            "source 0x800A450C VBlank ISR" in trace and
+            "frame counter 0x800D7A88, ending at 41" in trace and
+            "incidental v0 remained live and no timeout was added" in trace and
+            "did not sleep on a host clock, drive the native renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -427,6 +461,8 @@ def main():
           "without changing pixels; "
           "native clock-delta sampler 0x800A584C refreshed the zero startup baseline through 0x800A5810, "
           "retained raw 32-bit wraparound, and changed no pixels; "
+          "native presentation-wait wrapper 0x80029BDC crossed explicit service 0x800A9CC0 41 times, "
+          "acknowledged source VBlank state without host timing, retained its unbounded wait, and changed no pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
