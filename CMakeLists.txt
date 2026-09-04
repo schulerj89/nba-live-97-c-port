@@ -254,7 +254,7 @@ if(BUILD_TESTING)
     add_test(NAME game_overlay_entry COMMAND nba97_game_overlay_entry_tests)
     add_executable(nba97_game_main_tests tests/game_main_tests.cpp src/recovered/game_main.c
         src/recovered/game_overlay_entry.c src/recovered/game_static_initializers.c
-        src/recovered/game_global_pointer_save.c)
+        src/recovered/game_global_pointer_save.c src/recovered/game_heap_initialize.c)
     target_compile_features(nba97_game_main_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_main_tests PRIVATE src)
     add_test(NAME game_main COMMAND nba97_game_main_tests)

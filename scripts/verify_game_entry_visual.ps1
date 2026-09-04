@@ -10,7 +10,7 @@ try {
     if(-not $SkipBuild) {
         & "$PSScriptRoot/build.ps1" -Configuration $Configuration
         if($LASTEXITCODE) {throw 'Native application build failed'}
-        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_main_tests --parallel
+        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_main_tests --parallel
         if($LASTEXITCODE) {throw 'GAMEONLY game-entry owner tests failed'}
     }
     $staticUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_static_initializers_tests.exe"
@@ -19,6 +19,9 @@ try {
     $globalPointerUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_global_pointer_save_tests.exe"
     & $globalPointerUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x800A4830 unit tests failed'}
+    $heapUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_heap_initialize_tests.exe"
+    & $heapUnit
+    if($LASTEXITCODE) {throw 'GAMEONLY 0x8008FA6C heap tests failed'}
     $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}

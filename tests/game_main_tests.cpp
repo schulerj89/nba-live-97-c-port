@@ -2,6 +2,7 @@
 #include "recovered/game_overlay_entry.h"
 #include "recovered/game_static_initializers.h"
 #include "recovered/game_global_pointer_save.h"
+#include "recovered/game_heap_initialize.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -49,9 +50,14 @@ struct Fixture {
     Nba97GameMainProgress progress{};
     Nba97GameStaticInitializersProgress static_progress{};
     Nba97GameGlobalPointerSaveProgress global_pointer_progress{};
+    Nba97GameHeapInitializeProgress heap_progress{};
+    std::vector<Nba97GameHeapInitializeEvent> heap_journal =
+        std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
+    unsigned heap_format_calls = 0;
     bool compose_static = false;
     bool compose_global_pointer = false;
+    bool compose_heap = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -79,6 +85,32 @@ struct Fixture {
             value |= std::uint32_t(*byte(address + i)) << (i * 8);
         return value;
     }
+    void putText(std::uint32_t address, const char* text) {
+        do {
+            *byte(address) = static_cast<std::uint8_t>(*text);
+            *known(address) = 1;
+            ++address;
+        } while (*text++);
+    }
+    static int heapIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameHeapInitializeEvent* event) {
+        auto& f = *static_cast<Fixture*>(user);
+        ++f.heap_format_calls;
+        if (event->kind != NBA97_HEAP_INITIALIZE_FORMAT_9CB7C ||
+            event->argument[2] != 0x8002802cu)
+            return 0;
+        if (f.heap_format_calls == 1 && event->argument[0] == 0x8010b620u &&
+            event->argument[1] == 0x80028034u) {
+            f.putText(event->argument[0], "LOW MB_RAM  ");
+            return 1;
+        }
+        if (f.heap_format_calls == 2 && event->argument[0] == 0x8010b648u &&
+            event->argument[1] == 0x80028040u) {
+            f.putText(event->argument[0], "HIGH MB_RAM ");
+            return 1;
+        }
+        return 0;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -93,6 +125,14 @@ struct Fixture {
             Nba97GameGlobalPointerSaveContext context{*memory,10,event->global_pointer};
             if (nba97_game_global_pointer_save(&context,&f.global_pointer_progress) !=
                 NBA97_TEXT_COMPLETE)
+                return 0;
+        }
+        if (f.compose_heap && event->entry == 0x8008fa6cu) {
+            Nba97GameHeapInitializeArguments arguments{event->argument[0],event->argument[1],
+                event->argument[2],event->global_pointer};
+            Nba97GameHeapInitializeContext context{*memory,10000,heapIo,&f};
+            if (nba97_game_heap_initialize(&context,&arguments,f.heap_journal.data(),
+                    f.heap_journal.size(),&f.heap_progress) != NBA97_TEXT_COMPLETE)
                 return 0;
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
@@ -252,6 +292,7 @@ struct Composition {
         game.put(0x800c4b14u, 0);
         game.compose_static = true;
         game.compose_global_pointer = true;
+        game.compose_heap = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -286,6 +327,17 @@ void overlay_composition() {
     check(c.game.global_pointer_progress.completed &&
         c.game.global_pointer_progress.stored_global_pointer == 0x800d79c8u &&
         c.game.get(0x800d6e2cu) == 0x800d79c8u);
+    check(c.game.heap_progress.completed && c.game.heap_format_calls == 2 &&
+        c.game.heap_progress.callbacks_completed == 2 &&
+        c.game.heap_progress.return_v0 == 0x000f21e4u);
+    check(c.game.heap_progress.accesses == 258 && c.game.heap_progress.events == 250 &&
+        c.game.heap_progress.stores == 248);
+    check(c.game.get(0x80103d50u) == 0x8010b61cu &&
+        c.game.get(0x80103d54u) == 0x8010b644u &&
+        c.game.get(0x800eb688u) == 0x8010b66cu &&
+        c.game.get(0x800d7c3cu) == 0);
+    check(c.game.get(0x8010b620u) == 0x20574f4cu &&
+        c.game.get(0x8010b648u) == 0x48474948u);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }
