@@ -9,6 +9,7 @@
 #include "recovered/game_interrupt_mask_set.h"
 #include "recovered/game_reset_callback.h"
 #include "recovered/game_controller_resume.h"
+#include "recovered/game_reset_graph.h"
 
 #include <array>
 #include <cstdint>
@@ -65,6 +66,8 @@ struct Fixture {
     Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
     Nba97GameResetCallbackProgress reset_callback_progress{};
     std::array<Nba97GameControllerResumeProgress,2> controller_resume_progress{};
+    Nba97GameResetGraphProgress reset_graph_progress{};
+    Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -72,6 +75,8 @@ struct Fixture {
     std::vector<Nba97GamePathPrefixSetEvent> path_calls;
     std::vector<Nba97GameResetCallbackEvent> reset_callback_calls;
     std::vector<Nba97GameControllerResumeEvent> controller_resume_calls;
+    std::vector<Nba97GameResetGraphEvent> reset_graph_calls;
+    std::vector<Nba97GameResetCallbackEvent> reset_graph_reset_callback_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     bool compose_static = false;
@@ -83,6 +88,7 @@ struct Fixture {
     bool compose_interrupt_mask = false;
     bool compose_reset_callback = false;
     bool compose_controller_resume = false;
+    bool compose_reset_graph = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -247,6 +253,44 @@ struct Fixture {
         }
         return 0;
     }
+    static int resetGraphResetCallbackIo(void* user,
+        const Nba97GameTextMemory*, const Nba97GameResetCallbackEvent* event,
+        Nba97GameResetCallbackValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.reset_graph_reset_callback_calls.push_back(*event);
+        *value={1,1};
+        return 1;
+    }
+    static int resetGraphIo(void* user, const Nba97GameTextMemory* memory,
+        const Nba97GameResetGraphEvent* event,
+        Nba97GameResetGraphValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.reset_graph_calls.push_back(*event);
+        if(event->entry==0x8009bd78u) {
+            if(event->argument_count!=3)return 0;
+            for(std::uint32_t i=0;i<event->argument[2];++i)
+                f.put(event->argument[0]+i,event->argument[1],1);
+            return 1;
+        }
+        if(event->entry==0x800985dcu) {
+            Nba97GameResetCallbackContext context{*memory,10,
+                event->stack_pointer,event->return_address,
+                resetGraphResetCallbackIo,&f};
+            if(nba97_game_reset_callback(&context,
+                    &f.reset_graph_reset_callback_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.reset_graph_reset_callback_progress.return_v0,
+                f.reset_graph_reset_callback_progress.return_v0_known};
+            return 1;
+        }
+        if(event->entry==0x8009cb2cu || event->entry==0x8009bda4u)
+            return 1;
+        if(event->entry==0x8009b878u && event->pc==0x800990d0u) {
+            *value={0,1};
+            return 1;
+        }
+        return 0;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -321,6 +365,17 @@ struct Fixture {
             if (nba97_game_controller_resume(&context,&progress) != NBA97_TEXT_COMPLETE)
                 return 0;
             *value={progress.return_v0,progress.return_v0_known};
+        }
+        if (f.compose_reset_graph && event->entry == 0x80099058u) {
+            Nba97GameResetGraphContext context{*memory,100,
+                event->argument[0],event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1]},
+                resetGraphIo,&f};
+            if (nba97_game_reset_graph(&context,&f.reset_graph_progress) !=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.reset_graph_progress.return_v0,
+                f.reset_graph_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -493,6 +548,10 @@ struct Composition {
         game.put(0x800c4a70u,1);
         game.put(0x800c4a74u,0);
         game.put(0x800d7a48u,0);
+        game.put(0x800c55b8u,0x800c5578u);
+        game.put(0x800c55bcu,0x8009cb2cu);
+        game.put(0x800c5640u,0x400u,2);
+        game.put(0x800c5654u,0x200u,2);
         game.putText(0x800247e4u,"cdrom:");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
@@ -505,6 +564,7 @@ struct Composition {
         game.compose_interrupt_mask = true;
         game.compose_reset_callback = true;
         game.compose_controller_resume = true;
+        game.compose_reset_graph = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -652,6 +712,46 @@ void overlay_composition() {
         c.game.controller_resume_calls[1].pc == 0x8008f204u &&
         c.game.controller_resume_calls[1].entry == 0x800a5810u &&
         c.game.controller_resume_calls[1].return_address == 0x8008f20cu);
+    check(c.game.reset_graph_progress.completed &&
+        c.game.reset_graph_progress.initialized &&
+        c.game.reset_graph_progress.requested_mode == 3 &&
+        c.game.reset_graph_progress.masked_mode == 3 &&
+        c.game.reset_graph_progress.operations == 23 &&
+        c.game.reset_graph_progress.accesses == 16 &&
+        c.game.reset_graph_progress.reads == 9 &&
+        c.game.reset_graph_progress.stores == 7 &&
+        c.game.reset_graph_progress.callbacks_completed == 7);
+    check(c.game.reset_graph_progress.driver_table == 0x800c5578u &&
+        c.game.reset_graph_progress.reset_type == 0 &&
+        c.game.reset_graph_progress.display_width == 0x400u &&
+        c.game.reset_graph_progress.display_height == 0x200u &&
+        c.game.reset_graph_progress.display_width_known &&
+        c.game.reset_graph_progress.display_height_known &&
+        c.game.reset_graph_progress.return_v0 == 0 &&
+        c.game.reset_graph_progress.return_v0_known &&
+        c.game.reset_graph_progress.frame_stack_pointer == FrameSp-0x20u &&
+        c.game.reset_graph_progress.stack_pointer == FrameSp &&
+        c.game.reset_graph_progress.restored_return_address == 0x80029a28u);
+    check(c.game.reset_graph_calls.size() == 7 &&
+        c.game.reset_graph_calls[0].pc == 0x80099098u &&
+        c.game.reset_graph_calls[0].entry == 0x8009cb2cu &&
+        c.game.reset_graph_calls[3].pc == 0x800990c8u &&
+        c.game.reset_graph_calls[3].entry == 0x8009bda4u &&
+        c.game.reset_graph_calls[3].argument[0] == 0x000c5578u &&
+        c.game.reset_graph_calls[4].pc == 0x800990d0u &&
+        c.game.reset_graph_calls[4].entry == 0x8009b878u &&
+        c.game.reset_graph_calls[4].argument[0] == 1);
+    check(c.game.reset_graph_reset_callback_progress.completed &&
+        c.game.reset_graph_reset_callback_progress.dispatch_target == 0x80098714u &&
+        c.game.reset_graph_reset_callback_progress.frame_stack_pointer ==
+            FrameSp-0x38u &&
+        c.game.reset_graph_reset_callback_progress.restored_return_address ==
+            0x800990b8u &&
+        c.game.reset_graph_reset_callback_calls.size() == 1);
+    check(c.game.get(0x800c55c0u) == 0x00000100u &&
+        c.game.get(0x800c55c4u) == 0x02000400u &&
+        c.game.get(0x800c55d0u) == UINT32_MAX &&
+        c.game.get(0x800c562cu) == UINT32_MAX);
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&

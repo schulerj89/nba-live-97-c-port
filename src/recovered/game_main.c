@@ -219,6 +219,9 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * controller-resume/mode owner. With the retail suspend flag initially
      * one, this mode-8 call initializes pad sampling and snapshots its clock. */
     TRY(direct_call(run, 0x80029a18u, 0x8008f1d4u, 1, 8, 0, 0, &value));
+    /* GAMEONLY 0x80029A20 -> 0x80099058 is the recovered PsyQ
+     * ResetGraph owner. Mode 3 takes its initialization path without clearing
+     * video RAM; GPU/BIOS service calls remain explicit child boundaries. */
     TRY(direct_call(run, 0x80029a20u, 0x80099058u, 1, 3, 0, 0, &value));
     TRY(direct_call(run, 0x80029a28u, 0x800992c4u, 1, 0, 0, 0, &value));
     /* GAMEONLY calls the same owner again at 0x80029A30. Input is already

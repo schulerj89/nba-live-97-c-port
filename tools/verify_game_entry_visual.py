@@ -154,6 +154,27 @@ def main():
                 "second_call_status": "mode-reasserted-input-already-active",
                 "visual_effect": "none", "status": "resumed"},
             "recovered 0x8008F1D4 controller-resume receipt drifted")
+    require(receipt["reset_graph"] == {
+                "binary": "GAMEONLY", "address": "0x80099058",
+                "end_exclusive": "0x800991B0", "instructions": 86,
+                "call_pc": "0x80029A20", "api": "ResetGraph",
+                "requested_mode": 3, "masked_mode": 3,
+                "driver_table_global": "0x800C55B8",
+                "driver_table": "0x800C5578",
+                "state_global": "0x800C55C0", "reset_type": 0,
+                "display_width": 1024, "display_height": 512,
+                "memory_set_calls": 3, "reset_callback_calls": 1,
+                "bios_a0_49_calls": 1, "device_reset_calls": 1,
+                "child_calls": 7, "nested_reset_target": "0x80098714",
+                "operations": 23, "accesses": 16, "reads": 9,
+                "stores": 7, "source_quirks": {
+                    "mode_mask": 7,
+                    "reset_result_truncated_to_byte": True,
+                    "unchecked_reset_type_index": True,
+                    "unguarded_driver_dispatch": True},
+                "visual_effect": "none",
+                "status": "initialized-mapped-ps1-gpu-state"},
+            "recovered 0x80099058 ResetGraph receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -182,6 +203,8 @@ def main():
     require(calls[8]["pc"] == "0x80029A18" and calls[8]["entry"] == "0x8008F1D4" and
             calls[11]["pc"] == "0x80029A30" and calls[11]["entry"] == "0x8008F1D4",
             "controller-resume call boundaries drifted")
+    require(calls[9]["pc"] == "0x80029A20" and calls[9]["entry"] == "0x80099058",
+            "ResetGraph call boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -227,6 +250,14 @@ def main():
             "stored clock 37 from 0x800A5810 at 0x800C4A74" in trace and
             "second saw input already active and only reasserted mode 8 at 0x800D7A48" in trace and
             "native input devices and pixels did not" in trace and
+            "0x80099058 executed PsyQ ResetGraph(3)" in trace and
+            "cleared 128 bookkeeping bytes" in trace and
+            "nested ResetCallback to 0x80098714" in trace and
+            "called BIOS A0:49 with 0x000C5578" in trace and
+            "published reset type 0 and 1024x512 limits at 0x800C55C0" in trace and
+            "filled 112 cached environment bytes with 0xFF" in trace and
+            "original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain" in trace and
+            "native renderer and captured pixels were unchanged" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -240,6 +271,8 @@ def main():
           "native PsyQ ResetCallback wrapper 0x800985DC dispatched table slot +0x0C to 0x80098714 "
           "with no direct pixel effect; "
           "native controller-resume 0x8008F1D4 initialized input once, then took its already-active fast path; "
+          "native PsyQ ResetGraph 0x80099058 initialized mapped GPU state and retained source quirks "
+          "without changing captured pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

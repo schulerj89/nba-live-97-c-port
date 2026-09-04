@@ -23,6 +23,7 @@
 #include "recovered/game_interrupt_mask_set.h"
 #include "recovered/game_reset_callback.h"
 #include "recovered/game_controller_resume.h"
+#include "recovered/game_reset_graph.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6239,7 +6240,10 @@ private:
             Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
             Nba97GameResetCallbackProgress reset_callback_progress{};
             std::array<Nba97GameControllerResumeProgress,2> controller_resume_progress{};
+            Nba97GameResetGraphProgress reset_graph_progress{};
+            Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
+            std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6255,6 +6259,9 @@ private:
             unsigned controller_resume_calls=0;
             unsigned controller_initialize_callbacks=0;
             unsigned controller_clock_callbacks=0;
+            unsigned reset_graph_calls=0;
+            unsigned reset_graph_child_callbacks=0;
+            unsigned reset_graph_reset_children=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6271,6 +6278,12 @@ private:
                 put(0x800c4a70u,1);
                 put(0x800c4a74u,0);
                 put(0x800d7a48u,0);
+                /* Retail libgpu jump-table pointers and resolution tables
+                   consumed by ResetGraph(3) at GAMEONLY 0x80099058. */
+                put(0x800c55b8u,0x800c5578u);
+                put(0x800c55bcu,0x8009cb2cu);
+                put(0x800c5640u,0x00000400u);
+                put(0x800c5654u,0x00000200u);
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6506,6 +6519,79 @@ private:
                        NBA97_TEXT_COMPLETE || !controller_progress.completed)return 0;
                 *value={controller_progress.return_v0,
                     controller_progress.return_v0_known};
+            } else if(event->entry==0x80099058u) {
+                ++fixture.reset_graph_calls;
+                const auto reset_graph=[](void* user,
+                    const Nba97GameTextMemory* graph_memory,
+                    const Nba97GameResetGraphEvent* graph_event,
+                    Nba97GameResetGraphValue* graph_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.reset_graph_child_callbacks;
+                    state.reset_graph_events.push_back(*graph_event);
+                    if(graph_event->entry==0x8009bd78u) {
+                        if(graph_event->kind!=NBA97_GAME_RESET_GRAPH_DIRECT_CALL ||
+                           graph_event->argument_count!=3)return 0;
+                        for(std::uint32_t i=0;i<graph_event->argument[2];++i)
+                            state.putByte(graph_event->argument[0]+i,
+                                static_cast<std::uint8_t>(graph_event->argument[1]));
+                        return 1;
+                    }
+                    if(graph_event->entry==0x800985dcu) {
+                        const auto nested=[](void* user,
+                            const Nba97GameTextMemory*,
+                            const Nba97GameResetCallbackEvent* reset_event,
+                            Nba97GameResetCallbackValue* reset_value)->int {
+                            auto& state=*static_cast<State*>(user);
+                            ++state.reset_graph_reset_children;
+                            if(reset_event->pc!=0x800985f4u ||
+                               reset_event->entry!=0x80098714u ||
+                               reset_event->stack_pointer!=0x807fff98u ||
+                               reset_event->return_address!=0x800985fcu ||
+                               reset_event->argument_count)return 0;
+                            *reset_value={1,1};return 1;
+                        };
+                        Nba97GameResetCallbackContext nested_context{
+                            *graph_memory,10,graph_event->stack_pointer,
+                            graph_event->return_address,nested,&state};
+                        if(nba97_game_reset_callback(&nested_context,
+                               &state.reset_graph_reset_callback_progress)!=
+                               NBA97_TEXT_COMPLETE ||
+                           !state.reset_graph_reset_callback_progress.completed)
+                            return 0;
+                        *graph_value={
+                            state.reset_graph_reset_callback_progress.return_v0,
+                            state.reset_graph_reset_callback_progress.return_v0_known};
+                        return 1;
+                    }
+                    if(graph_event->entry==0x8009cb2cu) {
+                        return graph_event->pc==0x80099098u &&
+                            graph_event->argument_count==3 &&
+                            graph_event->argument[0]==0x80028204u &&
+                            graph_event->argument[1]==0x800c5578u &&
+                            graph_event->argument[2]==0x800c55c0u;
+                    }
+                    if(graph_event->entry==0x8009bda4u) {
+                        return graph_event->pc==0x800990c8u &&
+                            graph_event->argument_count==1 &&
+                            graph_event->argument[0]==0x000c5578u;
+                    }
+                    if(graph_event->entry==0x8009b878u) {
+                        if(graph_event->pc!=0x800990d0u ||
+                           graph_event->argument_count!=1 ||
+                           graph_event->argument[0]!=1)return 0;
+                        *graph_value={0,1};return 1;
+                    }
+                    return 0;
+                };
+                Nba97GameResetGraphContext graph_context{*memory,100,
+                    event->argument[0],event->stack_pointer,event->return_address,
+                    {event->saved_register[0],event->saved_register[1]},
+                    reset_graph,&fixture};
+                if(nba97_game_reset_graph(&graph_context,
+                       &fixture.reset_graph_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.reset_graph_progress.completed)return 0;
+                *value={fixture.reset_graph_progress.return_v0,
+                    fixture.reset_graph_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6618,13 +6704,56 @@ private:
            state.controller_resume_progress[1].callbacks_completed!=0 ||
            state.controller_resume_progress[1].requested_pad_mode!=8 ||
            state.controller_resume_progress[1].initial_suspend_flag!=0 ||
-           state.controller_resume_progress[1].return_v0!=0 ||
-           !state.controller_resume_progress[1].return_v0_known ||
-           state.controller_resume_progress[1].restored_return_address!=0x80029a38u ||
-           state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-           state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029a38u ||
-           state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
-           state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u)
+            state.controller_resume_progress[1].return_v0!=0 ||
+            !state.controller_resume_progress[1].return_v0_known ||
+            state.controller_resume_progress[1].restored_return_address!=0x80029a38u ||
+            state.reset_graph_calls!=1 || state.reset_graph_child_callbacks!=7 ||
+            state.reset_graph_reset_children!=1 ||
+            state.reset_graph_events.size()!=7 ||
+            !state.reset_graph_progress.completed ||
+            !state.reset_graph_progress.initialized ||
+            state.reset_graph_progress.requested_mode!=3 ||
+            state.reset_graph_progress.masked_mode!=3 ||
+            state.reset_graph_progress.operations!=23 ||
+            state.reset_graph_progress.accesses!=16 ||
+            state.reset_graph_progress.reads!=9 ||
+            state.reset_graph_progress.stores!=7 ||
+            state.reset_graph_progress.callbacks_completed!=7 ||
+            state.reset_graph_progress.driver_table!=0x800c5578u ||
+            state.reset_graph_progress.reset_type!=0 ||
+            state.reset_graph_progress.display_width!=0x400u ||
+            state.reset_graph_progress.display_height!=0x200u ||
+            !state.reset_graph_progress.display_width_known ||
+            !state.reset_graph_progress.display_height_known ||
+            state.reset_graph_progress.return_v0!=0 ||
+            !state.reset_graph_progress.return_v0_known ||
+            state.reset_graph_progress.frame_stack_pointer!=0x807fffb0u ||
+            state.reset_graph_progress.stack_pointer!=0x807fffd0u ||
+            state.reset_graph_progress.restored_return_address!=0x80029a28u ||
+            state.reset_graph_progress.restored_saved_register[0]!=1 ||
+            state.reset_graph_progress.restored_saved_register[1]!=0 ||
+            !state.reset_graph_reset_callback_progress.completed ||
+            state.reset_graph_reset_callback_progress.dispatch_target!=0x80098714u ||
+            state.reset_graph_reset_callback_progress.frame_stack_pointer!=0x807fff98u ||
+            state.reset_graph_reset_callback_progress.stack_pointer!=0x807fffb0u ||
+            state.reset_graph_reset_callback_progress.restored_return_address!=0x800990b8u ||
+            state.reset_graph_events[0].pc!=0x80099098u ||
+            state.reset_graph_events[0].entry!=0x8009cb2cu ||
+            state.reset_graph_events[3].pc!=0x800990c8u ||
+            state.reset_graph_events[3].entry!=0x8009bda4u ||
+            state.reset_graph_events[3].argument[0]!=0x000c5578u ||
+            state.reset_graph_events[4].pc!=0x800990d0u ||
+            state.reset_graph_events[4].entry!=0x8009b878u ||
+            state.reset_graph_events[4].argument[0]!=1 ||
+            state.get(0x800c55c0u)!=0x00000100u ||
+            state.get(0x800c55c4u)!=0x02000400u ||
+            state.get(0x800c55d0u)!=0xffffffffu ||
+            state.get(0x800c562cu)!=0xffffffffu ||
+            state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029a38u ||
+            state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
+            state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
+            state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6719,6 +6848,26 @@ private:
             state.controller_resume_progress[1].callbacks_completed<<
             ", \"second_call_status\": \"mode-reasserted-input-already-active\", "
             "\"visual_effect\": \"none\", \"status\": \"resumed\"},\n"
+            "  \"reset_graph\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80099058\", "
+            "\"end_exclusive\": \"0x800991B0\", \"instructions\": 86, "
+            "\"call_pc\": \"0x80029A20\", \"api\": \"ResetGraph\", "
+            "\"requested_mode\": "<<state.reset_graph_progress.requested_mode<<
+            ", \"masked_mode\": "<<unsigned(state.reset_graph_progress.masked_mode)<<
+            ", \"driver_table_global\": \"0x800C55B8\", \"driver_table\": \"0x800C5578\", "
+            "\"state_global\": \"0x800C55C0\", \"reset_type\": "<<
+            unsigned(state.reset_graph_progress.reset_type)<<", \"display_width\": "<<
+            state.reset_graph_progress.display_width<<", \"display_height\": "<<
+            state.reset_graph_progress.display_height<<", \"memory_set_calls\": 3, "
+            "\"reset_callback_calls\": 1, \"bios_a0_49_calls\": 1, "
+            "\"device_reset_calls\": 1, \"child_calls\": "<<
+            state.reset_graph_progress.callbacks_completed<<", \"nested_reset_target\": \"0x80098714\", "
+            "\"operations\": "<<state.reset_graph_progress.operations<<", \"accesses\": "<<
+            state.reset_graph_progress.accesses<<", \"reads\": "<<
+            state.reset_graph_progress.reads<<", \"stores\": "<<
+            state.reset_graph_progress.stores<<", \"source_quirks\": {\"mode_mask\": 7, "
+            "\"reset_result_truncated_to_byte\": true, \"unchecked_reset_type_index\": true, "
+            "\"unguarded_driver_dispatch\": true}, \"visual_effect\": \"none\", "
+            "\"status\": \"initialized-mapped-ps1-gpu-state\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6732,7 +6881,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; 67 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; ninth recovered startup callee 0x80099058 executed PsyQ ResetGraph(3), cleared 128 bookkeeping bytes, nested ResetCallback to 0x80098714, called BIOS A0:49 with 0x000C5578, reset the GPU service with argument 1, published reset type 0 and 1024x512 limits at 0x800C55C0, and filled 112 cached environment bytes with 0xFF; the native renderer and captured pixels were unchanged; original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain; 66 remaining acknowledged outer test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
