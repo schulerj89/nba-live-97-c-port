@@ -1,0 +1,307 @@
+#include "game_main.h"
+
+#include <string.h>
+
+typedef struct Nba97GameMainRun {
+    Nba97GameMainContext* context;
+    Nba97GameMainProgress* out;
+    uint32_t sp;
+    uint32_t s0;
+    uint32_t s1;
+    uint32_t s2;
+} Nba97GameMainRun;
+
+#define TRY(expression) do { \
+    int nba97_result_ = (expression); \
+    if (nba97_result_ != NBA97_TEXT_COMPLETE) return nba97_result_; \
+} while (0)
+
+static void stop(Nba97GameMainRun* run, uint32_t pc, uint32_t address,
+    uint32_t entry) {
+    run->out->stopped_pc = pc;
+    run->out->stopped_address = address;
+    run->out->stopped_entry = entry;
+}
+
+static int spend(Nba97GameMainRun* run) {
+    if (run->out->operations >= run->context->operation_budget)
+        return NBA97_TEXT_LIMIT;
+    ++run->out->operations;
+    return NBA97_TEXT_COMPLETE;
+}
+
+static int locate(Nba97GameMainRun* run, uint32_t address, size_t width,
+    size_t alignment, uint32_t pc, uint8_t** data, uint8_t** known) {
+    size_t i;
+    size_t j;
+    stop(run, pc, address, 0);
+    TRY(spend(run));
+    ++run->out->accesses;
+    if (address & (uint32_t)(alignment - 1u))
+        return NBA97_TEXT_ALIGNMENT_TRAP;
+    for (i = 0; i < run->context->memory.count; ++i) {
+        Nba97GameTextRegion* region = &run->context->memory.region[i];
+        uint64_t offset = (uint64_t)address - region->base;
+        if (address < region->base || offset > region->size ||
+            width > region->size - (size_t)offset)
+            continue;
+        *data = region->data + (size_t)offset;
+        *known = region->known ? region->known + (size_t)offset : 0;
+        if (*known)
+            for (j = 0; j < width; ++j)
+                if ((*known)[j] > 1)
+                    return NBA97_TEXT_ARGUMENT;
+        return NBA97_TEXT_COMPLETE;
+    }
+    return NBA97_TEXT_RESOURCE;
+}
+
+static int write_value(Nba97GameMainRun* run, uint32_t address, size_t width,
+    uint32_t pc, uint32_t value) {
+    uint8_t* data;
+    uint8_t* known;
+    size_t i;
+    TRY(locate(run, address, width, width, pc, &data, &known));
+    for (i = 0; i < width; ++i) {
+        data[i] = (uint8_t)(value >> (i * 8u));
+        if (known)
+            known[i] = 1;
+    }
+    ++run->out->stores;
+    return NBA97_TEXT_COMPLETE;
+}
+
+static int write_word(Nba97GameMainRun* run, uint32_t address, uint32_t pc,
+    uint32_t value) {
+    return write_value(run, address, 4, pc, value);
+}
+
+static int write_half(Nba97GameMainRun* run, uint32_t address, uint32_t pc,
+    uint16_t value) {
+    return write_value(run, address, 2, pc, value);
+}
+
+static int read_word(Nba97GameMainRun* run, uint32_t address, uint32_t pc,
+    uint32_t* value) {
+    uint8_t* data;
+    uint8_t* known;
+    uint32_t result = 0;
+    unsigned i;
+    TRY(locate(run, address, 4, 4, pc, &data, &known));
+    if (known)
+        for (i = 0; i < 4; ++i)
+            if (!known[i])
+                return NBA97_TEXT_UNKNOWN;
+    for (i = 0; i < 4; ++i)
+        result |= (uint32_t)data[i] << (i * 8u);
+    *value = result;
+    ++run->out->reads;
+    return NBA97_TEXT_COMPLETE;
+}
+
+static int validate(Nba97GameMainContext* context, Nba97GameMainProgress* out,
+    Nba97GameMainRun* run) {
+    size_t i;
+    size_t j;
+    if (!out)
+        return NBA97_TEXT_ARGUMENT;
+    memset(out, 0, sizeof *out);
+    if (!context || (!context->memory.region && context->memory.count))
+        return NBA97_TEXT_ARGUMENT;
+    for (i = 0; i < context->memory.count; ++i) {
+        const Nba97GameTextRegion* a = &context->memory.region[i];
+        if (!a->data || !a->size || a->size > UINT64_C(0x100000000) ||
+            (uint64_t)a->base + a->size > UINT64_C(0x100000000))
+            return NBA97_TEXT_ARGUMENT;
+        for (j = 0; j < i; ++j) {
+            const Nba97GameTextRegion* b = &context->memory.region[j];
+            if ((uint64_t)a->base < (uint64_t)b->base + b->size &&
+                (uint64_t)b->base < (uint64_t)a->base + a->size)
+                return NBA97_TEXT_ARGUMENT;
+        }
+    }
+    run->context = context;
+    run->out = out;
+    run->sp = context->stack_pointer - 0x28u;
+    run->s0 = context->saved_register[0];
+    run->s1 = context->saved_register[1];
+    run->s2 = context->saved_register[2];
+    out->frame_stack_pointer = run->sp;
+    out->stack_pointer = run->sp;
+    out->global_pointer = context->global_pointer;
+    return NBA97_TEXT_COMPLETE;
+}
+
+static int invoke(Nba97GameMainRun* run, uint32_t pc, uint32_t entry,
+    uint8_t kind, uint8_t argument_count, uint32_t a0, uint32_t a1,
+    uint32_t a2, Nba97GameMainValue* value,
+    enum Nba97GameMainCalleeOutcome* outcome) {
+    Nba97GameMainEvent event;
+    int result;
+    stop(run, pc, 0, entry);
+    TRY(spend(run));
+    if (kind == NBA97_GAME_MAIN_INDIRECT_CALL && (entry & 3u))
+        return NBA97_TEXT_ALIGNMENT_TRAP;
+    if (!run->context->io)
+        return NBA97_TEXT_IO_REFUSED;
+    memset(&event, 0, sizeof event);
+    event.pc = pc;
+    event.entry = entry;
+    event.argument[0] = a0;
+    event.argument[1] = a1;
+    event.argument[2] = a2;
+    event.stack_pointer = run->sp;
+    event.global_pointer = run->context->global_pointer;
+    event.saved_register[0] = run->s0;
+    event.saved_register[1] = run->s1;
+    event.saved_register[2] = run->s2;
+    event.return_address = pc + 8u;
+    event.kind = kind;
+    event.argument_count = argument_count;
+    value->word = 0;
+    value->known = 0;
+    *outcome = NBA97_GAME_MAIN_CALLEE_UNSET;
+    result = run->context->io(run->context->user, &run->context->memory,
+        &event, value, outcome);
+    if (result != 1)
+        return NBA97_TEXT_IO_REFUSED;
+    if (*outcome != NBA97_GAME_MAIN_CALLEE_RETURNED &&
+        *outcome != NBA97_GAME_MAIN_CALLEE_TRANSFERRED)
+        return NBA97_TEXT_ARGUMENT;
+    if (kind == NBA97_GAME_MAIN_DIRECT_CALL &&
+        *outcome != NBA97_GAME_MAIN_CALLEE_RETURNED)
+        return NBA97_TEXT_ARGUMENT;
+    if (value->known > 1)
+        return NBA97_TEXT_ARGUMENT;
+    ++run->out->callbacks_completed;
+    return NBA97_TEXT_COMPLETE;
+}
+
+static int direct_call(Nba97GameMainRun* run, uint32_t pc, uint32_t entry,
+    uint8_t argument_count, uint32_t a0, uint32_t a1, uint32_t a2,
+    Nba97GameMainValue* value) {
+    enum Nba97GameMainCalleeOutcome outcome;
+    return invoke(run, pc, entry, NBA97_GAME_MAIN_DIRECT_CALL, argument_count,
+        a0, a1, a2, value, &outcome);
+}
+
+int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
+    Nba97GameMainRun storage;
+    Nba97GameMainRun* run = &storage;
+    Nba97GameMainValue value;
+    enum Nba97GameMainCalleeOutcome outcome;
+    uint32_t indirect;
+    unsigned i;
+    TRY(validate(context, out, run));
+
+    /* GAMEONLY 0x80029994 prologue. The s0 save is the delay slot of the
+     * 0x800948D0 call and therefore completes before that callee observes RAM. */
+    TRY(write_word(run, run->sp + 0x24u, 0x80029998u, context->return_address));
+    TRY(write_word(run, run->sp + 0x20u, 0x8002999cu, run->s2));
+    TRY(write_word(run, run->sp + 0x1cu, 0x800299a0u, run->s1));
+    TRY(write_word(run, run->sp + 0x18u, 0x800299a8u, run->s0));
+    TRY(direct_call(run, 0x800299a4u, 0x800948d0u, 0, 0, 0, 0, &value));
+    run->s0 = 1;
+    TRY(direct_call(run, 0x800299acu, 0x800a4830u, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x800299c8u, 0x8008fa6cu, 3, 0xdcu,
+        0x8010b61cu, 0x000f21e4u, &value));
+    TRY(write_word(run, 0x800d7b04u, 0x800299d4u, 0));
+    TRY(direct_call(run, 0x800299d8u, 0x80091c08u, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x800299e8u, 0x800a35d8u, 1, 0x800247e4u, 0, 0, &value));
+    TRY(direct_call(run, 0x800299f8u, 0x80092c7cu, 2, 0x8001000cu, 0x2c3u, 0, &value));
+    TRY(write_half(run, 0x8002148cu, 0x80029a04u, 0));
+    TRY(direct_call(run, 0x80029a08u, 0x800985b4u, 1, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a10u, 0x800985dcu, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a18u, 0x8008f1d4u, 1, 8, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a20u, 0x80099058u, 1, 3, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a28u, 0x800992c4u, 1, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a30u, 0x8008f1d4u, 1, 8, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a38u, 0x800a43e8u, 0, 0, 0, 0, &value));
+    TRY(write_word(run, 0x800d7a94u, 0x80029a48u, 0x78u));
+    TRY(direct_call(run, 0x80029a4cu, 0x800914d8u, 1, 0x78u, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a54u, 0x80056678u, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a5cu, 0x800a584cu, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a64u, 0x80029bdcu, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029a6cu, 0x80029f20u, 1, 0, 0, 0, &value));
+
+    TRY(write_half(run, run->sp + 0x10u, 0x80029a84u, 0x200u));
+    TRY(write_half(run, run->sp + 0x14u, 0x80029a88u, 0x200u));
+    TRY(write_half(run, run->sp + 0x12u, 0x80029a90u, 0));
+    TRY(write_half(run, run->sp + 0x16u, 0x80029a98u, 0x100u));
+    TRY(direct_call(run, 0x80029a94u, 0x800997e4u, 3, run->sp + 0x10u,
+        0, 0, &value));
+    TRY(direct_call(run, 0x80029aa4u, 0x800997e4u, 3, run->sp + 0x10u,
+        0, 0x100u, &value));
+    TRY(direct_call(run, 0x80029aacu, 0x800994f4u, 1, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029ab4u, 0x80099458u, 1, 1, 0, 0, &value));
+    TRY(direct_call(run, 0x80029abcu, 0x800a3e20u, 0, 0, 0, 0, &value));
+    TRY(write_word(run, 0x800d7af4u, 0x80029ac8u, 0));
+    TRY(write_word(run, 0x800d7af8u, 0x80029ad0u, run->s0));
+    TRY(direct_call(run, 0x80029ad4u, 0x800a7738u, 0, 0, 0, 0, &value));
+    out->reached_match_orchestration = 1;
+    TRY(direct_call(run, 0x80029adcu, 0x8002d8d4u, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029ae4u, 0x80029e58u, 0, 0, 0, 0, &value));
+    TRY(write_word(run, 0x800d7af8u, 0x80029af8u, run->s0));
+    TRY(direct_call(run, 0x80029afcu, 0x80029bfcu, 2, 0x800247ecu, 0, 0, &value));
+    if (!value.known) {
+        stop(run, 0x80029b04u, 0, 0);
+        return NBA97_TEXT_UNKNOWN;
+    }
+    run->s1 = value.word;
+    out->loaded_image = run->s1;
+    TRY(direct_call(run, 0x80029b08u, 0x80090d60u, 1, run->s1, 0, 0, &value));
+    if (!value.known) {
+        stop(run, 0x80029b10u, 0, 0);
+        return NBA97_TEXT_UNKNOWN;
+    }
+    run->s2 = value.word;
+    out->loaded_image_size = run->s2;
+    out->loaded_feload = 1;
+    run->s0 = 0;
+    TRY(write_word(run, 0x800d7af8u, 0x80029b1cu, 0));
+    for (i = 0; i < 20; ++i) {
+        ++run->s0; /* 0x80029B24 delay slot executes before the callee. */
+        TRY(direct_call(run, 0x80029b20u, 0x80029bdcu, 0, 0, 0, 0, &value));
+    }
+    TRY(direct_call(run, 0x80029b34u, 0x8009dba0u, 2, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029b3cu, 0x8009dbe0u, 1, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029b44u, 0x8009dbf8u, 1, 0, 0, 0, &value));
+    run->s0 = 0;
+    for (i = 0; i < 20; ++i) {
+        ++run->s0; /* 0x80029B54 delay slot executes before the callee. */
+        TRY(direct_call(run, 0x80029b50u, 0x80029bdcu, 0, 0, 0, 0, &value));
+    }
+    TRY(direct_call(run, 0x80029b64u, 0x800a44d4u, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029b6cu, 0x8009167cu, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029b74u, 0x8008f19cu, 0, 0, 0, 0, &value));
+    TRY(direct_call(run, 0x80029b84u, 0x800a3a74u, 2, 0x800d6decu, 0x20u, 0, &value));
+    TRY(direct_call(run, 0x80029b94u, 0x800aa468u, 3, run->s1,
+        0x801e0000u, run->s2, &value));
+    TRY(read_word(run, 0x801e0000u, 0x80029ba0u, &indirect));
+    out->indirect_entry = indirect;
+    TRY(invoke(run, 0x80029ba8u, indirect, NBA97_GAME_MAIN_INDIRECT_CALL,
+        0, 0, 0, 0, &value, &outcome));
+    if (outcome == NBA97_GAME_MAIN_CALLEE_TRANSFERRED) {
+        out->transferred = 1;
+        out->completed = 1;
+        out->saved_register[0] = run->s0;
+        out->saved_register[1] = run->s1;
+        out->saved_register[2] = run->s2;
+        stop(run, 0, 0, 0);
+        return NBA97_TEXT_COMPLETE;
+    }
+
+    /* A returning loaded overlay resumes the live source epilogue. */
+    TRY(read_word(run, run->sp + 0x24u, 0x80029bb0u,
+        &out->restored_return_address));
+    TRY(read_word(run, run->sp + 0x20u, 0x80029bb4u, &run->s2));
+    TRY(read_word(run, run->sp + 0x1cu, 0x80029bb8u, &run->s1));
+    TRY(read_word(run, run->sp + 0x18u, 0x80029bbcu, &run->s0));
+    out->stack_pointer = run->sp + 0x28u;
+    out->saved_register[0] = run->s0;
+    out->saved_register[1] = run->s1;
+    out->saved_register[2] = run->s2;
+    out->completed = 1;
+    stop(run, 0, 0, 0);
+    return NBA97_TEXT_COMPLETE;
+}

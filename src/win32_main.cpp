@@ -16,6 +16,7 @@
 #include "user_setup_session.hpp"
 #include "match_assets.hpp"
 #include "match_snapshot.hpp"
+#include "recovered/game_main.h"
 #include "recovered/team_select_poll.h"
 #include "png_image.hpp"
 #include "player_photo_loader.hpp"
@@ -43,6 +44,7 @@
 #include "recovered/cool_fact_selection.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -1121,6 +1123,7 @@ private:
             "actual result6 commits the presentation RNG");
         recordMatchInput("match-handoff-pending",first_match_rng,first_match_cues);
         std::ofstream(output/"match_snapshot.json")<<nba97::matchSnapshotReceipt(*match_session_.snapshot());
+        captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
         userKey('C');userTicks(20);
@@ -6204,6 +6207,66 @@ private:
             trace_.log("MATCH-SNAPSHOT","revision="+std::to_string(match_session_.revision())+
                 " source61674/46D24/63D58/655B0 subset; "+nba97::matchSnapshotReceipt(*snapshot));
         } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-LOG-FAILED",std::string("snapshot retained; ")+e.what());}
+    }
+    void captureGameEntryDiagnostic(const std::filesystem::path& output) {
+        struct State {
+            std::array<std::uint8_t,0x100> stack{},stack_known{};
+            std::array<std::uint8_t,0x80> globals{},globals_known{};
+            std::array<std::uint8_t,2> display{},display_known{};
+            std::array<std::uint8_t,4> loaded_entry{},loaded_entry_known{};
+            std::array<Nba97GameTextRegion,4> regions{};
+            std::vector<Nba97GameMainEvent> calls;
+            State() {
+                stack_known.fill(1);globals_known.fill(1);display_known.fill(1);loaded_entry_known.fill(1);
+                regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
+                    Nba97GameTextRegion{0x800d7a90u,globals.data(),globals_known.data(),globals.size()},
+                    Nba97GameTextRegion{0x8002148cu,display.data(),display_known.data(),display.size()},
+                    Nba97GameTextRegion{0x801e0000u,loaded_entry.data(),loaded_entry_known.data(),loaded_entry.size()}};
+            }
+            void put(std::uint32_t address,std::uint32_t value) {
+                for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
+                    const auto offset=address-region.base;
+                    for(unsigned i=0;i<4;++i) {region.data[offset+i]=std::uint8_t(value>>(8*i));region.known[offset+i]=1;}
+                    return;
+                }
+                throw std::runtime_error("game-entry diagnostic write escaped declared source memory");
+            }
+        } state;
+        const auto callback=[](void* user,const Nba97GameTextMemory*,const Nba97GameMainEvent* event,
+            Nba97GameMainValue* value,Nba97GameMainCalleeOutcome* outcome)->int {
+            auto& fixture=*static_cast<State*>(user);fixture.calls.push_back(*event);
+            *outcome=NBA97_GAME_MAIN_CALLEE_RETURNED;
+            if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
+            else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
+            else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
+            else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
+            return 1;
+        };
+        Nba97GameMainContext context{{state.regions.data(),state.regions.size()},256,0x807ffff8u,
+            0x800948ccu,{0,0,0},0x800d79c8u,callback,&state};
+        Nba97GameMainProgress progress{};
+        const auto result=nba97_game_main(&context,&progress);
+        if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
+           !progress.reached_match_orchestration || state.calls.size()!=77)
+            throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
+        std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
+        json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
+            "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
+            "  \"scope\": \"Synthetic mandatory service fixtures; proves translated CPU order only, not a live loader, device, court, possession or gameplay frame.\",\n"
+            "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
+            ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
+            ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
+            "\"loaded_size\": 5136, \"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
+        for(std::size_t i=0;i<state.calls.size();++i) {
+            const auto& event=state.calls[i];if(i)json<<",\n";
+            json<<"    {\"index\": "<<i<<", \"kind\": \""<<
+                (event.kind==NBA97_GAME_MAIN_INDIRECT_CALL ? "indirect":"direct")<<
+                "\", \"pc\": \"0x"<<std::uppercase<<std::hex<<std::setw(8)<<std::setfill('0')<<event.pc<<
+                "\", \"entry\": \"0x"<<std::setw(8)<<event.entry<<"\", \"s0\": \"0x"<<
+                std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
+        }
+        json<<"\n  ]\n}\n";
+        trace_.log("GAME-ENTRY-DIAG","GAMEONLY 0x80029994: 77 acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
