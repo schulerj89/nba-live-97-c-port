@@ -1,6 +1,7 @@
 #include "recovered/game_main.h"
 #include "recovered/game_overlay_entry.h"
 #include "recovered/game_static_initializers.h"
+#include "recovered/game_global_pointer_save.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -47,8 +48,10 @@ struct Fixture {
         {0xa0a0a0a0u, 0xb1b1b1b1u, 0xc2c2c2c2u}, 0x800d79c8u, io, this};
     Nba97GameMainProgress progress{};
     Nba97GameStaticInitializersProgress static_progress{};
+    Nba97GameGlobalPointerSaveProgress global_pointer_progress{};
     std::vector<Nba97GameMainEvent> calls;
     bool compose_static = false;
+    bool compose_global_pointer = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -76,14 +79,20 @@ struct Fixture {
             value |= std::uint32_t(*byte(address + i)) << (i * 8);
         return value;
     }
-    static int io(void* user, const Nba97GameTextMemory*, const Nba97GameMainEvent* event,
+    static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
         f.calls.push_back(*event);
         if (f.compose_static && event->entry == 0x800948d0u) {
-            Nba97GameStaticInitializersContext context{f.context.memory,100,event->stack_pointer,
+            Nba97GameStaticInitializersContext context{*memory,100,event->stack_pointer,
                 event->return_address,{event->saved_register[0],event->saved_register[1]}};
             if (nba97_game_static_initializers(&context,&f.static_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+        }
+        if (f.compose_global_pointer && event->entry == 0x800a4830u) {
+            Nba97GameGlobalPointerSaveContext context{*memory,10,event->global_pointer};
+            if (nba97_game_global_pointer_save(&context,&f.global_pointer_progress) !=
+                NBA97_TEXT_COMPLETE)
                 return 0;
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
@@ -242,6 +251,7 @@ struct Composition {
         game.put(0x800c4b38u, 0x00008000u);
         game.put(0x800c4b14u, 0);
         game.compose_static = true;
+        game.compose_global_pointer = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -273,6 +283,9 @@ void overlay_composition() {
     check(c.main_progress.frame_stack_pointer == 0x807fffd0u && c.game.calls.size() == 77);
     check(c.game.static_progress.completed && c.game.static_progress.initialized &&
         c.game.get(0x800c4b14u) == 1);
+    check(c.game.global_pointer_progress.completed &&
+        c.game.global_pointer_progress.stored_global_pointer == 0x800d79c8u &&
+        c.game.get(0x800d6e2cu) == 0x800d79c8u);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

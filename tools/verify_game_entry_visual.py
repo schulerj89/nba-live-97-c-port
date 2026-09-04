@@ -68,6 +68,12 @@ def main():
                 "constructor_callbacks": 0, "operations": 8,
                 "status": "initialized"},
             "recovered 0x800948D0 execution receipt drifted")
+    require(receipt["global_pointer_save"] == {
+                "binary": "GAMEONLY", "address": "0x800A4830",
+                "end_exclusive": "0x800A4844", "instructions": 5,
+                "call_pc": "0x800299AC", "destination": "0x800D6E2C",
+                "value": "0x800D79C8", "operations": 1, "status": "saved"},
+            "recovered 0x800A4830 execution receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -79,6 +85,8 @@ def main():
             "runtime call extent/order drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
+    require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
+            "global-pointer save boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -98,10 +106,13 @@ def main():
             "native recovered-input click-through" in trace and
             "0x800948D0 executed recovered owner" in trace and
             "guard 0x800C4B14 changed 0->1" in trace and
+            "0x800A4830 executed recovered owner" in trace and
+            "saved gp 0x800D79C8 to 0x800D6E2C" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
           "native 0x800948D0 changed guard 0x800C4B14 from 0 to 1; "
+          "native 0x800A4830 saved gp 0x800D79C8 at 0x800D6E2C; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
