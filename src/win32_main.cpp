@@ -21,6 +21,7 @@
 #include "recovered/game_path_prefix_set.h"
 #include "recovered/game_directory_cache_configure.h"
 #include "recovered/game_interrupt_mask_set.h"
+#include "recovered/game_reset_callback.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6235,6 +6236,7 @@ private:
             Nba97GamePathPrefixSetProgress path_prefix_progress{};
             Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
             Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
+            Nba97GameResetCallbackProgress reset_callback_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6246,6 +6248,8 @@ private:
             unsigned path_child_callbacks=0;
             unsigned directory_cache_calls=0;
             unsigned interrupt_mask_calls=0;
+            unsigned reset_callback_calls=0;
+            unsigned reset_child_callbacks=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6254,6 +6258,8 @@ private:
                 putByte(0x800d7a0cu,0x5c);
                 putByte(0x800d7a0du,0);
                 put(0x800c54acu,0x7ffu);
+                put(0x800c54c8u,0x800c54b0u);
+                put(0x800c54bcu,0x80098714u);
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6434,6 +6440,26 @@ private:
                        &fixture.interrupt_mask_progress)!=NBA97_TEXT_COMPLETE ||
                    !fixture.interrupt_mask_progress.completed)return 0;
                 *value={fixture.interrupt_mask_progress.return_v0,1};
+            } else if(event->entry==0x800985dcu) {
+                ++fixture.reset_callback_calls;
+                const auto reset=[](void* user,const Nba97GameTextMemory*,
+                    const Nba97GameResetCallbackEvent* reset_event,
+                    Nba97GameResetCallbackValue* reset_value)->int {
+                    auto& state=*static_cast<State*>(user);++state.reset_child_callbacks;
+                    if(reset_event->pc!=0x800985f4u ||
+                       reset_event->entry!=0x80098714u ||
+                       reset_event->stack_pointer!=0x807fffb8u ||
+                       reset_event->return_address!=0x800985fcu ||
+                       reset_event->argument_count)return 0;
+                    *reset_value={1,1};return 1;
+                };
+                Nba97GameResetCallbackContext context{*memory,10,
+                    event->stack_pointer,event->return_address,reset,&fixture};
+                if(nba97_game_reset_callback(&context,
+                       &fixture.reset_callback_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.reset_callback_progress.completed)return 0;
+                *value={fixture.reset_callback_progress.return_v0,
+                    fixture.reset_callback_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6493,7 +6519,6 @@ private:
            state.directory_cache_progress.return_v0!=0x8001000cu ||
            state.get(0x800c4ab8u)!=0x2c3u ||
            state.get(0x801046a0u)!=0x8001000cu ||
-           state.get(0x807fffc8u)!=0xf3f3f3f3u ||
            state.get(0x807fffd0u)!=0x8001000cu ||
            state.get(0x807fffd4u)!=0x2c3u ||
            state.interrupt_mask_calls!=1 ||
@@ -6506,7 +6531,22 @@ private:
            state.interrupt_mask_progress.previous_mask!=0x7ffu ||
            state.interrupt_mask_progress.published_mask!=0 ||
            state.interrupt_mask_progress.return_v0!=0x7ffu ||
-           state.get(0x800c54acu)!=0)
+           state.get(0x800c54acu)!=0 ||
+           state.reset_callback_calls!=1 || state.reset_child_callbacks!=1 ||
+           !state.reset_callback_progress.completed ||
+           state.reset_callback_progress.operations!=5 ||
+           state.reset_callback_progress.accesses!=4 ||
+           state.reset_callback_progress.reads!=3 ||
+           state.reset_callback_progress.stores!=1 ||
+           state.reset_callback_progress.callbacks_completed!=1 ||
+           state.reset_callback_progress.dispatch_table!=0x800c54b0u ||
+           state.reset_callback_progress.dispatch_target!=0x80098714u ||
+           state.reset_callback_progress.frame_stack_pointer!=0x807fffb8u ||
+           state.reset_callback_progress.stack_pointer!=0x807fffd0u ||
+           state.reset_callback_progress.restored_return_address!=0x80029a18u ||
+           state.reset_callback_progress.return_v0!=1 ||
+           !state.reset_callback_progress.return_v0_known ||
+           state.get(0x807fffc8u)!=0x80029a18u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6571,6 +6611,18 @@ private:
             state.interrupt_mask_progress.reads<<", \"stores\": "<<
             state.interrupt_mask_progress.stores<<", \"child_calls\": 0, "
             "\"status\": \"cleared-before-callback-reset\"},\n"
+            "  \"reset_callback\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800985DC\", "
+            "\"end_exclusive\": \"0x8009860C\", \"instructions\": 12, \"call_pc\": \"0x80029A10\", "
+            "\"api\": \"ResetCallback\", \"dispatch_pointer_global\": \"0x800C54C8\", "
+            "\"dispatch_table\": \"0x800C54B0\", \"dispatch_slot_offset\": 12, "
+            "\"dispatch_target\": \"0x80098714\", \"frame_stack_pointer\": \"0x807FFFB8\", "
+            "\"restored_return_address\": \"0x80029A18\", \"accesses\": "<<
+            state.reset_callback_progress.accesses<<", \"reads\": "<<
+            state.reset_callback_progress.reads<<", \"stores\": "<<
+            state.reset_callback_progress.stores<<", \"child_calls\": "<<
+            state.reset_callback_progress.callbacks_completed<<", \"child_return\": "<<
+            state.reset_callback_progress.return_v0<<", \"child_status\": \"synthetic-required-boundary\", "
+            "\"visual_effect\": \"none\", \"status\": \"dispatched\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6584,7 +6636,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; 70 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; 69 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

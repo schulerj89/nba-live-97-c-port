@@ -7,6 +7,7 @@
 #include "recovered/game_path_prefix_set.h"
 #include "recovered/game_directory_cache_configure.h"
 #include "recovered/game_interrupt_mask_set.h"
+#include "recovered/game_reset_callback.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -60,11 +61,13 @@ struct Fixture {
     Nba97GamePathPrefixSetProgress path_prefix_progress{};
     Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
     Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
+    Nba97GameResetCallbackProgress reset_callback_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
     std::vector<Nba97GameCdDirectoryInitializeEvent> cd_calls;
     std::vector<Nba97GamePathPrefixSetEvent> path_calls;
+    std::vector<Nba97GameResetCallbackEvent> reset_callback_calls;
     unsigned heap_format_calls = 0;
     bool compose_static = false;
     bool compose_global_pointer = false;
@@ -73,6 +76,7 @@ struct Fixture {
     bool compose_path_prefix = false;
     bool compose_directory_cache = false;
     bool compose_interrupt_mask = false;
+    bool compose_reset_callback = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -212,6 +216,14 @@ struct Fixture {
             }
         return 0;
     }
+    static int resetCallbackIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameResetCallbackEvent* event,
+        Nba97GameResetCallbackValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.reset_callback_calls.push_back(*event);
+        *value={1,1};
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -267,6 +279,15 @@ struct Fixture {
                     &f.interrupt_mask_progress) != NBA97_TEXT_COMPLETE)
                 return 0;
             *value={f.interrupt_mask_progress.return_v0,1};
+        }
+        if (f.compose_reset_callback && event->entry == 0x800985dcu) {
+            Nba97GameResetCallbackContext context{*memory,10,
+                event->stack_pointer,event->return_address,resetCallbackIo,&f};
+            if (nba97_game_reset_callback(&context,
+                    &f.reset_callback_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.reset_callback_progress.return_v0,
+                f.reset_callback_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -427,6 +448,8 @@ struct Composition {
         game.put(0x800c4b14u, 0);
         game.put(0x800c4abcu, 0);
         game.put(0x800c54acu, 0x7ffu);
+        game.put(0x800c54c8u, 0x800c54b0u);
+        game.put(0x800c54bcu, 0x80098714u);
         game.putText(0x800247e4u,"cdrom:");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
@@ -437,6 +460,7 @@ struct Composition {
         game.compose_path_prefix = true;
         game.compose_directory_cache = true;
         game.compose_interrupt_mask = true;
+        game.compose_reset_callback = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -527,7 +551,6 @@ void overlay_composition() {
         c.game.directory_cache_progress.return_v0 == 0x8001000cu);
     check(c.game.get(0x800c4ab8u) == 0x2c3u &&
         c.game.get(0x801046a0u) == 0x8001000cu &&
-        c.game.get(FrameSp - 8u) == 0xf3f3f3f3u &&
         c.game.get(FrameSp) == 0x8001000cu &&
         c.game.get(FrameSp + 4u) == 0x2c3u);
     check(c.game.interrupt_mask_progress.completed &&
@@ -540,6 +563,25 @@ void overlay_composition() {
         c.game.interrupt_mask_progress.published_mask == 0 &&
         c.game.interrupt_mask_progress.return_v0 == 0x7ffu &&
         c.game.get(0x800c54acu) == 0);
+    check(c.game.reset_callback_progress.completed &&
+        c.game.reset_callback_progress.operations == 5 &&
+        c.game.reset_callback_progress.accesses == 4 &&
+        c.game.reset_callback_progress.reads == 3 &&
+        c.game.reset_callback_progress.stores == 1 &&
+        c.game.reset_callback_progress.callbacks_completed == 1);
+    check(c.game.reset_callback_progress.dispatch_table == 0x800c54b0u &&
+        c.game.reset_callback_progress.dispatch_target == 0x80098714u &&
+        c.game.reset_callback_progress.frame_stack_pointer == FrameSp - 0x18u &&
+        c.game.reset_callback_progress.stack_pointer == FrameSp &&
+        c.game.reset_callback_progress.restored_return_address == 0x80029a18u &&
+        c.game.reset_callback_progress.return_v0 == 1 &&
+        c.game.reset_callback_progress.return_v0_known &&
+        c.game.get(FrameSp - 8u) == 0x80029a18u);
+    check(c.game.reset_callback_calls.size() == 1 &&
+        c.game.reset_callback_calls[0].pc == 0x800985f4u &&
+        c.game.reset_callback_calls[0].entry == 0x80098714u &&
+        c.game.reset_callback_calls[0].stack_pointer == FrameSp - 0x18u &&
+        c.game.reset_callback_calls[0].return_address == 0x800985fcu);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

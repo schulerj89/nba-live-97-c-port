@@ -210,6 +210,9 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     TRY(direct_call(run, 0x800299e8u, 0x800a35d8u, 1, 0x800247e4u, 0, 0, &value));
     TRY(direct_call(run, 0x800299f8u, 0x80092c7cu, 2, 0x8001000cu, 0x2c3u, 0, &value));
     TRY(write_half(run, 0x8002148cu, 0x80029a04u, 0));
+    /* GAMEONLY startup clears the inherited PsyQ mask first, then enters the
+     * separately recovered ResetCallback table-dispatch wrapper. Neither call
+     * is treated as a native host interrupt operation by this composition. */
     TRY(direct_call(run, 0x80029a08u, 0x800985b4u, 1, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a10u, 0x800985dcu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a18u, 0x8008f1d4u, 1, 8, 0, 0, &value));

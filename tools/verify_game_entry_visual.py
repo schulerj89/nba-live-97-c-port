@@ -123,6 +123,20 @@ def main():
                 "accesses": 2, "reads": 1, "stores": 1,
                 "child_calls": 0, "status": "cleared-before-callback-reset"},
             "recovered 0x800985B4 interrupt-mask receipt drifted")
+    require(receipt["reset_callback"] == {
+                "binary": "GAMEONLY", "address": "0x800985DC",
+                "end_exclusive": "0x8009860C", "instructions": 12,
+                "call_pc": "0x80029A10", "api": "ResetCallback",
+                "dispatch_pointer_global": "0x800C54C8",
+                "dispatch_table": "0x800C54B0", "dispatch_slot_offset": 12,
+                "dispatch_target": "0x80098714",
+                "frame_stack_pointer": "0x807FFFB8",
+                "restored_return_address": "0x80029A18",
+                "accesses": 4, "reads": 3, "stores": 1,
+                "child_calls": 1, "child_return": 1,
+                "child_status": "synthetic-required-boundary",
+                "visual_effect": "none", "status": "dispatched"},
+            "recovered 0x800985DC ResetCallback dispatch receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -146,6 +160,8 @@ def main():
             "directory-cache configuration boundary drifted")
     require(calls[6]["pc"] == "0x80029A08" and calls[6]["entry"] == "0x800985B4",
             "interrupt-mask clear boundary drifted")
+    require(calls[7]["pc"] == "0x80029A10" and calls[7]["entry"] == "0x800985DC",
+            "ResetCallback dispatch boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -180,6 +196,12 @@ def main():
             "returned prior mask 0x000007FF" in trace and
             "cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback" in trace and
             "without changing native OS interrupts or rendering" in trace and
+            "0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper" in trace and
+            "loaded table 0x800C54B0 through 0x800C54C8" in trace and
+            "slot +0x0C target 0x80098714" in trace and
+            "saved and restored caller RA 0x80029A18" in trace and
+            "invoked one explicit diagnostic child fixture" in trace and
+            "wrapper changed no native OS callbacks or pixels" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -190,6 +212,8 @@ def main():
           "native 0x800A35D8 selected the cdrom: file prefix without adding a separator; "
           "native 0x80092C7C registered a 707-entry PS1 directory cache at 0x8001000C; "
           "native PsyQ SetIntrMask 0x800985B4 cleared the mapped callback mask before reset; "
+          "native PsyQ ResetCallback wrapper 0x800985DC dispatched table slot +0x0C to 0x80098714 "
+          "with no direct pixel effect; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
