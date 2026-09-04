@@ -3,6 +3,7 @@
 #include "recovered/game_static_initializers.h"
 #include "recovered/game_global_pointer_save.h"
 #include "recovered/game_heap_initialize.h"
+#include "recovered/game_cd_directory_initialize.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -51,13 +52,17 @@ struct Fixture {
     Nba97GameStaticInitializersProgress static_progress{};
     Nba97GameGlobalPointerSaveProgress global_pointer_progress{};
     Nba97GameHeapInitializeProgress heap_progress{};
+    Nba97GameCdDirectoryInitializeProgress cd_directory_progress{};
+    Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
+    std::vector<Nba97GameCdDirectoryInitializeEvent> cd_calls;
     unsigned heap_format_calls = 0;
     bool compose_static = false;
     bool compose_global_pointer = false;
     bool compose_heap = false;
+    bool compose_cd_directory = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -111,6 +116,62 @@ struct Fixture {
         }
         return 0;
     }
+    static int cdDirectoryIo(void* user, const Nba97GameTextMemory* memory,
+        const Nba97GameCdDirectoryInitializeEvent* event,
+        Nba97GameCdDirectoryInitializeValue* value) {
+        auto& f = *static_cast<Fixture*>(user);
+        f.cd_calls.push_back(*event);
+        if (event->kind == NBA97_CD_DIRECTORY_INITIALIZE_POLL) {
+            f.put(0x80103551u, 0, 1);
+            return 1;
+        }
+        switch (event->entry) {
+        case 0x800a4830u: {
+            Nba97GameGlobalPointerSaveContext context{*memory,10,event->global_pointer};
+            return nba97_game_global_pointer_save(&context,
+                &f.cd_global_pointer_progress) == NBA97_TEXT_COMPLETE;
+        }
+        case 0x800985a4u:
+        case 0x8009d94cu:
+            return 1;
+        case 0x8009fa6cu:
+            if (event->argument_count != 1 || event->argument[0] != 0x80103550u)
+                return 0;
+            f.put(0x80103551u,0,1);
+            f.put(0x80103554u,0x00000200u);
+            *value={1,1};
+            return 1;
+        case 0x80091870u:
+            if (event->argument_count != 1)
+                return 0;
+            if (event->argument[0] == 0x80103554u)
+                *value={0x100u,1};
+            else if (event->argument[0] == event->stack_pointer + 0x18u &&
+                f.get(event->argument[0]) == 0x00160200u)
+                *value={0x110u,1};
+            else
+                return 0;
+            return 1;
+        case 0x80091e1cu:
+            return event->argument_count == 1 && event->argument[0] == 0x10u;
+        case 0x80091e80u:
+            if (event->argument_count != 2 || event->argument[0] != 0x80103550u ||
+                event->argument[1] != 1)
+                return 0;
+            f.put(0x801035eeu,23u);
+            f.put(0x801035f6u,2048u);
+            return 1;
+        case 0x800aa04cu:
+            if (event->argument_count != 2 || event->argument[1] != 4 ||
+                (event->argument[0] != 0x801035eeu &&
+                 event->argument[0] != 0x801035f6u))
+                return 0;
+            *value={f.get(event->argument[0]),1};
+            return 1;
+        default:
+            return 0;
+        }
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -133,6 +194,14 @@ struct Fixture {
             Nba97GameHeapInitializeContext context{*memory,10000,heapIo,&f};
             if (nba97_game_heap_initialize(&context,&arguments,f.heap_journal.data(),
                     f.heap_journal.size(),&f.heap_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+        }
+        if (f.compose_cd_directory && event->entry == 0x80091c08u) {
+            Nba97GameCdDirectoryInitializeContext context{*memory,200,4,
+                event->stack_pointer,event->return_address,0x0f0f0f0fu,
+                event->global_pointer,cdDirectoryIo,&f};
+            if (nba97_game_cd_directory_initialize(&context,
+                    &f.cd_directory_progress) != NBA97_TEXT_COMPLETE)
                 return 0;
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
@@ -290,9 +359,11 @@ struct Composition {
         game.put(0x800c4b3cu, 0x00800000u);
         game.put(0x800c4b38u, 0x00008000u);
         game.put(0x800c4b14u, 0);
+        game.put(0x800c4abcu, 0);
         game.compose_static = true;
         game.compose_global_pointer = true;
         game.compose_heap = true;
+        game.compose_cd_directory = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -338,6 +409,21 @@ void overlay_composition() {
         c.game.get(0x800d7c3cu) == 0);
     check(c.game.get(0x8010b620u) == 0x20574f4cu &&
         c.game.get(0x8010b648u) == 0x48474948u);
+    check(c.game.cd_directory_progress.completed &&
+        c.game.cd_directory_progress.return_v0 == 1 &&
+        c.game.cd_directory_progress.operations == 42 &&
+        c.game.cd_directory_progress.accesses == 32 &&
+        c.game.cd_directory_progress.reads == 17 &&
+        c.game.cd_directory_progress.stores == 15);
+    check(c.game.cd_calls.size() == 10 &&
+        c.game.cd_directory_progress.calls_completed == 10 &&
+        !c.game.cd_directory_progress.polls &&
+        c.game.cd_global_pointer_progress.completed);
+    check(c.game.get(0x800ebc3cu) == 0x100u &&
+        c.game.get(0x800fb150u) == 0x110u &&
+        c.game.get(0x800d7d3cu) == 23u &&
+        c.game.get(0x800d7d40u) == 2048u &&
+        c.game.get(0x800c4abcu) == 1);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

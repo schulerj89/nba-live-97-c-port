@@ -17,6 +17,7 @@
 #include "match_assets.hpp"
 #include "match_snapshot.hpp"
 #include "recovered/game_global_pointer_save.h"
+#include "recovered/game_cd_directory_initialize.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6221,11 +6222,15 @@ private:
             Nba97GameStaticInitializersProgress static_progress{};
             Nba97GameGlobalPointerSaveProgress global_pointer_progress{};
             Nba97GameHeapInitializeProgress heap_progress{};
+            Nba97GameCdDirectoryInitializeProgress cd_directory_progress{};
+            Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
             unsigned heap_format_calls=0;
+            unsigned cd_directory_calls=0;
+            unsigned cd_child_callbacks=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6238,6 +6243,14 @@ private:
                     return;
                 }
                 throw std::runtime_error("game-entry diagnostic write escaped declared source memory");
+            }
+            void putByte(std::uint32_t address,std::uint8_t value) {
+                for(auto& region:regions)if(address>=region.base &&
+                   std::uint64_t(address-region.base)<region.size) {
+                    const auto offset=address-region.base;region.data[offset]=value;
+                    if(region.known)region.known[offset]=1;return;
+                }
+                throw std::runtime_error("game-entry diagnostic byte write escaped declared source memory");
             }
             void putText(std::uint32_t address,const char* text) {
                 do {
@@ -6300,6 +6313,55 @@ private:
                 if(nba97_game_heap_initialize(&context,&arguments,fixture.heap_journal.data(),
                        fixture.heap_journal.size(),&fixture.heap_progress)!=NBA97_TEXT_COMPLETE ||
                    !fixture.heap_progress.completed)return 0;
+            } else if(event->entry==0x80091c08u) {
+                ++fixture.cd_directory_calls;
+                const auto cd=[](void* user,const Nba97GameTextMemory* cd_memory,
+                    const Nba97GameCdDirectoryInitializeEvent* cd_event,
+                    Nba97GameCdDirectoryInitializeValue* cd_value)->int {
+                    auto& state=*static_cast<State*>(user);++state.cd_child_callbacks;
+                    if(cd_event->kind==NBA97_CD_DIRECTORY_INITIALIZE_POLL) {
+                        state.putByte(0x80103551u,0);return 1;
+                    }
+                    switch(cd_event->entry) {
+                    case 0x800a4830u: {
+                        Nba97GameGlobalPointerSaveContext nested{*cd_memory,10,
+                            cd_event->global_pointer};
+                        return nba97_game_global_pointer_save(&nested,
+                            &state.cd_global_pointer_progress)==NBA97_TEXT_COMPLETE;
+                    }
+                    case 0x800985a4u:
+                    case 0x8009d94cu:return 1;
+                    case 0x8009fa6cu:
+                        if(cd_event->argument_count!=1 || cd_event->argument[0]!=0x80103550u)return 0;
+                        state.putByte(0x80103551u,0);
+                        state.put(0x80103554u,0x00000200u);
+                        *cd_value={1,1};return 1;
+                    case 0x80091870u:
+                        if(cd_event->argument_count!=1)return 0;
+                        if(cd_event->argument[0]==0x80103554u)*cd_value={0x100u,1};
+                        else if(cd_event->argument[0]==cd_event->stack_pointer+0x18u &&
+                                state.get(cd_event->argument[0])==0x00160200u)*cd_value={0x110u,1};
+                        else return 0;
+                        return 1;
+                    case 0x80091e1cu:
+                        return cd_event->argument_count==1 && cd_event->argument[0]==0x10u;
+                    case 0x80091e80u:
+                        if(cd_event->argument_count!=2 || cd_event->argument[0]!=0x80103550u ||
+                           cd_event->argument[1]!=1)return 0;
+                        state.put(0x801035eeu,23u);state.put(0x801035f6u,2048u);return 1;
+                    case 0x800aa04cu:
+                        if(cd_event->argument_count!=2 || cd_event->argument[1]!=4 ||
+                           (cd_event->argument[0]!=0x801035eeu &&
+                            cd_event->argument[0]!=0x801035f6u))return 0;
+                        *cd_value={state.get(cd_event->argument[0]),1};return 1;
+                    default:return 0;
+                    }
+                };
+                Nba97GameCdDirectoryInitializeContext context{*memory,200,4,
+                    event->stack_pointer,event->return_address,0x0f0f0f0fu,
+                    event->global_pointer,cd,&fixture};
+                if(nba97_game_cd_directory_initialize(&context,&fixture.cd_directory_progress)!=
+                       NBA97_TEXT_COMPLETE || !fixture.cd_directory_progress.completed)return 0;
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6324,7 +6386,16 @@ private:
            state.heap_progress.stores!=248 || state.heap_progress.callbacks_completed!=2 ||
            state.heap_progress.return_v0!=0x000f21e4u ||
            state.get(0x80103d50u)!=0x8010b61cu || state.get(0x80103d54u)!=0x8010b644u ||
-           state.get(0x800eb688u)!=0x8010b66cu || state.get(0x800d7c3cu)!=0)
+           state.get(0x800eb688u)!=0x8010b66cu || state.get(0x800d7c3cu)!=0 ||
+           state.cd_directory_calls!=1 || !state.cd_directory_progress.completed ||
+           state.cd_directory_progress.operations!=42 || state.cd_directory_progress.accesses!=32 ||
+           state.cd_directory_progress.reads!=17 || state.cd_directory_progress.stores!=15 ||
+           state.cd_directory_progress.calls_completed!=10 || state.cd_directory_progress.polls!=0 ||
+           state.cd_child_callbacks!=10 || !state.cd_global_pointer_progress.completed ||
+           state.cd_directory_progress.root_directory_lba!=23 ||
+           state.cd_directory_progress.root_directory_size!=2048 ||
+           state.get(0x800d7d3cu)!=23 || state.get(0x800d7d40u)!=2048 ||
+           state.get(0x800c4abcu)!=1)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6349,6 +6420,18 @@ private:
             ", \"stores\": "<<state.heap_progress.stores<<", \"formatter_callbacks\": "<<
             state.heap_progress.callbacks_completed<<", \"low_name\": \"LOW MB_RAM  \", "
             "\"high_name\": \"HIGH MB_RAM \", \"status\": \"initialized\"},\n"
+            "  \"cd_directory_initialize\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80091C08\", "
+            "\"end_exclusive\": \"0x80091DE0\", \"instructions\": 118, \"call_pc\": \"0x800299D8\", "
+            "\"buffer\": \"0x80103550\", \"child_calls\": "<<state.cd_directory_progress.calls_completed<<
+            ", \"accesses\": "<<state.cd_directory_progress.accesses<<", \"reads\": "<<
+            state.cd_directory_progress.reads<<", \"stores\": "<<state.cd_directory_progress.stores<<
+            ", \"polls\": "<<state.cd_directory_progress.polls<<", \"disc_base_sector\": "<<
+            state.cd_directory_progress.disc_base_sector<<", \"primary_volume_sector\": "<<
+            state.cd_directory_progress.primary_volume_sector<<", \"descriptor_delta\": "<<
+            state.cd_directory_progress.primary_volume_sector-state.cd_directory_progress.disc_base_sector<<
+            ", \"root_directory_lba\": "<<state.cd_directory_progress.root_directory_lba<<
+            ", \"root_directory_size\": "<<state.cd_directory_progress.root_directory_size<<
+            ", \"cache_flag\": \"0x800C4ABC\", \"status\": \"initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6362,7 +6445,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; 74 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; 73 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

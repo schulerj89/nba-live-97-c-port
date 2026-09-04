@@ -85,6 +85,16 @@ def main():
                 "low_name": "LOW MB_RAM  ", "high_name": "HIGH MB_RAM ",
                 "status": "initialized"},
             "recovered 0x8008FA6C heap execution receipt drifted")
+    require(receipt["cd_directory_initialize"] == {
+                "binary": "GAMEONLY", "address": "0x80091C08",
+                "end_exclusive": "0x80091DE0", "instructions": 118,
+                "call_pc": "0x800299D8", "buffer": "0x80103550",
+                "child_calls": 10, "accesses": 32, "reads": 17,
+                "stores": 15, "polls": 0, "disc_base_sector": 256,
+                "primary_volume_sector": 272, "descriptor_delta": 16,
+                "root_directory_lba": 23, "root_directory_size": 2048,
+                "cache_flag": "0x800C4ABC", "status": "initialized"},
+            "recovered 0x80091C08 CD-directory execution receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -100,6 +110,8 @@ def main():
             "global-pointer save boundary drifted")
     require(calls[2]["pc"] == "0x800299C8" and calls[2]["entry"] == "0x8008FA6C",
             "heap-initialization boundary drifted")
+    require(calls[3]["pc"] == "0x800299D8" and calls[3]["entry"] == "0x80091C08",
+            "CD-directory initialization boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -123,12 +135,15 @@ def main():
             "saved gp 0x800D79C8 to 0x800D6E2C" in trace and
             "0x8008FA6C executed recovered heap owner" in trace and
             "220 descriptors, 248 stores" in trace and
+            "0x80091C08 executed recovered CD-directory owner" in trace and
+            "10 child calls, root LBA 23, length 2048" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
           "native 0x800948D0 changed guard 0x800C4B14 from 0 to 1; "
           "native 0x800A4830 saved gp 0x800D79C8 at 0x800D6E2C; "
           "native 0x8008FA6C initialized the 220-descriptor gameplay heap; "
+          "native 0x80091C08 published CD root LBA 23 and length 2048; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

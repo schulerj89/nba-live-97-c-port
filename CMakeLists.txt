@@ -254,7 +254,8 @@ if(BUILD_TESTING)
     add_test(NAME game_overlay_entry COMMAND nba97_game_overlay_entry_tests)
     add_executable(nba97_game_main_tests tests/game_main_tests.cpp src/recovered/game_main.c
         src/recovered/game_overlay_entry.c src/recovered/game_static_initializers.c
-        src/recovered/game_global_pointer_save.c src/recovered/game_heap_initialize.c)
+        src/recovered/game_global_pointer_save.c src/recovered/game_heap_initialize.c
+        src/recovered/game_cd_directory_initialize.c)
     target_compile_features(nba97_game_main_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_main_tests PRIVATE src)
     add_test(NAME game_main COMMAND nba97_game_main_tests)
@@ -268,6 +269,12 @@ if(BUILD_TESTING)
     target_compile_features(nba97_game_global_pointer_save_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_global_pointer_save_tests PRIVATE src)
     add_test(NAME game_global_pointer_save COMMAND nba97_game_global_pointer_save_tests)
+    add_executable(nba97_game_cd_directory_initialize_tests
+        tests/game_cd_directory_initialize_tests.cpp
+        src/recovered/game_cd_directory_initialize.c)
+    target_compile_features(nba97_game_cd_directory_initialize_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_cd_directory_initialize_tests PRIVATE src)
+    add_test(NAME game_cd_directory_initialize COMMAND nba97_game_cd_directory_initialize_tests)
     add_executable(nba97_game_heap_allocate_tests tests/game_heap_allocate_tests.cpp src/recovered/game_heap_allocate.c)
     target_compile_features(nba97_game_heap_allocate_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_heap_allocate_tests PRIVATE src)
@@ -1016,7 +1023,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/spu_initialize.c src/spu_initialize_backend.cpp
     src/recovered/audio_startup.c src/audio_startup_backend.cpp
     src/recovered/game_text_objects.c src/recovered/game_text_pools.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
-    src/recovered/game_overlay_entry.c src/recovered/game_main.c src/recovered/game_static_initializers.c src/recovered/game_global_pointer_save.c src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
+    src/recovered/game_overlay_entry.c src/recovered/game_main.c src/recovered/game_static_initializers.c src/recovered/game_global_pointer_save.c src/recovered/game_heap_initialize.c src/recovered/game_cd_directory_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c
