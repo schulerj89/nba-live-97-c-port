@@ -19,6 +19,7 @@
 #include "recovered/game_global_pointer_save.h"
 #include "recovered/game_cd_directory_initialize.h"
 #include "recovered/game_path_prefix_set.h"
+#include "recovered/game_directory_cache_configure.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6231,6 +6232,7 @@ private:
             Nba97GameCdDirectoryInitializeProgress cd_directory_progress{};
             Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
             Nba97GamePathPrefixSetProgress path_prefix_progress{};
+            Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6240,6 +6242,7 @@ private:
             unsigned cd_child_callbacks=0;
             unsigned path_prefix_calls=0;
             unsigned path_child_callbacks=0;
+            unsigned directory_cache_calls=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6411,6 +6414,14 @@ private:
                     event->global_pointer,path,&fixture};
                 if(nba97_game_path_prefix_set(&context,&fixture.path_prefix_progress)!=
                        NBA97_TEXT_COMPLETE || !fixture.path_prefix_progress.completed)return 0;
+            } else if(event->entry==0x80092c7cu) {
+                ++fixture.directory_cache_calls;
+                Nba97GameDirectoryCacheConfigureContext context{*memory,100,
+                    event->argument[0],event->argument[1],event->stack_pointer,
+                    0xf3f3f3f3u};
+                if(nba97_game_directory_cache_configure(&context,
+                       &fixture.directory_cache_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.directory_cache_progress.completed)return 0;
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6454,7 +6465,25 @@ private:
            state.path_prefix_progress.separator_appended ||
            state.get(0x800d6dacu)!=0x6f726463u ||
            state.getByte(0x800d6db0u)!='m' || state.getByte(0x800d6db1u)!=':' ||
-           state.getByte(0x800d6db2u)!=0)
+           state.getByte(0x800d6db2u)!=0 || state.directory_cache_calls!=1 ||
+           !state.directory_cache_progress.completed ||
+           state.directory_cache_progress.operations!=8 ||
+           state.directory_cache_progress.accesses!=8 ||
+           state.directory_cache_progress.reads!=3 ||
+           state.directory_cache_progress.stores!=5 ||
+           state.directory_cache_progress.cache_address!=0x8001000cu ||
+           state.directory_cache_progress.entry_capacity!=0x2c3u ||
+           state.directory_cache_progress.published_cache_address!=0x8001000cu ||
+           state.directory_cache_progress.published_entry_capacity!=0x2c3u ||
+           state.directory_cache_progress.frame_stack_pointer!=0x807fffc8u ||
+           state.directory_cache_progress.stack_pointer!=0x807fffd0u ||
+           state.directory_cache_progress.restored_frame_pointer!=0xf3f3f3f3u ||
+           state.directory_cache_progress.return_v0!=0x8001000cu ||
+           state.get(0x800c4ab8u)!=0x2c3u ||
+           state.get(0x801046a0u)!=0x8001000cu ||
+           state.get(0x807fffc8u)!=0xf3f3f3f3u ||
+           state.get(0x807fffd0u)!=0x8001000cu ||
+           state.get(0x807fffd4u)!=0x2c3u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6500,6 +6529,16 @@ private:
             state.path_prefix_progress.copied_length<<", \"final_length\": "<<
             state.path_prefix_progress.final_length<<", \"separator_appended\": false, "
             "\"status\": \"selected\"},\n"
+            "  \"directory_cache_configure\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80092C7C\", "
+            "\"end_exclusive\": \"0x80092CBC\", \"instructions\": 16, \"call_pc\": \"0x800299F8\", "
+            "\"cache\": \"0x8001000C\", \"capacity\": "<<
+            state.directory_cache_progress.published_entry_capacity<<", \"record_size\": 20, "
+            "\"reserved_bytes\": 14140, \"capacity_global\": \"0x800C4AB8\", "
+            "\"pointer_global\": \"0x801046A0\", \"accesses\": "<<
+            state.directory_cache_progress.accesses<<", \"reads\": "<<
+            state.directory_cache_progress.reads<<", \"stores\": "<<
+            state.directory_cache_progress.stores<<", \"child_calls\": 0, "
+            "\"status\": \"configured\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6513,7 +6552,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; 72 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; 71 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

@@ -5,6 +5,7 @@
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_cd_directory_initialize.h"
 #include "recovered/game_path_prefix_set.h"
+#include "recovered/game_directory_cache_configure.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -56,6 +57,7 @@ struct Fixture {
     Nba97GameCdDirectoryInitializeProgress cd_directory_progress{};
     Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
     Nba97GamePathPrefixSetProgress path_prefix_progress{};
+    Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -67,6 +69,7 @@ struct Fixture {
     bool compose_heap = false;
     bool compose_cd_directory = false;
     bool compose_path_prefix = false;
+    bool compose_directory_cache = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -246,6 +249,14 @@ struct Fixture {
                     NBA97_TEXT_COMPLETE)
                 return 0;
         }
+        if (f.compose_directory_cache && event->entry == 0x80092c7cu) {
+            Nba97GameDirectoryCacheConfigureContext context{*memory,100,
+                event->argument[0],event->argument[1],event->stack_pointer,
+                0xf3f3f3f3u};
+            if (nba97_game_directory_cache_configure(&context,
+                    &f.directory_cache_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -410,6 +421,7 @@ struct Composition {
         game.compose_heap = true;
         game.compose_cd_directory = true;
         game.compose_path_prefix = true;
+        game.compose_directory_cache = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -485,6 +497,24 @@ void overlay_composition() {
         c.game.path_prefix_progress.restored_register_s0 == 1);
     check(c.game.get(0x800d6dacu) == 0x6f726463u &&
         c.game.get(0x800d6db0u,3) == 0x003a6du);
+    check(c.game.directory_cache_progress.completed &&
+        c.game.directory_cache_progress.operations == 8 &&
+        c.game.directory_cache_progress.accesses == 8 &&
+        c.game.directory_cache_progress.reads == 3 &&
+        c.game.directory_cache_progress.stores == 5);
+    check(c.game.directory_cache_progress.cache_address == 0x8001000cu &&
+        c.game.directory_cache_progress.entry_capacity == 0x2c3u &&
+        c.game.directory_cache_progress.published_cache_address == 0x8001000cu &&
+        c.game.directory_cache_progress.published_entry_capacity == 0x2c3u);
+    check(c.game.directory_cache_progress.frame_stack_pointer == FrameSp - 8u &&
+        c.game.directory_cache_progress.stack_pointer == FrameSp &&
+        c.game.directory_cache_progress.restored_frame_pointer == 0xf3f3f3f3u &&
+        c.game.directory_cache_progress.return_v0 == 0x8001000cu);
+    check(c.game.get(0x800c4ab8u) == 0x2c3u &&
+        c.game.get(0x801046a0u) == 0x8001000cu &&
+        c.game.get(FrameSp - 8u) == 0xf3f3f3f3u &&
+        c.game.get(FrameSp) == 0x8001000cu &&
+        c.game.get(FrameSp + 4u) == 0x2c3u);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

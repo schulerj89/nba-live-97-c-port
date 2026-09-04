@@ -104,6 +104,16 @@ def main():
                 "stores": 2, "copied_length": 6, "final_length": 6,
                 "separator_appended": False, "status": "selected"},
             "recovered 0x800A35D8 path-prefix execution receipt drifted")
+    require(receipt["directory_cache_configure"] == {
+                "binary": "GAMEONLY", "address": "0x80092C7C",
+                "end_exclusive": "0x80092CBC", "instructions": 16,
+                "call_pc": "0x800299F8", "cache": "0x8001000C",
+                "capacity": 707, "record_size": 20, "reserved_bytes": 14140,
+                "capacity_global": "0x800C4AB8",
+                "pointer_global": "0x801046A0", "accesses": 8,
+                "reads": 3, "stores": 5, "child_calls": 0,
+                "status": "configured"},
+            "recovered 0x80092C7C directory-cache configuration receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -123,6 +133,8 @@ def main():
             "CD-directory initialization boundary drifted")
     require(calls[4]["pc"] == "0x800299E8" and calls[4]["entry"] == "0x800A35D8",
             "path-prefix selection boundary drifted")
+    require(calls[5]["pc"] == "0x800299F8" and calls[5]["entry"] == "0x80092C7C",
+            "directory-cache configuration boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -151,6 +163,8 @@ def main():
             "0x800A35D8 executed recovered path-prefix owner" in trace and
             "2 BIOS string calls, copied cdrom: to 0x800D6DAC" in trace and
             "skipped separator append because the source ended in colon" in trace and
+            "0x80092C7C executed recovered directory-cache owner" in trace and
+            "preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -159,6 +173,7 @@ def main():
           "native 0x8008FA6C initialized the 220-descriptor gameplay heap; "
           "native 0x80091C08 published CD root LBA 23 and length 2048; "
           "native 0x800A35D8 selected the cdrom: file prefix without adding a separator; "
+          "native 0x80092C7C registered a 707-entry PS1 directory cache at 0x8001000C; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
