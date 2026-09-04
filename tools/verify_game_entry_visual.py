@@ -95,6 +95,15 @@ def main():
                 "root_directory_lba": 23, "root_directory_size": 2048,
                 "cache_flag": "0x800C4ABC", "status": "initialized"},
             "recovered 0x80091C08 CD-directory execution receipt drifted")
+    require(receipt["path_prefix_set"] == {
+                "binary": "GAMEONLY", "address": "0x800A35D8",
+                "end_exclusive": "0x800A364C", "instructions": 29,
+                "call_pc": "0x800299E8", "source": "0x800247E4",
+                "destination": "0x800D6DAC", "path": "cdrom:",
+                "child_calls": 2, "accesses": 5, "reads": 3,
+                "stores": 2, "copied_length": 6, "final_length": 6,
+                "separator_appended": False, "status": "selected"},
+            "recovered 0x800A35D8 path-prefix execution receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -112,6 +121,8 @@ def main():
             "heap-initialization boundary drifted")
     require(calls[3]["pc"] == "0x800299D8" and calls[3]["entry"] == "0x80091C08",
             "CD-directory initialization boundary drifted")
+    require(calls[4]["pc"] == "0x800299E8" and calls[4]["entry"] == "0x800A35D8",
+            "path-prefix selection boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -137,6 +148,9 @@ def main():
             "220 descriptors, 248 stores" in trace and
             "0x80091C08 executed recovered CD-directory owner" in trace and
             "10 child calls, root LBA 23, length 2048" in trace and
+            "0x800A35D8 executed recovered path-prefix owner" in trace and
+            "2 BIOS string calls, copied cdrom: to 0x800D6DAC" in trace and
+            "skipped separator append because the source ended in colon" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -144,6 +158,7 @@ def main():
           "native 0x800A4830 saved gp 0x800D79C8 at 0x800D6E2C; "
           "native 0x8008FA6C initialized the 220-descriptor gameplay heap; "
           "native 0x80091C08 published CD root LBA 23 and length 2048; "
+          "native 0x800A35D8 selected the cdrom: file prefix without adding a separator; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

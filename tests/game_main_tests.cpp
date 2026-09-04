@@ -4,6 +4,7 @@
 #include "recovered/game_global_pointer_save.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_cd_directory_initialize.h"
+#include "recovered/game_path_prefix_set.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -54,15 +55,18 @@ struct Fixture {
     Nba97GameHeapInitializeProgress heap_progress{};
     Nba97GameCdDirectoryInitializeProgress cd_directory_progress{};
     Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
+    Nba97GamePathPrefixSetProgress path_prefix_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
     std::vector<Nba97GameCdDirectoryInitializeEvent> cd_calls;
+    std::vector<Nba97GamePathPrefixSetEvent> path_calls;
     unsigned heap_format_calls = 0;
     bool compose_static = false;
     bool compose_global_pointer = false;
     bool compose_heap = false;
     bool compose_cd_directory = false;
+    bool compose_path_prefix = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -172,6 +176,36 @@ struct Fixture {
             return 0;
         }
     }
+    static int pathPrefixIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GamePathPrefixSetEvent* event,
+        Nba97GamePathPrefixSetValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.path_calls.push_back(*event);
+        if (event->kind==NBA97_GAME_PATH_PREFIX_COPY) {
+            if (event->argument_count!=2 || event->argument[0]!=0x800d6dacu ||
+                event->argument[1]!=0x800247e4u)
+                return 0;
+            for (unsigned i=0;i<64;++i) {
+                const auto source=*f.byte(event->argument[1]+i);
+                *f.byte(event->argument[0]+i)=source;
+                *f.known(event->argument[0]+i)=*f.known(event->argument[1]+i);
+                if (!source) {
+                    *value={event->argument[0],1};
+                    return 1;
+                }
+            }
+            return 0;
+        }
+        if (event->kind!=NBA97_GAME_PATH_PREFIX_LENGTH ||
+            event->argument_count!=1 || event->argument[0]!=0x800d6dacu)
+            return 0;
+        for (unsigned length=0;length<64;++length)
+            if (!*f.byte(event->argument[0]+length)) {
+                *value={length,1};
+                return 1;
+            }
+        return 0;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -202,6 +236,14 @@ struct Fixture {
                 event->global_pointer,cdDirectoryIo,&f};
             if (nba97_game_cd_directory_initialize(&context,
                     &f.cd_directory_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+        }
+        if (f.compose_path_prefix && event->entry == 0x800a35d8u) {
+            Nba97GamePathPrefixSetContext context{*memory,100,event->argument[0],
+                event->stack_pointer,event->return_address,event->saved_register[0],
+                event->global_pointer,pathPrefixIo,&f};
+            if (nba97_game_path_prefix_set(&context,&f.path_prefix_progress) !=
+                    NBA97_TEXT_COMPLETE)
                 return 0;
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
@@ -360,10 +402,14 @@ struct Composition {
         game.put(0x800c4b38u, 0x00008000u);
         game.put(0x800c4b14u, 0);
         game.put(0x800c4abcu, 0);
+        game.putText(0x800247e4u,"cdrom:");
+        game.put(0x800d7a0cu,0x5cu,1);
+        game.put(0x800d7a0du,0,1);
         game.compose_static = true;
         game.compose_global_pointer = true;
         game.compose_heap = true;
         game.compose_cd_directory = true;
+        game.compose_path_prefix = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -424,6 +470,21 @@ void overlay_composition() {
         c.game.get(0x800d7d3cu) == 23u &&
         c.game.get(0x800d7d40u) == 2048u &&
         c.game.get(0x800c4abcu) == 1);
+    check(c.game.path_prefix_progress.completed &&
+        c.game.path_prefix_progress.operations == 7 &&
+        c.game.path_prefix_progress.accesses == 5 &&
+        c.game.path_prefix_progress.reads == 3 &&
+        c.game.path_prefix_progress.stores == 2 &&
+        c.game.path_prefix_progress.callbacks_completed == 2 &&
+        c.game.path_prefix_progress.copied_length == 6 &&
+        c.game.path_prefix_progress.final_length == 6 &&
+        !c.game.path_prefix_progress.separator_appended);
+    check(c.game.path_calls.size() == 2 &&
+        c.game.path_calls[0].entry == 0x8009cb6cu &&
+        c.game.path_calls[1].entry == 0x8009cb4cu &&
+        c.game.path_prefix_progress.restored_register_s0 == 1);
+    check(c.game.get(0x800d6dacu) == 0x6f726463u &&
+        c.game.get(0x800d6db0u,3) == 0x003a6du);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }
