@@ -137,6 +137,23 @@ def main():
                 "child_status": "synthetic-required-boundary",
                 "visual_effect": "none", "status": "dispatched"},
             "recovered 0x800985DC ResetCallback dispatch receipt drifted")
+    require(receipt["controller_resume"] == {
+                "binary": "GAMEONLY", "address": "0x8008F1D4",
+                "end_exclusive": "0x8008F224", "instructions": 20,
+                "call_pcs": ["0x80029A18", "0x80029A30"],
+                "requested_mode": 8, "pad_mode_global": "0x800D7A48",
+                "final_pad_mode": 8, "suspend_flag_global": "0x800C4A70",
+                "initial_suspend_flag": 1, "final_suspend_flag": 0,
+                "clock_snapshot_global": "0x800C4A74", "clock_snapshot": 37,
+                "initializer_entry": "0x80091184", "clock_entry": "0x800A5810",
+                "first_call_operations": 8, "first_call_accesses": 6,
+                "first_call_child_calls": 2,
+                "first_call_status": "input-reinitialized",
+                "second_call_operations": 4, "second_call_accesses": 4,
+                "second_call_child_calls": 0,
+                "second_call_status": "mode-reasserted-input-already-active",
+                "visual_effect": "none", "status": "resumed"},
+            "recovered 0x8008F1D4 controller-resume receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -162,6 +179,9 @@ def main():
             "interrupt-mask clear boundary drifted")
     require(calls[7]["pc"] == "0x80029A10" and calls[7]["entry"] == "0x800985DC",
             "ResetCallback dispatch boundary drifted")
+    require(calls[8]["pc"] == "0x80029A18" and calls[8]["entry"] == "0x8008F1D4" and
+            calls[11]["pc"] == "0x80029A30" and calls[11]["entry"] == "0x8008F1D4",
+            "controller-resume call boundaries drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -202,6 +222,11 @@ def main():
             "saved and restored caller RA 0x80029A18" in trace and
             "invoked one explicit diagnostic child fixture" in trace and
             "wrapper changed no native OS callbacks or pixels" in trace and
+            "controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30" in trace and
+            "first saw suspend flag 1, invoked initializer 0x80091184" in trace and
+            "stored clock 37 from 0x800A5810 at 0x800C4A74" in trace and
+            "second saw input already active and only reasserted mode 8 at 0x800D7A48" in trace and
+            "native input devices and pixels did not" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -214,6 +239,7 @@ def main():
           "native PsyQ SetIntrMask 0x800985B4 cleared the mapped callback mask before reset; "
           "native PsyQ ResetCallback wrapper 0x800985DC dispatched table slot +0x0C to 0x80098714 "
           "with no direct pixel effect; "
+          "native controller-resume 0x8008F1D4 initialized input once, then took its already-active fast path; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

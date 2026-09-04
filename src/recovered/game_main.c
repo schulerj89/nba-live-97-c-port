@@ -215,9 +215,14 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * is treated as a native host interrupt operation by this composition. */
     TRY(direct_call(run, 0x80029a08u, 0x800985b4u, 1, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a10u, 0x800985dcu, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029A18 -> 0x8008F1D4 is the separately recovered
+     * controller-resume/mode owner. With the retail suspend flag initially
+     * one, this mode-8 call initializes pad sampling and snapshots its clock. */
     TRY(direct_call(run, 0x80029a18u, 0x8008f1d4u, 1, 8, 0, 0, &value));
     TRY(direct_call(run, 0x80029a20u, 0x80099058u, 1, 3, 0, 0, &value));
     TRY(direct_call(run, 0x80029a28u, 0x800992c4u, 1, 0, 0, 0, &value));
+    /* GAMEONLY calls the same owner again at 0x80029A30. Input is already
+     * active here, so source behavior still writes mode 8 but skips children. */
     TRY(direct_call(run, 0x80029a30u, 0x8008f1d4u, 1, 8, 0, 0, &value));
     TRY(direct_call(run, 0x80029a38u, 0x800a43e8u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7a94u, 0x80029a48u, 0x78u));

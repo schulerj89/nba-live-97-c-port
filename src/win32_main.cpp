@@ -22,6 +22,7 @@
 #include "recovered/game_directory_cache_configure.h"
 #include "recovered/game_interrupt_mask_set.h"
 #include "recovered/game_reset_callback.h"
+#include "recovered/game_controller_resume.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6237,6 +6238,7 @@ private:
             Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
             Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
             Nba97GameResetCallbackProgress reset_callback_progress{};
+            std::array<Nba97GameControllerResumeProgress,2> controller_resume_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6250,6 +6252,9 @@ private:
             unsigned interrupt_mask_calls=0;
             unsigned reset_callback_calls=0;
             unsigned reset_child_callbacks=0;
+            unsigned controller_resume_calls=0;
+            unsigned controller_initialize_callbacks=0;
+            unsigned controller_clock_callbacks=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6260,6 +6265,12 @@ private:
                 put(0x800c54acu,0x7ffu);
                 put(0x800c54c8u,0x800c54b0u);
                 put(0x800c54bcu,0x80098714u);
+                /* Raw GAMEONLY initial data: input begins suspended. This
+                   makes startup's first 0x8008F1D4 call resume it and its
+                   second call take the already-active path. */
+                put(0x800c4a70u,1);
+                put(0x800c4a74u,0);
+                put(0x800d7a48u,0);
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6460,6 +6471,41 @@ private:
                    !fixture.reset_callback_progress.completed)return 0;
                 *value={fixture.reset_callback_progress.return_v0,
                     fixture.reset_callback_progress.return_v0_known};
+            } else if(event->entry==0x8008f1d4u) {
+                if(fixture.controller_resume_calls>=fixture.controller_resume_progress.size())
+                    return 0;
+                const auto controller=[](void* user,const Nba97GameTextMemory*,
+                    const Nba97GameControllerResumeEvent* controller_event,
+                    Nba97GameControllerResumeValue* controller_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    if(controller_event->stack_pointer!=0x807fffb8u ||
+                       controller_event->argument_count)return 0;
+                    if(controller_event->kind==NBA97_GAME_CONTROLLER_RESUME_INITIALIZE &&
+                       controller_event->pc==0x8008f1f4u &&
+                       controller_event->entry==0x80091184u &&
+                       controller_event->return_address==0x8008f1fcu) {
+                        ++state.controller_initialize_callbacks;
+                        *controller_value={0,0};
+                        return 1;
+                    }
+                    if(controller_event->kind==NBA97_GAME_CONTROLLER_RESUME_CLOCK &&
+                       controller_event->pc==0x8008f204u &&
+                       controller_event->entry==0x800a5810u &&
+                       controller_event->return_address==0x8008f20cu) {
+                        ++state.controller_clock_callbacks;
+                        *controller_value={37,1};
+                        return 1;
+                    }
+                    return 0;
+                };
+                auto& controller_progress=
+                    fixture.controller_resume_progress[fixture.controller_resume_calls++];
+                Nba97GameControllerResumeContext context{*memory,20,event->argument[0],
+                    event->stack_pointer,event->return_address,controller,&fixture};
+                if(nba97_game_controller_resume(&context,&controller_progress)!=
+                       NBA97_TEXT_COMPLETE || !controller_progress.completed)return 0;
+                *value={controller_progress.return_v0,
+                    controller_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6546,7 +6592,39 @@ private:
            state.reset_callback_progress.restored_return_address!=0x80029a18u ||
            state.reset_callback_progress.return_v0!=1 ||
            !state.reset_callback_progress.return_v0_known ||
-           state.get(0x807fffc8u)!=0x80029a18u)
+           state.controller_resume_calls!=2 ||
+           state.controller_initialize_callbacks!=1 ||
+           state.controller_clock_callbacks!=1 ||
+           !state.controller_resume_progress[0].completed ||
+           !state.controller_resume_progress[0].input_reinitialized ||
+           state.controller_resume_progress[0].operations!=8 ||
+           state.controller_resume_progress[0].accesses!=6 ||
+           state.controller_resume_progress[0].reads!=2 ||
+           state.controller_resume_progress[0].stores!=4 ||
+           state.controller_resume_progress[0].callbacks_completed!=2 ||
+           state.controller_resume_progress[0].requested_pad_mode!=8 ||
+           state.controller_resume_progress[0].initial_suspend_flag!=1 ||
+           state.controller_resume_progress[0].clock_snapshot!=37 ||
+           !state.controller_resume_progress[0].clock_snapshot_known ||
+           state.controller_resume_progress[0].frame_stack_pointer!=0x807fffb8u ||
+           state.controller_resume_progress[0].stack_pointer!=0x807fffd0u ||
+           state.controller_resume_progress[0].restored_return_address!=0x80029a20u ||
+           !state.controller_resume_progress[1].completed ||
+           state.controller_resume_progress[1].input_reinitialized ||
+           state.controller_resume_progress[1].operations!=4 ||
+           state.controller_resume_progress[1].accesses!=4 ||
+           state.controller_resume_progress[1].reads!=2 ||
+           state.controller_resume_progress[1].stores!=2 ||
+           state.controller_resume_progress[1].callbacks_completed!=0 ||
+           state.controller_resume_progress[1].requested_pad_mode!=8 ||
+           state.controller_resume_progress[1].initial_suspend_flag!=0 ||
+           state.controller_resume_progress[1].return_v0!=0 ||
+           !state.controller_resume_progress[1].return_v0_known ||
+           state.controller_resume_progress[1].restored_return_address!=0x80029a38u ||
+           state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
+           state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029a38u ||
+           state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
+           state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6623,6 +6701,24 @@ private:
             state.reset_callback_progress.callbacks_completed<<", \"child_return\": "<<
             state.reset_callback_progress.return_v0<<", \"child_status\": \"synthetic-required-boundary\", "
             "\"visual_effect\": \"none\", \"status\": \"dispatched\"},\n"
+            "  \"controller_resume\": {\"binary\": \"GAMEONLY\", \"address\": \"0x8008F1D4\", "
+            "\"end_exclusive\": \"0x8008F224\", \"instructions\": 20, "
+            "\"call_pcs\": [\"0x80029A18\", \"0x80029A30\"], \"requested_mode\": 8, "
+            "\"pad_mode_global\": \"0x800D7A48\", \"final_pad_mode\": "<<state.get(0x800d7a48u)<<
+            ", \"suspend_flag_global\": \"0x800C4A70\", \"initial_suspend_flag\": "<<
+            state.controller_resume_progress[0].initial_suspend_flag<<", \"final_suspend_flag\": "<<
+            state.get(0x800c4a70u)<<", \"clock_snapshot_global\": \"0x800C4A74\", "
+            "\"clock_snapshot\": "<<state.get(0x800c4a74u)<<", "
+            "\"initializer_entry\": \"0x80091184\", \"clock_entry\": \"0x800A5810\", "
+            "\"first_call_operations\": "<<state.controller_resume_progress[0].operations<<
+            ", \"first_call_accesses\": "<<state.controller_resume_progress[0].accesses<<
+            ", \"first_call_child_calls\": "<<state.controller_resume_progress[0].callbacks_completed<<
+            ", \"first_call_status\": \"input-reinitialized\", \"second_call_operations\": "<<
+            state.controller_resume_progress[1].operations<<", \"second_call_accesses\": "<<
+            state.controller_resume_progress[1].accesses<<", \"second_call_child_calls\": "<<
+            state.controller_resume_progress[1].callbacks_completed<<
+            ", \"second_call_status\": \"mode-reasserted-input-already-active\", "
+            "\"visual_effect\": \"none\", \"status\": \"resumed\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6636,7 +6732,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; 69 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; 67 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

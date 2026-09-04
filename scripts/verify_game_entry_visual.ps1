@@ -10,7 +10,7 @@ try {
     if(-not $SkipBuild) {
         & "$PSScriptRoot/build.ps1" -Configuration $Configuration
         if($LASTEXITCODE) {throw 'Native application build failed'}
-        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_main_tests --parallel
+        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_controller_resume_tests nba97_game_main_tests --parallel
         if($LASTEXITCODE) {throw 'GAMEONLY game-entry owner tests failed'}
     }
     $staticUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_static_initializers_tests.exe"
@@ -37,6 +37,9 @@ try {
     $resetCallbackUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_reset_callback_tests.exe"
     & $resetCallbackUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x800985DC ResetCallback wrapper tests failed'}
+    $controllerResumeUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_controller_resume_tests.exe"
+    & $controllerResumeUnit
+    if($LASTEXITCODE) {throw 'GAMEONLY 0x8008F1D4 controller-resume tests failed'}
     $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}
