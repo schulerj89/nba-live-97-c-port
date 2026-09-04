@@ -25,6 +25,7 @@
 #include "recovered/game_controller_resume.h"
 #include "recovered/game_reset_graph.h"
 #include "recovered/game_graph_debug_set.h"
+#include "recovered/game_vblank_initialize.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6244,9 +6245,12 @@ private:
             Nba97GameResetGraphProgress reset_graph_progress{};
             Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
             Nba97GameGraphDebugSetProgress graph_debug_progress{};
+            Nba97GameVblankInitializeProgress vblank_progress{};
+            Nba97GameGlobalPointerSaveProgress vblank_global_pointer_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
+            std::vector<Nba97GameVblankInitializeEvent> vblank_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6266,6 +6270,12 @@ private:
             unsigned reset_graph_child_callbacks=0;
             unsigned reset_graph_reset_children=0;
             unsigned graph_debug_calls=0;
+            unsigned vblank_calls=0;
+            unsigned vblank_child_callbacks=0;
+            bool vblank_set_rcnt_rejected=false;
+            bool vblank_started_after_rejection=false;
+            bool vblank_interrupt_installed=false;
+            bool vblank_critical_section=false;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6617,6 +6627,85 @@ private:
                    !fixture.graph_debug_progress.completed)return 0;
                 *value={fixture.graph_debug_progress.return_v0,
                     fixture.graph_debug_progress.return_v0_known};
+            } else if(event->entry==0x800a43e8u) {
+                ++fixture.vblank_calls;
+                const auto vblank=[](void* user,
+                    const Nba97GameTextMemory* vblank_memory,
+                    const Nba97GameVblankInitializeEvent* vblank_event,
+                    Nba97GameVblankInitializeValue* vblank_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.vblank_child_callbacks;
+                    state.vblank_events.push_back(*vblank_event);
+                    *vblank_value={0,1};
+                    switch(vblank_event->entry) {
+                    case 0x800a4830u: {
+                        Nba97GameGlobalPointerSaveContext nested{
+                            *vblank_memory,10,vblank_event->global_pointer};
+                        return nba97_game_global_pointer_save(&nested,
+                            &state.vblank_global_pointer_progress)==
+                            NBA97_TEXT_COMPLETE;
+                    }
+                    case 0x800994f4u:
+                        return vblank_event->pc==0x800a4460u &&
+                            vblank_event->argument_count==1 &&
+                            vblank_event->argument[0]==0;
+                    case 0x80098394u:
+                        if(vblank_event->pc!=0x800a4468u ||
+                           vblank_event->argument_count)return 0;
+                        state.vblank_critical_section=true;
+                        return 1;
+                    case 0x8009860cu:
+                        if(!state.vblank_critical_section ||
+                           vblank_event->pc!=0x800a447cu ||
+                           vblank_event->argument_count!=2 ||
+                           vblank_event->argument[0]!=0 ||
+                           vblank_event->argument[1]!=0x800a450cu)return 0;
+                        state.vblank_interrupt_installed=true;
+                        return 1;
+                    case 0x800983b4u:
+                        if(!state.vblank_critical_section ||
+                           vblank_event->pc!=0x800a4494u ||
+                           vblank_event->argument_count!=3 ||
+                           vblank_event->argument[0]!=0xf2000003u ||
+                           vblank_event->argument[1]!=1 ||
+                           vblank_event->argument[2]!=0x1000u)return 0;
+                        /* PsyQ SetRCnt rejects index 3. The raw false return
+                           is required evidence, not a reason to repair it. */
+                        state.vblank_set_rcnt_rejected=true;
+                        return 1;
+                    case 0x80098488u:
+                        if(!state.vblank_set_rcnt_rejected ||
+                           vblank_event->pc!=0x800a44a4u ||
+                           vblank_event->argument_count!=1 ||
+                           vblank_event->argument[0]!=0xf2000003u)return 0;
+                        /* StartRCnt ORs VBlank bit 0 before returning false. */
+                        state.vblank_started_after_rejection=true;
+                        return 1;
+                    case 0x80098594u:
+                        if(!state.vblank_critical_section ||
+                           vblank_event->pc!=0x800a44acu ||
+                           vblank_event->argument_count)return 0;
+                        state.vblank_critical_section=false;
+                        return 1;
+                    case 0x800a3e48u:
+                        if(state.vblank_critical_section ||
+                           vblank_event->pc!=0x800a44b4u ||
+                           vblank_event->argument_count)return 0;
+                        state.put(0x800d7a88u,0);
+                        state.put(0x800d7afcu,0);
+                        state.put(0x800d7b00u,0);
+                        return 1;
+                    default:return 0;
+                    }
+                };
+                Nba97GameVblankInitializeContext vblank_context{*memory,100,
+                    event->stack_pointer,event->return_address,0xf4f4f4f4u,
+                    event->global_pointer,vblank,&fixture};
+                if(nba97_game_vblank_initialize(&vblank_context,
+                       &fixture.vblank_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.vblank_progress.completed)return 0;
+                *value={fixture.vblank_progress.return_v0,
+                    fixture.vblank_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6627,6 +6716,10 @@ private:
             0x800948ccu,{0,0,0},0x800d79c8u,callback,&state};
         Nba97GameMainProgress progress{};
         const auto result=nba97_game_main(&context,&progress);
+        bool vblank_slots_cleared=true;
+        for(unsigned i=0;i<8;++i)
+            vblank_slots_cleared=vblank_slots_cleared &&
+                state.get(0x800d6e0cu+i*4u)==0;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -6788,16 +6881,56 @@ private:
             state.graph_debug_progress.stack_pointer!=0x807fffd0u ||
             state.graph_debug_progress.restored_return_address!=0x80029a30u ||
             state.graph_debug_progress.restored_saved_register_s0!=1 ||
+            state.vblank_calls!=1 || state.vblank_child_callbacks!=8 ||
+            state.vblank_events.size()!=8 ||
+            !state.vblank_progress.completed ||
+            state.vblank_progress.operations!=54 ||
+            state.vblank_progress.accesses!=46 ||
+            state.vblank_progress.reads!=27 ||
+            state.vblank_progress.stores!=19 ||
+            state.vblank_progress.callbacks_completed!=8 ||
+            state.vblank_progress.callback_slots_cleared!=8 ||
+            state.vblank_progress.interrupt_handler!=0x800a450cu ||
+            state.vblank_progress.root_counter_spec!=0xf2000003u ||
+            state.vblank_progress.root_counter_target!=1 ||
+            state.vblank_progress.root_counter_mode!=0x1000u ||
+            state.vblank_progress.set_rcnt_return!=0 ||
+            !state.vblank_progress.set_rcnt_return_known ||
+            state.vblank_progress.start_rcnt_return!=0 ||
+            !state.vblank_progress.start_rcnt_return_known ||
+            state.vblank_progress.return_v0!=0 ||
+            !state.vblank_progress.return_v0_known ||
+            state.vblank_progress.frame_stack_pointer!=0x807fffb0u ||
+            state.vblank_progress.stack_pointer!=0x807fffd0u ||
+            state.vblank_progress.restored_return_address!=0x80029a40u ||
+            state.vblank_progress.restored_frame_pointer!=0xf4f4f4f4u ||
+            !state.vblank_global_pointer_progress.completed ||
+            state.vblank_global_pointer_progress.stored_global_pointer!=0x800d79c8u ||
+            !state.vblank_set_rcnt_rejected ||
+            !state.vblank_started_after_rejection ||
+            !state.vblank_interrupt_installed || state.vblank_critical_section ||
+            !vblank_slots_cleared || state.get(0x800d7a88u)!=0 ||
+            state.get(0x800d7afcu)!=0 || state.get(0x800d7b00u)!=0 ||
+            state.vblank_events[0].pc!=0x800a43f8u ||
+            state.vblank_events[0].entry!=0x800a4830u ||
+            state.vblank_events[3].pc!=0x800a447cu ||
+            state.vblank_events[3].entry!=0x8009860cu ||
+            state.vblank_events[3].argument[1]!=0x800a450cu ||
+            state.vblank_events[4].entry!=0x800983b4u ||
+            state.vblank_events[4].argument[0]!=0xf2000003u ||
+            state.vblank_events[5].entry!=0x80098488u ||
+            state.vblank_events[7].entry!=0x800a3e48u ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029a38u ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf4f4f4f4u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
-            state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u)
+            state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u ||
+            state.calls[12].pc!=0x80029a38u || state.calls[12].entry!=0x800a43e8u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -6928,6 +7061,27 @@ private:
             "\"argument_truncated_to_byte\": true, \"zero_low_byte_skips_diagnostic\": true, "
             "\"unguarded_diagnostic_dispatch\": true, \"callback_return_ignored\": true}, "
             "\"visual_effect\": \"none\", \"status\": \"debug-disabled\"},\n"
+            "  \"vblank_initialize\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800A43E8\", "
+            "\"end_exclusive\": \"0x800A44D4\", \"instructions\": 59, "
+            "\"call_pc\": \"0x80029A38\", \"callback_table\": \"0x800D6E0C\", "
+            "\"callback_slots\": 8, \"cleared_slots\": "<<
+            unsigned(state.vblank_progress.callback_slots_cleared)<<
+            ", \"interrupt_channel\": 0, \"interrupt_handler\": \"0x800A450C\", "
+            "\"counter_spec\": \"0xF2000003\", \"counter_target\": "<<
+            state.vblank_progress.root_counter_target<<", \"counter_mode\": "<<
+            state.vblank_progress.root_counter_mode<<", \"set_rcnt_return\": "<<
+            state.vblank_progress.set_rcnt_return<<", \"start_rcnt_return\": "<<
+            state.vblank_progress.start_rcnt_return<<", \"frame_counter_globals\": "
+            "[\"0x800D7A88\", \"0x800D7AFC\", \"0x800D7B00\"], \"child_calls\": "<<
+            state.vblank_progress.callbacks_completed<<", \"operations\": "<<
+            state.vblank_progress.operations<<", \"accesses\": "<<
+            state.vblank_progress.accesses<<", \"reads\": "<<
+            state.vblank_progress.reads<<", \"stores\": "<<
+            state.vblank_progress.stores<<", \"source_quirks\": {"
+            "\"set_rcnt_rejects_index_3\": true, "
+            "\"start_rcnt_unmasks_before_false_return\": true, "
+            "\"raw_child_returns_ignored\": true, \"prefix_writes_not_rolled_back\": true}, "
+            "\"visual_effect\": \"none\", \"status\": \"mapped-ps1-vblank-state-initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6950,6 +7104,16 @@ private:
             "unguarded nonzero dispatch quirks remain; mapped PS1 debug bookkeeping changed, "
             "but native logging, renderer and captured pixels were unchanged; 65 remaining "
             "acknowledged outer test boundaries");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x800A43E8 initialized the VBlank service: "
+            "cleared eight callback words at 0x800D6E0C, installed handler 0x800A450C "
+            "on interrupt channel 0 through an explicit diagnostic fixture, issued "
+            "SetRCnt/StartRCnt for 0xF2000003, and reset frame counters 0x800D7A88, "
+            "0x800D7AFC and 0x800D7B00; original counter-3 mismatch remains: SetRCnt "
+            "rejected index 3 while StartRCnt still unmasked VBlank before returning false, "
+            "and both raw returns were ignored; this did not install a native OS interrupt "
+            "or synthesize VBlank cadence, so the 98 captured frontend frames were unchanged; "
+            "64 remaining acknowledged outer test boundaries");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

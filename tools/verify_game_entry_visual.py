@@ -191,6 +191,26 @@ def main():
                     "callback_return_ignored": True},
                 "visual_effect": "none", "status": "debug-disabled"},
             "recovered 0x800992C4 SetGraphDebug receipt drifted")
+    require(receipt["vblank_initialize"] == {
+                "binary": "GAMEONLY", "address": "0x800A43E8",
+                "end_exclusive": "0x800A44D4", "instructions": 59,
+                "call_pc": "0x80029A38", "callback_table": "0x800D6E0C",
+                "callback_slots": 8, "cleared_slots": 8,
+                "interrupt_channel": 0, "interrupt_handler": "0x800A450C",
+                "counter_spec": "0xF2000003", "counter_target": 1,
+                "counter_mode": 4096, "set_rcnt_return": 0,
+                "start_rcnt_return": 0,
+                "frame_counter_globals": ["0x800D7A88", "0x800D7AFC",
+                                          "0x800D7B00"],
+                "child_calls": 8, "operations": 54, "accesses": 46,
+                "reads": 27, "stores": 19, "source_quirks": {
+                    "set_rcnt_rejects_index_3": True,
+                    "start_rcnt_unmasks_before_false_return": True,
+                    "raw_child_returns_ignored": True,
+                    "prefix_writes_not_rolled_back": True},
+                "visual_effect": "none",
+                "status": "mapped-ps1-vblank-state-initialized"},
+            "recovered 0x800A43E8 VBlank initialization receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -223,6 +243,8 @@ def main():
             "ResetGraph call boundary drifted")
     require(calls[10]["pc"] == "0x80029A28" and calls[10]["entry"] == "0x800992C4",
             "SetGraphDebug call boundary drifted")
+    require(calls[12]["pc"] == "0x80029A38" and calls[12]["entry"] == "0x800A43E8",
+            "VBlank initialization boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -282,6 +304,15 @@ def main():
             "skipped the 0x800C55BC diagnostic pointer" in trace and
             "original byte truncation, zero-low-byte alias, ignored callback return and unguarded nonzero dispatch quirks remain" in trace and
             "native logging, renderer and captured pixels were unchanged" in trace and
+            "0x800A43E8 initialized the VBlank service" in trace and
+            "cleared eight callback words at 0x800D6E0C" in trace and
+            "installed handler 0x800A450C on interrupt channel 0" in trace and
+            "issued SetRCnt/StartRCnt for 0xF2000003" in trace and
+            "reset frame counters 0x800D7A88, 0x800D7AFC and 0x800D7B00" in trace and
+            "SetRCnt rejected index 3 while StartRCnt still unmasked VBlank before returning false" in trace and
+            "both raw returns were ignored" in trace and
+            "did not install a native OS interrupt or synthesize VBlank cadence" in trace and
+            "98 captured frontend frames were unchanged" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -299,6 +330,8 @@ def main():
           "without changing captured pixels; "
           "native PsyQ SetGraphDebug 0x800992C4 disabled mapped diagnostics, returned the prior level, "
           "and retained byte-alias/unguarded-dispatch quirks without changing captured pixels; "
+          "native VBlank initializer 0x800A43E8 cleared eight callback slots, installed the source "
+          "handler through explicit fixtures, retained its counter-3 failure quirk, and changed no pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

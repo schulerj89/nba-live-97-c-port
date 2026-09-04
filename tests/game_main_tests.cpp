@@ -11,6 +11,7 @@
 #include "recovered/game_controller_resume.h"
 #include "recovered/game_reset_graph.h"
 #include "recovered/game_graph_debug_set.h"
+#include "recovered/game_vblank_initialize.h"
 
 #include <array>
 #include <cstdint>
@@ -70,6 +71,8 @@ struct Fixture {
     Nba97GameResetGraphProgress reset_graph_progress{};
     Nba97GameResetCallbackProgress reset_graph_reset_callback_progress{};
     Nba97GameGraphDebugSetProgress graph_debug_progress{};
+    Nba97GameVblankInitializeProgress vblank_progress{};
+    Nba97GameGlobalPointerSaveProgress vblank_global_pointer_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -80,8 +83,11 @@ struct Fixture {
     std::vector<Nba97GameResetGraphEvent> reset_graph_calls;
     std::vector<Nba97GameResetCallbackEvent> reset_graph_reset_callback_calls;
     std::vector<Nba97GameGraphDebugSetEvent> graph_debug_calls;
+    std::vector<Nba97GameVblankInitializeEvent> vblank_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
+    bool vblank_set_rcnt_rejected = false;
+    bool vblank_started_after_rejection = false;
     bool compose_static = false;
     bool compose_global_pointer = false;
     bool compose_heap = false;
@@ -93,6 +99,7 @@ struct Fixture {
     bool compose_controller_resume = false;
     bool compose_reset_graph = false;
     bool compose_graph_debug = false;
+    bool compose_vblank = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -301,6 +308,40 @@ struct Fixture {
         f.graph_debug_calls.push_back(*event);
         return 1;
     }
+    static int vblankIo(void* user, const Nba97GameTextMemory* memory,
+        const Nba97GameVblankInitializeEvent* event,
+        Nba97GameVblankInitializeValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.vblank_calls.push_back(*event);
+        value->word=0;
+        value->known=1;
+        if(event->entry==0x800a4830u) {
+            Nba97GameGlobalPointerSaveContext context{*memory,10,
+                event->global_pointer};
+            return nba97_game_global_pointer_save(&context,
+                &f.vblank_global_pointer_progress)==NBA97_TEXT_COMPLETE;
+        }
+        if(event->entry==0x800983b4u) {
+            /* Retail SetRCnt masks the spec to index 3, rejects it and
+               returns zero. The VBlank initializer deliberately continues. */
+            f.vblank_set_rcnt_rejected=true;
+            return 1;
+        }
+        if(event->entry==0x80098488u) {
+            /* Retail StartRCnt still unmasks table entry 3 before returning
+               zero. This fixture records that reached service-side effect. */
+            f.vblank_started_after_rejection=true;
+            return 1;
+        }
+        if(event->entry==0x800a3e48u) {
+            f.put(0x800d7a88u,0);
+            f.put(0x800d7afcu,0);
+            f.put(0x800d7b00u,0);
+            return 1;
+        }
+        return event->entry==0x800994f4u || event->entry==0x80098394u ||
+            event->entry==0x8009860cu || event->entry==0x80098594u;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -396,6 +437,16 @@ struct Fixture {
                 return 0;
             *value={f.graph_debug_progress.return_v0,
                 f.graph_debug_progress.return_v0_known};
+        }
+        if (f.compose_vblank && event->entry == 0x800a43e8u) {
+            Nba97GameVblankInitializeContext context{*memory,100,
+                event->stack_pointer,event->return_address,0xf4f4f4f4u,
+                event->global_pointer,vblankIo,&f};
+            if (nba97_game_vblank_initialize(&context,&f.vblank_progress) !=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.vblank_progress.return_v0,
+                f.vblank_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -586,6 +637,7 @@ struct Composition {
         game.compose_controller_resume = true;
         game.compose_reset_graph = true;
         game.compose_graph_debug = true;
+        game.compose_vblank = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -791,6 +843,49 @@ void overlay_composition() {
         c.game.calls[10].entry == 0x800992c4u &&
         c.game.calls[10].argument_count == 1 &&
         c.game.calls[10].argument[0] == 0);
+    check(c.game.vblank_progress.completed &&
+        c.game.vblank_progress.operations == 54 &&
+        c.game.vblank_progress.accesses == 46 &&
+        c.game.vblank_progress.reads == 27 &&
+        c.game.vblank_progress.stores == 19 &&
+        c.game.vblank_progress.callbacks_completed == 8 &&
+        c.game.vblank_progress.callback_slots_cleared == 8);
+    check(c.game.vblank_progress.interrupt_handler == 0x800a450cu &&
+        c.game.vblank_progress.root_counter_spec == 0xf2000003u &&
+        c.game.vblank_progress.root_counter_target == 1 &&
+        c.game.vblank_progress.root_counter_mode == 0x1000u &&
+        c.game.vblank_progress.set_rcnt_return == 0 &&
+        c.game.vblank_progress.set_rcnt_return_known &&
+        c.game.vblank_progress.start_rcnt_return == 0 &&
+        c.game.vblank_progress.start_rcnt_return_known &&
+        c.game.vblank_set_rcnt_rejected &&
+        c.game.vblank_started_after_rejection);
+    check(c.game.vblank_progress.frame_stack_pointer == FrameSp-0x20u &&
+        c.game.vblank_progress.stack_pointer == FrameSp &&
+        c.game.vblank_progress.global_pointer == 0x800d79c8u &&
+        c.game.vblank_progress.restored_return_address == 0x80029a40u &&
+        c.game.vblank_progress.restored_frame_pointer == 0xf4f4f4f4u &&
+        c.game.vblank_progress.return_v0 == 0 &&
+        c.game.vblank_progress.return_v0_known);
+    check(c.game.vblank_global_pointer_progress.completed &&
+        c.game.vblank_global_pointer_progress.stored_global_pointer ==
+            0x800d79c8u && c.game.vblank_calls.size() == 8);
+    check(c.game.vblank_calls[0].pc == 0x800a43f8u &&
+        c.game.vblank_calls[0].entry == 0x800a4830u &&
+        c.game.vblank_calls[3].pc == 0x800a447cu &&
+        c.game.vblank_calls[3].entry == 0x8009860cu &&
+        c.game.vblank_calls[3].argument[0] == 0 &&
+        c.game.vblank_calls[3].argument[1] == 0x800a450cu &&
+        c.game.vblank_calls[4].entry == 0x800983b4u &&
+        c.game.vblank_calls[4].argument[0] == 0xf2000003u &&
+        c.game.vblank_calls[5].entry == 0x80098488u &&
+        c.game.vblank_calls[7].entry == 0x800a3e48u);
+    for(unsigned i=0;i<8;++i)
+        check(c.game.get(0x800d6e0cu+i*4u)==0);
+    check(c.game.get(0x800d7a88u)==0 && c.game.get(0x800d7afcu)==0 &&
+        c.game.get(0x800d7b00u)==0 && c.game.calls[12].pc==0x80029a38u &&
+        c.game.calls[12].entry==0x800a43e8u &&
+        c.game.calls[12].argument_count==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -798,7 +893,9 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        c.game.get(FrameSp - 8u) == 0x80029a38u);
+        /* The later 0x800A43E8 frame legitimately reuses the earlier
+           controller/graph stack slot with its saved incoming fp. */
+        c.game.get(FrameSp - 8u) == 0xf4f4f4f4u);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

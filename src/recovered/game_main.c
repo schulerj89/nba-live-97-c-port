@@ -230,6 +230,9 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     /* GAMEONLY calls the same owner again at 0x80029A30. Input is already
      * active here, so source behavior still writes mode 8 but skips children. */
     TRY(direct_call(run, 0x80029a30u, 0x8008f1d4u, 1, 8, 0, 0, &value));
+    /* GAMEONLY 0x80029A38 -> 0x800A43E8 is the recovered VBlank-service
+     * initializer. Its PS1 interrupt/counter calls remain explicit children;
+     * the owner clears eight callback slots and preserves counter-3 quirks. */
     TRY(direct_call(run, 0x80029a38u, 0x800a43e8u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7a94u, 0x80029a48u, 0x78u));
     TRY(direct_call(run, 0x80029a4cu, 0x800914d8u, 1, 0x78u, 0, 0, &value));
