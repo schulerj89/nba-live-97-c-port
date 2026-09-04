@@ -246,6 +246,10 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * controls. It intentionally leaves the other 25 GTE controls live and
      * returns the updated Status word; this caller ignores that raw return. */
     TRY(direct_call(run, 0x80029a54u, 0x80056678u, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029A5C -> 0x800A584C samples 0x800A5810, replaces the
+     * gp+0x164 clock baseline, and returns raw modulo-2^32 elapsed ticks. The
+     * initializer immediately before it reset both clock words, so natural
+     * startup returns zero; this caller deliberately ignores that value. */
     TRY(direct_call(run, 0x80029a5cu, 0x800a584cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a64u, 0x80029bdcu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a6cu, 0x80029f20u, 1, 0, 0, 0, &value));

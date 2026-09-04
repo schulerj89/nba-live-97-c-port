@@ -59,5 +59,7 @@ and logs, and writes the clock receipt into `game_entry_trace.json`. This
 initializer changes source callback/timer state but cannot directly change a
 pixel; Debug and RelWithDebInfo frames are therefore expected to remain
 byte-identical. Ticking `0x800916B4` naturally is a later timer/interrupt
-integration boundary, and the capture still does not claim a playable court or
+integration boundary. The immediately following `0x800A584C` delta sampler is
+now recovered separately and observes the initializer's zero baseline without
+inventing that cadence. The capture still does not claim a playable court or
 gameplay frame.

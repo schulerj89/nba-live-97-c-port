@@ -14,6 +14,7 @@
 #include "recovered/game_vblank_initialize.h"
 #include "recovered/game_clock_initialize.h"
 #include "recovered/game_gte_initialize.h"
+#include "recovered/game_clock_delta.h"
 
 #include <array>
 #include <cstdint>
@@ -78,6 +79,7 @@ struct Fixture {
     Nba97GameClockInitializeProgress clock_progress{};
     Nba97GameGteInitializeState gte_state{};
     Nba97GameGteInitializeProgress gte_progress{};
+    Nba97GameClockDeltaProgress clock_delta_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -90,6 +92,7 @@ struct Fixture {
     std::vector<Nba97GameGraphDebugSetEvent> graph_debug_calls;
     std::vector<Nba97GameVblankInitializeEvent> vblank_calls;
     std::vector<Nba97GameClockInitializeEvent> clock_calls;
+    std::vector<Nba97GameClockDeltaEvent> clock_delta_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     bool vblank_set_rcnt_rejected = false;
@@ -113,6 +116,7 @@ struct Fixture {
     bool compose_vblank = false;
     bool compose_clock = false;
     bool compose_gte = false;
+    bool compose_clock_delta = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -402,6 +406,20 @@ struct Fixture {
         default:return 0;
         }
     }
+    static int clockDeltaIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameClockDeltaEvent* event,
+        Nba97GameClockDeltaValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.clock_delta_calls.push_back(*event);
+        if(event->kind!=NBA97_GAME_CLOCK_DELTA_READ_CLOCK ||
+           event->pc!=0x800a585cu || event->entry!=0x800a5810u ||
+           event->argument_count)
+            return 0;
+        /* This is the already-recovered 0x800A5810 leaf: it returns the live
+           source-clock word without creating host cadence. */
+        *value={f.get(0x800d7a70u),1};
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -525,6 +543,16 @@ struct Fixture {
                 return 0;
             *value={f.gte_progress.return_v0,
                 f.gte_progress.return_v0_known};
+        }
+        if (f.compose_clock_delta && event->entry == 0x800a584cu) {
+            Nba97GameClockDeltaContext context{*memory,20,
+                event->stack_pointer,event->return_address,
+                event->saved_register[0],event->global_pointer,clockDeltaIo,&f};
+            if (nba97_game_clock_delta(&context,&f.clock_delta_progress) !=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.clock_delta_progress.return_v0,
+                f.clock_delta_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -723,6 +751,7 @@ struct Composition {
         game.compose_vblank = true;
         game.compose_clock = true;
         game.compose_gte = true;
+        game.compose_clock_delta = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1052,6 +1081,28 @@ void overlay_composition() {
     check(c.game.calls[14].pc==0x80029a54u &&
         c.game.calls[14].entry==0x80056678u &&
         c.game.calls[14].argument_count==0);
+    check(c.game.clock_delta_progress.completed &&
+        c.game.clock_delta_progress.operations==7 &&
+        c.game.clock_delta_progress.accesses==6 &&
+        c.game.clock_delta_progress.reads==3 &&
+        c.game.clock_delta_progress.stores==3 &&
+        c.game.clock_delta_progress.callbacks_completed==1 &&
+        c.game.clock_delta_progress.previous_snapshot==0 &&
+        c.game.clock_delta_progress.sampled_clock==0 &&
+        c.game.clock_delta_progress.sampled_clock_known &&
+        c.game.clock_delta_progress.return_v0==0 &&
+        c.game.clock_delta_progress.return_v0_known &&
+        c.game.clock_delta_progress.snapshot_address==0x800d7b2cu &&
+        c.game.clock_delta_progress.restored_return_address==0x80029a64u &&
+        c.game.clock_delta_progress.restored_saved_register_s0==1);
+    check(c.game.clock_delta_calls.size()==1 &&
+        c.game.clock_delta_calls[0].pc==0x800a585cu &&
+        c.game.clock_delta_calls[0].entry==0x800a5810u &&
+        c.game.clock_delta_calls[0].global_pointer==0x800d79c8u);
+    check(c.game.calls[15].pc==0x80029a5cu &&
+        c.game.calls[15].entry==0x800a584cu &&
+        c.game.calls[15].argument_count==0 &&
+        c.game.calls[15].saved_register[0]==1);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -1059,9 +1110,10 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* The later 0x800914D8 frame legitimately reuses the earlier
-           controller/graph/VBlank stack slot with its saved incoming fp. */
-        c.game.get(FrameSp - 8u) == 0xf5f5f5f5u);
+        /* The 0x800A584C frame legitimately reuses the prior clock frame's
+           saved-fp slot with main's live s0 before restoring that same word. */
+        c.game.get(FrameSp - 8u) == 1 &&
+        c.game.get(FrameSp - 4u) == 0x80029a64u);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

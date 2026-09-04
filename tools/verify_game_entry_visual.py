@@ -258,6 +258,19 @@ def main():
                 "visual_effect": "none",
                 "status": "retained-gte-projection-controls-initialized"},
             "recovered 0x80056678 GTE initialization receipt drifted")
+    require(receipt["clock_delta"] == {
+                "binary": "GAMEONLY", "address": "0x800A584C",
+                "end_exclusive": "0x800A5880", "instructions": 13,
+                "call_pc": "0x80029A5C", "clock_leaf": "0x800A5810",
+                "snapshot_address": "0x800D7B2C", "previous_snapshot": 0,
+                "sampled_clock": 0, "delta": 0, "child_calls": 1,
+                "operations": 7, "accesses": 6, "reads": 3, "stores": 3,
+                "source_quirks": {"gp_relative_snapshot": True,
+                                  "captures_old_before_child": True,
+                                  "commits_sample_before_return": True,
+                                  "raw_subu_wraparound": True},
+                "visual_effect": "none", "status": "clock-baseline-refreshed"},
+            "recovered 0x800A584C clock-delta receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -296,6 +309,8 @@ def main():
             "game-clock initialization boundary drifted")
     require(calls[14]["pc"] == "0x80029A54" and calls[14]["entry"] == "0x80056678",
             "GTE initialization boundary drifted")
+    require(calls[15]["pc"] == "0x80029A5C" and calls[15]["entry"] == "0x800A584C",
+            "clock-delta boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -381,6 +396,12 @@ def main():
             "matrices, FIFOs, FLAG and the other 25 control registers remain live exactly as in GAMEONLY" in trace and
             "establishes later court/player/net projection inputs" in trace and
             "does not submit a GPU packet or change any of the 98 captured frontend frames" in trace and
+            "0x800A584C refreshed the gameplay clock baseline" in trace and
+            "captured gp+0x164 (0x800D7B2C) as 0" in trace and
+            "0x800A5810 leaf to sample retained clock 0" in trace and
+            "returned delta 0" in trace and
+            "original pre-child capture, commit-before-return, gp-relative addressing and raw 32-bit SUBU wraparound remain" in trace and
+            "no host cadence was invented" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -404,6 +425,8 @@ def main():
           "retained signed division traps, and changed no pixels; "
           "native GTE initializer 0x80056678 enabled CU2 and installed seven retained projection controls "
           "without changing pixels; "
+          "native clock-delta sampler 0x800A584C refreshed the zero startup baseline through 0x800A5810, "
+          "retained raw 32-bit wraparound, and changed no pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

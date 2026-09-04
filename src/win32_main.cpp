@@ -28,6 +28,7 @@
 #include "recovered/game_vblank_initialize.h"
 #include "recovered/game_clock_initialize.h"
 #include "recovered/game_gte_initialize.h"
+#include "recovered/game_clock_delta.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6252,11 +6253,13 @@ private:
             Nba97GameClockInitializeProgress clock_progress{};
             Nba97GameGteInitializeState gte_state{};
             Nba97GameGteInitializeProgress gte_progress{};
+            Nba97GameClockDeltaProgress clock_delta_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
             std::vector<Nba97GameVblankInitializeEvent> vblank_events;
             std::vector<Nba97GameClockInitializeEvent> clock_events;
+            std::vector<Nba97GameClockDeltaEvent> clock_delta_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6281,6 +6284,8 @@ private:
             unsigned clock_calls=0;
             unsigned clock_child_callbacks=0;
             unsigned gte_calls=0;
+            unsigned clock_delta_calls=0;
+            unsigned clock_delta_child_callbacks=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6824,6 +6829,33 @@ private:
                    !fixture.gte_progress.completed)return 0;
                 *value={fixture.gte_progress.return_v0,
                     fixture.gte_progress.return_v0_known};
+            } else if(event->entry==0x800a584cu) {
+                ++fixture.clock_delta_calls;
+                const auto read_clock=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GameClockDeltaEvent* clock_event,
+                    Nba97GameClockDeltaValue* clock_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.clock_delta_child_callbacks;
+                    state.clock_delta_events.push_back(*clock_event);
+                    if(clock_event->kind!=NBA97_GAME_CLOCK_DELTA_READ_CLOCK ||
+                       clock_event->pc!=0x800a585cu ||
+                       clock_event->entry!=0x800a5810u ||
+                       clock_event->argument_count)return 0;
+                    /* Exact 0x800A5810 fixture: expose the retained source
+                       counter without manufacturing host timer cadence. */
+                    *clock_value={state.get(0x800d7a70u),1};
+                    return 1;
+                };
+                Nba97GameClockDeltaContext clock_delta_context{*memory,20,
+                    event->stack_pointer,event->return_address,
+                    event->saved_register[0],event->global_pointer,
+                    read_clock,&fixture};
+                if(nba97_game_clock_delta(&clock_delta_context,
+                       &fixture.clock_delta_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.clock_delta_progress.completed)return 0;
+                *value={fixture.clock_delta_progress.return_v0,
+                    fixture.clock_delta_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7116,12 +7148,33 @@ private:
             state.gte_state.control[NBA97_GAME_GTE_OFX].word!=0 ||
             state.gte_state.control[NBA97_GAME_GTE_OFY].word!=0 ||
             state.gte_state.control[31].word!=0xa500001fu ||
+            state.clock_delta_calls!=1 || state.clock_delta_child_callbacks!=1 ||
+            !state.clock_delta_progress.completed ||
+            state.clock_delta_progress.operations!=7 ||
+            state.clock_delta_progress.accesses!=6 ||
+            state.clock_delta_progress.reads!=3 ||
+            state.clock_delta_progress.stores!=3 ||
+            state.clock_delta_progress.callbacks_completed!=1 ||
+            state.clock_delta_progress.global_pointer!=0x800d79c8u ||
+            state.clock_delta_progress.snapshot_address!=0x800d7b2cu ||
+            state.clock_delta_progress.previous_snapshot!=0 ||
+            state.clock_delta_progress.sampled_clock!=0 ||
+            !state.clock_delta_progress.sampled_clock_known ||
+            state.clock_delta_progress.return_v0!=0 ||
+            !state.clock_delta_progress.return_v0_known ||
+            state.clock_delta_progress.restored_return_address!=0x80029a64u ||
+            state.clock_delta_progress.restored_saved_register_s0!=1 ||
+            state.clock_delta_events.size()!=1 ||
+            state.clock_delta_events[0].pc!=0x800a585cu ||
+            state.clock_delta_events[0].entry!=0x800a5810u ||
+            state.clock_delta_events[0].global_pointer!=0x800d79c8u ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf5f5f5f5u ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=1 ||
+            state.get(0x807fffccu)!=0x80029a64u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
@@ -7130,7 +7183,9 @@ private:
             state.calls[13].pc!=0x80029a4cu || state.calls[13].entry!=0x800914d8u ||
             state.calls[13].argument_count!=1 || state.calls[13].argument[0]!=120 ||
             state.calls[14].pc!=0x80029a54u || state.calls[14].entry!=0x80056678u ||
-            state.calls[14].argument_count!=0)
+            state.calls[14].argument_count!=0 ||
+            state.calls[15].pc!=0x80029a5cu || state.calls[15].entry!=0x800a584cu ||
+            state.calls[15].argument_count!=0 || state.calls[15].saved_register[0]!=1)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -7326,6 +7381,21 @@ private:
             "\"leaves_other_gte_state_live\": true, \"zsf3_zsf4_are_independent\": true, "
             "\"return_is_updated_status\": true}, \"visual_effect\": \"none\", "
             "\"status\": \"retained-gte-projection-controls-initialized\"},\n"
+            "  \"clock_delta\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800A584C\", "
+            "\"end_exclusive\": \"0x800A5880\", \"instructions\": 13, "
+            "\"call_pc\": \"0x80029A5C\", \"clock_leaf\": \"0x800A5810\", "
+            "\"snapshot_address\": \"0x800D7B2C\", \"previous_snapshot\": "<<
+            state.clock_delta_progress.previous_snapshot<<", \"sampled_clock\": "<<
+            state.clock_delta_progress.sampled_clock<<", \"delta\": "<<
+            state.clock_delta_progress.return_v0<<", \"child_calls\": "<<
+            state.clock_delta_progress.callbacks_completed<<", \"operations\": "<<
+            state.clock_delta_progress.operations<<", \"accesses\": "<<
+            state.clock_delta_progress.accesses<<", \"reads\": "<<
+            state.clock_delta_progress.reads<<", \"stores\": "<<
+            state.clock_delta_progress.stores<<", \"source_quirks\": {"
+            "\"gp_relative_snapshot\": true, \"captures_old_before_child\": true, "
+            "\"commits_sample_before_return\": true, \"raw_subu_wraparound\": true}, "
+            "\"visual_effect\": \"none\", \"status\": \"clock-baseline-refreshed\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7380,6 +7450,16 @@ private:
             "Status word; this establishes later court/player/net projection inputs but "
             "does not submit a GPU packet or change any of the 98 captured frontend "
             "frames; 62 remaining acknowledged outer test boundaries");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x800A584C refreshed the gameplay clock "
+            "baseline: it captured gp+0x164 (0x800D7B2C) as 0, called the exact "
+            "0x800A5810 leaf to sample retained clock 0, committed that sample, and "
+            "returned delta 0; the immediately preceding clock initializer is why this "
+            "natural startup observation is zero; original pre-child capture, "
+            "commit-before-return, gp-relative addressing and raw 32-bit SUBU "
+            "wraparound remain; no host cadence was invented and none of the 98 "
+            "captured frontend frames changed; 61 remaining acknowledged outer test "
+            "boundaries");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
