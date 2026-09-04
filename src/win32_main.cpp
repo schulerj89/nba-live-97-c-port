@@ -26,6 +26,7 @@
 #include "recovered/game_reset_graph.h"
 #include "recovered/game_graph_debug_set.h"
 #include "recovered/game_vblank_initialize.h"
+#include "recovered/game_clock_initialize.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6247,10 +6248,12 @@ private:
             Nba97GameGraphDebugSetProgress graph_debug_progress{};
             Nba97GameVblankInitializeProgress vblank_progress{};
             Nba97GameGlobalPointerSaveProgress vblank_global_pointer_progress{};
+            Nba97GameClockInitializeProgress clock_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
             std::vector<Nba97GameVblankInitializeEvent> vblank_events;
+            std::vector<Nba97GameClockInitializeEvent> clock_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6272,10 +6275,19 @@ private:
             unsigned graph_debug_calls=0;
             unsigned vblank_calls=0;
             unsigned vblank_child_callbacks=0;
+            unsigned clock_calls=0;
+            unsigned clock_child_callbacks=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
             bool vblank_critical_section=false;
+            bool clock_critical_section=false;
+            bool clock_interrupt_installed=false;
+            bool clock_shutdown_registered=false;
+            bool clock_counter_set=false;
+            bool clock_counter_started=false;
+            std::uint32_t clock_hardware_mode=0;
+            std::uint32_t clock_interrupt_mask=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6292,6 +6304,10 @@ private:
                 put(0x800c4a70u,1);
                 put(0x800c4a74u,0);
                 put(0x800d7a48u,0);
+                /* GAMEONLY's source-clock init guard and its 32-slot shutdown
+                   table are BSS-zero at cold entry. */
+                put(0x800c4aa4u,0);
+                for(unsigned i=0;i<32;++i)put(0x800d7234u+i*4u,0);
                 /* Retail libgpu jump-table pointers and resolution tables
                    consumed by ResetGraph(3) at GAMEONLY 0x80099058. */
                 put(0x800c55b8u,0x800c5578u);
@@ -6706,6 +6722,90 @@ private:
                    !fixture.vblank_progress.completed)return 0;
                 *value={fixture.vblank_progress.return_v0,
                     fixture.vblank_progress.return_v0_known};
+            } else if(event->entry==0x800914d8u) {
+                ++fixture.clock_calls;
+                const auto clock=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GameClockInitializeEvent* clock_event,
+                    Nba97GameClockInitializeValue* clock_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    ++state.clock_child_callbacks;
+                    state.clock_events.push_back(*clock_event);
+                    *clock_value={0,1};
+                    switch(clock_event->entry) {
+                    case 0x80098394u:
+                        if(clock_event->pc!=0x800914ecu ||
+                           clock_event->argument_count ||
+                           state.clock_critical_section)return 0;
+                        state.clock_critical_section=true;
+                        return 1;
+                    case 0x8009860cu:
+                        if(!state.clock_critical_section ||
+                           clock_event->pc!=0x80091578u ||
+                           clock_event->argument_count!=2 ||
+                           clock_event->argument[0]!=6 ||
+                           clock_event->argument[1]!=0x800916b4u)return 0;
+                        state.clock_interrupt_installed=true;
+                        return 1;
+                    case 0x800a575cu:
+                        if(!state.clock_critical_section ||
+                           clock_event->pc!=0x80091594u ||
+                           clock_event->argument_count!=1 ||
+                           clock_event->argument[0]!=0x8009167cu)return 0;
+                        /* Exact callback-list result for the BSS-zero fixture:
+                           the shutdown handler occupies the first free slot. */
+                        state.put(0x800d7234u,0x8009167cu);
+                        state.clock_shutdown_registered=true;
+                        return 1;
+                    case 0x800983b4u:
+                        if(!state.clock_critical_section ||
+                           clock_event->pc!=0x8009163cu ||
+                           clock_event->argument_count!=3 ||
+                           clock_event->argument[0]!=0xf2000002u ||
+                           clock_event->argument[1]!=35280 ||
+                           clock_event->argument[2]!=0x1000u)return 0;
+                        /* PsyQ Timer 2 turns mode request 0x1000 into 0x0258:
+                           sysclock/8, target reset, repeat IRQ and IRQ enable. */
+                        state.clock_hardware_mode=0x258u;
+                        state.clock_counter_set=true;
+                        clock_value->word=1;
+                        return 1;
+                    case 0x80098488u:
+                        if(!state.clock_counter_set ||
+                           clock_event->pc!=0x8009164cu ||
+                           clock_event->argument_count!=1 ||
+                           clock_event->argument[0]!=0xf2000002u)return 0;
+                        state.clock_interrupt_mask|=0x40u;
+                        state.clock_counter_started=true;
+                        clock_value->word=1;
+                        return 1;
+                    case 0x80098594u:
+                        if(!state.clock_critical_section ||
+                           clock_event->pc!=0x80091654u ||
+                           clock_event->argument_count)return 0;
+                        state.clock_critical_section=false;
+                        return 1;
+                    case 0x800a5880u:
+                        if(state.clock_critical_section ||
+                           clock_event->pc!=0x8009165cu ||
+                           clock_event->argument_count)return 0;
+                        state.put(0x800d7a7cu,0);
+                        state.put(0x800d7a70u,0);
+                        state.put(clock_event->global_pointer+0x164u,0);
+                        state.put(clock_event->global_pointer+0x160u,0);
+                        return 1;
+                    default:return 0;
+                    }
+                };
+                Nba97GameClockInitializeContext clock_context{*memory,100,
+                    event->argument[0],event->stack_pointer,
+                    event->return_address,0xf5f5f5f5u,event->global_pointer,
+                    clock,&fixture};
+                if(nba97_game_clock_initialize(&clock_context,
+                       &fixture.clock_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.clock_progress.completed)return 0;
+                *value={fixture.clock_progress.return_v0,
+                    fixture.clock_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6720,6 +6820,10 @@ private:
         for(unsigned i=0;i<8;++i)
             vblank_slots_cleared=vblank_slots_cleared &&
                 state.get(0x800d6e0cu+i*4u)==0;
+        bool clock_slots_cleared=true;
+        for(unsigned i=0;i<8;++i)
+            clock_slots_cleared=clock_slots_cleared &&
+                state.get(0x800d6decu+i*4u)==0;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -6769,7 +6873,8 @@ private:
            state.directory_cache_progress.return_v0!=0x8001000cu ||
            state.get(0x800c4ab8u)!=0x2c3u ||
            state.get(0x801046a0u)!=0x8001000cu ||
-           state.get(0x807fffd0u)!=0x8001000cu ||
+           /* 0x800914D8 later spills 120 into the shared ABI home slot. */
+           state.get(0x807fffd0u)!=120 ||
            state.get(0x807fffd4u)!=0x2c3u ||
            state.interrupt_mask_calls!=1 ||
            !state.interrupt_mask_progress.completed ||
@@ -6920,17 +7025,74 @@ private:
             state.vblank_events[4].argument[0]!=0xf2000003u ||
             state.vblank_events[5].entry!=0x80098488u ||
             state.vblank_events[7].entry!=0x800a3e48u ||
+            state.clock_calls!=1 || state.clock_child_callbacks!=7 ||
+            state.clock_events.size()!=7 ||
+            !state.clock_progress.completed ||
+            state.clock_progress.operations!=62 ||
+            state.clock_progress.accesses!=55 ||
+            state.clock_progress.reads!=31 ||
+            state.clock_progress.stores!=24 ||
+            state.clock_progress.callbacks_completed!=7 ||
+            state.clock_progress.initialization_guard_before ||
+            !state.clock_progress.initialized_once ||
+            state.clock_progress.callback_slots_cleared!=8 ||
+            state.clock_progress.incoming_rate!=120 ||
+            state.clock_progress.live_rate_divisor!=120 ||
+            state.clock_progress.clock_base!=0x409980u ||
+            state.clock_progress.timer_target!=35280 ||
+            state.clock_progress.effective_rate!=120 ||
+            state.clock_progress.interrupt_handler!=0x800916b4u ||
+            state.clock_progress.shutdown_handler!=0x8009167cu ||
+            state.clock_progress.root_counter_spec!=0xf2000002u ||
+            state.clock_progress.root_counter_mode!=0x1000u ||
+            state.clock_progress.set_rcnt_return!=1 ||
+            !state.clock_progress.set_rcnt_return_known ||
+            state.clock_progress.start_rcnt_return!=1 ||
+            !state.clock_progress.start_rcnt_return_known ||
+            state.clock_progress.return_v0!=0 ||
+            !state.clock_progress.return_v0_known ||
+            state.clock_progress.trap_code ||
+            state.clock_progress.frame_stack_pointer!=0x807fffb0u ||
+            state.clock_progress.stack_pointer!=0x807fffd0u ||
+            state.clock_progress.restored_return_address!=0x80029a54u ||
+            state.clock_progress.restored_frame_pointer!=0xf5f5f5f5u ||
+            !state.clock_interrupt_installed ||
+            !state.clock_shutdown_registered || !state.clock_counter_set ||
+            !state.clock_counter_started || state.clock_critical_section ||
+            state.clock_hardware_mode!=0x258u ||
+            state.clock_interrupt_mask!=0x40u || !clock_slots_cleared ||
+            state.get(0x800c4aa4u)!=1 ||
+            state.get(0x800d7234u)!=0x8009167cu ||
+            state.get(0x800d7a78u)!=0 || state.get(0x800d7a98u)!=35280 ||
+            state.get(0x800d7a94u)!=120 || state.get(0x800d7a7cu)!=0 ||
+            state.get(0x800d7a70u)!=0 || state.get(0x800d7b2cu)!=0 ||
+            state.get(0x800d7b28u)!=0 ||
+            state.clock_events[0].pc!=0x800914ecu ||
+            state.clock_events[0].entry!=0x80098394u ||
+            state.clock_events[1].pc!=0x80091578u ||
+            state.clock_events[1].entry!=0x8009860cu ||
+            state.clock_events[1].argument[0]!=6 ||
+            state.clock_events[1].argument[1]!=0x800916b4u ||
+            state.clock_events[2].entry!=0x800a575cu ||
+            state.clock_events[2].argument[0]!=0x8009167cu ||
+            state.clock_events[3].entry!=0x800983b4u ||
+            state.clock_events[3].argument[0]!=0xf2000002u ||
+            state.clock_events[3].argument[1]!=35280 ||
+            state.clock_events[4].entry!=0x80098488u ||
+            state.clock_events[6].entry!=0x800a5880u ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf4f4f4f4u ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf5f5f5f5u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
             state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u ||
-            state.calls[12].pc!=0x80029a38u || state.calls[12].entry!=0x800a43e8u)
+            state.calls[12].pc!=0x80029a38u || state.calls[12].entry!=0x800a43e8u ||
+            state.calls[13].pc!=0x80029a4cu || state.calls[13].entry!=0x800914d8u ||
+            state.calls[13].argument_count!=1 || state.calls[13].argument[0]!=120)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -7082,6 +7244,36 @@ private:
             "\"start_rcnt_unmasks_before_false_return\": true, "
             "\"raw_child_returns_ignored\": true, \"prefix_writes_not_rolled_back\": true}, "
             "\"visual_effect\": \"none\", \"status\": \"mapped-ps1-vblank-state-initialized\"},\n"
+            "  \"clock_initialize\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800914D8\", "
+            "\"end_exclusive\": \"0x8009167C\", \"instructions\": 105, "
+            "\"call_pc\": \"0x80029A4C\", \"requested_rate\": "<<
+            state.clock_progress.incoming_rate<<", \"live_rate_divisor\": "<<
+            state.clock_progress.live_rate_divisor<<", \"clock_base\": "<<
+            state.clock_progress.clock_base<<", \"guard_address\": \"0x800C4AA4\", "
+            "\"guard_before\": "<<unsigned(state.clock_progress.initialization_guard_before)<<
+            ", \"guard_after\": "<<state.get(0x800c4aa4u)<<
+            ", \"callback_table\": \"0x800D6DEC\", \"callback_slots\": 8, "
+            "\"cleared_slots\": "<<unsigned(state.clock_progress.callback_slots_cleared)<<
+            ", \"interrupt_channel\": 6, \"interrupt_handler\": \"0x800916B4\", "
+            "\"shutdown_handler\": \"0x8009167C\", \"counter_spec\": \"0xF2000002\", "
+            "\"timer_target\": "<<state.clock_progress.timer_target<<
+            ", \"requested_counter_mode\": "<<state.clock_progress.root_counter_mode<<
+            ", \"hardware_counter_mode\": "<<state.clock_hardware_mode<<
+            ", \"counter_interrupt_mask\": "<<state.clock_interrupt_mask<<
+            ", \"effective_rate\": "<<state.clock_progress.effective_rate<<
+            ", \"set_rcnt_return\": "<<state.clock_progress.set_rcnt_return<<
+            ", \"start_rcnt_return\": "<<state.clock_progress.start_rcnt_return<<
+            ", \"reset_clock_globals\": [\"0x800D7A7C\", \"0x800D7A70\", "
+            "\"0x800D7B2C\", \"0x800D7B28\"], \"child_calls\": "<<
+            state.clock_progress.callbacks_completed<<", \"operations\": "<<
+            state.clock_progress.operations<<", \"accesses\": "<<
+            state.clock_progress.accesses<<", \"reads\": "<<
+            state.clock_progress.reads<<", \"stores\": "<<
+            state.clock_progress.stores<<", \"source_quirks\": {"
+            "\"signed_double_division\": true, \"quantized_effective_rate\": true, "
+            "\"divide_traps_prefix_commit\": true, \"raw_child_returns_ignored\": true, "
+            "\"warm_path_skips_registration\": true}, \"visual_effect\": \"none\", "
+            "\"status\": \"mapped-ps1-clock-service-initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7114,6 +7306,19 @@ private:
             "and both raw returns were ignored; this did not install a native OS interrupt "
             "or synthesize VBlank cadence, so the 98 captured frontend frames were unchanged; "
             "64 remaining acknowledged outer test boundaries");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x800914D8 initialized the source game clock: "
+            "cold guard 0x800C4AA4 changed 0->1, eight callback words at 0x800D6DEC "
+            "were cleared, IRQ6 handler 0x800916B4 was installed, and shutdown handler "
+            "0x8009167C was registered; signed 4233600/120 produced Timer 2 target 35280 "
+            "and effective rate 120, then SetRCnt/StartRCnt for 0xF2000002 returned true "
+            "with diagnostic hardware mode 0x0258 and interrupt-mask bit 0x0040; clock "
+            "globals 0x800D7A7C, 0x800D7A70, 0x800D7B2C and 0x800D7B28 were reset; "
+            "original signed double-division quantization and prefix-committing divide "
+            "BREAK paths remain, and raw child returns are ignored; this diagnostic did "
+            "not install a native OS interrupt or synthesize Timer 2 cadence, so the 98 "
+            "captured frontend frames were unchanged; 63 remaining acknowledged outer "
+            "test boundaries");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

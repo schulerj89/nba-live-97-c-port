@@ -16,6 +16,7 @@ defects should still be fixed.
 |GAME65140 |Status arithmetic saturates by the low16 sign bit, allowing wide sums to wrap to small positive values |Same owner; signed elapsed and overflow cases |
 |GAME646A8 |Duplicate lineup entries use the last inverse-map write; entity subtraction retains raw underflow |`game_player_bindings.c`, bindings tests and workflow |
 |GAME646A8 |Player byte+9 zero traps after earlier binding/entity writes; no reciprocal or later tail calls |Exact DIVIDE_TRAP prefix in bindings owner and original oracle |
+|GAME914D8 |Rate zero traps after entering the critical section and installing cold handlers; a zero first quotient is stored before a second divide trap, with no rollback or critical-section exit |`game_clock_initialize.c`, clock tests and [clock workflow](game_clock_initialize_workflow.md) preserve both exact prefixes |
 |GAME6459C/644FC |All-zero ratings retain carried register values, including a prior sort score as a player ID |`game_team_roles.c`, complete source tail-chain comparison |
 |GAME64388 |Swaps do not advance the sort cursor; the result can remain incompletely sorted |Roles helper; exact source saved-return sentinel comparison retained |
 |GAME56FFC force1 path |An in-range old frame/time can survive forced reset; primary mode2 copies secondary values without clamping |`game_player_initialization.c`, initializer/reset tests and workflow |

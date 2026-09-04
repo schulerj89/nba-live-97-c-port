@@ -211,6 +211,33 @@ def main():
                 "visual_effect": "none",
                 "status": "mapped-ps1-vblank-state-initialized"},
             "recovered 0x800A43E8 VBlank initialization receipt drifted")
+    require(receipt["clock_initialize"] == {
+                "binary": "GAMEONLY", "address": "0x800914D8",
+                "end_exclusive": "0x8009167C", "instructions": 105,
+                "call_pc": "0x80029A4C", "requested_rate": 120,
+                "live_rate_divisor": 120, "clock_base": 4233600,
+                "guard_address": "0x800C4AA4", "guard_before": 0,
+                "guard_after": 1, "callback_table": "0x800D6DEC",
+                "callback_slots": 8, "cleared_slots": 8,
+                "interrupt_channel": 6, "interrupt_handler": "0x800916B4",
+                "shutdown_handler": "0x8009167C",
+                "counter_spec": "0xF2000002", "timer_target": 35280,
+                "requested_counter_mode": 4096,
+                "hardware_counter_mode": 600,
+                "counter_interrupt_mask": 64, "effective_rate": 120,
+                "set_rcnt_return": 1, "start_rcnt_return": 1,
+                "reset_clock_globals": ["0x800D7A7C", "0x800D7A70",
+                                          "0x800D7B2C", "0x800D7B28"],
+                "child_calls": 7, "operations": 62, "accesses": 55,
+                "reads": 31, "stores": 24, "source_quirks": {
+                    "signed_double_division": True,
+                    "quantized_effective_rate": True,
+                    "divide_traps_prefix_commit": True,
+                    "raw_child_returns_ignored": True,
+                    "warm_path_skips_registration": True},
+                "visual_effect": "none",
+                "status": "mapped-ps1-clock-service-initialized"},
+            "recovered 0x800914D8 clock initialization receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -245,6 +272,8 @@ def main():
             "SetGraphDebug call boundary drifted")
     require(calls[12]["pc"] == "0x80029A38" and calls[12]["entry"] == "0x800A43E8",
             "VBlank initialization boundary drifted")
+    require(calls[13]["pc"] == "0x80029A4C" and calls[13]["entry"] == "0x800914D8",
+            "game-clock initialization boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -313,6 +342,17 @@ def main():
             "both raw returns were ignored" in trace and
             "did not install a native OS interrupt or synthesize VBlank cadence" in trace and
             "98 captured frontend frames were unchanged" in trace and
+            "0x800914D8 initialized the source game clock" in trace and
+            "cold guard 0x800C4AA4 changed 0->1" in trace and
+            "eight callback words at 0x800D6DEC were cleared" in trace and
+            "IRQ6 handler 0x800916B4 was installed" in trace and
+            "shutdown handler 0x8009167C was registered" in trace and
+            "signed 4233600/120 produced Timer 2 target 35280 and effective rate 120" in trace and
+            "SetRCnt/StartRCnt for 0xF2000002 returned true" in trace and
+            "diagnostic hardware mode 0x0258 and interrupt-mask bit 0x0040" in trace and
+            "clock globals 0x800D7A7C, 0x800D7A70, 0x800D7B2C and 0x800D7B28 were reset" in trace and
+            "original signed double-division quantization and prefix-committing divide BREAK paths remain" in trace and
+            "did not install a native OS interrupt or synthesize Timer 2 cadence" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -332,6 +372,8 @@ def main():
           "and retained byte-alias/unguarded-dispatch quirks without changing captured pixels; "
           "native VBlank initializer 0x800A43E8 cleared eight callback slots, installed the source "
           "handler through explicit fixtures, retained its counter-3 failure quirk, and changed no pixels; "
+          "native game-clock initializer 0x800914D8 installed IRQ6, configured Timer 2 for 120 Hz, "
+          "retained signed division traps, and changed no pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

@@ -235,6 +235,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * the owner clears eight callback slots and preserves counter-3 quirks. */
     TRY(direct_call(run, 0x80029a38u, 0x800a43e8u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7a94u, 0x80029a48u, 0x78u));
+    /* GAMEONLY 0x80029A4C -> 0x800914D8 is the recovered source-clock
+     * initializer. It installs IRQ6 once, derives Timer 2's target from the
+     * live stack-spilled rate, preserves the original divide BREAK paths, and
+     * resets clock counters after starting the counter. Hardware/service calls
+     * stay explicit child boundaries; this call does not invent host cadence. */
     TRY(direct_call(run, 0x80029a4cu, 0x800914d8u, 1, 0x78u, 0, 0, &value));
     TRY(direct_call(run, 0x80029a54u, 0x80056678u, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a5cu, 0x800a584cu, 0, 0, 0, 0, &value));
