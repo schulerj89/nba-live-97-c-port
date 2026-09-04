@@ -30,6 +30,7 @@
 #include "recovered/game_gte_initialize.h"
 #include "recovered/game_clock_delta.h"
 #include "recovered/game_presentation_wait.h"
+#include "recovered/game_video_environment_initialize.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6256,6 +6257,7 @@ private:
             Nba97GameGteInitializeProgress gte_progress{};
             Nba97GameClockDeltaProgress clock_delta_progress{};
             std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
+            Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6263,6 +6265,7 @@ private:
             std::vector<Nba97GameClockInitializeEvent> clock_events;
             std::vector<Nba97GameClockDeltaEvent> clock_delta_events;
             std::vector<Nba97GamePresentationWaitEvent> presentation_wait_events;
+            std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_events;
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6292,6 +6295,8 @@ private:
             unsigned presentation_wait_calls=0;
             unsigned presentation_wait_child_callbacks=0;
             unsigned presentation_vblank_signals=0;
+            unsigned video_environment_calls=0;
+            unsigned video_environment_child_callbacks=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6301,8 +6306,11 @@ private:
             bool clock_shutdown_registered=false;
             bool clock_counter_set=false;
             bool clock_counter_started=false;
+            bool video_environment_synchronized=false;
             std::uint32_t clock_hardware_mode=0;
             std::uint32_t clock_interrupt_mask=0;
+            std::uint32_t active_display_environment=0;
+            std::uint32_t active_draw_environment=0;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6342,6 +6350,12 @@ private:
                 put(0x800c55bcu,0x8009cb2cu);
                 put(0x800c5640u,0x00000400u);
                 put(0x800c5654u,0x00000200u);
+                /* Sentinels in the two DRAWENVs that 0x80029F20 never passes
+                   to SetDefDrawEnv make its asymmetric direct writes visible. */
+                putByte(0x80021fbau,0xa2u);putByte(0x80021fbbu,0xb2u);
+                putByte(0x80021fbcu,0xc2u);putByte(0x80021fbdu,0xd2u);
+                putByte(0x80022016u,0xa3u);putByte(0x80022017u,0xb3u);
+                putByte(0x80022018u,0xc3u);putByte(0x80022019u,0xd3u);
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6358,6 +6372,10 @@ private:
                     if(region.known)region.known[offset]=1;return;
                 }
                 throw std::runtime_error("game-entry diagnostic byte write escaped declared source memory");
+            }
+            void putHalf(std::uint32_t address,std::uint16_t value) {
+                putByte(address,static_cast<std::uint8_t>(value));
+                putByte(address+1u,static_cast<std::uint8_t>(value>>8));
             }
             void putText(std::uint32_t address,const char* text) {
                 do {
@@ -6378,6 +6396,10 @@ private:
                    std::uint64_t(address-region.base)<region.size)
                     return region.data[address-region.base];
                 throw std::runtime_error("game-entry diagnostic byte read escaped declared source memory");
+            }
+            std::uint16_t getHalf(std::uint32_t address) const {
+                return static_cast<std::uint16_t>(getByte(address) |
+                    (std::uint16_t(getByte(address+1u))<<8));
             }
             std::uint32_t get(std::uint32_t address) const {
                 for(const auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6909,6 +6931,97 @@ private:
                        NBA97_TEXT_COMPLETE || !wait_progress.completed)return 0;
                 ++fixture.presentation_wait_calls;
                 *value={wait_progress.return_v0,wait_progress.return_v0_known};
+            } else if(event->entry==0x80029f20u) {
+                ++fixture.video_environment_calls;
+                const auto video=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GameVideoEnvironmentInitializeEvent* video_event,
+                    Nba97GameVideoEnvironmentInitializeValue* video_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    const auto call=state.video_environment_events.size();
+                    static constexpr std::uint32_t pcs[9]={
+                        0x80029f60u,0x80029f7cu,0x80029f9cu,0x80029fb8u,
+                        0x8002a040u,0x8002a048u,0x8002a050u,0x8002a058u,
+                        0x8002a060u};
+                    static constexpr std::uint32_t entries[9]={
+                        0x8009cad0u,0x8009cad0u,0x8009ca00u,0x8009ca00u,
+                        0x80099ca4u,0x80099accu,0x80099ca4u,0x80099accu,
+                        0x800994f4u};
+                    if(call>=9 || video_event->pc!=pcs[call] ||
+                       video_event->entry!=entries[call] ||
+                       video_event->return_address!=video_event->pc+8u ||
+                       video_event->stack_pointer!=0x807fff98u ||
+                       video_event->global_pointer!=0x800d79c8u)return 0;
+                    ++state.video_environment_child_callbacks;
+                    state.video_environment_events.push_back(*video_event);
+                    if(call<4) {
+                        const std::uint32_t pointer[4]={0x8002205cu,
+                            0x80022070u,0x80021eecu,0x80021f48u};
+                        const std::uint32_t y[4]={0x100u,0,0,0x100u};
+                        const auto expected_kind=call<2 ?
+                            NBA97_GAME_VIDEO_SET_DEF_DISP_ENV:
+                            NBA97_GAME_VIDEO_SET_DEF_DRAW_ENV;
+                        if(video_event->kind!=expected_kind ||
+                           video_event->argument_count!=5 ||
+                           video_event->argument[0]!=pointer[call] ||
+                           video_event->argument[1]!=0 ||
+                           video_event->argument[2]!=y[call] ||
+                           video_event->argument[3]!=0x200u ||
+                           video_event->argument[4]!=0xf0u)return 0;
+                        const auto p=video_event->argument[0];
+                        state.putHalf(p,0);state.putHalf(p+2u,
+                            static_cast<std::uint16_t>(y[call]));
+                        state.putHalf(p+4u,0x200u);state.putHalf(p+6u,0xf0u);
+                        if(call<2) {
+                            for(unsigned offset=8;offset<16;offset+=2)
+                                state.putHalf(p+offset,0);
+                            for(unsigned offset=16;offset<20;++offset)
+                                state.putByte(p+offset,0);
+                        } else {
+                            state.putHalf(p+8u,0);
+                            state.putHalf(p+10u,
+                                static_cast<std::uint16_t>(y[call]));
+                            for(unsigned offset=12;offset<20;offset+=2)
+                                state.putHalf(p+offset,0);
+                            state.putHalf(p+20u,10);
+                            state.putByte(p+22u,1);state.putByte(p+23u,1);
+                            for(unsigned offset=24;offset<28;++offset)
+                                state.putByte(p+offset,0);
+                        }
+                        *video_value={p,1};
+                        return 1;
+                    }
+                    const std::uint32_t pointer[4]={0x8002205cu,
+                        0x80021eecu,0x80022070u,0x80021f48u};
+                    if(call<8) {
+                        if(video_event->argument_count!=1 ||
+                           video_event->argument[0]!=pointer[call-4])return 0;
+                        if(video_event->kind==NBA97_GAME_VIDEO_PUT_DISP_ENV)
+                            state.active_display_environment=video_event->argument[0];
+                        else if(video_event->kind==NBA97_GAME_VIDEO_PUT_DRAW_ENV)
+                            state.active_draw_environment=video_event->argument[0];
+                        else return 0;
+                        *video_value={video_event->argument[0],1};
+                        return 1;
+                    }
+                    if(video_event->kind!=NBA97_GAME_VIDEO_DRAW_SYNC ||
+                       video_event->argument_count!=1 ||
+                       video_event->argument[0]!=0)return 0;
+                    state.video_environment_synchronized=true;
+                    *video_value={0,1};
+                    return 1;
+                };
+                Nba97GameVideoEnvironmentInitializeContext video_context{
+                    *memory,100,event->argument[0],event->stack_pointer,
+                    event->return_address,{event->saved_register[0],
+                    event->saved_register[1],event->saved_register[2],
+                    0xd3d3d3d3u,0xd4d4d4d4u,0xd5d5d5d5u},
+                    event->global_pointer,video,&fixture};
+                if(nba97_game_video_environment_initialize(&video_context,
+                       &fixture.video_environment_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.video_environment_progress.completed)return 0;
+                *value={fixture.video_environment_progress.return_v0,
+                    fixture.video_environment_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -6939,6 +7052,30 @@ private:
                 wait.global_pointer==0x800d79c8u &&
                 wait.service_entry==0x800a9cc0u && wait.return_v0==1 &&
                 wait.return_v0_known;
+        const bool video_environments_complete=
+            state.video_environment_calls==1 &&
+            state.video_environment_child_callbacks==9 &&
+            state.video_environment_events.size()==9 &&
+            state.video_environment_progress.completed &&
+            state.video_environment_progress.operations==44 &&
+            state.video_environment_progress.accesses==35 &&
+            state.video_environment_progress.reads==7 &&
+            state.video_environment_progress.stores==28 &&
+            state.video_environment_progress.callbacks_completed==9 &&
+            state.video_environment_progress.direct_control_bytes_written==16 &&
+            state.video_environment_progress.frame_stack_pointer==0x807fff98u &&
+            state.video_environment_progress.stack_pointer==0x807fffd0u &&
+            state.video_environment_progress.requested_background_mode==0 &&
+            state.video_environment_progress.background_byte==0 &&
+            state.video_environment_progress.restored_return_address==0x80029a74u &&
+            state.video_environment_progress.restored_saved_register[0]==1 &&
+            state.video_environment_progress.restored_saved_register[1]==0 &&
+            state.video_environment_progress.restored_saved_register[2]==0 &&
+            state.video_environment_progress.restored_saved_register[3]==0xd3d3d3d3u &&
+            state.video_environment_progress.restored_saved_register[4]==0xd4d4d4d4u &&
+            state.video_environment_progress.restored_saved_register[5]==0xd5d5d5d5u &&
+            state.video_environment_progress.return_v0==0 &&
+            state.video_environment_progress.return_v0_known;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7246,6 +7383,43 @@ private:
             state.get(0x800d7a80u)!=1 || state.get(0x800d7a84u)!=0 ||
             state.get(0x800d7b3cu)!=0 || state.get(0x800d7b40u)!=0 ||
             state.get(0x800d7b7cu)!=0 ||
+            !video_environments_complete ||
+            state.video_environment_events[0].kind!=
+                NBA97_GAME_VIDEO_SET_DEF_DISP_ENV ||
+            state.video_environment_events[2].kind!=
+                NBA97_GAME_VIDEO_SET_DEF_DRAW_ENV ||
+            state.video_environment_events[4].kind!=
+                NBA97_GAME_VIDEO_PUT_DISP_ENV ||
+            state.video_environment_events[5].kind!=
+                NBA97_GAME_VIDEO_PUT_DRAW_ENV ||
+            state.video_environment_events[8].kind!=
+                NBA97_GAME_VIDEO_DRAW_SYNC ||
+            state.getHalf(0x8002205eu)!=0x100u ||
+            state.getHalf(0x80022060u)!=0x200u ||
+            state.getHalf(0x80022062u)!=0xf0u ||
+            state.getHalf(0x80022072u)!=0 ||
+            state.getHalf(0x80021eeeu)!=0 ||
+            state.getHalf(0x80021f4au)!=0x100u ||
+            state.getByte(0x80021f02u)!=0 ||
+            state.getByte(0x80021f03u)!=1 ||
+            state.getByte(0x80021f04u)!=0 ||
+            state.getByte(0x80021f5eu)!=0 ||
+            state.getByte(0x80021f5fu)!=1 ||
+            state.getByte(0x80021f60u)!=0 ||
+            state.getByte(0x80021fbau)!=0 ||
+            state.getByte(0x80021fbbu)!=0xb2u ||
+            state.getByte(0x80021fbcu)!=0 ||
+            state.getByte(0x80021fbdu)!=0xd2u ||
+            state.getByte(0x80022016u)!=0 ||
+            state.getByte(0x80022017u)!=0xb3u ||
+            state.getByte(0x80022018u)!=0 ||
+            state.getByte(0x80022019u)!=0xd3u ||
+            state.getByte(0x8002206du)!=0 ||
+            state.getByte(0x80022081u)!=0 ||
+            state.get(0x8001ede8u)!=0 ||
+            state.active_display_environment!=0x80022070u ||
+            state.active_draw_environment!=0x80021f48u ||
+            !state.video_environment_synchronized ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
@@ -7265,6 +7439,8 @@ private:
             state.calls[15].pc!=0x80029a5cu || state.calls[15].entry!=0x800a584cu ||
             state.calls[15].argument_count!=0 || state.calls[15].saved_register[0]!=1 ||
             state.calls[16].pc!=0x80029a64u || state.calls[16].entry!=0x80029bdcu ||
+            state.calls[17].pc!=0x80029a6cu || state.calls[17].entry!=0x80029f20u ||
+            state.calls[17].argument_count!=1 || state.calls[17].argument[0]!=0 ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
@@ -7493,6 +7669,34 @@ private:
             "\"child_v0_retained\": true, \"child_wait_has_no_timeout\": true, "
             "\"child_service_remains_explicit\": true}, \"visual_effect\": \"none\", "
             "\"status\": \"41-source-vblank-boundaries-acknowledged\"},\n"
+            "  \"video_environment_initialize\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x80029F20\", \"end_exclusive\": \"0x8002A098\", "
+            "\"instructions\": 94, \"call_pc\": \"0x80029A6C\", "
+            "\"mode_argument\": "<<state.video_environment_progress.requested_background_mode<<
+            ", \"background_byte\": "<<unsigned(state.video_environment_progress.background_byte)<<
+            ", \"display_environments\": [\"0x8002205C\", \"0x80022070\"], "
+            "\"draw_environments\": [\"0x80021EEC\", \"0x80021F48\"], "
+            "\"display_rects\": [{\"x\": 0, \"y\": 256, \"w\": 512, \"h\": 240}, "
+            "{\"x\": 0, \"y\": 0, \"w\": 512, \"h\": 240}], "
+            "\"draw_rects\": [{\"x\": 0, \"y\": 0, \"w\": 512, \"h\": 240}, "
+            "{\"x\": 0, \"y\": 256, \"w\": 512, \"h\": 240}], "
+            "\"set_def_calls\": 4, \"put_calls\": 4, \"draw_sync_calls\": 1, "
+            "\"operations\": "<<state.video_environment_progress.operations<<
+            ", \"accesses\": "<<state.video_environment_progress.accesses<<
+            ", \"reads\": "<<state.video_environment_progress.reads<<
+            ", \"stores\": "<<state.video_environment_progress.stores<<
+            ", \"direct_control_byte_stores\": "<<
+            unsigned(state.video_environment_progress.direct_control_bytes_written)<<
+            ", \"buffer_selector\": \"0x8001EDE8\", \"buffer_selector_value\": "<<
+            state.get(0x8001ede8u)<<", \"last_active_pair\": 1, "
+            "\"return_v0\": 0, \"source_quirks\": {"
+            "\"fifth_arguments_are_delay_slot_stack_stores\": true, "
+            "\"mode_is_low_byte_truncated\": true, "
+            "\"touches_two_setdef_untouched_drawenvs\": true, "
+            "\"rgb_cleared_only_in_initialized_drawenvs\": true, "
+            "\"pair1_active_while_selector_zero\": true, "
+            "\"live_register_epilogue\": true}, \"visual_effect\": \"none\", "
+            "\"status\": \"ps1-double-buffer-environments-initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7569,6 +7773,20 @@ private:
             "preserving the original unbounded-wait behavior; this did not sleep on "
             "a host clock, drive the native renderer, or change any of the 98 captured "
             "frontend frames; 20 remaining outer calls are still acknowledged fixtures");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x80029F20 initialized GAMEONLY's PS1 "
+            "double-buffer environments from call PC 0x80029A6C with mode 0: display "
+            "rectangles at (0,256,512,240) and (0,0,512,240) were written at "
+            "0x8002205C/0x80022070, while opposite draw rectangles at y=0/y=256 were "
+            "written at 0x80021EEC/0x80021F48; four SetDef calls, four Put calls and "
+            "DrawSync(0) completed through typed source-service fixtures, leaving pair 1 "
+            "last installed while selector 0x8001EDE8 was reset to 0; all four o32 fifth "
+            "arguments executed as mapped JAL delay-slot stores; original quirks remain: "
+            "mode is truncated to a byte, dtd/isbg are changed in two adjacent DRAWENV "
+            "records never passed to SetDefDrawEnv, and RGB is cleared only in the two "
+            "initialized records; this configures retained PS1-era metadata and does not "
+            "draw, so none of the 98 natively captured frontend frames changed; 19 "
+            "remaining outer calls are still acknowledged fixtures");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

@@ -16,6 +16,7 @@
 #include "recovered/game_gte_initialize.h"
 #include "recovered/game_clock_delta.h"
 #include "recovered/game_presentation_wait.h"
+#include "recovered/game_video_environment_initialize.h"
 
 #include <array>
 #include <cstdint>
@@ -82,6 +83,7 @@ struct Fixture {
     Nba97GameGteInitializeProgress gte_progress{};
     Nba97GameClockDeltaProgress clock_delta_progress{};
     std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
+    Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -96,10 +98,16 @@ struct Fixture {
     std::vector<Nba97GameClockInitializeEvent> clock_calls;
     std::vector<Nba97GameClockDeltaEvent> clock_delta_calls;
     std::vector<Nba97GamePresentationWaitEvent> presentation_wait_calls;
+    std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
     unsigned presentation_vblank_signals = 0;
+    unsigned video_environment_invocations = 0;
+    unsigned video_environment_child_callbacks = 0;
+    std::uint32_t active_display_environment = 0;
+    std::uint32_t active_draw_environment = 0;
+    bool video_environment_synchronized = false;
     bool vblank_set_rcnt_rejected = false;
     bool vblank_started_after_rejection = false;
     bool clock_critical_section = false;
@@ -123,6 +131,7 @@ struct Fixture {
     bool compose_gte = false;
     bool compose_clock_delta = false;
     bool compose_presentation_wait = false;
+    bool compose_video_environment = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -449,6 +458,68 @@ struct Fixture {
         *value={1,1};
         return 1;
     }
+    static int videoEnvironmentIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameVideoEnvironmentInitializeEvent* event,
+        Nba97GameVideoEnvironmentInitializeValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        const auto call=f.video_environment_calls.size();
+        static constexpr std::uint32_t pcs[9]={0x80029f60u,0x80029f7cu,
+            0x80029f9cu,0x80029fb8u,0x8002a040u,0x8002a048u,
+            0x8002a050u,0x8002a058u,0x8002a060u};
+        static constexpr std::uint32_t entries[9]={0x8009cad0u,0x8009cad0u,
+            0x8009ca00u,0x8009ca00u,0x80099ca4u,0x80099accu,
+            0x80099ca4u,0x80099accu,0x800994f4u};
+        if(call>=9 || event->pc!=pcs[call] || event->entry!=entries[call] ||
+           event->return_address!=event->pc+8u ||
+           event->stack_pointer!=FrameSp-0x38u ||
+           event->global_pointer!=0x800d79c8u)
+            return 0;
+        f.video_environment_calls.push_back(*event);
+        ++f.video_environment_child_callbacks;
+        if(call<4) {
+            const std::uint32_t pointer[4]={0x8002205cu,0x80022070u,
+                0x80021eecu,0x80021f48u};
+            const std::uint32_t y[4]={0x100u,0,0,0x100u};
+            if(event->argument_count!=5 || event->argument[0]!=pointer[call] ||
+               event->argument[1]!=0 || event->argument[2]!=y[call] ||
+               event->argument[3]!=0x200u || event->argument[4]!=0xf0u)
+                return 0;
+            const auto p=event->argument[0];
+            f.put(p,event->argument[1],2);f.put(p+2,event->argument[2],2);
+            f.put(p+4,event->argument[3],2);f.put(p+6,event->argument[4],2);
+            if(call<2) {
+                for(unsigned offset=8;offset<16;offset+=2)f.put(p+offset,0,2);
+                for(unsigned offset=16;offset<20;++offset)f.put(p+offset,0,1);
+            } else {
+                f.put(p+8,event->argument[1],2);
+                f.put(p+10,event->argument[2],2);
+                for(unsigned offset=12;offset<20;offset+=2)f.put(p+offset,0,2);
+                f.put(p+20,10,2);f.put(p+22,1,1);f.put(p+23,1,1);
+                for(unsigned offset=24;offset<28;++offset)f.put(p+offset,0,1);
+            }
+            *value={p,1};
+            return 1;
+        }
+        const std::uint32_t pointer[4]={0x8002205cu,0x80021eecu,
+            0x80022070u,0x80021f48u};
+        if(call<8) {
+            if(event->argument_count!=1 || event->argument[0]!=pointer[call-4])
+                return 0;
+            if(event->kind==NBA97_GAME_VIDEO_PUT_DISP_ENV)
+                f.active_display_environment=event->argument[0];
+            else if(event->kind==NBA97_GAME_VIDEO_PUT_DRAW_ENV)
+                f.active_draw_environment=event->argument[0];
+            else return 0;
+            *value={event->argument[0],1};
+            return 1;
+        }
+        if(event->kind!=NBA97_GAME_VIDEO_DRAW_SYNC ||
+           event->argument_count!=1 || event->argument[0]!=0)
+            return 0;
+        f.video_environment_synchronized=true;
+        *value={0,1};
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -596,6 +667,19 @@ struct Fixture {
                 return 0;
             ++f.presentation_wait_invocations;
             *value={wait_progress.return_v0,wait_progress.return_v0_known};
+        }
+        if (f.compose_video_environment && event->entry == 0x80029f20u) {
+            ++f.video_environment_invocations;
+            Nba97GameVideoEnvironmentInitializeContext context{*memory,100,
+                event->argument[0],event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1],
+                 event->saved_register[2],0xd3d3d3d3u,0xd4d4d4d4u,
+                 0xd5d5d5d5u},event->global_pointer,videoEnvironmentIo,&f};
+            if(nba97_game_video_environment_initialize(&context,
+                   &f.video_environment_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.video_environment_progress.return_v0,
+                f.video_environment_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -803,6 +887,7 @@ struct Composition {
         game.compose_gte = true;
         game.compose_clock_delta = true;
         game.compose_presentation_wait = true;
+        game.compose_video_environment = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1186,6 +1271,67 @@ void overlay_composition() {
         c.game.calls[47].pc==0x80029b20u &&
         c.game.calls[51].pc==0x80029b50u &&
         c.game.calls[70].pc==0x80029b50u);
+    check(c.game.video_environment_invocations==1 &&
+        c.game.video_environment_child_callbacks==9 &&
+        c.game.video_environment_calls.size()==9 &&
+        c.game.video_environment_progress.completed &&
+        c.game.video_environment_progress.operations==44 &&
+        c.game.video_environment_progress.accesses==35 &&
+        c.game.video_environment_progress.reads==7 &&
+        c.game.video_environment_progress.stores==28 &&
+        c.game.video_environment_progress.callbacks_completed==9 &&
+        c.game.video_environment_progress.direct_control_bytes_written==16 &&
+        c.game.video_environment_progress.frame_stack_pointer==FrameSp-0x38u &&
+        c.game.video_environment_progress.stack_pointer==FrameSp &&
+        c.game.video_environment_progress.requested_background_mode==0 &&
+        c.game.video_environment_progress.background_byte==0 &&
+        c.game.video_environment_progress.restored_return_address==0x80029a74u &&
+        c.game.video_environment_progress.restored_saved_register[0]==1 &&
+        c.game.video_environment_progress.restored_saved_register[1]==0 &&
+        c.game.video_environment_progress.restored_saved_register[2]==0 &&
+        c.game.video_environment_progress.restored_saved_register[3]==0xd3d3d3d3u &&
+        c.game.video_environment_progress.restored_saved_register[4]==0xd4d4d4d4u &&
+        c.game.video_environment_progress.restored_saved_register[5]==0xd5d5d5d5u &&
+        c.game.video_environment_progress.return_v0==0 &&
+        c.game.video_environment_progress.return_v0_known);
+    check(c.game.calls[17].pc==0x80029a6cu &&
+        c.game.calls[17].entry==0x80029f20u &&
+        c.game.calls[17].argument_count==1 &&
+        c.game.calls[17].argument[0]==0 &&
+        c.game.video_environment_calls[0].kind==
+            NBA97_GAME_VIDEO_SET_DEF_DISP_ENV &&
+        c.game.video_environment_calls[2].kind==
+            NBA97_GAME_VIDEO_SET_DEF_DRAW_ENV &&
+        c.game.video_environment_calls[4].kind==
+            NBA97_GAME_VIDEO_PUT_DISP_ENV &&
+        c.game.video_environment_calls[5].kind==
+            NBA97_GAME_VIDEO_PUT_DRAW_ENV &&
+        c.game.video_environment_calls[8].kind==
+            NBA97_GAME_VIDEO_DRAW_SYNC);
+    check(c.game.get(0x8002205cu+2u,2)==0x100u &&
+        c.game.get(0x8002205cu+4u,2)==0x200u &&
+        c.game.get(0x8002205cu+6u,2)==0xf0u &&
+        c.game.get(0x80022070u+2u,2)==0 &&
+        c.game.get(0x80021eecu+2u,2)==0 &&
+        c.game.get(0x80021f48u+2u,2)==0x100u &&
+        c.game.get(0x80021eecu+22u,1)==0 &&
+        c.game.get(0x80021f48u+22u,1)==0 &&
+        c.game.get(0x80021eecu+23u,1)==1 &&
+        c.game.get(0x80021f48u+23u,1)==1 &&
+        c.game.get(0x80021eecu+24u,1)==0 &&
+        c.game.get(0x80021f48u+24u,1)==0 &&
+        c.game.get(0x80021fa4u+22u,1)==0 &&
+        c.game.get(0x80021fa4u+23u,1)==0xcdu &&
+        c.game.get(0x80021fa4u+24u,1)==0 &&
+        c.game.get(0x80022000u+22u,1)==0 &&
+        c.game.get(0x80022000u+23u,1)==0xcdu &&
+        c.game.get(0x80022000u+24u,1)==0 &&
+        c.game.get(0x8002206du,1)==0 &&
+        c.game.get(0x80022081u,1)==0 &&
+        c.game.get(0x8001ede8u)==0 &&
+        c.game.active_display_environment==0x80022070u &&
+        c.game.active_draw_environment==0x80021f48u &&
+        c.game.video_environment_synchronized);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

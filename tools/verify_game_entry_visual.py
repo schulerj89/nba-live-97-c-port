@@ -290,6 +290,34 @@ def main():
                 "visual_effect": "none",
                 "status": "41-source-vblank-boundaries-acknowledged"},
             "recovered 0x80029BDC presentation-wait receipt drifted")
+    require(receipt["video_environment_initialize"] == {
+                "binary": "GAMEONLY", "address": "0x80029F20",
+                "end_exclusive": "0x8002A098", "instructions": 94,
+                "call_pc": "0x80029A6C", "mode_argument": 0,
+                "background_byte": 0,
+                "display_environments": ["0x8002205C", "0x80022070"],
+                "draw_environments": ["0x80021EEC", "0x80021F48"],
+                "display_rects": [
+                    {"x": 0, "y": 256, "w": 512, "h": 240},
+                    {"x": 0, "y": 0, "w": 512, "h": 240}],
+                "draw_rects": [
+                    {"x": 0, "y": 0, "w": 512, "h": 240},
+                    {"x": 0, "y": 256, "w": 512, "h": 240}],
+                "set_def_calls": 4, "put_calls": 4, "draw_sync_calls": 1,
+                "operations": 44, "accesses": 35, "reads": 7,
+                "stores": 28, "direct_control_byte_stores": 16,
+                "buffer_selector": "0x8001EDE8", "buffer_selector_value": 0,
+                "last_active_pair": 1, "return_v0": 0,
+                "source_quirks": {
+                    "fifth_arguments_are_delay_slot_stack_stores": True,
+                    "mode_is_low_byte_truncated": True,
+                    "touches_two_setdef_untouched_drawenvs": True,
+                    "rgb_cleared_only_in_initialized_drawenvs": True,
+                    "pair1_active_while_selector_zero": True,
+                    "live_register_epilogue": True},
+                "visual_effect": "none",
+                "status": "ps1-double-buffer-environments-initialized"},
+            "recovered 0x80029F20 video-environment receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -336,6 +364,9 @@ def main():
             all(call["pc"] == "0x80029B50" and call["entry"] == "0x80029BDC"
                 for call in calls[51:71]),
             "presentation-wait boundaries drifted")
+    require(calls[17]["pc"] == "0x80029A6C" and
+            calls[17]["entry"] == "0x80029F20",
+            "video-environment initialization boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -436,6 +467,16 @@ def main():
             "frame counter 0x800D7A88, ending at 41" in trace and
             "incidental v0 remained live and no timeout was added" in trace and
             "did not sleep on a host clock, drive the native renderer" in trace and
+            "0x80029F20 initialized GAMEONLY's PS1 double-buffer environments" in trace and
+            "call PC 0x80029A6C with mode 0" in trace and
+            "display rectangles at (0,256,512,240) and (0,0,512,240)" in trace and
+            "opposite draw rectangles at y=0/y=256" in trace and
+            "four SetDef calls, four Put calls and DrawSync(0) completed" in trace and
+            "leaving pair 1 last installed while selector 0x8001EDE8 was reset to 0" in trace and
+            "all four o32 fifth arguments executed as mapped JAL delay-slot stores" in trace and
+            "dtd/isbg are changed in two adjacent DRAWENV records never passed to SetDefDrawEnv" in trace and
+            "RGB is cleared only in the two initialized records" in trace and
+            "does not draw, so none of the 98 natively captured frontend frames changed" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -463,6 +504,8 @@ def main():
           "retained raw 32-bit wraparound, and changed no pixels; "
           "native presentation-wait wrapper 0x80029BDC crossed explicit service 0x800A9CC0 41 times, "
           "acknowledged source VBlank state without host timing, retained its unbounded wait, and changed no pixels; "
+          "native video-environment initializer 0x80029F20 configured both original 512x240 PS1 buffer pairs, "
+          "retained its asymmetric DRAWENV writes and selector mismatch, and changed no pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

@@ -257,6 +257,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * being replaced with host sleep or renderer cadence. The same wrapper is
      * deliberately reused by both twenty-call FELOAD delay loops below. */
     TRY(direct_call(run, 0x80029a64u, 0x80029bdcu, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029A6C -> 0x80029F20 is the recovered double-buffer
+     * environment initializer. It builds 512x240 display/draw pairs on
+     * opposite VRAM pages, installs both, DrawSyncs, and clears 0x8001EDE8.
+     * Its asymmetric writes into two otherwise-uninitialized DRAWENVs and
+     * low-byte background-mode truncation are preserved by that owner. */
     TRY(direct_call(run, 0x80029a6cu, 0x80029f20u, 1, 0, 0, 0, &value));
 
     TRY(write_half(run, run->sp + 0x10u, 0x80029a84u, 0x200u));
