@@ -78,7 +78,12 @@ typedef struct Nba97GamePathPrefixSetProgress {
  * already ends in '\\' or ':'. The startup "cdrom:" input therefore needs no
  * appended separator. Stack spills, live restores and source-ordered partial
  * effects are retained. Returns NBA97_TEXT_*; return_v0 records the otherwise
- * unused source register value at return. */
+ * unused source register value at return.
+ *
+ * This compatibility owner models PS1 startup state only. It does not select
+ * host asset paths or participate in the native asset loader. Recovered
+ * GAMEONLY composition tests and the game-entry diagnostic invoke it against
+ * mapped PS1 RAM to retain original call order and observable CPU effects. */
 int nba97_game_path_prefix_set(Nba97GamePathPrefixSetContext*,
     Nba97GamePathPrefixSetProgress*);
 

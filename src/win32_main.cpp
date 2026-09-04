@@ -6213,6 +6213,11 @@ private:
                 " source61674/46D24/63D58/655B0 subset; "+nba97::matchSnapshotReceipt(*snapshot));
         } catch(const std::exception& e) {trace_.log("MATCH-SNAPSHOT-LOG-FAILED",std::string("snapshot retained; ")+e.what());}
     }
+    /* Diagnostic-only recovered startup composition. The state below maps PS1
+       addresses into owned host buffers and its callbacks emulate required
+       BIOS/service boundaries. It neither mounts "cdrom:" nor participates in
+       live asset loading; native assets continue through options_.asset_root
+       and host filesystem paths. */
     void captureGameEntryDiagnostic(const std::filesystem::path& output) {
         struct State {
             std::array<std::uint8_t,0x100> stack{},stack_known{};
