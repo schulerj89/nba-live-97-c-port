@@ -6,6 +6,7 @@
 #include "recovered/game_cd_directory_initialize.h"
 #include "recovered/game_path_prefix_set.h"
 #include "recovered/game_directory_cache_configure.h"
+#include "recovered/game_interrupt_mask_set.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -58,6 +59,7 @@ struct Fixture {
     Nba97GameGlobalPointerSaveProgress cd_global_pointer_progress{};
     Nba97GamePathPrefixSetProgress path_prefix_progress{};
     Nba97GameDirectoryCacheConfigureProgress directory_cache_progress{};
+    Nba97GameInterruptMaskSetProgress interrupt_mask_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -70,6 +72,7 @@ struct Fixture {
     bool compose_cd_directory = false;
     bool compose_path_prefix = false;
     bool compose_directory_cache = false;
+    bool compose_interrupt_mask = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -257,6 +260,14 @@ struct Fixture {
                     &f.directory_cache_progress) != NBA97_TEXT_COMPLETE)
                 return 0;
         }
+        if (f.compose_interrupt_mask && event->entry == 0x800985b4u) {
+            Nba97GameInterruptMaskSetContext context{*memory,10,
+                event->argument[0]};
+            if (nba97_game_interrupt_mask_set(&context,
+                    &f.interrupt_mask_progress) != NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.interrupt_mask_progress.return_v0,1};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -326,6 +337,8 @@ void transferred_path() {
     check(f.calls[4].entry == 0x800a35d8u && f.calls[4].argument[0] == 0x800247e4u &&
         f.calls[5].entry == 0x80092c7cu && f.calls[5].argument[0] == 0x8001000cu &&
         f.calls[5].argument[1] == 0x2c3u);
+    check(f.calls[6].pc == 0x80029a08u && f.calls[6].entry == 0x800985b4u &&
+        f.calls[6].argument_count == 1 && f.calls[6].argument[0] == 0);
     check(f.calls[18].pc == 0x80029a94u && f.calls[18].argument[0] == FrameSp + 0x10u &&
         f.calls[19].argument[2] == 0x100u);
     check(f.calls[24].entry == 0x8002d8d4u && f.calls[26].entry == 0x80029bfcu &&
@@ -413,6 +426,7 @@ struct Composition {
         game.put(0x800c4b38u, 0x00008000u);
         game.put(0x800c4b14u, 0);
         game.put(0x800c4abcu, 0);
+        game.put(0x800c54acu, 0x7ffu);
         game.putText(0x800247e4u,"cdrom:");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
@@ -422,6 +436,7 @@ struct Composition {
         game.compose_cd_directory = true;
         game.compose_path_prefix = true;
         game.compose_directory_cache = true;
+        game.compose_interrupt_mask = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -515,6 +530,16 @@ void overlay_composition() {
         c.game.get(FrameSp - 8u) == 0xf3f3f3f3u &&
         c.game.get(FrameSp) == 0x8001000cu &&
         c.game.get(FrameSp + 4u) == 0x2c3u);
+    check(c.game.interrupt_mask_progress.completed &&
+        c.game.interrupt_mask_progress.operations == 2 &&
+        c.game.interrupt_mask_progress.accesses == 2 &&
+        c.game.interrupt_mask_progress.reads == 1 &&
+        c.game.interrupt_mask_progress.stores == 1);
+    check(c.game.interrupt_mask_progress.requested_mask == 0 &&
+        c.game.interrupt_mask_progress.previous_mask == 0x7ffu &&
+        c.game.interrupt_mask_progress.published_mask == 0 &&
+        c.game.interrupt_mask_progress.return_v0 == 0x7ffu &&
+        c.game.get(0x800c54acu) == 0);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);
 }

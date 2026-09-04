@@ -114,6 +114,15 @@ def main():
                 "reads": 3, "stores": 5, "child_calls": 0,
                 "status": "configured"},
             "recovered 0x80092C7C directory-cache configuration receipt drifted")
+    require(receipt["interrupt_mask_set"] == {
+                "binary": "GAMEONLY", "address": "0x800985B4",
+                "end_exclusive": "0x800985CC", "instructions": 6,
+                "call_pc": "0x80029A08", "api": "SetIntrMask",
+                "mask_global": "0x800C54AC", "requested_mask": 0,
+                "previous_mask": 2047, "published_mask": 0,
+                "accesses": 2, "reads": 1, "stores": 1,
+                "child_calls": 0, "status": "cleared-before-callback-reset"},
+            "recovered 0x800985B4 interrupt-mask receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -135,6 +144,8 @@ def main():
             "path-prefix selection boundary drifted")
     require(calls[5]["pc"] == "0x800299F8" and calls[5]["entry"] == "0x80092C7C",
             "directory-cache configuration boundary drifted")
+    require(calls[6]["pc"] == "0x80029A08" and calls[6]["entry"] == "0x800985B4",
+            "interrupt-mask clear boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -165,6 +176,10 @@ def main():
             "skipped separator append because the source ended in colon" in trace and
             "0x80092C7C executed recovered directory-cache owner" in trace and
             "preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C" in trace and
+            "0x800985B4 executed recovered PsyQ SetIntrMask owner" in trace and
+            "returned prior mask 0x000007FF" in trace and
+            "cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback" in trace and
+            "without changing native OS interrupts or rendering" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -174,6 +189,7 @@ def main():
           "native 0x80091C08 published CD root LBA 23 and length 2048; "
           "native 0x800A35D8 selected the cdrom: file prefix without adding a separator; "
           "native 0x80092C7C registered a 707-entry PS1 directory cache at 0x8001000C; "
+          "native PsyQ SetIntrMask 0x800985B4 cleared the mapped callback mask before reset; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
