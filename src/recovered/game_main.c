@@ -285,6 +285,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * callback/table reload, signed timeout/reset oddities, raw v0, and o32
      * stack reload remain source behavior rather than host normalization. */
     TRY(direct_call(run, 0x80029aacu, 0x800994f4u, 1, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029AB4 -> 0x80099458 is the recovered PsyQ SetDispMask
+     * owner. Argument one selects active-low GP1(03h) word 0x03000000 and
+     * enables scanout only after both staged framebuffer copies are complete.
+     * Its debug callback, disable-only cache clear, live table slot +0x10,
+     * raw child v0, and unguarded dispatch behavior remain source-visible. */
     TRY(direct_call(run, 0x80029ab4u, 0x80099458u, 1, 1, 0, 0, &value));
     TRY(direct_call(run, 0x80029abcu, 0x800a3e20u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af4u, 0x80029ac8u, 0));

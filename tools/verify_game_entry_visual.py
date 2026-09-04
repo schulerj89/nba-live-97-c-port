@@ -15,12 +15,16 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def ppm_hash(path):
+def ppm_pixels(path):
     data = path.read_bytes()
     parts = data.split(b"\n", 3)
     require(parts[:3] == [b"P6", b"512 240", b"255"], f"bad PPM header: {path}")
     require(len(parts) == 4 and len(parts[3]) == 512 * 240 * 3, f"bad PPM extent: {path}")
-    return hashlib.sha256(parts[3]).hexdigest()
+    return parts[3]
+
+
+def ppm_hash(path):
+    return hashlib.sha256(ppm_pixels(path)).hexdigest()
 
 
 def main():
@@ -74,6 +78,19 @@ def main():
             move_hashes["move-image-source"] ==
             move_hashes["move-image-buffer0"],
             "DrawSync completion does not match the submitted MoveImage source")
+    display_paths = {
+        name: args.frames / f"{name}.ppm"
+        for name in ["set-disp-mask-before", "set-disp-mask-after"]}
+    display_hashes = {name: ppm_hash(path) for name, path in display_paths.items()}
+    require(set(ppm_pixels(display_paths["set-disp-mask-before"])) == {0},
+            "SetDispMask pre-enable scanout is not completely masked")
+    require(display_hashes["set-disp-mask-before"] !=
+            display_hashes["set-disp-mask-after"],
+            "SetDispMask did not produce a visible retained-scanout transition")
+    require(display_hashes["set-disp-mask-after"] ==
+            sync_hashes["draw-sync-after-buffer0"] ==
+            move_hashes["move-image-source"],
+            "SetDispMask enabled scanout does not match the completed active buffer")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -406,6 +423,35 @@ def main():
                 "visual_effect": "pending MoveImage packets became visible in both retained VRAM buffers during DrawSync; native frontend unchanged",
                 "status": "gpu-submissions-completed"},
             "recovered 0x800994F4 DrawSync receipt drifted")
+    require(receipt["display_mask_set"] == {
+                "binary": "GAMEONLY", "address": "0x80099458",
+                "end_exclusive": "0x800994F4", "instructions": 39,
+                "api": "SetDispMask", "call_pc": "0x80029AB4",
+                "mask": 1, "debug_level": 0, "diagnostic_calls": 0,
+                "environment_cache": "0x800C562C",
+                "environment_cache_clear_calls": 0,
+                "driver_table_global": "0x800C55B8",
+                "driver_table": "0x800C5578", "dispatch_offset": "0x10",
+                "dispatch_entry": "0x8009B16C",
+                "gpu_control_word": "0x03000000",
+                "display_enable_bit": 0, "display_enabled": True,
+                "active_display_environment": "0x80022070",
+                "return_v0": 3, "operations": 10, "accesses": 9,
+                "reads": 6, "stores": 3, "child_calls": 1,
+                "source_quirks": {
+                    "full_word_zero_test": True,
+                    "gp1_enable_bit_is_active_low": True,
+                    "disable_clears_environment_cache_first": True,
+                    "debug_callback_precedes_live_table_load": True,
+                    "unguarded_indirect_dispatch": True,
+                    "raw_child_v0_retained": True,
+                    "live_o32_epilogue_reload": True},
+                "visual_fixture": "generated retained scanout, not retail pixels",
+                "captures": ["set-disp-mask-before.ppm",
+                             "set-disp-mask-after.ppm"],
+                "visual_effect": "black masked diagnostic scanout became the completed retained framebuffer; native frontend unchanged",
+                "status": "display-enabled"},
+            "recovered 0x80099458 SetDispMask receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -463,6 +509,9 @@ def main():
     require(calls[20]["pc"] == "0x80029AAC" and
             calls[20]["entry"] == "0x800994F4",
             "DrawSync startup boundary drifted")
+    require(calls[21]["pc"] == "0x80029AB4" and
+            calls[21]["entry"] == "0x80099458",
+            "SetDispMask startup boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -600,6 +649,17 @@ def main():
             "post-incremented poll counter" in trace and
             "timeout reset/-1 return" in trace and
             "live o32 epilogue quirks remain" in trace and
+            "0x80099458 ran PsyQ SetDispMask(1)" in trace and
+            "call PC 0x80029AB4" in trace and
+            "recovered 39-instruction owner" in trace and
+            "debug level 0 skipped 0x800C55BC" in trace and
+            "disable-only 20-byte clear at 0x800C562C" in trace and
+            "live table 0x800C5578 slot +0x10 resolved to retail target 0x8009B16C" in trace and
+            "active-low GP1(03h) control word 0x03000000" in trace and
+            "retained child v0=3" in trace and
+            "display environment 0x80022070" in trace and
+            "set-disp-mask-before.ppm is black while masked" in trace and
+            "original full-word zero testing, active-low bit, disable pre-clear" in trace and
             "native frontend renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
@@ -633,6 +693,8 @@ def main():
           "native PsyQ MoveImage 0x800997E4 submitted two diagnostic VRAM copies; "
           "native PsyQ DrawSync 0x800994F4 waited for and completed both packets, emitted before/after "
           "PPM proof, and preserved its timeout/dispatch quirks while leaving frontend pixels unchanged; "
+          "native PsyQ SetDispMask 0x80099458 emitted active-low GP1(03h) enable through retail "
+          "table slot +0x10, captured masked/visible scanout frames, and retained its original quirks; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

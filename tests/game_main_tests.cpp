@@ -19,6 +19,7 @@
 #include "recovered/game_video_environment_initialize.h"
 #include "recovered/game_move_image.h"
 #include "recovered/game_gpu_sync.h"
+#include "recovered/game_display_mask_set.h"
 
 #include <array>
 #include <cstdint>
@@ -90,6 +91,7 @@ struct Fixture {
     Nba97GameGpuSyncState gpu_sync_state{};
     Nba97GameGpuSyncProgress gpu_sync_progress{};
     Nba97GameGpuSyncWord gpu_sync_source_v0{};
+    Nba97GameDisplayMaskSetProgress display_mask_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -109,6 +111,7 @@ struct Fixture {
     std::vector<Nba97GameGpuSyncAccess> gpu_sync_reads;
     std::vector<Nba97GameGpuSyncWrite> gpu_sync_writes;
     std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
+    std::vector<Nba97GameDisplayMaskSetEvent> display_mask_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
@@ -120,6 +123,8 @@ struct Fixture {
     unsigned gpu_sync_invocations = 0;
     unsigned gpu_sync_dispatch_resolutions = 0;
     unsigned gpu_sync_backend_observations = 0;
+    unsigned display_mask_invocations = 0;
+    unsigned display_mask_child_callbacks = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -131,6 +136,8 @@ struct Fixture {
     std::uint32_t gpu_dpcr = 0;
     std::uint32_t gpu_timer_status = 0;
     std::uint32_t gpu_timer_count = 0;
+    std::uint32_t display_control_word = UINT32_MAX;
+    bool display_visible = false;
     std::uint32_t active_display_environment = 0;
     std::uint32_t active_draw_environment = 0;
     bool video_environment_synchronized = false;
@@ -160,6 +167,7 @@ struct Fixture {
     bool compose_video_environment = false;
     bool compose_move_image = false;
     bool compose_gpu_sync = false;
+    bool compose_display_mask = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -663,6 +671,34 @@ struct Fixture {
             static_cast<std::uint8_t>(f.gpu_idle),1};
         return NBA97_GAME_GPU_SYNC_OK;
     }
+    static int displayMaskIo(void* user,const Nba97GameTextMemory*,
+        const Nba97GameDisplayMaskSetEvent* event,
+        Nba97GameDisplayMaskSetValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.display_mask_calls.push_back(*event);
+        ++f.display_mask_child_callbacks;
+        if(event->kind==NBA97_GAME_DISPLAY_MASK_CLEAR_ENVIRONMENTS) {
+            if(event->entry!=0x8009bd78u || event->argument_count!=3)
+                return 0;
+            for(std::uint32_t i=0;i<event->argument[2];++i)
+                f.put(event->argument[0]+i,event->argument[1],1);
+            *value={0,0};
+            return 1;
+        }
+        if(event->kind==NBA97_GAME_DISPLAY_MASK_DIAGNOSTIC) {
+            *value={0,0};
+            return 1;
+        }
+        if(event->kind!=NBA97_GAME_DISPLAY_MASK_GPU_CONTROL ||
+           event->entry!=0x8009b16cu || event->argument_count!=1)
+            return 0;
+        /* The concrete retained display service applies GP1(03h)'s active-low
+           enable bit. The recovered 0x8009B16C leaf leaves command id 3 in v0. */
+        f.display_control_word=event->argument[0];
+        f.display_visible=(event->argument[0]&1u)==0;
+        *value={3,1};
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -864,6 +900,22 @@ struct Fixture {
                 static_cast<std::uint8_t>(
                     f.gpu_sync_source_v0.known_mask==0xffffffffu)};
         }
+        if (f.compose_display_mask && event->entry == 0x80099458u) {
+            if(event->pc!=0x80029ab4u || event->argument_count!=1 ||
+               event->argument[0]!=1 || event->stack_pointer!=FrameSp ||
+               event->return_address!=0x80029abcu)
+                return 0;
+            ++f.display_mask_invocations;
+            Nba97GameDisplayMaskSetContext context{*memory,30,
+                event->argument[0],event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1]},
+                displayMaskIo,&f};
+            if(nba97_game_display_mask_set(&context,&f.display_mask_progress)!=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.display_mask_progress.return_v0,
+                f.display_mask_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -942,6 +994,9 @@ void transferred_path() {
         f.calls[11].argument_count == 1 && f.calls[11].argument[0] == 8);
     check(f.calls[18].pc == 0x80029a94u && f.calls[18].argument[0] == FrameSp + 0x10u &&
         f.calls[19].argument[2] == 0x100u);
+    check(f.calls[20].pc == 0x80029aacu && f.calls[20].entry == 0x800994f4u &&
+        f.calls[21].pc == 0x80029ab4u && f.calls[21].entry == 0x80099458u &&
+        f.calls[21].argument_count == 1 && f.calls[21].argument[0] == 1);
     check(f.calls[24].entry == 0x8002d8d4u && f.calls[26].entry == 0x80029bfcu &&
         f.calls[26].argument[0] == 0x800247ecu);
     for (unsigned i = 0; i < 20; ++i)
@@ -1039,6 +1094,7 @@ struct Composition {
         game.put(0x800c55b8u,0x800c5578u);
         game.put(0x800c55bcu,0x8009cb2cu);
         game.put(0x800c5580u,0x8009b298u);
+        game.put(0x800c5588u,0x8009b16cu);
         game.put(0x800c5590u,0x8009b1f8u);
         game.put(0x800c5668u,0x04ffffffu);
         game.put(0x800c566cu,0x80000000u);
@@ -1084,6 +1140,7 @@ struct Composition {
         game.compose_video_environment = true;
         game.compose_move_image = true;
         game.compose_gpu_sync = true;
+        game.compose_display_mask = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1620,6 +1677,47 @@ void overlay_composition() {
         c.game.calls[20].return_address==0x80029ab4u &&
         c.game.calls[20].argument_count==1 &&
         c.game.calls[20].argument[0]==0);
+    check(c.game.display_mask_invocations==1 &&
+        c.game.display_mask_child_callbacks==1 &&
+        c.game.display_mask_calls.size()==1 &&
+        c.game.display_mask_progress.completed &&
+        c.game.display_mask_progress.operations==10 &&
+        c.game.display_mask_progress.accesses==9 &&
+        c.game.display_mask_progress.reads==6 &&
+        c.game.display_mask_progress.stores==3 &&
+        c.game.display_mask_progress.callbacks_completed==1 &&
+        c.game.display_mask_progress.requested_mask==1 &&
+        c.game.display_mask_progress.debug_level==0 &&
+        !c.game.display_mask_progress.diagnostic_called &&
+        !c.game.display_mask_progress.environment_cache_clear_called &&
+        c.game.display_mask_progress.display_enabled &&
+        c.game.display_mask_progress.gpu_control_word==0x03000000u &&
+        c.game.display_mask_progress.driver_table==0x800c5578u &&
+        c.game.display_mask_progress.dispatch_target==0x8009b16cu &&
+        c.game.display_mask_progress.return_v0==3 &&
+        c.game.display_mask_progress.return_v0_known &&
+        c.game.display_control_word==0x03000000u &&
+        c.game.display_visible &&
+        c.game.display_mask_progress.frame_stack_pointer==FrameSp-0x20u &&
+        c.game.display_mask_progress.stack_pointer==FrameSp &&
+        c.game.display_mask_progress.restored_return_address==0x80029abcu &&
+        c.game.display_mask_progress.restored_saved_register[0]==1 &&
+        c.game.display_mask_progress.restored_saved_register[1]==0);
+    check(c.game.display_mask_calls[0].kind==
+            NBA97_GAME_DISPLAY_MASK_GPU_CONTROL &&
+        c.game.display_mask_calls[0].pc==0x800994d4u &&
+        c.game.display_mask_calls[0].entry==0x8009b16cu &&
+        c.game.display_mask_calls[0].argument_count==1 &&
+        c.game.display_mask_calls[0].argument[0]==0x03000000u &&
+        c.game.display_mask_calls[0].stack_pointer==FrameSp-0x20u &&
+        c.game.display_mask_calls[0].return_address==0x800994dcu &&
+        c.game.display_mask_calls[0].saved_register[0]==1 &&
+        c.game.display_mask_calls[0].saved_register[1]==0x800c55c2u);
+    check(c.game.calls[21].pc==0x80029ab4u &&
+        c.game.calls[21].entry==0x80099458u &&
+        c.game.calls[21].return_address==0x80029abcu &&
+        c.game.calls[21].argument_count==1 &&
+        c.game.calls[21].argument[0]==1);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
