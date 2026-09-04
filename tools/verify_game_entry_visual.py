@@ -53,9 +53,21 @@ def main():
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
             "diagnostic receipt lost its non-gameplay scope boundary")
+    require(receipt["driver"] == {"kind": "native recovered-input handlers",
+                                  "screens": ["Game Setup", "Team Select", "User Setup"],
+                                  "frame_format": "P6 PPM"},
+            "visual capture is not attributed to the native input test driver")
     require(receipt["source"] == {"binary": "GAMEONLY", "address": "0x80029994",
                                   "end_exclusive": "0x80029BCC", "instructions": 142},
             "translated source identity drifted")
+    require(receipt["static_initializers"] == {
+                "binary": "GAMEONLY", "address": "0x800948D0",
+                "end_exclusive": "0x80094940", "instructions": 28,
+                "call_pc": "0x800299A4", "guard_address": "0x800C4B14",
+                "guard_before": 0, "guard_after": 1, "constructor_count": 0,
+                "constructor_callbacks": 0, "operations": 8,
+                "status": "initialized"},
+            "recovered 0x800948D0 execution receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -83,9 +95,13 @@ def main():
 
     trace = args.trace.read_text(encoding="utf-8-sig")
     require("MATCH-HANDOFF-PENDING" in trace and "GAME-ENTRY-DIAG" in trace and
+            "native recovered-input click-through" in trace and
+            "0x800948D0 executed recovered owner" in trace and
+            "guard 0x800C4B14 changed 0->1" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
+          "native 0x800948D0 changed guard 0x800C4B14 from 0 to 1; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

@@ -253,10 +253,15 @@ if(BUILD_TESTING)
     target_include_directories(nba97_game_overlay_entry_tests PRIVATE src)
     add_test(NAME game_overlay_entry COMMAND nba97_game_overlay_entry_tests)
     add_executable(nba97_game_main_tests tests/game_main_tests.cpp src/recovered/game_main.c
-        src/recovered/game_overlay_entry.c)
+        src/recovered/game_overlay_entry.c src/recovered/game_static_initializers.c)
     target_compile_features(nba97_game_main_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_main_tests PRIVATE src)
     add_test(NAME game_main COMMAND nba97_game_main_tests)
+    add_executable(nba97_game_static_initializers_tests tests/game_static_initializers_tests.cpp
+        src/recovered/game_static_initializers.c)
+    target_compile_features(nba97_game_static_initializers_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_static_initializers_tests PRIVATE src)
+    add_test(NAME game_static_initializers COMMAND nba97_game_static_initializers_tests)
     add_executable(nba97_game_heap_allocate_tests tests/game_heap_allocate_tests.cpp src/recovered/game_heap_allocate.c)
     target_compile_features(nba97_game_heap_allocate_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_heap_allocate_tests PRIVATE src)
@@ -1005,7 +1010,7 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/spu_initialize.c src/spu_initialize_backend.cpp
     src/recovered/audio_startup.c src/audio_startup_backend.cpp
     src/recovered/game_text_objects.c src/recovered/game_text_pools.c src/recovered/game_font_loader.c src/game_player_label_backend.cpp
-    src/recovered/game_overlay_entry.c src/recovered/game_main.c src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
+    src/recovered/game_overlay_entry.c src/recovered/game_main.c src/recovered/game_static_initializers.c src/recovered/game_heap_initialize.c src/recovered/game_heap_allocate.c src/recovered/game_heap_release.c
     src/recovered/game_substitution_support.c
     src/recovered/game_player_attributes.c src/music_playback.cpp src/recovered/music_transition.c src/recovered/frontend_resource.c
     src/recovered/frontend_resource_cleanup.c

@@ -10,11 +10,14 @@ try {
     if(-not $SkipBuild) {
         & "$PSScriptRoot/build.ps1" -Configuration $Configuration
         if($LASTEXITCODE) {throw 'Native application build failed'}
-        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_main_tests --parallel
-        if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 test build failed'}
+        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_main_tests --parallel
+        if($LASTEXITCODE) {throw 'GAMEONLY 0x800948D0/0x80029994 test build failed'}
     }
-    $unit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
-    & $unit
+    $staticUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_static_initializers_tests.exe"
+    & $staticUnit
+    if($LASTEXITCODE) {throw 'GAMEONLY 0x800948D0 unit tests failed'}
+    $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
+    & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}
 
     $stamp=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8)

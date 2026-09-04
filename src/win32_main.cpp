@@ -17,6 +17,7 @@
 #include "match_assets.hpp"
 #include "match_snapshot.hpp"
 #include "recovered/game_main.h"
+#include "recovered/game_static_initializers.h"
 #include "recovered/team_select_poll.h"
 #include "png_image.hpp"
 #include "player_photo_loader.hpp"
@@ -6214,14 +6215,19 @@ private:
             std::array<std::uint8_t,0x80> globals{},globals_known{};
             std::array<std::uint8_t,2> display{},display_known{};
             std::array<std::uint8_t,4> loaded_entry{},loaded_entry_known{};
-            std::array<Nba97GameTextRegion,4> regions{};
+            std::array<std::uint8_t,4> static_guard{},static_guard_known{};
+            std::array<Nba97GameTextRegion,5> regions{};
             std::vector<Nba97GameMainEvent> calls;
+            Nba97GameStaticInitializersProgress static_progress{};
+            unsigned static_calls=0;
             State() {
                 stack_known.fill(1);globals_known.fill(1);display_known.fill(1);loaded_entry_known.fill(1);
+                static_guard_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
                     Nba97GameTextRegion{0x800d7a90u,globals.data(),globals_known.data(),globals.size()},
                     Nba97GameTextRegion{0x8002148cu,display.data(),display_known.data(),display.size()},
-                    Nba97GameTextRegion{0x801e0000u,loaded_entry.data(),loaded_entry_known.data(),loaded_entry.size()}};
+                    Nba97GameTextRegion{0x801e0000u,loaded_entry.data(),loaded_entry_known.data(),loaded_entry.size()},
+                    Nba97GameTextRegion{0x800c4b14u,static_guard.data(),static_guard_known.data(),static_guard.size()}};
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -6231,12 +6237,26 @@ private:
                 }
                 throw std::runtime_error("game-entry diagnostic write escaped declared source memory");
             }
+            std::uint32_t get(std::uint32_t address) const {
+                for(const auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
+                    const auto offset=address-region.base;std::uint32_t value=0;
+                    for(unsigned i=0;i<4;++i)value|=std::uint32_t(region.data[offset+i])<<(8*i);
+                    return value;
+                }
+                throw std::runtime_error("game-entry diagnostic read escaped declared source memory");
+            }
         } state;
-        const auto callback=[](void* user,const Nba97GameTextMemory*,const Nba97GameMainEvent* event,
+        const auto callback=[](void* user,const Nba97GameTextMemory* memory,const Nba97GameMainEvent* event,
             Nba97GameMainValue* value,Nba97GameMainCalleeOutcome* outcome)->int {
             auto& fixture=*static_cast<State*>(user);fixture.calls.push_back(*event);
             *outcome=NBA97_GAME_MAIN_CALLEE_RETURNED;
-            if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
+            if(event->entry==0x800948d0u) {
+                ++fixture.static_calls;
+                Nba97GameStaticInitializersContext context{*memory,100,event->stack_pointer,
+                    event->return_address,{event->saved_register[0],event->saved_register[1]}};
+                if(nba97_game_static_initializers(&context,&fixture.static_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.static_progress.completed)return 0;
+            } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
@@ -6247,12 +6267,22 @@ private:
         Nba97GameMainProgress progress{};
         const auto result=nba97_game_main(&context,&progress);
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
-           !progress.reached_match_orchestration || state.calls.size()!=77)
+           !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
+           !state.static_progress.completed || !state.static_progress.initialized ||
+           state.static_progress.already_initialized || state.static_progress.initialization_flag!=0 ||
+           state.static_progress.operations!=8 || state.get(0x800c4b14u)!=1)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
-            "  \"scope\": \"Synthetic mandatory service fixtures; proves translated CPU order only, not a live loader, device, court, possession or gameplay frame.\",\n"
+            "  \"driver\": {\"kind\": \"native recovered-input handlers\", \"screens\": [\"Game Setup\", \"Team Select\", \"User Setup\"], \"frame_format\": \"P6 PPM\"},\n"
+            "  \"scope\": \"The test drives recovered input handlers and captures native frontend frames. Synthetic mandatory service fixtures prove translated CPU order only, not a live loader, device, court, possession or gameplay frame.\",\n"
+            "  \"static_initializers\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800948D0\", "
+            "\"end_exclusive\": \"0x80094940\", \"instructions\": 28, \"call_pc\": \"0x800299A4\", "
+            "\"guard_address\": \"0x800C4B14\", \"guard_before\": "<<state.static_progress.initialization_flag<<
+            ", \"guard_after\": "<<state.get(0x800c4b14u)<<", \"constructor_count\": 0, "
+            "\"constructor_callbacks\": 0, \"operations\": "<<state.static_progress.operations<<
+            ", \"status\": \"initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -6266,7 +6296,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","GAMEONLY 0x80029994: 77 acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; 76 remaining acknowledged test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
