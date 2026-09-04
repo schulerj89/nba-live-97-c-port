@@ -50,6 +50,17 @@ def main():
             "Setup, Team Select and User Setup frames are not visually distinct")
     require(hashes["user-setup-entry"] != hashes["match-handoff-pending"],
             "accepted controller assignment did not change the User Setup frame")
+    move_hashes = {
+        name: ppm_hash(args.frames / f"{name}.ppm")
+        for name in ["move-image-before-buffer0", "move-image-source",
+                     "move-image-buffer0", "move-image-buffer1"]}
+    require(move_hashes["move-image-before-buffer0"] !=
+            move_hashes["move-image-source"],
+            "MoveImage diagnostic source is indistinguishable from the old buffer")
+    require(move_hashes["move-image-source"] ==
+            move_hashes["move-image-buffer0"] ==
+            move_hashes["move-image-buffer1"],
+            "MoveImage did not reproduce its source in both retained VRAM buffers")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -318,6 +329,42 @@ def main():
                 "visual_effect": "none",
                 "status": "ps1-double-buffer-environments-initialized"},
             "recovered 0x80029F20 video-environment receipt drifted")
+    require(receipt["move_image"] == {
+                "binary": "GAMEONLY", "address": "0x800997E4",
+                "end_exclusive": "0x800998A8", "instructions": 49,
+                "api": "MoveImage",
+                "call_pcs": ["0x80029A94", "0x80029AA4"],
+                "invocations": 2,
+                "rectangle": {"x": 512, "y": 0, "w": 512, "h": 256},
+                "destinations": [{"x": 0, "y": 0}, {"x": 0, "y": 256}],
+                "packet": "0x800C5668",
+                "packet_words_after": ["0x04FFFFFF", "0x80000000",
+                                       "0x00000200", "0x01000000",
+                                       "0x01000200"],
+                "driver_table_global": "0x800C55B8",
+                "driver_table": "0x800C5578",
+                "dispatch_context": "0x8009B1F8",
+                "dispatch_entry": "0x8009B298",
+                "diagnostic_calls": 2, "gpu_dispatches": 2,
+                "operations_per_call": 20, "accesses_per_call": 18,
+                "reads_per_call": 11, "stores_per_call": 7,
+                "pixel_words_per_copy": 131072,
+                "pixel_words_copied": 262144,
+                "source_quirks": {
+                    "diagnostic_precedes_extent_check": True,
+                    "only_zero_extent_is_rejected": True,
+                    "destination_coordinates_truncate_to_16_bits": True,
+                    "packet_header_words_remain_live": True,
+                    "unguarded_indirect_dispatch": True,
+                    "live_register_epilogue": True},
+                "visual_fixture": "generated diagnostic grid, not retail pixels",
+                "captures": ["move-image-before-buffer0.ppm",
+                             "move-image-source.ppm",
+                             "move-image-buffer0.ppm",
+                             "move-image-buffer1.ppm"],
+                "visual_effect": "diagnostic source copied to both retained PS1 buffers; native frontend unchanged",
+                "status": "both-vram-pages-seeded"},
+            "recovered 0x800997E4 MoveImage receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -367,6 +414,11 @@ def main():
     require(calls[17]["pc"] == "0x80029A6C" and
             calls[17]["entry"] == "0x80029F20",
             "video-environment initialization boundary drifted")
+    require(calls[18]["pc"] == "0x80029A94" and
+            calls[18]["entry"] == "0x800997E4" and
+            calls[19]["pc"] == "0x80029AA4" and
+            calls[19]["entry"] == "0x800997E4",
+            "two MoveImage startup boundaries drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -477,6 +529,20 @@ def main():
             "dtd/isbg are changed in two adjacent DRAWENV records never passed to SetDefDrawEnv" in trace and
             "RGB is cleared only in the two initialized records" in trace and
             "does not draw, so none of the 98 natively captured frontend frames changed" in trace and
+            "0x800997E4 executed PsyQ MoveImage twice" in trace and
+            "call PCs 0x80029A94 and 0x80029AA4" in trace and
+            "RECT(512,0,512,256) copied" in trace and
+            "first to (0,0), then to (0,256)" in trace and
+            "262144 total 16-bit pixel words" in trace and
+            "unconditional 0x80099560 diagnostic boundary" in trace and
+            "retained packet header words 0x04FFFFFF/0x80000000" in trace and
+            "wrote source/destination/extent at 0x800C5670..0x800C5678" in trace and
+            "live table 0x800C5578 target 0x8009B298" in trace and
+            "only exact zero extents rejected while negative extents dispatch" in trace and
+            "low-16-bit destination truncation" in trace and
+            "move-image-before-buffer0.ppm" in trace and
+            "generated retained-VRAM test grid, not retail art" in trace and
+            "native frontend renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -506,6 +572,8 @@ def main():
           "acknowledged source VBlank state without host timing, retained its unbounded wait, and changed no pixels; "
           "native video-environment initializer 0x80029F20 configured both original 512x240 PS1 buffer pairs, "
           "retained its asymmetric DRAWENV writes and selector mismatch, and changed no pixels; "
+          "native PsyQ MoveImage 0x800997E4 copied the diagnostic right-hand VRAM page into both "
+          "framebuffer pages and emitted four directly comparable PPM proofs while leaving frontend pixels unchanged; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

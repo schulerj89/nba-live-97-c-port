@@ -31,6 +31,7 @@
 #include "recovered/game_clock_delta.h"
 #include "recovered/game_presentation_wait.h"
 #include "recovered/game_video_environment_initialize.h"
+#include "recovered/game_move_image.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6258,6 +6259,7 @@ private:
             Nba97GameClockDeltaProgress clock_delta_progress{};
             std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
             Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
+            std::array<Nba97GameMoveImageProgress,2> move_image_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6266,6 +6268,11 @@ private:
             std::vector<Nba97GameClockDeltaEvent> clock_delta_events;
             std::vector<Nba97GamePresentationWaitEvent> presentation_wait_events;
             std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_events;
+            std::vector<Nba97GameMoveImageEvent> move_image_events;
+            std::vector<std::uint16_t> diagnostic_vram=
+                std::vector<std::uint16_t>(1024u*512u);
+            std::vector<std::uint16_t> move_image_before_top=
+                std::vector<std::uint16_t>(512u*240u);
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6297,6 +6304,9 @@ private:
             unsigned presentation_vblank_signals=0;
             unsigned video_environment_calls=0;
             unsigned video_environment_child_callbacks=0;
+            unsigned move_image_calls=0;
+            unsigned move_image_child_callbacks=0;
+            std::uint64_t move_image_pixel_words=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6348,6 +6358,10 @@ private:
                    consumed by ResetGraph(3) at GAMEONLY 0x80099058. */
                 put(0x800c55b8u,0x800c5578u);
                 put(0x800c55bcu,0x8009cb2cu);
+                put(0x800c5580u,0x8009b298u);
+                put(0x800c5590u,0x8009b1f8u);
+                put(0x800c5668u,0x04ffffffu);
+                put(0x800c566cu,0x80000000u);
                 put(0x800c5640u,0x00000400u);
                 put(0x800c5654u,0x00000200u);
                 /* Sentinels in the two DRAWENVs that 0x80029F20 never passes
@@ -6356,6 +6370,25 @@ private:
                 putByte(0x80021fbcu,0xc2u);putByte(0x80021fbdu,0xd2u);
                 putByte(0x80022016u,0xa3u);putByte(0x80022017u,0xb3u);
                 putByte(0x80022018u,0xc3u);putByte(0x80022019u,0xd3u);
+                /* Visual-only retained VRAM fixture. The right 512x256 page
+                   gets a conspicuous diagnostic grid; the two left pages
+                   start with different flat colors. MoveImage itself, not
+                   the native renderer, must make both destinations match. */
+                for(unsigned y=0;y<512;++y)for(unsigned x=0;x<512;++x)
+                    diagnostic_vram[y*1024u+x]=y<256 ? 0x0010u : 0x4000u;
+                for(unsigned y=0;y<256;++y)for(unsigned x=0;x<512;++x) {
+                    const bool grid=(x%64u)<2u || (y%48u)<2u;
+                    const std::uint16_t r=grid ? 31u :
+                        static_cast<std::uint16_t>((x/16u+4u)&31u);
+                    const std::uint16_t g=grid ? 31u :
+                        static_cast<std::uint16_t>((y/8u+8u)&31u);
+                    const std::uint16_t b=grid ? 31u :
+                        static_cast<std::uint16_t>(((x+y)/24u+12u)&31u);
+                    diagnostic_vram[y*1024u+512u+x]=
+                        static_cast<std::uint16_t>(r|(g<<5u)|(b<<10u));
+                }
+                for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x)
+                    move_image_before_top[y*512u+x]=diagnostic_vram[y*1024u+x];
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -7022,6 +7055,78 @@ private:
                    !fixture.video_environment_progress.completed)return 0;
                 *value={fixture.video_environment_progress.return_v0,
                     fixture.video_environment_progress.return_v0_known};
+            } else if(event->entry==0x800997e4u) {
+                if(fixture.move_image_calls>=fixture.move_image_progress.size())return 0;
+                const auto move=[](void* user,const Nba97GameTextMemory*,
+                    const Nba97GameMoveImageEvent* move_event,
+                    Nba97GameMoveImageValue* move_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    const auto call=state.move_image_events.size();
+                    const auto invocation=call/2u;
+                    if(invocation>=2 || move_event->stack_pointer!=0x807fffb0u ||
+                       move_event->global_pointer!=0x800d79c8u ||
+                       move_event->saved_register[0]!=0x807fffe0u ||
+                       move_event->saved_register[1]!=(invocation ? 0x100u : 0u) ||
+                       move_event->saved_register[2]!=0)return 0;
+                    if(!(call&1u)) {
+                        if(move_event->kind!=NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
+                           move_event->pc!=0x8009980cu ||
+                           move_event->entry!=0x80099560u ||
+                           move_event->return_address!=0x80099814u ||
+                           move_event->argument_count!=2 ||
+                           move_event->argument[0]!=0x8002831cu ||
+                           move_event->argument[1]!=0x807fffe0u)return 0;
+                        *move_value={0,0};
+                    } else {
+                        if(move_event->kind!=NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH ||
+                           move_event->pc!=0x80099884u ||
+                           move_event->entry!=0x8009b298u ||
+                           move_event->return_address!=0x8009988cu ||
+                           move_event->argument_count!=4 ||
+                           move_event->argument[0]!=0x8009b1f8u ||
+                           move_event->argument[1]!=0x800c5668u ||
+                           move_event->argument[2]!=0x14u ||
+                           move_event->argument[3]!=0 ||
+                           state.get(0x800c5668u)!=0x04ffffffu ||
+                           state.get(0x800c566cu)!=0x80000000u)return 0;
+                        const auto source=state.get(0x800c5670u);
+                        const auto destination=state.get(0x800c5674u);
+                        const auto extent=state.get(0x800c5678u);
+                        const unsigned sx=source&0xffffu,sy=source>>16u;
+                        const unsigned dx=destination&0xffffu,dy=destination>>16u;
+                        const unsigned width=extent&0xffffu,height=extent>>16u;
+                        if(sx+width>1024u || dx+width>1024u ||
+                           sy+height>512u || dy+height>512u ||
+                           sx!=512u || sy!=0 || dx!=0 || width!=512u ||
+                           height!=256u || dy!=(invocation ? 256u : 0u))return 0;
+                        /* A temporary retains deterministic overlap behavior
+                           for this synchronous GPU fixture. No host window or
+                           frontend framebuffer participates in the copy. */
+                        std::vector<std::uint16_t> pixels(width*height);
+                        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+                            pixels[y*width+x]=state.diagnostic_vram[
+                                (sy+y)*1024u+sx+x];
+                        for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
+                            state.diagnostic_vram[(dy+y)*1024u+dx+x]=
+                                pixels[y*width+x];
+                        state.move_image_pixel_words+=pixels.size();
+                        *move_value={0,1};
+                    }
+                    ++state.move_image_child_callbacks;
+                    state.move_image_events.push_back(*move_event);
+                    return 1;
+                };
+                auto& move_progress=fixture.move_image_progress[
+                    fixture.move_image_calls++];
+                Nba97GameMoveImageContext move_context{*memory,100,
+                    event->argument[0],event->argument[1],event->argument[2],
+                    event->stack_pointer,event->return_address,
+                    {event->saved_register[0],event->saved_register[1],
+                     event->saved_register[2]},event->global_pointer,
+                    move,&fixture};
+                if(nba97_game_move_image(&move_context,&move_progress)!=
+                       NBA97_TEXT_COMPLETE || !move_progress.completed)return 0;
+                *value={move_progress.return_v0,move_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7076,6 +7181,40 @@ private:
             state.video_environment_progress.restored_saved_register[5]==0xd5d5d5d5u &&
             state.video_environment_progress.return_v0==0 &&
             state.video_environment_progress.return_v0_known;
+        bool move_images_complete=state.move_image_calls==2 &&
+            state.move_image_child_callbacks==4 &&
+            state.move_image_events.size()==4 &&
+            state.move_image_pixel_words==UINT64_C(262144);
+        for(unsigned i=0;i<2;++i) {
+            const auto& move=state.move_image_progress[i];
+            move_images_complete=move_images_complete && move.completed &&
+                move.diagnostic_called && move.gpu_dispatched &&
+                move.operations==20 && move.accesses==18 && move.reads==11 &&
+                move.stores==7 && move.callbacks_completed==2 &&
+                move.frame_stack_pointer==0x807fffb0u &&
+                move.stack_pointer==0x807fffd0u &&
+                move.global_pointer==0x800d79c8u &&
+                move.rectangle_address==0x807fffe0u &&
+                move.signed_width==512 && move.signed_height==256 &&
+                move.source_coordinate_word==0x00000200u &&
+                move.destination_coordinate_word==(i ? 0x01000000u : 0u) &&
+                move.extent_word==0x01000200u &&
+                move.driver_table==0x800c5578u &&
+                move.dispatch_context==0x8009b1f8u &&
+                move.dispatch_entry==0x8009b298u &&
+                move.return_v0==0 && move.return_v0_known &&
+                move.restored_return_address==(i ? 0x80029aacu : 0x80029a9cu) &&
+                move.restored_saved_register[0]==1 &&
+                move.restored_saved_register[1]==0 &&
+                move.restored_saved_register[2]==0;
+        }
+        bool move_image_vram_matches=true;
+        for(unsigned y=0;y<256;++y)for(unsigned x=0;x<512;++x)
+            move_image_vram_matches=move_image_vram_matches &&
+                state.diagnostic_vram[y*1024u+x]==
+                    state.diagnostic_vram[y*1024u+512u+x] &&
+                state.diagnostic_vram[(y+256u)*1024u+x]==
+                    state.diagnostic_vram[y*1024u+512u+x];
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7420,13 +7559,27 @@ private:
             state.active_display_environment!=0x80022070u ||
             state.active_draw_environment!=0x80021f48u ||
             !state.video_environment_synchronized ||
+            !move_images_complete || !move_image_vram_matches ||
+            state.move_image_events[0].kind!=
+                NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
+            state.move_image_events[1].kind!=
+                NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH ||
+            state.move_image_events[2].kind!=
+                NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
+            state.move_image_events[3].kind!=
+                NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH ||
+            state.get(0x800c5668u)!=0x04ffffffu ||
+            state.get(0x800c566cu)!=0x80000000u ||
+            state.get(0x800c5670u)!=0x00000200u ||
+            state.get(0x800c5674u)!=0x01000000u ||
+            state.get(0x800c5678u)!=0x01000200u ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
             state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029b58u ||
-            state.get(0x807fffccu)!=0x80029a64u ||
+            state.get(0x807fffccu)!=0x80029aacu ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
@@ -7441,9 +7594,38 @@ private:
             state.calls[16].pc!=0x80029a64u || state.calls[16].entry!=0x80029bdcu ||
             state.calls[17].pc!=0x80029a6cu || state.calls[17].entry!=0x80029f20u ||
             state.calls[17].argument_count!=1 || state.calls[17].argument[0]!=0 ||
+            state.calls[18].pc!=0x80029a94u || state.calls[18].entry!=0x800997e4u ||
+            state.calls[18].argument_count!=3 ||
+            state.calls[18].argument[0]!=0x807fffe0u ||
+            state.calls[18].argument[1]!=0 || state.calls[18].argument[2]!=0 ||
+            state.calls[19].pc!=0x80029aa4u || state.calls[19].entry!=0x800997e4u ||
+            state.calls[19].argument_count!=3 ||
+            state.calls[19].argument[0]!=0x807fffe0u ||
+            state.calls[19].argument[1]!=0 || state.calls[19].argument[2]!=0x100u ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
+        const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
+            const std::vector<std::uint16_t>* snapshot) {
+            PshImage image;image.tag="GAMEONLY MoveImage diagnostic";
+            image.width=512;image.height=240;image.rgba.resize(512u*240u*4u);
+            for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x) {
+                const auto pixel=snapshot ? (*snapshot)[y*512u+x] :
+                    state.diagnostic_vram[(origin_y+y)*1024u+origin_x+x];
+                const auto at=(y*512u+x)*4u;
+                image.rgba[at]=static_cast<std::uint8_t>((pixel&31u)*255u/31u);
+                image.rgba[at+1u]=static_cast<std::uint8_t>(((pixel>>5u)&31u)*255u/31u);
+                image.rgba[at+2u]=static_cast<std::uint8_t>(((pixel>>10u)&31u)*255u/31u);
+                image.rgba[at+3u]=255;
+            }
+            return image;
+        };
+        const auto capture_root=output.parent_path();
+        writePpm(vram_frame(0,0,&state.move_image_before_top),
+            capture_root/"move-image-before-buffer0.ppm");
+        writePpm(vram_frame(512,0,nullptr),capture_root/"move-image-source.ppm");
+        writePpm(vram_frame(0,0,nullptr),capture_root/"move-image-buffer0.ppm");
+        writePpm(vram_frame(0,256,nullptr),capture_root/"move-image-buffer1.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -7697,6 +7879,33 @@ private:
             "\"pair1_active_while_selector_zero\": true, "
             "\"live_register_epilogue\": true}, \"visual_effect\": \"none\", "
             "\"status\": \"ps1-double-buffer-environments-initialized\"},\n"
+            "  \"move_image\": {\"binary\": \"GAMEONLY\", \"address\": \"0x800997E4\", "
+            "\"end_exclusive\": \"0x800998A8\", \"instructions\": 49, \"api\": \"MoveImage\", "
+            "\"call_pcs\": [\"0x80029A94\", \"0x80029AA4\"], \"invocations\": "<<
+            state.move_image_calls<<", \"rectangle\": {\"x\": 512, \"y\": 0, "
+            "\"w\": 512, \"h\": 256}, \"destinations\": [{\"x\": 0, \"y\": 0}, "
+            "{\"x\": 0, \"y\": 256}], \"packet\": \"0x800C5668\", "
+            "\"packet_words_after\": [\"0x04FFFFFF\", \"0x80000000\", "
+            "\"0x00000200\", \"0x01000000\", \"0x01000200\"], "
+            "\"driver_table_global\": \"0x800C55B8\", \"driver_table\": \"0x800C5578\", "
+            "\"dispatch_context\": \"0x8009B1F8\", \"dispatch_entry\": \"0x8009B298\", "
+            "\"diagnostic_calls\": 2, \"gpu_dispatches\": 2, "
+            "\"operations_per_call\": 20, \"accesses_per_call\": 18, "
+            "\"reads_per_call\": 11, \"stores_per_call\": 7, "
+            "\"pixel_words_per_copy\": 131072, \"pixel_words_copied\": "<<
+            state.move_image_pixel_words<<", \"source_quirks\": {"
+            "\"diagnostic_precedes_extent_check\": true, "
+            "\"only_zero_extent_is_rejected\": true, "
+            "\"destination_coordinates_truncate_to_16_bits\": true, "
+            "\"packet_header_words_remain_live\": true, "
+            "\"unguarded_indirect_dispatch\": true, "
+            "\"live_register_epilogue\": true}, "
+            "\"visual_fixture\": \"generated diagnostic grid, not retail pixels\", "
+            "\"captures\": [\"move-image-before-buffer0.ppm\", "
+            "\"move-image-source.ppm\", \"move-image-buffer0.ppm\", "
+            "\"move-image-buffer1.ppm\"], "
+            "\"visual_effect\": \"diagnostic source copied to both retained PS1 buffers; native frontend unchanged\", "
+            "\"status\": \"both-vram-pages-seeded\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7787,6 +7996,22 @@ private:
             "initialized records; this configures retained PS1-era metadata and does not "
             "draw, so none of the 98 natively captured frontend frames changed; 19 "
             "remaining outer calls are still acknowledged fixtures");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x800997E4 executed PsyQ MoveImage twice "
+            "from call PCs 0x80029A94 and 0x80029AA4: RECT(512,0,512,256) copied "
+            "the staged right-hand VRAM page first to (0,0), then to (0,256), for "
+            "262144 total 16-bit pixel words; both calls emitted the unconditional "
+            "0x80099560 diagnostic boundary, retained packet header words 0x04FFFFFF/"
+            "0x80000000, wrote source/destination/extent at 0x800C5670..0x800C5678, "
+            "and dispatched the 20-byte packet through live table 0x800C5578 target "
+            "0x8009B298; original quirks remain: diagnostic-before-validation, only "
+            "exact zero extents rejected while negative extents dispatch, low-16-bit "
+            "destination truncation, untouched packet header words and an unguarded "
+            "indirect target; move-image-before-buffer0.ppm, move-image-source.ppm, "
+            "move-image-buffer0.ppm and move-image-buffer1.ppm visualize a generated "
+            "retained-VRAM test grid, not retail art; the native frontend renderer and "
+            "its 98 click-through frames were unchanged; 17 remaining outer calls are "
+            "still acknowledged fixtures");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

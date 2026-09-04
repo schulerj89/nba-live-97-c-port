@@ -17,6 +17,7 @@
 #include "recovered/game_clock_delta.h"
 #include "recovered/game_presentation_wait.h"
 #include "recovered/game_video_environment_initialize.h"
+#include "recovered/game_move_image.h"
 
 #include <array>
 #include <cstdint>
@@ -84,6 +85,7 @@ struct Fixture {
     Nba97GameClockDeltaProgress clock_delta_progress{};
     std::array<Nba97GamePresentationWaitProgress,41> presentation_wait_progress{};
     Nba97GameVideoEnvironmentInitializeProgress video_environment_progress{};
+    std::array<Nba97GameMoveImageProgress,2> move_image_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -99,12 +101,15 @@ struct Fixture {
     std::vector<Nba97GameClockDeltaEvent> clock_delta_calls;
     std::vector<Nba97GamePresentationWaitEvent> presentation_wait_calls;
     std::vector<Nba97GameVideoEnvironmentInitializeEvent> video_environment_calls;
+    std::vector<Nba97GameMoveImageEvent> move_image_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
     unsigned presentation_vblank_signals = 0;
     unsigned video_environment_invocations = 0;
     unsigned video_environment_child_callbacks = 0;
+    unsigned move_image_invocations = 0;
+    unsigned move_image_child_callbacks = 0;
     std::uint32_t active_display_environment = 0;
     std::uint32_t active_draw_environment = 0;
     bool video_environment_synchronized = false;
@@ -132,6 +137,7 @@ struct Fixture {
     bool compose_clock_delta = false;
     bool compose_presentation_wait = false;
     bool compose_video_environment = false;
+    bool compose_move_image = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -520,6 +526,47 @@ struct Fixture {
         *value={0,1};
         return 1;
     }
+    static int moveImageIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameMoveImageEvent* event,
+        Nba97GameMoveImageValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        const auto call=f.move_image_calls.size();
+        const auto invocation=call/2u;
+        if(invocation>=2 || event->stack_pointer!=FrameSp-0x20u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->saved_register[0]!=FrameSp+0x10u ||
+           event->saved_register[1]!=(invocation ? 0x100u : 0u) ||
+           event->saved_register[2]!=0)
+            return 0;
+        if(!(call&1u)) {
+            if(event->kind!=NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
+               event->pc!=0x8009980cu || event->entry!=0x80099560u ||
+               event->return_address!=0x80099814u ||
+               event->argument_count!=2 ||
+               event->argument[0]!=0x8002831cu ||
+               event->argument[1]!=FrameSp+0x10u)
+                return 0;
+            *value={0,0};
+        } else {
+            if(event->kind!=NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH ||
+               event->pc!=0x80099884u || event->entry!=0x8009b298u ||
+               event->return_address!=0x8009988cu ||
+               event->argument_count!=4 ||
+               event->argument[0]!=0x8009b1f8u ||
+               event->argument[1]!=0x800c5668u ||
+               event->argument[2]!=0x14u || event->argument[3]!=0 ||
+               f.get(0x800c5668u)!=0x04ffffffu ||
+               f.get(0x800c566cu)!=0x80000000u ||
+               f.get(0x800c5670u)!=0x00000200u ||
+               f.get(0x800c5674u)!=(invocation ? 0x01000000u : 0u) ||
+               f.get(0x800c5678u)!=0x01000200u)
+                return 0;
+            *value={0,1};
+        }
+        ++f.move_image_child_callbacks;
+        f.move_image_calls.push_back(*event);
+        return 1;
+    }
     static int io(void* user, const Nba97GameTextMemory* memory, const Nba97GameMainEvent* event,
         Nba97GameMainValue* value, Nba97GameMainCalleeOutcome* outcome) {
         auto& f = *static_cast<Fixture*>(user);
@@ -680,6 +727,21 @@ struct Fixture {
                 return 0;
             *value={f.video_environment_progress.return_v0,
                 f.video_environment_progress.return_v0_known};
+        }
+        if (f.compose_move_image && event->entry == 0x800997e4u) {
+            if(f.move_image_invocations>=f.move_image_progress.size())
+                return 0;
+            auto& move_progress=f.move_image_progress[f.move_image_invocations++];
+            Nba97GameMoveImageContext context{*memory,100,
+                event->argument[0],event->argument[1],event->argument[2],
+                event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1],
+                 event->saved_register[2]},event->global_pointer,
+                moveImageIo,&f};
+            if(nba97_game_move_image(&context,&move_progress)!=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={move_progress.return_v0,move_progress.return_v0_known};
         }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
@@ -855,6 +917,10 @@ struct Composition {
         game.put(0x800d7a48u,0);
         game.put(0x800c55b8u,0x800c5578u);
         game.put(0x800c55bcu,0x8009cb2cu);
+        game.put(0x800c5580u,0x8009b298u);
+        game.put(0x800c5590u,0x8009b1f8u);
+        game.put(0x800c5668u,0x04ffffffu);
+        game.put(0x800c566cu,0x80000000u);
         game.put(0x800c5640u,0x400u,2);
         game.put(0x800c5654u,0x200u,2);
         game.putText(0x800247e4u,"cdrom:");
@@ -888,6 +954,7 @@ struct Composition {
         game.compose_clock_delta = true;
         game.compose_presentation_wait = true;
         game.compose_video_environment = true;
+        game.compose_move_image = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1332,6 +1399,54 @@ void overlay_composition() {
         c.game.active_display_environment==0x80022070u &&
         c.game.active_draw_environment==0x80021f48u &&
         c.game.video_environment_synchronized);
+    check(c.game.move_image_invocations==2 &&
+        c.game.move_image_child_callbacks==4 &&
+        c.game.move_image_calls.size()==4);
+    for(unsigned i=0;i<2;++i) {
+        const auto& move=c.game.move_image_progress[i];
+        check(move.completed && move.diagnostic_called && move.gpu_dispatched &&
+            move.operations==20 && move.accesses==18 && move.reads==11 &&
+            move.stores==7 && move.callbacks_completed==2 &&
+            move.frame_stack_pointer==FrameSp-0x20u &&
+            move.stack_pointer==FrameSp &&
+            move.global_pointer==0x800d79c8u &&
+            move.rectangle_address==FrameSp+0x10u &&
+            move.signed_width==512 && move.signed_height==256 &&
+            move.source_coordinate_word==0x00000200u &&
+            move.destination_coordinate_word==(i ? 0x01000000u : 0u) &&
+            move.extent_word==0x01000200u &&
+            move.driver_table==0x800c5578u &&
+            move.dispatch_context==0x8009b1f8u &&
+            move.dispatch_entry==0x8009b298u &&
+            move.return_v0==0 && move.return_v0_known &&
+            move.restored_return_address==(i ? 0x80029aacu : 0x80029a9cu) &&
+            move.restored_saved_register[0]==1 &&
+            move.restored_saved_register[1]==0 &&
+            move.restored_saved_register[2]==0);
+    }
+    check(c.game.calls[18].pc==0x80029a94u &&
+        c.game.calls[18].entry==0x800997e4u &&
+        c.game.calls[18].argument_count==3 &&
+        c.game.calls[18].argument[0]==FrameSp+0x10u &&
+        c.game.calls[18].argument[1]==0 && c.game.calls[18].argument[2]==0 &&
+        c.game.calls[19].pc==0x80029aa4u &&
+        c.game.calls[19].entry==0x800997e4u &&
+        c.game.calls[19].argument[0]==FrameSp+0x10u &&
+        c.game.calls[19].argument[1]==0 &&
+        c.game.calls[19].argument[2]==0x100u);
+    check(c.game.move_image_calls[0].kind==
+            NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC &&
+        c.game.move_image_calls[1].kind==
+            NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH &&
+        c.game.move_image_calls[2].kind==
+            NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC &&
+        c.game.move_image_calls[3].kind==
+            NBA97_GAME_MOVE_IMAGE_GPU_DISPATCH &&
+        c.game.get(0x800c5668u)==0x04ffffffu &&
+        c.game.get(0x800c566cu)==0x80000000u &&
+        c.game.get(0x800c5670u)==0x00000200u &&
+        c.game.get(0x800c5674u)==0x01000000u &&
+        c.game.get(0x800c5678u)==0x01000200u);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -1339,10 +1454,10 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* All 41 0x80029BDC invocations reuse the clock sampler's saved-s0
-           slot; the final live spill is the second loop's return address. */
+        /* All 41 0x80029BDC invocations reuse MoveImage's saved-s2 slot; its
+           saved-ra slot remains the second 0x800997E4 caller return address. */
         c.game.get(FrameSp - 8u) == 0x80029b58u &&
-        c.game.get(FrameSp - 4u) == 0x80029a64u);
+        c.game.get(FrameSp - 4u) == 0x80029aacu);
     check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
         c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7b3cu)==0 &&
         c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);

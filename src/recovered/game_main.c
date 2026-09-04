@@ -264,6 +264,13 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * low-byte background-mode truncation are preserved by that owner. */
     TRY(direct_call(run, 0x80029a6cu, 0x80029f20u, 1, 0, 0, 0, &value));
 
+    /* GAMEONLY 0x80029A74..0x80029AA8 builds RECT(512,0,512,256) in
+     * this live stack frame, then calls the recovered PsyQ MoveImage owner
+     * 0x800997E4 twice. The JAL delay slots finish the rectangle height for
+     * the first call and supply destination y=256 for the second. Together
+     * they copy the staged right-hand VRAM page to both framebuffer pages;
+     * zero/negative extent quirks and shared packet behavior stay in that
+     * owner rather than being normalized here. */
     TRY(write_half(run, run->sp + 0x10u, 0x80029a84u, 0x200u));
     TRY(write_half(run, run->sp + 0x14u, 0x80029a88u, 0x200u));
     TRY(write_half(run, run->sp + 0x12u, 0x80029a90u, 0));
