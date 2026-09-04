@@ -54,8 +54,9 @@ root MAC0/IR0 and vector MAC1..3/IR1..3/FLAG correspond directly; both vertex
 arrays and OTZ must also be carried. Court LZCR and ZSF4 are untouched here.
 ZSF3 is independent of ZSF4. Raw source `56690/56694` loads `0155` into ZSF3;
 the following initialization loads `0100` into ZSF4. That observed initializer
-does not establish that a particular caller has executed it. The API still
-requires retained provenance instead of silently installing either value.
+is now owned by `game_gte_initialize.c`; the geometry API still requires its
+resulting retained state as provenance instead of silently installing either
+value for callers that have not executed that startup boundary.
 
 ## Source order and preserved quirks
 

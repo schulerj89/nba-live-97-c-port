@@ -13,6 +13,7 @@
 #include "recovered/game_graph_debug_set.h"
 #include "recovered/game_vblank_initialize.h"
 #include "recovered/game_clock_initialize.h"
+#include "recovered/game_gte_initialize.h"
 
 #include <array>
 #include <cstdint>
@@ -75,6 +76,8 @@ struct Fixture {
     Nba97GameVblankInitializeProgress vblank_progress{};
     Nba97GameGlobalPointerSaveProgress vblank_global_pointer_progress{};
     Nba97GameClockInitializeProgress clock_progress{};
+    Nba97GameGteInitializeState gte_state{};
+    Nba97GameGteInitializeProgress gte_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -109,6 +112,7 @@ struct Fixture {
     bool compose_graph_debug = false;
     bool compose_vblank = false;
     bool compose_clock = false;
+    bool compose_gte = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -514,6 +518,14 @@ struct Fixture {
             *value={f.clock_progress.return_v0,
                 f.clock_progress.return_v0_known};
         }
+        if (f.compose_gte && event->entry == 0x80056678u) {
+            Nba97GameGteInitializeContext context{&f.gte_state,20};
+            if (nba97_game_gte_initialize(&context,&f.gte_progress) !=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.gte_progress.return_v0,
+                f.gte_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -694,6 +706,9 @@ struct Composition {
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
         for(unsigned i=0;i<32;++i)game.put(0x800d7234u+i*4u,0);
+        game.gte_state.cop0_status={0x10900401u,1};
+        for(unsigned i=0;i<32;++i)
+            game.gte_state.control[i]={0xa5000000u+i,1};
         game.compose_static = true;
         game.compose_global_pointer = true;
         game.compose_heap = true;
@@ -707,6 +722,7 @@ struct Composition {
         game.compose_graph_debug = true;
         game.compose_vblank = true;
         game.compose_clock = true;
+        game.compose_gte = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1014,6 +1030,28 @@ void overlay_composition() {
         c.game.calls[13].entry==0x800914d8u &&
         c.game.calls[13].argument_count==1 &&
         c.game.calls[13].argument[0]==120);
+    check(c.game.gte_progress.completed &&
+        c.game.gte_progress.operations==9 &&
+        c.game.gte_progress.reads==1 &&
+        c.game.gte_progress.stores==8 &&
+        c.game.gte_progress.controls_written==7 &&
+        c.game.gte_progress.status_before==0x10900401u &&
+        c.game.gte_progress.status_after==0x50900401u &&
+        c.game.gte_progress.return_v0==0x50900401u &&
+        c.game.gte_progress.return_v0_known);
+    check(c.game.gte_state.cop0_status.word==0x50900401u &&
+        c.game.gte_state.control[NBA97_GAME_GTE_ZSF3].word==0x155u &&
+        c.game.gte_state.control[NBA97_GAME_GTE_ZSF4].word==0x100u &&
+        c.game.gte_state.control[NBA97_GAME_GTE_H].word==1000u &&
+        c.game.gte_state.control[NBA97_GAME_GTE_DQA].word==0xffffef9eu &&
+        c.game.gte_state.control[NBA97_GAME_GTE_DQB].word==0x01400000u &&
+        c.game.gte_state.control[NBA97_GAME_GTE_OFX].word==0 &&
+        c.game.gte_state.control[NBA97_GAME_GTE_OFY].word==0 &&
+        /* FLAG is one of the 25 controls the source deliberately leaves live. */
+        c.game.gte_state.control[31].word==0xa500001fu);
+    check(c.game.calls[14].pc==0x80029a54u &&
+        c.game.calls[14].entry==0x80056678u &&
+        c.game.calls[14].argument_count==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

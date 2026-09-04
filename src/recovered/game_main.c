@@ -241,6 +241,10 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * resets clock counters after starting the counter. Hardware/service calls
      * stay explicit child boundaries; this call does not invent host cadence. */
     TRY(direct_call(run, 0x80029a4cu, 0x800914d8u, 1, 0x78u, 0, 0, &value));
+    /* GAMEONLY 0x80029A54 -> 0x80056678 enables GTE/CU2 while preserving
+     * every other CP0 Status bit, then installs the seven original projection
+     * controls. It intentionally leaves the other 25 GTE controls live and
+     * returns the updated Status word; this caller ignores that raw return. */
     TRY(direct_call(run, 0x80029a54u, 0x80056678u, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a5cu, 0x800a584cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029a64u, 0x80029bdcu, 0, 0, 0, 0, &value));

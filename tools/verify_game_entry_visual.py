@@ -238,6 +238,26 @@ def main():
                 "visual_effect": "none",
                 "status": "mapped-ps1-clock-service-initialized"},
             "recovered 0x800914D8 clock initialization receipt drifted")
+    require(receipt["gte_initialize"] == {
+                "binary": "GAMEONLY", "address": "0x80056678",
+                "end_exclusive": "0x800566E0", "instructions": 26,
+                "call_pc": "0x80029A54",
+                "cop0_status_before": "0x10900401",
+                "cop0_status_after": "0x50900401",
+                "cu2_mask": "0x40000000",
+                "controls": {"OFX": 0, "OFY": 0, "H": 1000,
+                             "DQA": -4194, "DQB": 20971520,
+                             "ZSF3": 341, "ZSF4": 256},
+                "controls_written": 7, "untouched_control_registers": 25,
+                "operations": 9, "reads": 1, "stores": 8,
+                "return_v0": "0x50900401", "source_quirks": {
+                    "preserves_non_cu2_status_bits": True,
+                    "leaves_other_gte_state_live": True,
+                    "zsf3_zsf4_are_independent": True,
+                    "return_is_updated_status": True},
+                "visual_effect": "none",
+                "status": "retained-gte-projection-controls-initialized"},
+            "recovered 0x80056678 GTE initialization receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -274,6 +294,8 @@ def main():
             "VBlank initialization boundary drifted")
     require(calls[13]["pc"] == "0x80029A4C" and calls[13]["entry"] == "0x800914D8",
             "game-clock initialization boundary drifted")
+    require(calls[14]["pc"] == "0x80029A54" and calls[14]["entry"] == "0x80056678",
+            "GTE initialization boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -353,6 +375,12 @@ def main():
             "clock globals 0x800D7A7C, 0x800D7A70, 0x800D7B2C and 0x800D7B28 were reset" in trace and
             "original signed double-division quantization and prefix-committing divide BREAK paths remain" in trace and
             "did not install a native OS interrupt or synthesize Timer 2 cadence" in trace and
+            "0x80056678 initialized retained GTE projection state" in trace and
+            "CP0 Status 0x10900401 became 0x50900401 by setting only CU2" in trace and
+            "ZSF3 0x0155, ZSF4 0x0100, H 1000, DQA -4194, DQB 0x01400000, OFX 0 and OFY 0" in trace and
+            "matrices, FIFOs, FLAG and the other 25 control registers remain live exactly as in GAMEONLY" in trace and
+            "establishes later court/player/net projection inputs" in trace and
+            "does not submit a GPU packet or change any of the 98 captured frontend frames" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -374,6 +402,8 @@ def main():
           "handler through explicit fixtures, retained its counter-3 failure quirk, and changed no pixels; "
           "native game-clock initializer 0x800914D8 installed IRQ6, configured Timer 2 for 120 Hz, "
           "retained signed division traps, and changed no pixels; "
+          "native GTE initializer 0x80056678 enabled CU2 and installed seven retained projection controls "
+          "without changing pixels; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

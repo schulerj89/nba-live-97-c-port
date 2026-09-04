@@ -10,7 +10,7 @@ try {
     if(-not $SkipBuild) {
         & "$PSScriptRoot/build.ps1" -Configuration $Configuration
         if($LASTEXITCODE) {throw 'Native application build failed'}
-        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_controller_resume_tests nba97_game_reset_graph_tests nba97_game_graph_debug_set_tests nba97_game_vblank_initialize_tests nba97_game_clock_initialize_tests nba97_game_main_tests --parallel
+        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_controller_resume_tests nba97_game_reset_graph_tests nba97_game_graph_debug_set_tests nba97_game_vblank_initialize_tests nba97_game_clock_initialize_tests nba97_game_gte_initialize_tests nba97_game_main_tests --parallel
         if($LASTEXITCODE) {throw 'GAMEONLY game-entry owner tests failed'}
     }
     $staticUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_static_initializers_tests.exe"
@@ -52,6 +52,9 @@ try {
     $clockUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_clock_initialize_tests.exe"
     & $clockUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x800914D8 game-clock-initialize tests failed'}
+    $gteUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_gte_initialize_tests.exe"
+    & $gteUnit
+    if($LASTEXITCODE) {throw 'GAMEONLY 0x80056678 GTE-initialize tests failed'}
     $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}

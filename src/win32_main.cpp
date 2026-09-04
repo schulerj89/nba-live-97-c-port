@@ -27,6 +27,7 @@
 #include "recovered/game_graph_debug_set.h"
 #include "recovered/game_vblank_initialize.h"
 #include "recovered/game_clock_initialize.h"
+#include "recovered/game_gte_initialize.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6249,6 +6250,8 @@ private:
             Nba97GameVblankInitializeProgress vblank_progress{};
             Nba97GameGlobalPointerSaveProgress vblank_global_pointer_progress{};
             Nba97GameClockInitializeProgress clock_progress{};
+            Nba97GameGteInitializeState gte_state{};
+            Nba97GameGteInitializeProgress gte_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6277,6 +6280,7 @@ private:
             unsigned vblank_child_callbacks=0;
             unsigned clock_calls=0;
             unsigned clock_child_callbacks=0;
+            unsigned gte_calls=0;
             bool vblank_set_rcnt_rejected=false;
             bool vblank_started_after_rejection=false;
             bool vblank_interrupt_installed=false;
@@ -6308,6 +6312,11 @@ private:
                    table are BSS-zero at cold entry. */
                 put(0x800c4aa4u,0);
                 for(unsigned i=0;i<32;++i)put(0x800d7234u+i*4u,0);
+                /* A concrete retained CPU/GTE fixture lets the translated
+                   initializer prove both changed and deliberately-live state. */
+                gte_state.cop0_status={0x10900401u,1};
+                for(unsigned i=0;i<32;++i)
+                    gte_state.control[i]={0xa5000000u+i,1};
                 /* Retail libgpu jump-table pointers and resolution tables
                    consumed by ResetGraph(3) at GAMEONLY 0x80099058. */
                 put(0x800c55b8u,0x800c5578u);
@@ -6806,6 +6815,15 @@ private:
                    !fixture.clock_progress.completed)return 0;
                 *value={fixture.clock_progress.return_v0,
                     fixture.clock_progress.return_v0_known};
+            } else if(event->entry==0x80056678u) {
+                ++fixture.gte_calls;
+                Nba97GameGteInitializeContext gte_context{
+                    &fixture.gte_state,20};
+                if(nba97_game_gte_initialize(&gte_context,
+                       &fixture.gte_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.gte_progress.completed)return 0;
+                *value={fixture.gte_progress.return_v0,
+                    fixture.gte_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7080,6 +7098,24 @@ private:
             state.clock_events[3].argument[1]!=35280 ||
             state.clock_events[4].entry!=0x80098488u ||
             state.clock_events[6].entry!=0x800a5880u ||
+            state.gte_calls!=1 || !state.gte_progress.completed ||
+            state.gte_progress.operations!=9 || state.gte_progress.reads!=1 ||
+            state.gte_progress.stores!=8 ||
+            state.gte_progress.controls_written!=7 ||
+            state.gte_progress.control_written_mask!=0x7f000000u ||
+            state.gte_progress.status_before!=0x10900401u ||
+            state.gte_progress.status_after!=0x50900401u ||
+            state.gte_progress.return_v0!=0x50900401u ||
+            !state.gte_progress.return_v0_known ||
+            state.gte_state.cop0_status.word!=0x50900401u ||
+            state.gte_state.control[NBA97_GAME_GTE_ZSF3].word!=0x155u ||
+            state.gte_state.control[NBA97_GAME_GTE_ZSF4].word!=0x100u ||
+            state.gte_state.control[NBA97_GAME_GTE_H].word!=1000u ||
+            state.gte_state.control[NBA97_GAME_GTE_DQA].word!=0xffffef9eu ||
+            state.gte_state.control[NBA97_GAME_GTE_DQB].word!=0x01400000u ||
+            state.gte_state.control[NBA97_GAME_GTE_OFX].word!=0 ||
+            state.gte_state.control[NBA97_GAME_GTE_OFY].word!=0 ||
+            state.gte_state.control[31].word!=0xa500001fu ||
             state.get(0x800c55c0u)!=0x00000100u ||
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
@@ -7092,7 +7128,9 @@ private:
             state.calls[11].pc!=0x80029a30u || state.calls[11].entry!=0x8008f1d4u ||
             state.calls[12].pc!=0x80029a38u || state.calls[12].entry!=0x800a43e8u ||
             state.calls[13].pc!=0x80029a4cu || state.calls[13].entry!=0x800914d8u ||
-            state.calls[13].argument_count!=1 || state.calls[13].argument[0]!=120)
+            state.calls[13].argument_count!=1 || state.calls[13].argument[0]!=120 ||
+            state.calls[14].pc!=0x80029a54u || state.calls[14].entry!=0x80056678u ||
+            state.calls[14].argument_count!=0)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
@@ -7274,6 +7312,20 @@ private:
             "\"divide_traps_prefix_commit\": true, \"raw_child_returns_ignored\": true, "
             "\"warm_path_skips_registration\": true}, \"visual_effect\": \"none\", "
             "\"status\": \"mapped-ps1-clock-service-initialized\"},\n"
+            "  \"gte_initialize\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80056678\", "
+            "\"end_exclusive\": \"0x800566E0\", \"instructions\": 26, "
+            "\"call_pc\": \"0x80029A54\", \"cop0_status_before\": \"0x10900401\", "
+            "\"cop0_status_after\": \"0x50900401\", \"cu2_mask\": \"0x40000000\", "
+            "\"controls\": {\"OFX\": 0, \"OFY\": 0, \"H\": 1000, \"DQA\": -4194, "
+            "\"DQB\": 20971520, \"ZSF3\": 341, \"ZSF4\": 256}, "
+            "\"controls_written\": "<<unsigned(state.gte_progress.controls_written)<<
+            ", \"untouched_control_registers\": 25, \"operations\": "<<
+            state.gte_progress.operations<<", \"reads\": "<<state.gte_progress.reads<<
+            ", \"stores\": "<<state.gte_progress.stores<<", \"return_v0\": \"0x50900401\", "
+            "\"source_quirks\": {\"preserves_non_cu2_status_bits\": true, "
+            "\"leaves_other_gte_state_live\": true, \"zsf3_zsf4_are_independent\": true, "
+            "\"return_is_updated_status\": true}, \"visual_effect\": \"none\", "
+            "\"status\": \"retained-gte-projection-controls-initialized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -7319,6 +7371,15 @@ private:
             "not install a native OS interrupt or synthesize Timer 2 cadence, so the 98 "
             "captured frontend frames were unchanged; 63 remaining acknowledged outer "
             "test boundaries");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered startup callee 0x80056678 initialized retained GTE projection "
+            "state: CP0 Status 0x10900401 became 0x50900401 by setting only CU2; source "
+            "CTC2 writes set ZSF3 0x0155, ZSF4 0x0100, H 1000, DQA -4194, DQB "
+            "0x01400000, OFX 0 and OFY 0; matrices, FIFOs, FLAG and the other 25 control "
+            "registers remain live exactly as in GAMEONLY, while v0 retains the updated "
+            "Status word; this establishes later court/player/net projection inputs but "
+            "does not submit a GPU packet or change any of the 98 captured frontend "
+            "frames; 62 remaining acknowledged outer test boundaries");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;
