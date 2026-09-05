@@ -22,7 +22,8 @@ same 24-byte normalized body, so the byte shape alone cannot name this routine.
 The global resolves the ambiguity: internal `CdReady` `0x8009E9C0` reads
 `0x800C57E4` at `0x8009EB78` and invokes it on its ready path. The adjacent
 six-instruction routine `0x8009DBF8` exchanges the distinct callback word at
-`0x800C57E8` and remains the next untranslated routine.
+`0x800C57E8`; it is now recovered as `CdSyncCallback`. See
+[CD-sync callback exchange](game_cd_sync_callback_workflow.md).
 
 The diagnostic preloads `0x8009D9DC`, the default ready callback installed by
 earlier `CdInit` `0x8009D94C`, then proves that main receives that pointer and

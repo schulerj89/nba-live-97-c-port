@@ -364,6 +364,10 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * old 0x800C57E4 callback before clearing that slot. It invokes neither
      * pointer and does not validate, normalize, or translate pointer values. */
     TRY(direct_call(run, 0x80029b3cu, 0x8009dbe0u, 1, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029B44 -> 0x8009DBF8 is the recovered six-instruction
+     * CdSyncCallback exchange. Main passes NULL, so it reads and returns the
+     * old 0x800C57E8 command-completion callback before clearing that slot.
+     * It invokes neither pointer and preserves every raw pointer bit. */
     TRY(direct_call(run, 0x80029b44u, 0x8009dbf8u, 1, 0, 0, 0, &value));
     run->s0 = 0;
     for (i = 0; i < 20; ++i) {

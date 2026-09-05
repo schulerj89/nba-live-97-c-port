@@ -199,6 +199,15 @@ pixel-identical. Raw unchecked pointer values, read-before-store ordering, and
 unknown-old-value propagation are preserved. See
 game_cd_ready_callback_workflow.md.
 
+Main's next call at `0x80029B44` now composes all six instructions of PsyQ
+`CdSyncCallback` `0x8009DBF8`. It reads the old command-completion callback from
+`0x800C57E8`, stores main's NULL replacement, and returns the old pointer without
+invoking it. The diagnostic supplies source default callback `0x8009DA04` from
+the still-typed earlier `CdInit` boundary. Its before/after frames remain
+pixel-identical because this retained PS1 state exchange does no rendering. Raw
+unchecked pointers, read-before-store ordering, and unknown-old propagation are
+preserved. See game_cd_sync_callback_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

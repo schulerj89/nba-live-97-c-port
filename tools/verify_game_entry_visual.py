@@ -209,6 +209,13 @@ def main():
             cd_ready_callback_frames["cd-ready-callback-after"] ==
             cd_sync_frames["cd-sync-after"],
             "CdReadyCallback exchange unexpectedly changed retained scanout")
+    cd_sync_callback_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["cd-sync-callback-before", "cd-sync-callback-after"]}
+    require(cd_sync_callback_frames["cd-sync-callback-before"] ==
+            cd_sync_callback_frames["cd-sync-callback-after"] ==
+            cd_ready_callback_frames["cd-ready-callback-after"],
+            "CdSyncCallback exchange unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -838,6 +845,35 @@ def main():
                 "visual_effect": "no pixels changed; the ready callback slot changed from 0x8009D9DC to NULL",
                 "status": "ready-callback-cleared"},
             "recovered 0x8009DBE0 CdReadyCallback receipt drifted")
+    require(receipt["cd_sync_callback"] == {
+                "binary": "GAMEONLY", "address": "0x8009DBF8",
+                "end_exclusive": "0x8009DC10", "instructions": 6,
+                "source_bytes_sha256":
+                    "a5f87457838841a01d7e1d1695406ed58575fa304d34b46e5ef4eb106cadddae",
+                "psyq_name": "CdSyncCallback", "call_pc": "0x80029B44",
+                "callback_global": "0x800C57E8",
+                "requested_callback": "0x00000000",
+                "previous_callback": "0x8009DA04",
+                "fixture_origin": "source default callback installed by earlier untranslated CdInit boundary",
+                "other_callers": ["0x8002B70C", "0x8002BB14",
+                                  "0x80091F44", "0x80091FC4",
+                                  "0x8009D988", "0x8009F8F0",
+                                  "0x8009F998", "0x8002D244",
+                                  "0x80092360", "0x80092760",
+                                  "0x8009FE74", "0x8009FEF4",
+                                  "0x800A0044", "0x800A0158"],
+                "operations": 2, "accesses": 2, "reads": 1, "stores": 1,
+                "source_quirks": {
+                    "previous_value_read_before_store": True,
+                    "raw_replacement_not_validated": True,
+                    "previous_value_can_remain_unknown": True,
+                    "unknown_previous_does_not_suppress_store": True,
+                    "no_callback_invoked": True},
+                "captures": ["cd-sync-callback-before.ppm",
+                             "cd-sync-callback-after.ppm"],
+                "visual_effect": "no pixels changed; the sync callback slot changed from 0x8009DA04 to NULL",
+                "status": "sync-callback-cleared"},
+            "recovered 0x8009DBF8 CdSyncCallback receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -847,6 +883,7 @@ def main():
                        "loaded_image": "0x80123400", "loaded_size": 5136,
                        "cd_sync": "0x8009DBA0",
                        "cd_ready_callback": "0x8009DBE0",
+                       "cd_sync_callback": "0x8009DBF8",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -855,8 +892,10 @@ def main():
     require(calls[48]["pc"] == "0x80029B34" and
             calls[48]["entry"] == "0x8009DBA0" and
             calls[49]["pc"] == "0x80029B3C" and
-            calls[49]["entry"] == "0x8009DBE0",
-            "CdSync/CdReadyCallback main boundaries drifted")
+            calls[49]["entry"] == "0x8009DBE0" and
+            calls[50]["pc"] == "0x80029B44" and
+            calls[50]["entry"] == "0x8009DBF8",
+            "CdSync/callback-exchange main boundaries drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
     require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
@@ -1161,6 +1200,14 @@ def main():
             "old/new pointer log were captured natively by the self-driving recovered-input test, not computer control" in trace and
             "possibly unknown old v0" in trace and
             "unconditional replacement" in trace and
+            "next recovered boundary 0x8009DBF8" in trace and
+            "6-instruction PsyQ CdSyncCallback exchange" in trace and
+            "call PC 0x80029B44 immediately after CdReadyCallback" in trace and
+            "source default sync callback 0x8009DA04" in trace and
+            "global 0x800C57E8" in trace and
+            "internal CD_sync 0x8009E740 reads this exact slot at 0x8009E8BC" in trace and
+            "cd-sync-callback-before.ppm and cd-sync-callback-after.ppm are pixel-identical" in trace and
+            "both frames and the old/new pointer log were captured natively by the self-driving recovered-input test, not computer control" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1216,6 +1263,9 @@ def main():
           "native before/after frames; "
           "native PsyQ CdReadyCallback 0x8009DBE0 returned default callback 0x8009D9DC, cleared "
           "slot 0x800C57E4, retained raw exchange semantics, and emitted pixel-identical native "
+          "before/after frames; "
+          "native PsyQ CdSyncCallback 0x8009DBF8 returned default callback 0x8009DA04, cleared "
+          "slot 0x800C57E8, retained raw exchange semantics, and emitted pixel-identical native "
           "before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
