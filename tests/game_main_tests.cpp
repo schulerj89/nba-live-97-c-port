@@ -27,6 +27,7 @@
 #include "recovered/game_resource_loader.h"
 #include "recovered/game_heap_payload_size.h"
 #include "recovered/game_cd_sync.h"
+#include "recovered/game_cd_ready_callback.h"
 #include "recovered/game_heap_release.h"
 
 #include <array>
@@ -110,6 +111,7 @@ struct Fixture {
     Nba97GameHeapPayloadSizeProgress heap_payload_size_progress{};
     Nba97GameHeapReleaseProgress heap_payload_lookup_progress{};
     Nba97GameCdSyncProgress cd_sync_progress{};
+    Nba97GameCdReadyCallbackProgress cd_ready_callback_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -167,6 +169,7 @@ struct Fixture {
     unsigned resource_loader_invocations = 0;
     unsigned heap_payload_size_invocations = 0;
     unsigned cd_sync_invocations = 0;
+    unsigned cd_ready_callback_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -217,6 +220,7 @@ struct Fixture {
     bool compose_resource_loader = false;
     bool compose_heap_payload_size = false;
     bool compose_cd_sync = false;
+    bool compose_cd_ready_callback = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -838,6 +842,19 @@ struct Fixture {
             f.cd_sync_progress.return_v0_known};
         return 1;
     }
+    static int runCdReadyCallback(Fixture& f,
+        const Nba97GameTextMemory* memory,std::uint32_t replacement,
+        Nba97GameMainValue* value) {
+        if(f.cd_ready_callback_invocations || !memory || !value)return 0;
+        Nba97GameCdReadyCallbackContext context{*memory,10,replacement};
+        if(nba97_game_cd_ready_callback(&context,
+               &f.cd_ready_callback_progress)!=NBA97_TEXT_COMPLETE ||
+           !f.cd_ready_callback_progress.completed)return 0;
+        ++f.cd_ready_callback_invocations;
+        *value={f.cd_ready_callback_progress.return_v0,
+            f.cd_ready_callback_progress.return_v0_known};
+        return 1;
+    }
     static int loadingScreenIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameLoadingScreenEvent* event,
         Nba97GameLoadingScreenValue* value) {
@@ -1418,6 +1435,13 @@ struct Fixture {
                    event->global_pointer,&sync))return 0;
             *value={sync.word,sync.known};
         }
+        if(f.compose_cd_ready_callback && event->entry==0x8009dbe0u) {
+            if(event->pc!=0x80029b3cu || event->argument_count!=1 ||
+               event->argument[0]!=0 || event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029b44u)return 0;
+            if(!runCdReadyCallback(f,memory,event->argument[0],value))return 0;
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1604,6 +1628,10 @@ struct Composition {
         game.put(0x800c5588u,0x8009b16cu);
         game.put(0x800c5590u,0x8009b1f8u);
         game.put(0x800d7b1cu,0);
+        /* CdInit 0x8009D94C remains a typed earlier boundary. Seed its source
+         * default ready callback so the recovered exchange proves a real
+         * nonzero-to-NULL transition without claiming the full CdInit body. */
+        game.put(0x800c57e4u,0x8009d9dcu);
         /* Nonzero retained frame-rate state proves 0x800A7738 performs every
          * clear and leaves the old clock baseline live until its child call. */
         game.put(0x800d7b44u,9);
@@ -1671,6 +1699,7 @@ struct Composition {
         game.compose_resource_loader = true;
         game.compose_heap_payload_size = true;
         game.compose_cd_sync = true;
+        game.compose_cd_ready_callback = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2496,6 +2525,21 @@ void overlay_composition() {
         c.game.cd_sync_calls[0].stack_pointer==FrameSp-0x18u &&
         c.game.cd_sync_calls[0].global_pointer==0x800d79c8u &&
         c.game.cd_sync_calls[0].return_address==0x8009dbb0u);
+    check(c.game.cd_ready_callback_invocations==1 &&
+        c.game.cd_ready_callback_progress.completed &&
+        c.game.cd_ready_callback_progress.operations==2 &&
+        c.game.cd_ready_callback_progress.accesses==2 &&
+        c.game.cd_ready_callback_progress.reads==1 &&
+        c.game.cd_ready_callback_progress.stores==1 &&
+        c.game.cd_ready_callback_progress.callback_global==0x800c57e4u &&
+        c.game.cd_ready_callback_progress.requested_callback==0 &&
+        c.game.cd_ready_callback_progress.previous_callback==0x8009d9dcu &&
+        c.game.cd_ready_callback_progress.previous_callback_known &&
+        c.game.cd_ready_callback_progress.return_v0==0x8009d9dcu &&
+        c.game.cd_ready_callback_progress.return_v0_known &&
+        !c.game.cd_ready_callback_progress.stopped_pc &&
+        !c.game.cd_ready_callback_progress.stopped_address &&
+        c.game.get(0x800c57e4u)==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

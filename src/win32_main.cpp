@@ -41,6 +41,7 @@
 #include "recovered/game_resource_loader.h"
 #include "recovered/game_heap_payload_size.h"
 #include "recovered/game_cd_sync.h"
+#include "recovered/game_cd_ready_callback.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6285,6 +6286,7 @@ private:
             Nba97GameHeapPayloadSizeProgress heap_payload_size_progress{};
             Nba97GameHeapReleaseProgress heap_payload_lookup_progress{};
             Nba97GameCdSyncProgress cd_sync_progress{};
+            Nba97GameCdReadyCallbackProgress cd_ready_callback_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6364,6 +6366,10 @@ private:
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> cd_sync_after=
                 std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> cd_ready_callback_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> cd_ready_callback_after=
+                std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
             std::vector<std::uint16_t> loading_screen_vram_after_first=
@@ -6431,6 +6437,7 @@ private:
             unsigned heap_payload_lookup_calls=0;
             unsigned cd_sync_calls=0;
             unsigned cd_sync_service_calls=0;
+            unsigned cd_ready_callback_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6504,6 +6511,10 @@ private:
                 /* Raw GAMEONLY data has no file-completion hook installed
                    until main reaches 0x800A3E20. */
                 put(0x800d7b1cu,0);
+                /* CdInit 0x8009D94C remains an earlier typed boundary. Its
+                   source default ready callback is the retained input for the
+                   newly recovered CdReadyCallback(NULL) exchange. */
+                put(0x800c57e4u,0x8009d9dcu);
                 /* Distinct retained values make every 0x800A7738 write
                    observable. The source clock itself remains the zero value
                    established by the earlier recovered initializer. */
@@ -6833,6 +6844,20 @@ private:
                 ++cd_sync_calls;
                 *value={cd_sync_progress.return_v0,
                     cd_sync_progress.return_v0_known};
+                return 1;
+            }
+            int runCdReadyCallback(const Nba97GameTextMemory* memory,
+                std::uint32_t replacement,Nba97GameMainValue* value) {
+                if(!memory || !value || cd_ready_callback_calls)return 0;
+                captureDisplay(cd_ready_callback_before);
+                Nba97GameCdReadyCallbackContext context{*memory,10,replacement};
+                if(nba97_game_cd_ready_callback(&context,
+                       &cd_ready_callback_progress)!=NBA97_TEXT_COMPLETE ||
+                   !cd_ready_callback_progress.completed)return 0;
+                captureDisplay(cd_ready_callback_after);
+                ++cd_ready_callback_calls;
+                *value={cd_ready_callback_progress.return_v0,
+                    cd_ready_callback_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8185,6 +8210,15 @@ private:
                     return 0;
                 *value={sync.word,sync.known};
             }
+            else if(event->entry==0x8009dbe0u) {
+                if(event->pc!=0x80029b3cu || event->argument_count!=1 ||
+                   event->argument[0]!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029b44u)return 0;
+                if(!fixture.runCdReadyCallback(memory,event->argument[0],value))
+                    return 0;
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -8752,6 +8786,25 @@ private:
         const bool cd_sync_visual_unchanged=
             state.cd_sync_before==state.cd_sync_after &&
             state.cd_sync_before==state.heap_payload_size_after;
+        const bool cd_ready_callback_complete=
+            state.cd_ready_callback_calls==1 &&
+            state.cd_ready_callback_progress.completed &&
+            state.cd_ready_callback_progress.operations==2 &&
+            state.cd_ready_callback_progress.accesses==2 &&
+            state.cd_ready_callback_progress.reads==1 &&
+            state.cd_ready_callback_progress.stores==1 &&
+            state.cd_ready_callback_progress.callback_global==0x800c57e4u &&
+            state.cd_ready_callback_progress.requested_callback==0 &&
+            state.cd_ready_callback_progress.previous_callback==0x8009d9dcu &&
+            state.cd_ready_callback_progress.previous_callback_known &&
+            state.cd_ready_callback_progress.return_v0==0x8009d9dcu &&
+            state.cd_ready_callback_progress.return_v0_known &&
+            !state.cd_ready_callback_progress.stopped_pc &&
+            !state.cd_ready_callback_progress.stopped_address &&
+            state.get(0x800c57e4u)==0;
+        const bool cd_ready_callback_visual_unchanged=
+            state.cd_ready_callback_before==state.cd_ready_callback_after &&
+            state.cd_ready_callback_before==state.cd_sync_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -8787,6 +8840,13 @@ private:
                 std::to_string(state.cd_sync_progress.return_v0));
         if(!cd_sync_visual_unchanged)
             throw std::runtime_error("translated 0x8009DBA0 unexpectedly changed retained scanout");
+        if(!cd_ready_callback_complete)
+            throw std::runtime_error("translated 0x8009DBE0 diagnostic state drifted: calls="+
+                std::to_string(state.cd_ready_callback_calls)+" previous="+
+                std::to_string(state.cd_ready_callback_progress.previous_callback)+
+                " installed="+std::to_string(state.get(0x800c57e4u)));
+        if(!cd_ready_callback_visual_unchanged)
+            throw std::runtime_error("translated 0x8009DBE0 unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9157,6 +9217,8 @@ private:
            !heap_payload_size_visual_unchanged ||
            !cd_sync_complete ||
            !cd_sync_visual_unchanged ||
+           !cd_ready_callback_complete ||
+           !cd_ready_callback_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9320,6 +9382,10 @@ private:
             capture_root/"cd-sync-before.ppm");
         writePpm(vram_frame(0,0,&state.cd_sync_after),
             capture_root/"cd-sync-after.ppm");
+        writePpm(vram_frame(0,0,&state.cd_ready_callback_before),
+            capture_root/"cd-ready-callback-before.ppm");
+        writePpm(vram_frame(0,0,&state.cd_ready_callback_after),
+            capture_root/"cd-ready-callback-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -9906,6 +9972,31 @@ private:
             "\"captures\": [\"cd-sync-before.ppm\", \"cd-sync-after.ppm\"], "
             "\"visual_effect\": \"no pixels changed; the wrapper synchronizes the CD command boundary before callback removal\", "
             "\"status\": \"cd-command-synchronized\"},\n"
+            "  \"cd_ready_callback\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x8009DBE0\", \"end_exclusive\": \"0x8009DBF8\", "
+            "\"instructions\": 6, \"source_bytes_sha256\": "
+            "\"98c5f9f745cd61ca8a7268bf74d7dea2419d421b67d277c31d38f64b41113414\", "
+            "\"psyq_name\": \"CdReadyCallback\", \"call_pc\": \"0x80029B3C\", "
+            "\"callback_global\": \"0x800C57E4\", "
+            "\"requested_callback\": \"0x00000000\", "
+            "\"previous_callback\": \"0x8009D9DC\", "
+            "\"fixture_origin\": \"source default callback installed by earlier untranslated CdInit boundary\", "
+            "\"other_callers\": [\"0x8009D978\", \"0x8009FABC\", "
+            "\"0x8009FC4C\", \"0x8009FC80\", \"0x8009FE64\", "
+            "\"0x8009FEEC\", \"0x800A0144\"], \"operations\": "<<
+            state.cd_ready_callback_progress.operations<<", \"accesses\": "<<
+            state.cd_ready_callback_progress.accesses<<", \"reads\": "<<
+            state.cd_ready_callback_progress.reads<<", \"stores\": "<<
+            state.cd_ready_callback_progress.stores<<
+            ", \"source_quirks\": {\"previous_value_read_before_store\": true, "
+            "\"raw_replacement_not_validated\": true, "
+            "\"previous_value_can_remain_unknown\": true, "
+            "\"unknown_previous_does_not_suppress_store\": true, "
+            "\"no_callback_invoked\": true}, "
+            "\"captures\": [\"cd-ready-callback-before.ppm\", "
+            "\"cd-ready-callback-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; the ready callback slot changed from 0x8009D9DC to NULL\", "
+            "\"status\": \"ready-callback-cleared\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
@@ -9913,6 +10004,7 @@ private:
             "\"resource_loader\": \"0x80029BFC\", "
             "\"heap_payload_size\": \"0x80090D60\", \"loaded_image\": \"0x80123400\", "
             "\"loaded_size\": 5136, \"cd_sync\": \"0x8009DBA0\", "
+            "\"cd_ready_callback\": \"0x8009DBE0\", "
             "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -10153,6 +10245,20 @@ private:
             "recovered-input test, not computer control; unchanged raw arguments, no "
             "wrapper-side result-pointer validation, no added timeout or return-code "
             "normalization, live child v0 and mutable o32 epilogue behavior remain");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x8009DBE0 is the 6-instruction PsyQ "
+            "CdReadyCallback exchange reached at call PC 0x80029B3C immediately "
+            "after CdSync; it read source default ready callback 0x8009D9DC from "
+            "global 0x800C57E4, stored main's null replacement, and returned the old "
+            "pointer without invoking either callback; internal CdReady 0x8009E9C0 "
+            "reads this exact slot at 0x8009EB78, distinguishing it from adjacent "
+            "CdSyncCallback; cd-ready-callback-before.ppm and "
+            "cd-ready-callback-after.ppm are pixel-identical because callback "
+            "registration performs no rendering; both frames and the old/new pointer "
+            "log were captured natively by the self-driving recovered-input test, not "
+            "computer control; raw unchecked callback values, read-before-store order, "
+            "possibly unknown old v0, unconditional replacement and no callback "
+            "invocation remain");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

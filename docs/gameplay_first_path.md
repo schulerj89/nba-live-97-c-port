@@ -189,6 +189,16 @@ no physical device progress or result-buffer effect is invented. Raw arguments,
 live child `v0`, mutable saved `ra`, and the absence of wrapper-added timeout or
 normalization are preserved. See game_cd_sync_workflow.md.
 
+Main's immediately following call at `0x80029B3C` now composes all six
+instructions of PsyQ `CdReadyCallback` `0x8009DBE0`. It reads the old ready
+callback from `0x800C57E4`, stores main's NULL replacement, and returns the old
+pointer without invoking it. The diagnostic supplies source default callback
+`0x8009D9DC` from the still-typed earlier `CdInit` boundary, so the exchange is
+observable without claiming a native CD backend. Its before/after frames remain
+pixel-identical. Raw unchecked pointer values, read-before-store ordering, and
+unknown-old-value propagation are preserved. See
+game_cd_ready_callback_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.
