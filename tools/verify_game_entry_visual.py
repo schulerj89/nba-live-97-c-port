@@ -91,6 +91,14 @@ def main():
             sync_hashes["draw-sync-after-buffer0"] ==
             move_hashes["move-image-source"],
             "SetDispMask enabled scanout does not match the completed active buffer")
+    validator_hashes = {
+        name: ppm_hash(args.frames / f"{name}.ppm")
+        for name in ["crc-validator-install-before",
+                     "crc-validator-install-after"]}
+    require(validator_hashes["crc-validator-install-before"] ==
+            validator_hashes["crc-validator-install-after"] ==
+            display_hashes["set-disp-mask-after"],
+            "CRCF validator registration unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -452,6 +460,28 @@ def main():
                 "visual_effect": "black masked diagnostic scanout became the completed retained framebuffer; native frontend unchanged",
                 "status": "display-enabled"},
             "recovered 0x80099458 SetDispMask receipt drifted")
+    require(receipt["resource_validator_install"] == {
+                "binary": "GAMEONLY", "address": "0x800A3E20",
+                "end_exclusive": "0x800A3E38", "instructions": 6,
+                "call_pc": "0x80029ABC",
+                "callback_global": "0x800D7B1C",
+                "previous_callback": "0x00000000",
+                "installed_callback": "0x800A3D60",
+                "callback_role": "whole-file CRCF validation",
+                "callback_status": "separate untranslated function",
+                "return_v0": "0x800A3D60", "operations": 1,
+                "accesses": 1, "stores": 1, "child_calls": 0,
+                "source_quirks": {
+                    "unconditional_overwrite": True,
+                    "previous_callback_not_read": True,
+                    "callback_not_invoked": True,
+                    "incidental_pointer_return": True},
+                "visual_fixture": "generated retained scanout, not retail pixels",
+                "captures": ["crc-validator-install-before.ppm",
+                             "crc-validator-install-after.ppm"],
+                "visual_effect": "callback pointer installed; retained scanout and native frontend unchanged",
+                "status": "crcf-validator-registered"},
+            "recovered 0x800A3E20 resource-validator installer receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -512,6 +542,9 @@ def main():
     require(calls[21]["pc"] == "0x80029AB4" and
             calls[21]["entry"] == "0x80099458",
             "SetDispMask startup boundary drifted")
+    require(calls[22]["pc"] == "0x80029ABC" and
+            calls[22]["entry"] == "0x800A3E20",
+            "resource-validator install boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -660,6 +693,17 @@ def main():
             "display environment 0x80022070" in trace and
             "set-disp-mask-before.ppm is black while masked" in trace and
             "original full-word zero testing, active-low bit, disable pre-clear" in trace and
+            "0x800A3E20 from call PC 0x80029ABC" in trace and
+            "six-instruction owner" in trace and
+            "replaced callback global 0x800D7B1C value 0x00000000" in trace and
+            "whole-file CRCF validator 0x800A3D60" in trace and
+            "made no child call" in trace and
+            "incidentally retained 0x800A3D60 in v0" in trace and
+            "separate validator body remains untranslated" in trace and
+            "native host filesystem loader was not redirected" in trace and
+            "original unconditional overwrite, no-read/no-guard registration" in trace and
+            "crc-validator-install-before.ppm" in trace and
+            "pixel-identical generated retained scanout" in trace and
             "native frontend renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
@@ -695,6 +739,8 @@ def main():
           "PPM proof, and preserved its timeout/dispatch quirks while leaving frontend pixels unchanged; "
           "native PsyQ SetDispMask 0x80099458 emitted active-low GP1(03h) enable through retail "
           "table slot +0x10, captured masked/visible scanout frames, and retained its original quirks; "
+          "native 0x800A3E20 installed whole-file CRCF validator 0x800A3D60 at 0x800D7B1C, "
+          "captured identical before/after scanout frames, and retained its overwrite/return quirks; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 

@@ -291,6 +291,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * Its debug callback, disable-only cache clear, live table slot +0x10,
      * raw child v0, and unguarded dispatch behavior remain source-visible. */
     TRY(direct_call(run, 0x80029ab4u, 0x80099458u, 1, 1, 0, 0, &value));
+    /* GAMEONLY 0x80029ABC -> 0x800A3E20 is the recovered resource-validator
+     * installer. It unconditionally stores whole-file CRCF callback
+     * 0x800A3D60 at 0x800D7B1C and incidentally leaves that address in v0.
+     * The callback body is a separate boundary; this call neither validates
+     * a file nor repairs its ignored-trailer-length source quirk. */
     TRY(direct_call(run, 0x80029abcu, 0x800a3e20u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af4u, 0x80029ac8u, 0));
     TRY(write_word(run, 0x800d7af8u, 0x80029ad0u, run->s0));

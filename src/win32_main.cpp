@@ -34,6 +34,7 @@
 #include "recovered/game_move_image.h"
 #include "recovered/game_gpu_sync.h"
 #include "recovered/game_display_mask_set.h"
+#include "recovered/game_resource_validator_install.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6266,6 +6267,8 @@ private:
             Nba97GameGpuSyncProgress gpu_sync_progress{};
             Nba97GameGpuSyncWord gpu_sync_source_v0{};
             Nba97GameDisplayMaskSetProgress display_mask_progress{};
+            Nba97GameResourceValidatorInstallProgress
+                resource_validator_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6294,6 +6297,10 @@ private:
             std::vector<std::uint16_t> display_mask_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> display_mask_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_validator_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_validator_after=
                 std::vector<std::uint16_t>(512u*240u);
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6335,6 +6342,7 @@ private:
             unsigned gpu_sync_timer_reads=0;
             unsigned display_mask_calls=0;
             unsigned display_mask_child_callbacks=0;
+            unsigned resource_validator_install_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6365,6 +6373,8 @@ private:
             std::uint32_t active_draw_environment=0;
             std::uint32_t display_control_word=0xffffffffu;
             bool display_visible=false;
+            std::uint32_t resource_validator_callback_before=0xffffffffu;
+            std::uint32_t resource_validator_callback_after=0xffffffffu;
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6393,6 +6403,9 @@ private:
                 put(0x800d7b3cu,0);
                 put(0x800d7b40u,0);
                 put(0x800d7b7cu,0);
+                /* Raw GAMEONLY data has no file-completion hook installed
+                   until main reaches 0x800A3E20. */
+                put(0x800d7b1cu,0);
                 /* A concrete retained CPU/GTE fixture lets the translated
                    initializer prove both changed and deliberately-live state. */
                 gte_state.cop0_status={0x10900401u,1};
@@ -7379,6 +7392,25 @@ private:
                 fixture.captureDisplay(fixture.display_mask_after);
                 *value={fixture.display_mask_progress.return_v0,
                     fixture.display_mask_progress.return_v0_known};
+            } else if(event->entry==0x800a3e20u) {
+                if(event->pc!=0x80029abcu || event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->return_address!=0x80029ac4u)return 0;
+                ++fixture.resource_validator_install_calls;
+                fixture.resource_validator_callback_before=
+                    fixture.get(0x800d7b1cu);
+                fixture.captureDisplay(fixture.resource_validator_before);
+                Nba97GameResourceValidatorInstallContext install_context{
+                    *memory,10};
+                if(nba97_game_resource_validator_install(&install_context,
+                       &fixture.resource_validator_progress)!=
+                           NBA97_TEXT_COMPLETE ||
+                   !fixture.resource_validator_progress.completed)return 0;
+                fixture.resource_validator_callback_after=
+                    fixture.get(0x800d7b1cu);
+                fixture.captureDisplay(fixture.resource_validator_after);
+                *value={fixture.resource_validator_progress.return_v0,
+                    fixture.resource_validator_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7565,6 +7597,22 @@ private:
                 state.display_mask_before[at]==0 &&
                 state.display_mask_after[at]==state.draw_sync_after_top[at];
         }
+        const bool resource_validator_install_complete=
+            state.resource_validator_install_calls==1 &&
+            state.resource_validator_callback_before==0 &&
+            state.resource_validator_callback_after==0x800a3d60u &&
+            state.resource_validator_progress.completed &&
+            state.resource_validator_progress.operations==1 &&
+            state.resource_validator_progress.accesses==1 &&
+            state.resource_validator_progress.stores==1 &&
+            state.resource_validator_progress.callback_global==0x800d7b1cu &&
+            state.resource_validator_progress.installed_callback==0x800a3d60u &&
+            state.resource_validator_progress.return_v0==0x800a3d60u &&
+            state.resource_validator_progress.return_v0_known &&
+            state.get(0x800d7b1cu)==0x800a3d60u;
+        const bool resource_validator_visual_unchanged=
+            state.resource_validator_before==state.resource_validator_after &&
+            state.resource_validator_after==state.display_mask_after;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7912,6 +7960,8 @@ private:
             !move_images_complete || !move_image_vram_matches ||
             !gpu_sync_complete || !draw_sync_visual_transition ||
             !display_mask_complete || !display_mask_visual_transition ||
+            !resource_validator_install_complete ||
+            !resource_validator_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -7958,6 +8008,9 @@ private:
             state.calls[20].argument_count!=1 || state.calls[20].argument[0]!=0 ||
             state.calls[21].pc!=0x80029ab4u || state.calls[21].entry!=0x80099458u ||
             state.calls[21].argument_count!=1 || state.calls[21].argument[0]!=1 ||
+            state.calls[22].pc!=0x80029abcu || state.calls[22].entry!=0x800a3e20u ||
+            state.calls[22].argument_count!=0 ||
+            state.calls[22].return_address!=0x80029ac4u ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
@@ -7990,6 +8043,10 @@ private:
             capture_root/"set-disp-mask-before.ppm");
         writePpm(vram_frame(0,0,&state.display_mask_after),
             capture_root/"set-disp-mask-after.ppm");
+        writePpm(vram_frame(0,0,&state.resource_validator_before),
+            capture_root/"crc-validator-install-before.ppm");
+        writePpm(vram_frame(0,0,&state.resource_validator_after),
+            capture_root/"crc-validator-install-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -8325,6 +8382,27 @@ private:
             "\"captures\": [\"set-disp-mask-before.ppm\", \"set-disp-mask-after.ppm\"], "
             "\"visual_effect\": \"black masked diagnostic scanout became the completed retained framebuffer; native frontend unchanged\", "
             "\"status\": \"display-enabled\"},\n"
+            "  \"resource_validator_install\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x800A3E20\", \"end_exclusive\": \"0x800A3E38\", "
+            "\"instructions\": 6, \"call_pc\": \"0x80029ABC\", "
+            "\"callback_global\": \"0x800D7B1C\", \"previous_callback\": \"0x00000000\", "
+            "\"installed_callback\": \"0x800A3D60\", "
+            "\"callback_role\": \"whole-file CRCF validation\", "
+            "\"callback_status\": \"separate untranslated function\", "
+            "\"return_v0\": \"0x800A3D60\", \"operations\": "<<
+            state.resource_validator_progress.operations<<
+            ", \"accesses\": "<<state.resource_validator_progress.accesses<<
+            ", \"stores\": "<<state.resource_validator_progress.stores<<
+            ", \"child_calls\": 0, \"source_quirks\": {"
+            "\"unconditional_overwrite\": true, "
+            "\"previous_callback_not_read\": true, "
+            "\"callback_not_invoked\": true, "
+            "\"incidental_pointer_return\": true}, "
+            "\"visual_fixture\": \"generated retained scanout, not retail pixels\", "
+            "\"captures\": [\"crc-validator-install-before.ppm\", "
+            "\"crc-validator-install-after.ppm\"], "
+            "\"visual_effect\": \"callback pointer installed; retained scanout and native frontend unchanged\", "
+            "\"status\": \"crcf-validator-registered\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -8462,6 +8540,19 @@ private:
             "and live o32 epilogue quirks remain; the native frontend renderer and its "
             "98 click-through frames were unchanged; 15 remaining outer calls are "
             "still acknowledged fixtures");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next executed startup callee 0x800A3E20 from call PC 0x80029ABC "
+            "through its recovered six-instruction owner: it replaced callback global "
+            "0x800D7B1C value 0x00000000 with whole-file CRCF validator 0x800A3D60, "
+            "made no child call, and incidentally retained 0x800A3D60 in v0; "
+            "the separate validator body remains untranslated and the native host "
+            "filesystem loader was not redirected; original unconditional overwrite, "
+            "no-read/no-guard registration and incidental pointer-return quirks remain; "
+            "crc-validator-install-before.ppm and crc-validator-install-after.ppm are "
+            "pixel-identical generated retained scanout, proving registration itself "
+            "does not render; the native frontend renderer and its 98 click-through "
+            "frames were unchanged; 14 remaining outer calls are still acknowledged "
+            "fixtures");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

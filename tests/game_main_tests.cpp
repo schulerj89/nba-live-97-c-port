@@ -20,6 +20,7 @@
 #include "recovered/game_move_image.h"
 #include "recovered/game_gpu_sync.h"
 #include "recovered/game_display_mask_set.h"
+#include "recovered/game_resource_validator_install.h"
 
 #include <array>
 #include <cstdint>
@@ -92,6 +93,7 @@ struct Fixture {
     Nba97GameGpuSyncProgress gpu_sync_progress{};
     Nba97GameGpuSyncWord gpu_sync_source_v0{};
     Nba97GameDisplayMaskSetProgress display_mask_progress{};
+    Nba97GameResourceValidatorInstallProgress resource_validator_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -125,6 +127,7 @@ struct Fixture {
     unsigned gpu_sync_backend_observations = 0;
     unsigned display_mask_invocations = 0;
     unsigned display_mask_child_callbacks = 0;
+    unsigned resource_validator_install_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -168,6 +171,7 @@ struct Fixture {
     bool compose_move_image = false;
     bool compose_gpu_sync = false;
     bool compose_display_mask = false;
+    bool compose_resource_validator_install = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -916,6 +920,20 @@ struct Fixture {
             *value={f.display_mask_progress.return_v0,
                 f.display_mask_progress.return_v0_known};
         }
+        if (f.compose_resource_validator_install &&
+                event->entry == 0x800a3e20u) {
+            if(event->pc!=0x80029abcu || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->return_address!=0x80029ac4u)
+                return 0;
+            ++f.resource_validator_install_invocations;
+            Nba97GameResourceValidatorInstallContext context{*memory,10};
+            if(nba97_game_resource_validator_install(&context,
+                   &f.resource_validator_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.resource_validator_progress.return_v0,
+                f.resource_validator_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -997,6 +1015,10 @@ void transferred_path() {
     check(f.calls[20].pc == 0x80029aacu && f.calls[20].entry == 0x800994f4u &&
         f.calls[21].pc == 0x80029ab4u && f.calls[21].entry == 0x80099458u &&
         f.calls[21].argument_count == 1 && f.calls[21].argument[0] == 1);
+    check(f.calls[22].pc == 0x80029abcu &&
+        f.calls[22].entry == 0x800a3e20u &&
+        f.calls[22].return_address == 0x80029ac4u &&
+        f.calls[22].argument_count == 0);
     check(f.calls[24].entry == 0x8002d8d4u && f.calls[26].entry == 0x80029bfcu &&
         f.calls[26].argument[0] == 0x800247ecu);
     for (unsigned i = 0; i < 20; ++i)
@@ -1096,6 +1118,7 @@ struct Composition {
         game.put(0x800c5580u,0x8009b298u);
         game.put(0x800c5588u,0x8009b16cu);
         game.put(0x800c5590u,0x8009b1f8u);
+        game.put(0x800d7b1cu,0);
         game.put(0x800c5668u,0x04ffffffu);
         game.put(0x800c566cu,0x80000000u);
         game.put(0x800c5640u,0x400u,2);
@@ -1141,6 +1164,7 @@ struct Composition {
         game.compose_move_image = true;
         game.compose_gpu_sync = true;
         game.compose_display_mask = true;
+        game.compose_resource_validator_install = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1718,6 +1742,20 @@ void overlay_composition() {
         c.game.calls[21].return_address==0x80029abcu &&
         c.game.calls[21].argument_count==1 &&
         c.game.calls[21].argument[0]==1);
+    check(c.game.resource_validator_install_invocations==1 &&
+        c.game.resource_validator_progress.completed &&
+        c.game.resource_validator_progress.operations==1 &&
+        c.game.resource_validator_progress.accesses==1 &&
+        c.game.resource_validator_progress.stores==1 &&
+        c.game.resource_validator_progress.callback_global==0x800d7b1cu &&
+        c.game.resource_validator_progress.installed_callback==0x800a3d60u &&
+        c.game.resource_validator_progress.return_v0==0x800a3d60u &&
+        c.game.resource_validator_progress.return_v0_known &&
+        c.game.get(0x800d7b1cu)==0x800a3d60u);
+    check(c.game.calls[22].pc==0x80029abcu &&
+        c.game.calls[22].entry==0x800a3e20u &&
+        c.game.calls[22].return_address==0x80029ac4u &&
+        c.game.calls[22].argument_count==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
