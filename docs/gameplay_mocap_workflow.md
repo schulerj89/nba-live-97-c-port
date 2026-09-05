@@ -12,7 +12,7 @@ Original files, source-oracle fixtures and RAM snapshots remain ignored under
 | GAMEONLY function | Scope | Native support / full original instructions | Dependencies and evidence | Remaining uncertainty |
 |---|---|---|---|---|
 |800640D8 |Load and normalize two motion directories |Raw-file projection /132 |23 synthetic source cases,64 randomized source comparisons, actual file and saved demo comparisons |Loader retry behavior, caller integration and playback |
-|80029BFC |Retry file loading until a nonzero pointer |Not recovered /17 |941C8; callsite and filename/argument checks only |File/device/allocation failure behavior; not implemented by the oracle's loader stub |
+|80029BFC |Retry file loading until a nonzero pointer |Standalone retry owner /17 |Fresh Ghidra extraction, exact retry/stack unit cases, and native composition at loading-screen and FELOAD callers |Production 941C8 file/device/allocation implementation and lifetime integration |
 |800642E8 |Release resource and clear21490 |Not integrated /17 |90698; source audit only |Native caller teardown and stale directory users |
 
 All denominators are complete functions. Source PC coverage is distinct from

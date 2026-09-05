@@ -10,7 +10,7 @@ try {
     if(-not $SkipBuild) {
         & "$PSScriptRoot/build.ps1" -Configuration $Configuration
         if($LASTEXITCODE) {throw 'Native application build failed'}
-        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_controller_resume_tests nba97_game_reset_graph_tests nba97_game_graph_debug_set_tests nba97_game_vblank_initialize_tests nba97_game_clock_initialize_tests nba97_game_gte_initialize_tests nba97_game_clock_delta_tests nba97_game_presentation_wait_tests nba97_game_video_environment_initialize_tests nba97_game_move_image_tests nba97_game_gpu_sync_tests nba97_game_display_mask_set_tests nba97_game_resource_validator_install_tests nba97_game_frame_rate_reset_tests nba97_game_match_session_tests nba97_game_loading_screen_tests nba97_game_main_tests --parallel
+        & $cmake --build "$repo/build-windows" --config $Configuration --target nba97_game_static_initializers_tests nba97_game_global_pointer_save_tests nba97_game_heap_initialize_tests nba97_game_cd_directory_initialize_tests nba97_game_path_prefix_set_tests nba97_game_directory_cache_configure_tests nba97_game_interrupt_mask_set_tests nba97_game_reset_callback_tests nba97_game_controller_resume_tests nba97_game_reset_graph_tests nba97_game_graph_debug_set_tests nba97_game_vblank_initialize_tests nba97_game_clock_initialize_tests nba97_game_gte_initialize_tests nba97_game_clock_delta_tests nba97_game_presentation_wait_tests nba97_game_video_environment_initialize_tests nba97_game_move_image_tests nba97_game_gpu_sync_tests nba97_game_display_mask_set_tests nba97_game_resource_validator_install_tests nba97_game_frame_rate_reset_tests nba97_game_match_session_tests nba97_game_loading_screen_tests nba97_game_resource_loader_tests nba97_game_main_tests --parallel
         if($LASTEXITCODE) {throw 'GAMEONLY game-entry owner tests failed'}
     }
     $staticUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_static_initializers_tests.exe"
@@ -85,6 +85,9 @@ try {
     $loadingScreenUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_loading_screen_tests.exe"
     & $loadingScreenUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029E58 loading-screen tests failed'}
+    $resourceLoaderUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_resource_loader_tests.exe"
+    & $resourceLoaderUnit
+    if($LASTEXITCODE) {throw 'GAMEONLY 0x80029BFC resource-loader tests failed'}
     $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}

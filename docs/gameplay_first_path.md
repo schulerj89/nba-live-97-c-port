@@ -159,6 +159,16 @@ match-stage boundaries launch gameplay. The original silent null-archive path
 and unchecked null-image behavior are retained. See
 game_loading_screen_workflow.md.
 
+The loader call inside that compositor and main's following `feload.bin` call
+now both compose the complete retry wrapper `0x80029BFC`. The native visual
+diagnostic deliberately returns null once for `zloadscr.psh` and twice for
+`feload.bin`, proving the original backward branch before each call succeeds.
+Four native before/after frames are pixel-identical because the wrapper itself
+does not draw; its returned resources feed the loading compositor and FELOAD
+handoff. Persistent failure still retries forever in source semantics—the
+diagnostic budget reports that state without inventing a failure return. See
+game_resource_loader_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

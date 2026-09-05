@@ -321,6 +321,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * that owner rather than being normalized by main. */
     TRY(direct_call(run, 0x80029ae4u, 0x80029e58u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af8u, 0x80029af8u, run->s0));
+    /* GAMEONLY 0x80029AFC -> 0x80029BFC is the recovered resource-loader
+     * retry wrapper. It keeps calling 0x800941C8 with "feload.bin" and flags
+     * zero until a nonzero pointer arrives. Persistent failure remains the
+     * original tight infinite retry; the native owner only exposes a bounded
+     * NBA97_TEXT_LIMIT diagnostic instead of inventing a NULL return. */
     TRY(direct_call(run, 0x80029afcu, 0x80029bfcu, 2, 0x800247ecu, 0, 0, &value));
     if (!value.known) {
         stop(run, 0x80029b04u, 0, 0);

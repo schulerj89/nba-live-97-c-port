@@ -38,6 +38,7 @@
 #include "recovered/game_frame_rate_reset.h"
 #include "recovered/game_match_session.h"
 #include "recovered/game_loading_screen.h"
+#include "recovered/game_resource_loader.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
@@ -6276,6 +6277,8 @@ private:
             Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
             Nba97GameMatchSessionProgress match_session_progress{};
             Nba97GameLoadingScreenProgress loading_screen_progress{};
+            std::array<Nba97GameResourceLoaderProgress,2>
+                resource_loader_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6299,6 +6302,7 @@ private:
             std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_events;
             std::vector<Nba97GameMatchSessionEvent> match_session_events;
             std::vector<Nba97GameLoadingScreenEvent> loading_screen_events;
+            std::vector<Nba97GameResourceLoaderEvent> resource_loader_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6334,6 +6338,14 @@ private:
             std::vector<std::uint16_t> loading_screen_display_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_display_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_loader_zload_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_loader_zload_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_loader_feload_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> resource_loader_feload_after=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
@@ -6395,6 +6407,9 @@ private:
             unsigned loading_screen_upload_calls=0;
             unsigned loading_screen_transfer_callbacks=0;
             unsigned loading_screen_release_calls=0;
+            unsigned resource_loader_invocations=0;
+            unsigned resource_loader_attempt_calls=0;
+            unsigned resource_loader_null_results=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6621,6 +6636,76 @@ private:
                 for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x)
                     pixels[y*width+x]=diagnostic_vram[
                         (origin_y+y)*1024u+origin_x+x];
+            }
+            static int resourceLoaderIo(void* user,
+                const Nba97GameTextMemory*,
+                const Nba97GameResourceLoaderEvent* event,
+                Nba97GameResourceLoaderValue* value) {
+                auto& state=*static_cast<State*>(user);
+                const auto invocation=state.resource_loader_invocations;
+                if(invocation>=state.resource_loader_progress.size())return 0;
+                const auto attempt=
+                    state.resource_loader_progress[invocation].load_attempts;
+                static constexpr std::uint32_t filenames[2]={
+                    0x800247f8u,0x800247ecu};
+                static constexpr std::uint32_t frame_sp[2]={
+                    0x807fff88u,0x807fffb0u};
+                static constexpr std::uint32_t resources[2]={
+                    0x80130000u,0x80123400u};
+                static constexpr std::size_t null_before_success[2]={1,2};
+                const char* expected=invocation ? "feload.bin" :
+                    "zloadscr.psh";
+                std::uint32_t address=filenames[invocation];
+                do {
+                    if(state.getByte(address++)!=
+                       static_cast<std::uint8_t>(*expected))return 0;
+                } while(*expected++);
+                if(event->kind!=NBA97_GAME_RESOURCE_LOADER_ATTEMPT ||
+                   event->pc!=0x80029c18u || event->entry!=0x800941c8u ||
+                   event->argument_count!=2 ||
+                   event->argument[0]!=filenames[invocation] ||
+                   event->argument[1]!=0 ||
+                   event->stack_pointer!=frame_sp[invocation] ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->saved_register[0]!=filenames[invocation] ||
+                   event->saved_register[1]!=0 ||
+                   !event->saved_register_known[0] ||
+                   !event->saved_register_known[1] ||
+                   event->return_address!=0x80029c20u)return 0;
+                state.resource_loader_events.push_back(*event);
+                ++state.resource_loader_attempt_calls;
+                if(attempt<null_before_success[invocation]) {
+                    ++state.resource_loader_null_results;
+                    *value={0,1};
+                } else {
+                    *value={resources[invocation],1};
+                }
+                return 1;
+            }
+            int runResourceLoader(const Nba97GameTextMemory* memory,
+                std::uint32_t filename,std::uint32_t flags,
+                std::uint32_t stack_pointer,std::uint32_t return_address,
+                const std::uint32_t* saved_register,
+                std::uint32_t global_pointer,
+                std::vector<std::uint16_t>& before,
+                std::vector<std::uint16_t>& after,
+                Nba97GameResourceLoaderValue* value) {
+                if(!memory || !saved_register || !value ||
+                   resource_loader_invocations>=
+                       resource_loader_progress.size())return 0;
+                captureDisplay(before);
+                auto& progress=
+                    resource_loader_progress[resource_loader_invocations];
+                Nba97GameResourceLoaderContext context{*memory,20,filename,
+                    flags,stack_pointer,return_address,
+                    {saved_register[0],saved_register[1]},global_pointer,
+                    resourceLoaderIo,this};
+                if(nba97_game_resource_loader(&context,&progress)!=
+                       NBA97_TEXT_COMPLETE || !progress.completed)return 0;
+                captureDisplay(after);
+                ++resource_loader_invocations;
+                *value={progress.return_v0,progress.return_v0_known};
+                return 1;
             }
             void completeGpuWork() {
                 for(const auto& command:pending_moves) {
@@ -7762,7 +7847,7 @@ private:
                 fixture.captureDisplay(fixture.loading_screen_display_before);
                 fixture.loading_screen_vram_before=fixture.diagnostic_vram;
                 const auto loading_io=[](void* user,
-                    const Nba97GameTextMemory*,
+                    const Nba97GameTextMemory* loading_memory,
                     const Nba97GameLoadingScreenEvent* loading_event,
                     Nba97GameLoadingScreenValue* loading_value)->int {
                     auto& state=*static_cast<State*>(user);
@@ -7793,15 +7878,27 @@ private:
                         return true;
                     };
                     switch(loading_event->kind) {
-                    case NBA97_GAME_LOADING_SCREEN_LOAD_RESOURCE:
+                    case NBA97_GAME_LOADING_SCREEN_LOAD_RESOURCE: {
                         if(call!=0 || loading_event->argument_count!=2 ||
                            loading_event->argument[0]!=0x800247f8u ||
                            loading_event->argument[1]!=0 ||
                            !has_text(loading_event->argument[0],
                                "zloadscr.psh"))return 0;
+                        Nba97GameResourceLoaderValue loaded{};
+                        if(!state.runResourceLoader(loading_memory,
+                               loading_event->argument[0],
+                               loading_event->argument[1],
+                               loading_event->stack_pointer,
+                               loading_event->return_address,
+                               loading_event->saved_register,
+                               loading_event->global_pointer,
+                               state.resource_loader_zload_before,
+                               state.resource_loader_zload_after,&loaded))
+                            return 0;
                         state.loading_screen_resource_loaded=true;
-                        *loading_value={0x80130000u,1};
+                        *loading_value={loaded.word,loaded.known};
                         return 1;
+                    }
                     case NBA97_GAME_LOADING_SCREEN_FIND_IMAGE:
                         if(call!=1 || !state.loading_screen_resource_loaded ||
                            loading_event->argument_count!=2 ||
@@ -7919,7 +8016,22 @@ private:
                 fixture.captureDisplay(fixture.loading_screen_display_after);
                 *value={fixture.loading_screen_progress.return_v0,
                     fixture.loading_screen_progress.return_v0_known};
-            } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
+            } else if(event->entry==0x80029bfcu) {
+                if(event->pc!=0x80029afcu || event->argument_count!=2 ||
+                   event->argument[0]!=0x800247ecu ||
+                   event->argument[1]!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029b04u)return 0;
+                Nba97GameResourceLoaderValue loaded{};
+                if(!fixture.runResourceLoader(memory,event->argument[0],
+                       event->argument[1],event->stack_pointer,
+                       event->return_address,event->saved_register,
+                       event->global_pointer,
+                       fixture.resource_loader_feload_before,
+                       fixture.resource_loader_feload_after,&loaded))return 0;
+                *value={loaded.word,loaded.known};
+            }
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
@@ -8347,6 +8459,71 @@ private:
                     loading_screen_visual_exact=loading_screen_visual_exact &&
                         state.loading_screen_display_after[y*512u+x]==first;
             }
+        bool resource_loader_complete=
+            state.resource_loader_invocations==2 &&
+            state.resource_loader_events.size()==5 &&
+            state.resource_loader_attempt_calls==5 &&
+            state.resource_loader_null_results==3;
+        static constexpr std::size_t loader_operations[2]={8,9};
+        static constexpr std::size_t loader_attempts[2]={2,3};
+        static constexpr std::size_t loader_null_results[2]={1,2};
+        static constexpr std::uint32_t loader_filename[2]={
+            0x800247f8u,0x800247ecu};
+        static constexpr std::uint32_t loader_resource[2]={
+            0x80130000u,0x80123400u};
+        static constexpr std::uint32_t loader_frame_sp[2]={
+            0x807fff88u,0x807fffb0u};
+        static constexpr std::uint32_t loader_entry_sp[2]={
+            0x807fffa8u,0x807fffd0u};
+        static constexpr std::uint32_t loader_return_address[2]={
+            0x80029e78u,0x80029b04u};
+        for(unsigned i=0;i<2;++i) {
+            const auto& loader=state.resource_loader_progress[i];
+            resource_loader_complete=resource_loader_complete &&
+                loader.completed && loader.operations==loader_operations[i] &&
+                loader.accesses==6 && loader.reads==3 && loader.stores==3 &&
+                loader.callbacks_completed==loader_attempts[i] &&
+                loader.load_attempts==loader_attempts[i] &&
+                loader.null_results==loader_null_results[i] &&
+                loader.filename==loader_filename[i] && loader.flags==0 &&
+                loader.frame_stack_pointer==loader_frame_sp[i] &&
+                loader.stack_pointer==loader_entry_sp[i] &&
+                loader.global_pointer==0x800d79c8u &&
+                loader.restored_return_address==loader_return_address[i] &&
+                loader.restored_saved_register[0]==1 &&
+                loader.restored_saved_register[1]==0 &&
+                loader.return_v0==loader_resource[i] &&
+                loader.return_v0_known && !loader.stopped_pc &&
+                !loader.stopped_address && !loader.stopped_entry;
+        }
+        if(resource_loader_complete)
+            for(unsigned i=0;i<5;++i) {
+                const unsigned invocation=i<2 ? 0u : 1u;
+                const auto& attempt=state.resource_loader_events[i];
+                resource_loader_complete=resource_loader_complete &&
+                    attempt.kind==NBA97_GAME_RESOURCE_LOADER_ATTEMPT &&
+                    attempt.pc==0x80029c18u &&
+                    attempt.entry==0x800941c8u &&
+                    attempt.argument_count==2 &&
+                    attempt.argument[0]==loader_filename[invocation] &&
+                    attempt.argument[1]==0 &&
+                    attempt.stack_pointer==loader_frame_sp[invocation] &&
+                    attempt.global_pointer==0x800d79c8u &&
+                    attempt.saved_register[0]==loader_filename[invocation] &&
+                    attempt.saved_register[1]==0 &&
+                    attempt.saved_register_known[0] &&
+                    attempt.saved_register_known[1] &&
+                    attempt.return_address==0x80029c20u;
+            }
+        const bool resource_loader_visual_unchanged=
+            state.resource_loader_zload_before==
+                state.resource_loader_zload_after &&
+            state.resource_loader_zload_before==
+                state.loading_screen_display_before &&
+            state.resource_loader_feload_before==
+                state.resource_loader_feload_after &&
+            state.resource_loader_feload_before==
+                state.loading_screen_display_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -8358,6 +8535,14 @@ private:
                 std::to_string(state.loading_screen_release_calls));
         if(!loading_screen_visual_exact)
             throw std::runtime_error("translated 0x80029E58 incremental VRAM placement drifted");
+        if(!resource_loader_complete)
+            throw std::runtime_error("translated 0x80029BFC diagnostic state drifted: invocations="+
+                std::to_string(state.resource_loader_invocations)+" attempts="+
+                std::to_string(state.resource_loader_attempt_calls)+" nulls="+
+                std::to_string(state.resource_loader_null_results)+" events="+
+                std::to_string(state.resource_loader_events.size()));
+        if(!resource_loader_visual_unchanged)
+            throw std::runtime_error("translated 0x80029BFC unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -8713,6 +8898,8 @@ private:
            !match_session_visual_unchanged ||
            !loading_screen_complete ||
            !loading_screen_visual_exact ||
+           !resource_loader_complete ||
+           !resource_loader_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -8860,6 +9047,14 @@ private:
             capture_root/"loading-screen-vram-after-bottom-left.ppm");
         writePpm(vram_canvas(state.loading_screen_vram_after_third),
             capture_root/"loading-screen-vram-complete.ppm");
+        writePpm(vram_frame(0,0,&state.resource_loader_zload_before),
+            capture_root/"resource-loader-zload-before.ppm");
+        writePpm(vram_frame(0,0,&state.resource_loader_zload_after),
+            capture_root/"resource-loader-zload-after.ppm");
+        writePpm(vram_frame(0,0,&state.resource_loader_feload_before),
+            capture_root/"resource-loader-feload-before.ppm");
+        writePpm(vram_frame(0,0,&state.resource_loader_feload_after),
+            capture_root/"resource-loader-feload-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -9363,10 +9558,47 @@ private:
             "\"loading-screen-vram-complete.ppm\"], "
             "\"visual_effect\": \"the same generated image was uploaded to the exact three source coordinates; the full-VRAM captures expose each incremental placement\", "
             "\"status\": \"loading-screen-composited\"},\n"
+            "  \"resource_loader\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x80029BFC\", \"end_exclusive\": \"0x80029C40\", "
+            "\"instructions\": 17, \"source_bytes_sha256\": "
+            "\"9534c90429813e90d899fe455f4d83c249eb738b1bc06b93be4470dd0486f9dc\", "
+            "\"load_attempt_entry\": \"0x800941C8\", \"invocations\": "<<
+            state.resource_loader_invocations<<", \"attempt_calls\": "<<
+            state.resource_loader_attempt_calls<<", \"null_results\": "<<
+            state.resource_loader_null_results<<", \"callers\": [{\"call_pc\": "
+            "\"0x80029E70\", \"resource_name\": {\"address\": \"0x800247F8\", "
+            "\"text\": \"zloadscr.psh\"}, \"attempts\": "<<
+            state.resource_loader_progress[0].load_attempts<<
+            ", \"null_results\": "<<state.resource_loader_progress[0].null_results<<
+            ", \"result\": \"0x80130000\"}, {\"call_pc\": \"0x80029AFC\", "
+            "\"resource_name\": {\"address\": \"0x800247EC\", \"text\": "
+            "\"feload.bin\"}, \"attempts\": "<<
+            state.resource_loader_progress[1].load_attempts<<
+            ", \"null_results\": "<<state.resource_loader_progress[1].null_results<<
+            ", \"result\": \"0x80123400\"}], \"operations\": ["<<
+            state.resource_loader_progress[0].operations<<", "<<
+            state.resource_loader_progress[1].operations<<"], \"accesses\": ["<<
+            state.resource_loader_progress[0].accesses<<", "<<
+            state.resource_loader_progress[1].accesses<<"], \"reads\": ["<<
+            state.resource_loader_progress[0].reads<<", "<<
+            state.resource_loader_progress[1].reads<<"], \"stores\": ["<<
+            state.resource_loader_progress[0].stores<<", "<<
+            state.resource_loader_progress[1].stores<<"], \"source_quirks\": {"
+            "\"retries_null_forever\": true, \"no_timeout_or_backoff\": true, "
+            "\"arguments_cached_across_retries\": true, "
+            "\"successful_v0_remains_live\": true, "
+            "\"live_o32_epilogue_reload\": true}, \"captures\": ["
+            "\"resource-loader-zload-before.ppm\", "
+            "\"resource-loader-zload-after.ppm\", "
+            "\"resource-loader-feload-before.ppm\", "
+            "\"resource-loader-feload-after.ppm\"], "
+            "\"visual_effect\": \"the retry wrapper changed no pixels; its successful results fed the recovered loading-screen compositor and the FELOAD transfer\", "
+            "\"status\": \"retry-wrapper-completed\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
-            "\"loading_screen\": \"0x80029E58\", \"loaded_image\": \"0x80123400\", "
+            "\"loading_screen\": \"0x80029E58\", "
+            "\"resource_loader\": \"0x80029BFC\", \"loaded_image\": \"0x80123400\", "
             "\"loaded_size\": 5136, \"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -9565,6 +9797,22 @@ private:
             "JAL-delay-slot fifth arguments, live release v0 and mutable o32 epilogue "
             "remain; the self-driving test supplied inputs through recovered handlers, "
             "not computer control, and outer execution then continued to FELOAD");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x80029BFC is the 17-instruction resource-load "
+            "retry wrapper around attempt entry 0x800941C8; the self-driving native "
+            "diagnostic composed both natural startup invocations: zloadscr.psh from "
+            "call PC 0x80029E70 returned null once then 0x80130000, while feload.bin "
+            "from call PC 0x80029AFC returned null twice then 0x80123400; five exact "
+            "attempt calls and three known-null results prove the backward branch, "
+            "with filename and flags cached unchanged across retries; the successful "
+            "results fed the recovered loading-screen compositor and FELOAD transfer; "
+            "resource-loader-zload-before.ppm and resource-loader-zload-after.ppm are "
+            "pixel-identical, as are resource-loader-feload-before.ppm and "
+            "resource-loader-feload-after.ppm, because this wrapper performs no "
+            "rendering; all four frames and logs were captured natively without "
+            "computer control; the original persistent-failure infinite retry, no "
+            "timeout or backoff, cached arguments, live successful v0 and mutable o32 "
+            "epilogue behavior remain");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

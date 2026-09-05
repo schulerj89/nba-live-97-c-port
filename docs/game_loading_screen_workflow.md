@@ -32,6 +32,12 @@ mandatory synchronous boundaries. The native diagnostic gives them concrete
 retained fixture effects; the recovered owner itself never invents a file,
 pixel, successful GPU operation or release.
 
+The archive-load boundary is no longer a bare return fixture in the composed
+diagnostic: it runs the complete recovered `0x80029BFC` retry wrapper, which
+calls typed attempt boundary `0x800941C8`. The diagnostic makes that boundary
+return null once and then `0x80130000`, proving the source retry. Production
+file/device/allocation work at `0x800941C8` remains external.
+
 Compatibility keeps the source's asymmetric null handling. A zero archive
 handle silently skips lookup, every DrawSync, all uploads and release. There is
 no corresponding check after the image lookup: even a zero image value reaches

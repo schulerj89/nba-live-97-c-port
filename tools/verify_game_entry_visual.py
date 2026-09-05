@@ -173,6 +173,20 @@ def main():
     require(crop_rgb(complete, 1024, 512, 0, 512, 240) == loading_pixels and
             equal_outside_rect(second, complete, 1024, 512, 512, 0, 512, 240),
             "third loading-screen upload escaped (512,0,512,240)")
+    resource_loader_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["resource-loader-zload-before",
+                     "resource-loader-zload-after",
+                     "resource-loader-feload-before",
+                     "resource-loader-feload-after"]}
+    require(resource_loader_frames["resource-loader-zload-before"] ==
+            resource_loader_frames["resource-loader-zload-after"] ==
+            loading_display["loading-screen-display-before"],
+            "zloadscr.psh retry wrapper unexpectedly changed retained scanout")
+    require(resource_loader_frames["resource-loader-feload-before"] ==
+            resource_loader_frames["resource-loader-feload-after"] ==
+            loading_display["loading-screen-display-after"],
+            "feload.bin retry wrapper unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -697,10 +711,44 @@ def main():
                 "visual_effect": "the same generated image was uploaded to the exact three source coordinates; the full-VRAM captures expose each incremental placement",
                 "status": "loading-screen-composited"},
             "recovered 0x80029E58 loading-screen receipt drifted")
+    require(receipt["resource_loader"] == {
+                "binary": "GAMEONLY", "address": "0x80029BFC",
+                "end_exclusive": "0x80029C40", "instructions": 17,
+                "source_bytes_sha256":
+                    "9534c90429813e90d899fe455f4d83c249eb738b1bc06b93be4470dd0486f9dc",
+                "load_attempt_entry": "0x800941C8", "invocations": 2,
+                "attempt_calls": 5, "null_results": 3,
+                "callers": [{
+                    "call_pc": "0x80029E70",
+                    "resource_name": {"address": "0x800247F8",
+                                      "text": "zloadscr.psh"},
+                    "attempts": 2, "null_results": 1,
+                    "result": "0x80130000"}, {
+                    "call_pc": "0x80029AFC",
+                    "resource_name": {"address": "0x800247EC",
+                                      "text": "feload.bin"},
+                    "attempts": 3, "null_results": 2,
+                    "result": "0x80123400"}],
+                "operations": [8, 9], "accesses": [6, 6],
+                "reads": [3, 3], "stores": [3, 3],
+                "source_quirks": {
+                    "retries_null_forever": True,
+                    "no_timeout_or_backoff": True,
+                    "arguments_cached_across_retries": True,
+                    "successful_v0_remains_live": True,
+                    "live_o32_epilogue_reload": True},
+                "captures": ["resource-loader-zload-before.ppm",
+                             "resource-loader-zload-after.ppm",
+                             "resource-loader-feload-before.ppm",
+                             "resource-loader-feload-after.ppm"],
+                "visual_effect": "the retry wrapper changed no pixels; its successful results fed the recovered loading-screen compositor and the FELOAD transfer",
+                "status": "retry-wrapper-completed"},
+            "recovered 0x80029BFC resource-loader receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
                        "loading_screen": "0x80029E58",
+                       "resource_loader": "0x80029BFC",
                        "loaded_image": "0x80123400", "loaded_size": 5136,
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
@@ -963,6 +1011,18 @@ def main():
             "self-driving test supplied inputs through recovered handlers" in trace and
             "not computer control" in trace and
             "continued to FELOAD" in trace and
+            "next recovered boundary 0x80029BFC" in trace and
+            "17-instruction resource-load retry wrapper" in trace and
+            "attempt entry 0x800941C8" in trace and
+            "zloadscr.psh from call PC 0x80029E70 returned null once" in trace and
+            "feload.bin from call PC 0x80029AFC returned null twice" in trace and
+            "five exact attempt calls and three known-null results" in trace and
+            "filename and flags cached unchanged across retries" in trace and
+            "resource-loader-zload-before.ppm and resource-loader-zload-after.ppm are pixel-identical" in trace and
+            "resource-loader-feload-before.ppm" in trace and
+            "all four frames and logs were captured natively without computer control" in trace and
+            "persistent-failure infinite retry" in trace and
+            "no timeout or backoff" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1007,6 +1067,9 @@ def main():
           "native loading-screen compositor 0x80029E58 loaded zloadscr.psh/LdS1 and used the recovered "
           "image owner to place one generated 512x240 fixture at all three exact VRAM coordinates, with "
           "incremental PPM proof and original null-handling quirks retained; "
+          "native resource-load retry wrapper 0x80029BFC retried zloadscr.psh once and feload.bin "
+          "twice after known-null attempts, preserved its infinite-retry bug, and emitted "
+          "pixel-identical native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 
