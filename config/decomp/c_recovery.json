@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80093694",
+      "original_name": "Game_RandomSeed",
+      "symbol": "nba97_game_random_seed",
+      "source": "src/recovered/game_random_seed.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_random_seed_tests; nba97_game_random_seed_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80067468",
       "original_name": "Game_PeriodStartup",
       "symbol": "nba97_game_period_startup",

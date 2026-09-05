@@ -511,6 +511,26 @@ def main():
         "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
         "state": resources, "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    seed = warmup["random_seed"]
+    require((seed["program"], seed["address"], seed["inclusive_end"], seed["bytes"], seed["instructions"]) ==
+            ("GAMEONLY", "0x80093694", "0x80093733", 160, 40), "random seed provenance drifted")
+    seed_words = [(0xCAFE + n) & 0xFFFFFFFF for n in
+                  (0xE45A0E56,0x106226E9,0x8C48DD2F,0x0E03C49C,0x3C683F7D,0xDFBB3B64)]
+    seed_pcs = [0x800936B0,0x800936C8,0x800936E0,0x800936F8,0x80093710,0x80093728]
+    require(seed["completed"] == 1 and seed["classification"] == "no direct visual effect"
+            and (seed["invocations"], seed["operations"], seed["stores"]) == (1, 6, 6)
+            and (seed["call_pc"], seed["delay_slot_pc"]) == (0x800802D0,0x800802D4)
+            and seed["words"] == seed_words
+            and seed["accesses"] == [{"pc":pc,"address":0x800C4AE8+i*4,"value":seed_words[i],"known_mask":15}
+                for i,pc in enumerate(seed_pcs)]
+            and (seed["final_a0"], seed["final_a1"], seed["final_at"], seed["final_v0"]) ==
+                (seed_words[-1],0x800C4AE8,0xD1A9FBE7,0xA352FBE7), "native six-word seed publication drifted")
+    (args.frames / "random_seed_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80093694","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":scene_hashes,"cpu_receipt":"scene_load_trace.json","state":seed,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     loop = read_json(args.frames / "loop_entry_trace.json")
     require((loop["program"], loop["address"], loop["inclusive_end"],
              loop["bytes"], loop["instructions"], loop["call_pc"]) ==
