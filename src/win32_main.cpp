@@ -39,6 +39,8 @@
 #include "recovered/game_match_session.h"
 #include "recovered/game_loading_screen.h"
 #include "recovered/game_resource_loader.h"
+#include "recovered/game_heap_payload_size.h"
+#include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
@@ -6279,6 +6281,8 @@ private:
             Nba97GameLoadingScreenProgress loading_screen_progress{};
             std::array<Nba97GameResourceLoaderProgress,2>
                 resource_loader_progress{};
+            Nba97GameHeapPayloadSizeProgress heap_payload_size_progress{};
+            Nba97GameHeapReleaseProgress heap_payload_lookup_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6303,6 +6307,8 @@ private:
             std::vector<Nba97GameMatchSessionEvent> match_session_events;
             std::vector<Nba97GameLoadingScreenEvent> loading_screen_events;
             std::vector<Nba97GameResourceLoaderEvent> resource_loader_events;
+            std::vector<Nba97GameHeapPayloadSizeEvent>
+                heap_payload_size_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6346,6 +6352,10 @@ private:
             std::vector<std::uint16_t> resource_loader_feload_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> resource_loader_feload_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> heap_payload_size_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> heap_payload_size_after=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
@@ -6410,6 +6420,8 @@ private:
             unsigned resource_loader_invocations=0;
             unsigned resource_loader_attempt_calls=0;
             unsigned resource_loader_null_results=0;
+            unsigned heap_payload_size_calls=0;
+            unsigned heap_payload_lookup_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6442,6 +6454,7 @@ private:
             bool display_visible=false;
             bool loading_screen_resource_loaded=false;
             bool loading_screen_resource_released=false;
+            bool feload_descriptor_installed=false;
             std::uint32_t resource_validator_callback_before=0xffffffffu;
             std::uint32_t resource_validator_callback_after=0xffffffffu;
             std::array<std::uint32_t,6> frame_rate_words_before{};
@@ -6617,6 +6630,32 @@ private:
                 }
                 throw std::runtime_error("game-entry diagnostic read escaped declared source memory");
             }
+            bool installFeloadDescriptor() {
+                if(feload_descriptor_installed)return true;
+                constexpr std::uint32_t descriptor=0x8010b66cu;
+                constexpr std::uint32_t low=0x8010b61cu;
+                constexpr std::uint32_t high=0x8010b644u;
+                if(get(0x800eb688u)!=descriptor ||
+                   get(0x80103d50u)!=low || get(0x80103d54u)!=high ||
+                   get(descriptor+0x20u)!=descriptor+0x28u)return false;
+
+                /* The still-fixtured 0x800941C8 loader publishes the one
+                   descriptor its successful FELOAD result would own. This
+                   lets 0x80090D60 call the already recovered 0x80090618 heap
+                   search against the retained list instead of inventing the
+                   requested-size result at the outer main boundary. */
+                put(0x800eb688u,descriptor+0x28u);
+                put(descriptor,0x80123400u);
+                put(descriptor+0x10u,0x1410u);
+                put(descriptor+0x14u,0x1410u);
+                put(descriptor+0x18u,0);
+                put(descriptor+0x20u,high);
+                put(descriptor+0x24u,low);
+                put(low+0x20u,descriptor);
+                put(high+0x24u,descriptor);
+                feload_descriptor_installed=true;
+                return true;
+            }
             void captureDisplay(std::vector<std::uint16_t>& pixels) const {
                 if(pixels.size()!=512u*240u)
                     throw std::runtime_error("game-entry diagnostic display extent drifted");
@@ -6678,6 +6717,8 @@ private:
                     ++state.resource_loader_null_results;
                     *value={0,1};
                 } else {
+                    if(invocation==1 && !state.installFeloadDescriptor())
+                        return 0;
                     *value={resources[invocation],1};
                 }
                 return 1;
@@ -6705,6 +6746,48 @@ private:
                 captureDisplay(after);
                 ++resource_loader_invocations;
                 *value={progress.return_v0,progress.return_v0_known};
+                return 1;
+            }
+            static int heapPayloadSizeIo(void* user,
+                const Nba97GameTextMemory* memory,
+                const Nba97GameHeapPayloadSizeEvent* event,
+                Nba97GameHeapPayloadSizeValue* value) {
+                auto& state=*static_cast<State*>(user);
+                if(!memory || !event || !value ||
+                   event->kind!=NBA97_GAME_HEAP_PAYLOAD_SIZE_FIND_DESCRIPTOR ||
+                   event->pc!=0x80090d68u || event->entry!=0x80090618u ||
+                   event->argument_count!=1 ||
+                   event->argument[0]!=0x80123400u ||
+                   event->stack_pointer!=0x807fffb8u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80090d70u)return 0;
+                state.heap_payload_size_events.push_back(*event);
+                ++state.heap_payload_lookup_calls;
+                Nba97GameHeapReleaseContext lookup{*memory,100};
+                if(nba97_game_heap_release(&lookup,NBA97_HEAP_FIND_90618,
+                       event->argument[0],{0,0},nullptr,0,
+                       &state.heap_payload_lookup_progress)!=NBA97_TEXT_COMPLETE ||
+                   !state.heap_payload_lookup_progress.completed)return 0;
+                *value={state.heap_payload_lookup_progress.returned.word,
+                    state.heap_payload_lookup_progress.returned.known};
+                return 1;
+            }
+            int runHeapPayloadSize(const Nba97GameTextMemory* memory,
+                std::uint32_t payload,std::uint32_t stack_pointer,
+                std::uint32_t return_address,std::uint32_t global_pointer,
+                Nba97GameHeapPayloadSizeValue* value) {
+                if(!memory || !value || heap_payload_size_calls)return 0;
+                captureDisplay(heap_payload_size_before);
+                Nba97GameHeapPayloadSizeContext context{*memory,10,payload,
+                    stack_pointer,return_address,global_pointer,
+                    heapPayloadSizeIo,this};
+                if(nba97_game_heap_payload_size(&context,
+                       &heap_payload_size_progress)!=NBA97_TEXT_COMPLETE ||
+                   !heap_payload_size_progress.completed)return 0;
+                captureDisplay(heap_payload_size_after);
+                ++heap_payload_size_calls;
+                *value={heap_payload_size_progress.return_v0,
+                    heap_payload_size_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8032,7 +8115,18 @@ private:
                        fixture.resource_loader_feload_after,&loaded))return 0;
                 *value={loaded.word,loaded.known};
             }
-            else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
+            else if(event->entry==0x80090d60u) {
+                if(event->pc!=0x80029b08u || event->argument_count!=1 ||
+                   event->argument[0]!=0x80123400u ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029b10u)return 0;
+                Nba97GameHeapPayloadSizeValue requested_size{};
+                if(!fixture.runHeapPayloadSize(memory,event->argument[0],
+                       event->stack_pointer,event->return_address,
+                       event->global_pointer,&requested_size))return 0;
+                *value={requested_size.word,requested_size.known};
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -8524,6 +8618,49 @@ private:
                 state.resource_loader_feload_after &&
             state.resource_loader_feload_before==
                 state.loading_screen_display_after;
+        const bool heap_payload_size_complete=
+            state.heap_payload_size_calls==1 &&
+            state.heap_payload_lookup_calls==1 &&
+            state.heap_payload_size_events.size()==1 &&
+            state.heap_payload_size_progress.completed &&
+            state.heap_payload_size_progress.operations==4 &&
+            state.heap_payload_size_progress.accesses==3 &&
+            state.heap_payload_size_progress.reads==2 &&
+            state.heap_payload_size_progress.stores==1 &&
+            state.heap_payload_size_progress.callbacks_completed==1 &&
+            state.heap_payload_size_progress.descriptor_lookup_calls==1 &&
+            state.heap_payload_size_progress.payload==0x80123400u &&
+            state.heap_payload_size_progress.descriptor==0x8010b66cu &&
+            state.heap_payload_size_progress.descriptor_known &&
+            state.heap_payload_size_progress.requested_size==0x1410u &&
+            state.heap_payload_size_progress.return_v0==0x1410u &&
+            state.heap_payload_size_progress.return_v0_known &&
+            state.heap_payload_size_progress.frame_stack_pointer==0x807fffb8u &&
+            state.heap_payload_size_progress.stack_pointer==0x807fffd0u &&
+            state.heap_payload_size_progress.global_pointer==0x800d79c8u &&
+            state.heap_payload_size_progress.restored_return_address==0x80029b10u &&
+            !state.heap_payload_size_progress.stopped_pc &&
+            !state.heap_payload_size_progress.stopped_address &&
+            !state.heap_payload_size_progress.stopped_entry &&
+            state.heap_payload_size_events[0].kind==
+                NBA97_GAME_HEAP_PAYLOAD_SIZE_FIND_DESCRIPTOR &&
+            state.heap_payload_size_events[0].pc==0x80090d68u &&
+            state.heap_payload_size_events[0].entry==0x80090618u &&
+            state.heap_payload_size_events[0].argument_count==1 &&
+            state.heap_payload_size_events[0].argument[0]==0x80123400u &&
+            state.heap_payload_size_events[0].stack_pointer==0x807fffb8u &&
+            state.heap_payload_size_events[0].global_pointer==0x800d79c8u &&
+            state.heap_payload_size_events[0].return_address==0x80090d70u &&
+            state.heap_payload_lookup_progress.completed &&
+            state.heap_payload_lookup_progress.accesses==5 &&
+            !state.heap_payload_lookup_progress.stores &&
+            state.heap_payload_lookup_progress.descriptor==0x8010b66cu &&
+            state.heap_payload_lookup_progress.returned.known &&
+            state.heap_payload_lookup_progress.returned.word==0x8010b66cu;
+        const bool heap_payload_size_visual_unchanged=
+            state.heap_payload_size_before==state.heap_payload_size_after &&
+            state.heap_payload_size_before==
+                state.resource_loader_feload_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -8543,6 +8680,14 @@ private:
                 std::to_string(state.resource_loader_events.size()));
         if(!resource_loader_visual_unchanged)
             throw std::runtime_error("translated 0x80029BFC unexpectedly changed retained scanout");
+        if(!heap_payload_size_complete)
+            throw std::runtime_error("translated 0x80090D60 diagnostic state drifted: calls="+
+                std::to_string(state.heap_payload_size_calls)+" lookups="+
+                std::to_string(state.heap_payload_lookup_calls)+" events="+
+                std::to_string(state.heap_payload_size_events.size())+" size="+
+                std::to_string(state.heap_payload_size_progress.requested_size));
+        if(!heap_payload_size_visual_unchanged)
+            throw std::runtime_error("translated 0x80090D60 unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -8557,7 +8702,16 @@ private:
            state.heap_progress.stores!=248 || state.heap_progress.callbacks_completed!=2 ||
            state.heap_progress.return_v0!=0x000f21e4u ||
            state.get(0x80103d50u)!=0x8010b61cu || state.get(0x80103d54u)!=0x8010b644u ||
-           state.get(0x800eb688u)!=0x8010b66cu || state.get(0x800d7c3cu)!=0 ||
+           state.get(0x800eb688u)!=0x8010b694u ||
+           state.get(0x8010b61cu+0x20u)!=0x8010b66cu ||
+           state.get(0x8010b644u+0x24u)!=0x8010b66cu ||
+           state.get(0x8010b66cu)!=0x80123400u ||
+           state.get(0x8010b66cu+0x10u)!=0x1410u ||
+           state.get(0x8010b66cu+0x14u)!=0x1410u ||
+           state.get(0x8010b66cu+0x18u)!=0 ||
+           state.get(0x8010b66cu+0x20u)!=0x8010b644u ||
+           state.get(0x8010b66cu+0x24u)!=0x8010b61cu ||
+           state.get(0x800d7c3cu)!=0 ||
            state.cd_directory_calls!=1 || !state.cd_directory_progress.completed ||
            state.cd_directory_progress.operations!=42 || state.cd_directory_progress.accesses!=32 ||
            state.cd_directory_progress.reads!=17 || state.cd_directory_progress.stores!=15 ||
@@ -8900,6 +9054,8 @@ private:
            !loading_screen_visual_exact ||
            !resource_loader_complete ||
            !resource_loader_visual_unchanged ||
+           !heap_payload_size_complete ||
+           !heap_payload_size_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9055,6 +9211,10 @@ private:
             capture_root/"resource-loader-feload-before.ppm");
         writePpm(vram_frame(0,0,&state.resource_loader_feload_after),
             capture_root/"resource-loader-feload-after.ppm");
+        writePpm(vram_frame(0,0,&state.heap_payload_size_before),
+            capture_root/"heap-payload-size-before.ppm");
+        writePpm(vram_frame(0,0,&state.heap_payload_size_after),
+            capture_root/"heap-payload-size-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -9594,11 +9754,37 @@ private:
             "\"resource-loader-feload-after.ppm\"], "
             "\"visual_effect\": \"the retry wrapper changed no pixels; its successful results fed the recovered loading-screen compositor and the FELOAD transfer\", "
             "\"status\": \"retry-wrapper-completed\"},\n"
+            "  \"heap_payload_size\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x80090D60\", \"end_exclusive\": \"0x80090D84\", "
+            "\"instructions\": 9, \"source_bytes_sha256\": "
+            "\"665368c63a001c084cd5c009548768ad5db5a385cad175c378e9f10f7ccdaaa0\", "
+            "\"call_pc\": \"0x80029B08\", \"payload\": \"0x80123400\", "
+            "\"descriptor_lookup_entry\": \"0x80090618\", "
+            "\"descriptor\": \"0x8010B66C\", \"requested_size\": "<<
+            state.heap_payload_size_progress.requested_size<<
+            ", \"operations\": "<<state.heap_payload_size_progress.operations<<
+            ", \"accesses\": "<<state.heap_payload_size_progress.accesses<<
+            ", \"reads\": "<<state.heap_payload_size_progress.reads<<
+            ", \"stores\": "<<state.heap_payload_size_progress.stores<<
+            ", \"child_calls\": "<<state.heap_payload_size_progress.callbacks_completed<<
+            ", \"lookup\": {\"actual_recovered_owner\": true, \"accesses\": "<<
+            state.heap_payload_lookup_progress.accesses<<", \"stores\": "<<
+            state.heap_payload_lookup_progress.stores<<"}, \"fixture\": "
+            "\"successful FELOAD service publishes one retained allocation descriptor\", "
+            "\"source_quirks\": {\"null_descriptor_reads_low_ram_0x14\": true, "
+            "\"descriptor_plus_0x14_wraps_32_bit\": true, "
+            "\"requested_size_read_precedes_live_ra_reload\": true, "
+            "\"malformed_heap_sentinel_behavior_retained\": true}, "
+            "\"captures\": [\"heap-payload-size-before.ppm\", "
+            "\"heap-payload-size-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; the returned allocation size feeds the FELOAD overlay transfer\", "
+            "\"status\": \"requested-size-returned\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
             "\"loading_screen\": \"0x80029E58\", "
-            "\"resource_loader\": \"0x80029BFC\", \"loaded_image\": \"0x80123400\", "
+            "\"resource_loader\": \"0x80029BFC\", "
+            "\"heap_payload_size\": \"0x80090D60\", \"loaded_image\": \"0x80123400\", "
             "\"loaded_size\": 5136, \"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -9813,6 +9999,19 @@ private:
             "computer control; the original persistent-failure infinite retry, no "
             "timeout or backoff, cached arguments, live successful v0 and mutable o32 "
             "epilogue behavior remain");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x80090D60 is the 9-instruction heap payload-size "
+            "query reached at call PC 0x80029B08 after feload.bin loaded; the successful "
+            "loader fixture published retained allocation descriptor 0x8010B66C for "
+            "payload 0x80123400, then the actual recovered 0x80090618 heap owner searched "
+            "the list with five reads and no stores; 0x80090D60 read requested-size word "
+            "+0x14 as 5136 and returned it to the FELOAD transfer path; "
+            "heap-payload-size-before.ppm and heap-payload-size-after.ppm are "
+            "pixel-identical because the query performs no rendering; both frames and "
+            "logs were captured natively by the self-driving recovered-input test, not "
+            "computer control; the original unchecked null descriptor read from low RAM "
+            "address 0x00000014, 32-bit pointer wrapping, malformed heap-sentinel behavior "
+            "and mutable live ra reload remain");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

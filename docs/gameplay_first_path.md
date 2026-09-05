@@ -169,6 +169,16 @@ handoff. Persistent failure still retries forever in source semantics—the
 diagnostic budget reports that state without inventing a failure return. See
 game_resource_loader_workflow.md.
 
+Main's next call at `0x80029B08` now composes the complete nine-instruction
+heap payload-size query `0x80090D60`. The successful diagnostic FELOAD service
+publishes one retained allocation descriptor, the query uses the existing
+recovered `0x80090618` heap-list search, and descriptor word `+0x14` supplies
+the exact 5136-byte transfer size. Its native before/after frames are
+pixel-identical because it only reads heap metadata. The original unchecked
+null-descriptor read from low RAM `0x00000014`, wrapping address addition,
+malformed-sentinel behavior, and live epilogue reload remain. See
+game_heap_payload_size_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

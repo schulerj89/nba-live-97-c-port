@@ -187,6 +187,14 @@ def main():
             resource_loader_frames["resource-loader-feload-after"] ==
             loading_display["loading-screen-display-after"],
             "feload.bin retry wrapper unexpectedly changed retained scanout")
+    heap_payload_size_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["heap-payload-size-before",
+                     "heap-payload-size-after"]}
+    require(heap_payload_size_frames["heap-payload-size-before"] ==
+            heap_payload_size_frames["heap-payload-size-after"] ==
+            resource_loader_frames["resource-loader-feload-after"],
+            "heap payload-size query unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -744,11 +752,35 @@ def main():
                 "visual_effect": "the retry wrapper changed no pixels; its successful results fed the recovered loading-screen compositor and the FELOAD transfer",
                 "status": "retry-wrapper-completed"},
             "recovered 0x80029BFC resource-loader receipt drifted")
+    require(receipt["heap_payload_size"] == {
+                "binary": "GAMEONLY", "address": "0x80090D60",
+                "end_exclusive": "0x80090D84", "instructions": 9,
+                "source_bytes_sha256":
+                    "665368c63a001c084cd5c009548768ad5db5a385cad175c378e9f10f7ccdaaa0",
+                "call_pc": "0x80029B08", "payload": "0x80123400",
+                "descriptor_lookup_entry": "0x80090618",
+                "descriptor": "0x8010B66C", "requested_size": 5136,
+                "operations": 4, "accesses": 3, "reads": 2,
+                "stores": 1, "child_calls": 1,
+                "lookup": {"actual_recovered_owner": True,
+                           "accesses": 5, "stores": 0},
+                "fixture": "successful FELOAD service publishes one retained allocation descriptor",
+                "source_quirks": {
+                    "null_descriptor_reads_low_ram_0x14": True,
+                    "descriptor_plus_0x14_wraps_32_bit": True,
+                    "requested_size_read_precedes_live_ra_reload": True,
+                    "malformed_heap_sentinel_behavior_retained": True},
+                "captures": ["heap-payload-size-before.ppm",
+                             "heap-payload-size-after.ppm"],
+                "visual_effect": "no pixels changed; the returned allocation size feeds the FELOAD overlay transfer",
+                "status": "requested-size-returned"},
+            "recovered 0x80090D60 heap payload-size receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
                        "loading_screen": "0x80029E58",
                        "resource_loader": "0x80029BFC",
+                       "heap_payload_size": "0x80090D60",
                        "loaded_image": "0x80123400", "loaded_size": 5136,
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
@@ -1023,6 +1055,17 @@ def main():
             "all four frames and logs were captured natively without computer control" in trace and
             "persistent-failure infinite retry" in trace and
             "no timeout or backoff" in trace and
+            "next recovered boundary 0x80090D60" in trace and
+            "9-instruction heap payload-size query" in trace and
+            "call PC 0x80029B08 after feload.bin loaded" in trace and
+            "allocation descriptor 0x8010B66C" in trace and
+            "actual recovered 0x80090618 heap owner" in trace and
+            "five reads and no stores" in trace and
+            "requested-size word +0x14 as 5136" in trace and
+            "heap-payload-size-before.ppm and heap-payload-size-after.ppm are pixel-identical" in trace and
+            "captured natively by the self-driving recovered-input test, not computer control" in trace and
+            "unchecked null descriptor read from low RAM address 0x00000014" in trace and
+            "32-bit pointer wrapping" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1070,6 +1113,9 @@ def main():
           "native resource-load retry wrapper 0x80029BFC retried zloadscr.psh once and feload.bin "
           "twice after known-null attempts, preserved its infinite-retry bug, and emitted "
           "pixel-identical native before/after frames; "
+          "native heap payload-size query 0x80090D60 used recovered lookup 0x80090618, returned "
+          "the retained FELOAD allocation's 5136-byte requested size, preserved its unchecked-null "
+          "low-RAM read, and emitted pixel-identical native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 

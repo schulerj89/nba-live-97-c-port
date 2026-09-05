@@ -333,6 +333,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     }
     run->s1 = value.word;
     out->loaded_image = run->s1;
+    /* GAMEONLY 0x80029B08 -> 0x80090D60 is the recovered heap payload-size
+     * wrapper. It finds the allocation descriptor through 0x80090618, then
+     * returns requested-size word descriptor+0x14 for the FELOAD transfer.
+     * Keep the original unchecked-null bug: descriptor zero still reads low
+     * RAM address 0x14 rather than being normalized to a zero/error result. */
     TRY(direct_call(run, 0x80029b08u, 0x80090d60u, 1, run->s1, 0, 0, &value));
     if (!value.known) {
         stop(run, 0x80029b10u, 0, 0);

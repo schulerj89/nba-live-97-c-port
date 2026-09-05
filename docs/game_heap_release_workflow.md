@@ -60,3 +60,8 @@ These comparisons use private source evidence. No original executable or asset i
 included in the public tests. The surrounding allocator still requires actual
 BIOS string-copy and reclamation operations; initialization still requires its
 formatter. This release owner does not substitute successful callbacks for them.
+
+GAMEONLY payload-size wrapper `80090D60` now provides one natural read-only
+consumer of `NBA97_HEAP_FIND_90618`. The FELOAD diagnostic publishes a retained
+descriptor, then the actual lookup returns it to the wrapper, which reads its
+requested-size field. See [heap payload-size query](game_heap_payload_size_workflow.md).

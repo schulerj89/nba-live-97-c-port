@@ -31,6 +31,13 @@ before the FELOAD handle. Its event log therefore proves five attempt calls,
 three null results, unchanged cached arguments, and eventual results
 `0x80130000` and `0x80123400`.
 
+For the following recovered `0x80090D60` query only, the successful FELOAD
+service fixture also publishes one allocation descriptor into the already
+initialized retained heap. That is a declared effect of boundary `0x800941C8`,
+not behavior attributed to this retry wrapper. The next owner then uses the
+actual recovered `0x80090618` lookup; see
+[heap payload-size query](game_heap_payload_size_workflow.md).
+
 Compatibility deliberately preserves the original failure bug. If every
 attempt returns zero, the source spins forever without timeout, backoff, input
 poll, or failure return. Native tests use an operation budget to stop and report

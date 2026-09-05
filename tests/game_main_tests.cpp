@@ -25,6 +25,8 @@
 #include "recovered/game_match_session.h"
 #include "recovered/game_loading_screen.h"
 #include "recovered/game_resource_loader.h"
+#include "recovered/game_heap_payload_size.h"
+#include "recovered/game_heap_release.h"
 
 #include <array>
 #include <cstdint>
@@ -104,6 +106,8 @@ struct Fixture {
     Nba97GameMatchSessionProgress match_session_progress{};
     Nba97GameLoadingScreenProgress loading_screen_progress{};
     std::array<Nba97GameResourceLoaderProgress,2> resource_loader_progress{};
+    Nba97GameHeapPayloadSizeProgress heap_payload_size_progress{};
+    Nba97GameHeapReleaseProgress heap_payload_lookup_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -131,6 +135,7 @@ struct Fixture {
     std::vector<Nba97GameMatchSessionEvent> match_session_calls;
     std::vector<Nba97GameLoadingScreenEvent> loading_screen_calls;
     std::vector<Nba97GameResourceLoaderEvent> resource_loader_calls;
+    std::vector<Nba97GameHeapPayloadSizeEvent> heap_payload_size_calls;
     std::vector<Nba97GameFrameRateResetEvent>
         match_session_frame_rate_reset_calls;
     std::vector<Nba97GamePresentationWaitEvent>
@@ -157,6 +162,7 @@ struct Fixture {
     unsigned match_session_vblank_signals = 0;
     unsigned loading_screen_invocations = 0;
     unsigned resource_loader_invocations = 0;
+    unsigned heap_payload_size_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -205,6 +211,7 @@ struct Fixture {
     bool compose_match_session = false;
     bool compose_loading_screen = false;
     bool compose_resource_loader = false;
+    bool compose_heap_payload_size = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -231,6 +238,26 @@ struct Fixture {
         for (unsigned i = 0; i < width; ++i)
             value |= std::uint32_t(*byte(address + i)) << (i * 8);
         return value;
+    }
+    bool installFeloadDescriptor() {
+        const auto descriptor=get(0x800eb688u);
+        if(descriptor!=0x8010b66cu ||
+           get(0x80103d50u)!=0x8010b61cu ||
+           get(0x80103d54u)!=0x8010b644u)return false;
+        const auto next_free=get(descriptor+0x20u);
+        /* Model the retained allocation that still-unrecovered loader 941C8
+           owns, so main's 90D60 child can use the real recovered 90618 lookup
+           instead of receiving another hard-coded outer-boundary size. */
+        put(0x800eb688u,next_free);
+        put(descriptor,0x80123400u);
+        put(descriptor+0x10u,0x1410u);
+        put(descriptor+0x14u,0x1410u);
+        put(descriptor+0x18u,0);
+        put(descriptor+0x20u,0x8010b644u);
+        put(descriptor+0x24u,0x8010b61cu);
+        put(0x8010b61cu+0x20u,descriptor);
+        put(0x8010b644u+0x24u,descriptor);
+        return true;
     }
     void putText(std::uint32_t address, const char* text) {
         do {
@@ -715,6 +742,8 @@ struct Fixture {
            event->return_address!=0x80029c20u)
             return 0;
         f.resource_loader_calls.push_back(*event);
+        if(invocation==1 && f.compose_heap_payload_size &&
+           !f.installFeloadDescriptor())return 0;
         *value={resource,1};
         return 1;
     }
@@ -734,6 +763,43 @@ struct Fixture {
             return 0;
         ++f.resource_loader_invocations;
         *value={progress.return_v0,progress.return_v0_known};
+        return 1;
+    }
+    static int heapPayloadSizeIo(void* user,
+        const Nba97GameTextMemory* memory,
+        const Nba97GameHeapPayloadSizeEvent* event,
+        Nba97GameHeapPayloadSizeValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        if(event->kind!=NBA97_GAME_HEAP_PAYLOAD_SIZE_FIND_DESCRIPTOR ||
+           event->pc!=0x80090d68u || event->entry!=0x80090618u ||
+           event->argument_count!=1 ||
+           event->argument[0]!=0x80123400u ||
+           event->stack_pointer!=FrameSp-0x18u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=0x80090d70u)return 0;
+        f.heap_payload_size_calls.push_back(*event);
+        Nba97GameHeapReleaseContext lookup{*memory,100};
+        if(nba97_game_heap_release(&lookup,NBA97_HEAP_FIND_90618,
+               event->argument[0],{0,0},nullptr,0,
+               &f.heap_payload_lookup_progress)!=NBA97_TEXT_COMPLETE ||
+           !f.heap_payload_lookup_progress.completed)return 0;
+        *value={f.heap_payload_lookup_progress.returned.word,
+            f.heap_payload_lookup_progress.returned.known};
+        return 1;
+    }
+    static int runHeapPayloadSize(Fixture& f,
+        const Nba97GameTextMemory* memory,std::uint32_t payload,
+        std::uint32_t stack_pointer,std::uint32_t return_address,
+        std::uint32_t global_pointer,Nba97GameHeapPayloadSizeValue* value) {
+        if(f.heap_payload_size_invocations)return 0;
+        Nba97GameHeapPayloadSizeContext context{*memory,10,payload,
+            stack_pointer,return_address,global_pointer,heapPayloadSizeIo,&f};
+        if(nba97_game_heap_payload_size(&context,
+               &f.heap_payload_size_progress)!=NBA97_TEXT_COMPLETE ||
+           !f.heap_payload_size_progress.completed)return 0;
+        ++f.heap_payload_size_invocations;
+        *value={f.heap_payload_size_progress.return_v0,
+            f.heap_payload_size_progress.return_v0_known};
         return 1;
     }
     static int loadingScreenIo(void* user, const Nba97GameTextMemory* memory,
@@ -1297,6 +1363,13 @@ struct Fixture {
                 return 0;
             *value={loaded.word,loaded.known};
         }
+        if(f.compose_heap_payload_size && event->entry==0x80090d60u) {
+            Nba97GameHeapPayloadSizeValue size{};
+            if(!runHeapPayloadSize(f,memory,event->argument[0],
+                   event->stack_pointer,event->return_address,
+                   event->global_pointer,&size))return 0;
+            *value={size.word,size.known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1311,7 +1384,8 @@ struct Fixture {
         if (event->entry == 0x80029bfcu && !f.compose_resource_loader) {
             value->word = 0x80123400u;
             value->known = f.mode == MissingImage ? 0 : 1;
-        } else if (event->entry == 0x80090d60u) {
+        } else if (event->entry == 0x80090d60u &&
+                   !f.compose_heap_payload_size) {
             value->word = 0x1410u;
             value->known = f.mode == MissingSize ? 0 : 1;
         } else if (event->entry == 0x800aa468u) {
@@ -1547,6 +1621,7 @@ struct Composition {
         game.compose_match_session = true;
         game.compose_loading_screen = true;
         game.compose_resource_loader = true;
+        game.compose_heap_payload_size = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1588,8 +1663,16 @@ void overlay_composition() {
         c.game.heap_progress.stores == 248);
     check(c.game.get(0x80103d50u) == 0x8010b61cu &&
         c.game.get(0x80103d54u) == 0x8010b644u &&
-        c.game.get(0x800eb688u) == 0x8010b66cu &&
+        c.game.get(0x800eb688u) == 0x8010b694u &&
         c.game.get(0x800d7c3cu) == 0);
+    check(c.game.get(0x8010b61cu+0x20u)==0x8010b66cu &&
+        c.game.get(0x8010b66cu)==0x80123400u &&
+        c.game.get(0x8010b66cu+0x10u)==0x1410u &&
+        c.game.get(0x8010b66cu+0x14u)==0x1410u &&
+        c.game.get(0x8010b66cu+0x18u)==0 &&
+        c.game.get(0x8010b66cu+0x20u)==0x8010b644u &&
+        c.game.get(0x8010b66cu+0x24u)==0x8010b61cu &&
+        c.game.get(0x8010b644u+0x24u)==0x8010b66cu);
     check(c.game.get(0x8010b620u) == 0x20574f4cu &&
         c.game.get(0x8010b648u) == 0x48474948u);
     check(c.game.cd_directory_progress.completed &&
@@ -2307,6 +2390,35 @@ void overlay_composition() {
         c.game.resource_loader_calls[0].stack_pointer==FrameSp-0x48u &&
         c.game.resource_loader_calls[1].argument[0]==0x800247ecu &&
         c.game.resource_loader_calls[1].stack_pointer==FrameSp-0x20u);
+    check(c.game.heap_payload_size_invocations==1 &&
+        c.game.heap_payload_size_calls.size()==1 &&
+        c.game.heap_payload_size_progress.completed &&
+        c.game.heap_payload_size_progress.operations==4 &&
+        c.game.heap_payload_size_progress.accesses==3 &&
+        c.game.heap_payload_size_progress.reads==2 &&
+        c.game.heap_payload_size_progress.stores==1 &&
+        c.game.heap_payload_size_progress.callbacks_completed==1 &&
+        c.game.heap_payload_size_progress.descriptor_lookup_calls==1 &&
+        c.game.heap_payload_size_progress.payload==0x80123400u &&
+        c.game.heap_payload_size_progress.descriptor==0x8010b66cu &&
+        c.game.heap_payload_size_progress.descriptor_known &&
+        c.game.heap_payload_size_progress.requested_size==0x1410u &&
+        c.game.heap_payload_size_progress.return_v0==0x1410u &&
+        c.game.heap_payload_size_progress.return_v0_known &&
+        c.game.heap_payload_size_progress.frame_stack_pointer==FrameSp-0x18u &&
+        c.game.heap_payload_size_progress.stack_pointer==FrameSp &&
+        c.game.heap_payload_size_progress.restored_return_address==0x80029b10u);
+    check(c.game.heap_payload_size_calls[0].pc==0x80090d68u &&
+        c.game.heap_payload_size_calls[0].entry==0x80090618u &&
+        c.game.heap_payload_size_calls[0].argument[0]==0x80123400u &&
+        c.game.heap_payload_size_calls[0].stack_pointer==FrameSp-0x18u &&
+        c.game.heap_payload_size_calls[0].return_address==0x80090d70u);
+    check(c.game.heap_payload_lookup_progress.completed &&
+        c.game.heap_payload_lookup_progress.accesses==5 &&
+        !c.game.heap_payload_lookup_progress.stores &&
+        c.game.heap_payload_lookup_progress.descriptor==0x8010b66cu &&
+        c.game.heap_payload_lookup_progress.returned.known &&
+        c.game.heap_payload_lookup_progress.returned.word==0x8010b66cu);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
