@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80066F88",
+      "original_name": "Game_MatchHotStart",
+      "symbol": "nba97_game_match_hot_start",
+      "source": "src/recovered/game_match_hot_start.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_match_hot_start_tests; nba97_game_match_hot_start_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80052C20",
       "original_name": "Game_SceneResources",
       "symbol": "nba97_game_scene_resources",

@@ -538,6 +538,28 @@ def main():
         "missing_boundary": "GAMEONLY 0x80068C24 -> 0x80066F88",
         "classification": "BLOCKED"
     }, indent=2) + "\n", encoding="utf-8")
+    hot = loop["hot_start"]
+    require((hot["program"], hot["address"], hot["inclusive_end"], hot["bytes"], hot["instructions"]) ==
+            ("GAMEONLY", "0x80066F88", "0x800670A7", 288, 72), "hot-start provenance drifted")
+    prefixes, total = [], 0
+    for i in range(84):
+        prefixes.append(total & 65535)
+        total += max((i * 13) & 255 if i % 3 else 0, (255 - i * 3) & 255 if i % 4 else 0)
+    require(hot["completed"] and "explicit synthetic" in hot["scope"]
+            and hot["classification"] == "no direct visual effect"
+            and hot["prefixes"] == prefixes and hot["prefixes_written"] == 84
+            and (hot["calls"], hot["retry_attempts"], hot["hot_pointer"], hot["load_flag"], hot["cleared_halfword"]) ==
+                (4, 2, 0x80130000, 1, 0)
+            and hot["frame_stack_pointer"] == 0x801FFEE0 and hot["restored_ra"] == 0x80068C2C
+            and hot["final_v0"] == 0x12345678
+            and (hot["next_pc"], hot["next_entry"], hot["simulation_steps"], hot["frame_pumps"]) ==
+                (0x80068C2C, 0x80079664, 0, 0), "hot-start native CPU fixture drifted")
+    (args.frames / "match_hot_start_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80066F88", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": hot,
+        "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     roster = initialize["roster_bindings"]
     require((roster["program"], roster["address"], roster["inclusive_end"],
              roster["bytes"], roster["instructions"], roster["call_pc"]) ==

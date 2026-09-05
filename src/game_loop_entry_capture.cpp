@@ -1,5 +1,6 @@
 #include "game_loop_entry_capture.h"
 #include "game_loop_entry_adapter.h"
+#include "game_match_hot_start_capture.h"
 #include <array>
 #include <fstream>
 #include <sstream>
@@ -49,6 +50,7 @@ bool GameLoopEntryCapture::probe(const Nba97GameTextMemory* memory,
         ",\"stopped_pc\":"<<adapter.match_tick.stopped_pc<<",\"stopped_entry\":"<<adapter.match_tick.stopped_entry<<
         ",\"simulation_steps\":"<<adapter.match_tick.simulation_steps<<
         ",\"frame_pumps\":"<<adapter.match_tick.frame_pumps<<"},"
+        "\"hot_start\":"<<captureGameMatchHotStart()<<","
         "\"routine_capture_frame_numbers\":[0,1],"
         "\"captures\":[\"loop-entry-before.ppm\",\"loop-entry-after.ppm\"]}\n";
     receipt=out.str();return true;
