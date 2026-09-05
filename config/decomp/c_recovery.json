@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8002DC38",
+      "original_name": "Game_LoopEntry",
+      "symbol": "nba97_game_loop_entry",
+      "source": "src/recovered/game_loop_entry.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_loop_entry_tests; nba97_game_loop_entry_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80029114",
       "original_name": "Game_AudioInitialize",
       "symbol": "nba97_game_audio_initialize",

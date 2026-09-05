@@ -402,6 +402,33 @@ def main():
         "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    loop = read_json(args.frames / "loop_entry_trace.json")
+    require((loop["program"], loop["address"], loop["inclusive_end"],
+             loop["bytes"], loop["instructions"], loop["call_pc"]) ==
+            ("GAMEONLY", "0x8002DC38", "0x8002DC57", 32, 8, "0x8002DA8C"),
+            "loop wrapper provenance drifted")
+    require(loop["classification"] == "BLOCKED" and not loop["completed"]
+            and "isolated" in loop["scope"] and "terminated" in loop["scope"]
+            and (loop["operations"], loop["reads"], loop["stores"], loop["calls_completed"]) == (2, 0, 1, 0)
+            and loop["stopped_pc"] == 0x8002DC40 and loop["stopped_entry"] == 0x80068BF8
+            and loop["saved_pc"] == 0x8002DC3C and loop["saved_address"] == 0x807FFFA0
+            and loop["saved_value"] == 0x8002DA94 and loop["unknown_output_gprs"] == 31
+            and loop["tick"] == {"entry": 0x80068BF8, "completed": False, "operations": 1,
+                "stopped_pc": 0x80068C24, "stopped_entry": 0x80066F88,
+                "simulation_steps": 0, "frame_pumps": 0},
+            "loop-entry probe must retain its exact unresolved tick boundary")
+    loop_hashes = {name: ppm_hash(args.frames / name) for name in loop["captures"]}
+    require(loop["routine_capture_frame_numbers"] == [0, 1] and len(loop_hashes) == 2
+            and len(set(loop_hashes.values())) == 1
+            and next(iter(loop_hashes.values())) == next(iter(initialize_hashes.values())),
+            "blocked loop-entry probe changed scanout")
+    (args.frames / "loop_entry_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8002DC38", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json",
+        "missing_boundary": "GAMEONLY 0x80068C24 -> 0x80066F88",
+        "classification": "BLOCKED"
+    }, indent=2) + "\n", encoding="utf-8")
     roster = initialize["roster_bindings"]
     require((roster["program"], roster["address"], roster["inclusive_end"],
              roster["bytes"], roster["instructions"], roster["call_pc"]) ==
