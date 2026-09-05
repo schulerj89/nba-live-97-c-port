@@ -560,6 +560,25 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": hot,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    period = loop["period_startup"]
+    require((period["program"], period["address"], period["inclusive_end"], period["bytes"], period["instructions"]) ==
+            ("GAMEONLY", "0x80067468", "0x8006754F", 232, 58), "period startup provenance drifted")
+    require(period["completed"] and "explicit synthetic" in period["scope"]
+            and period["classification"] == "no direct visual effect"
+            and (period["operations"], period["reads"], period["stores"], period["calls"]) == (23, 5, 5, 13)
+            and period["call_pcs"] == [0x80067470,0x80067478,0x800674A4,0x800674AC,0x800674B8,0x800674C0,
+                0x800674E0,0x800674F0,0x800674F8,0x80067500,0x80067508,0x80067510,0x80067518]
+            and (period["signed_selector"], period["published_pointer"], period["pre_pump_counter"], period["post_pump_delta"]) ==
+                (0xFFFF8000, 0x80123400, 0x4321, 0x8765)
+            and period["frame_stack_pointer"] == 0x801FFEE8 and period["restored_ra"] == 0x80068C54
+            and (period["next_pc"], period["next_entry"], period["simulation_steps"], period["frame_pumps"]) ==
+                (0x80068CEC, 0x80067550, 0, 0), "period startup native CPU fixture drifted")
+    (args.frames / "period_startup_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80067468", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": period,
+        "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     roster = initialize["roster_bindings"]
     require((roster["program"], roster["address"], roster["inclusive_end"],
              roster["bytes"], roster["instructions"], roster["call_pc"]) ==

@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_period_startup_tests tests/game_period_startup_tests.cpp src/recovered/game_period_startup.c)
+    target_compile_features(nba97_game_period_startup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_startup_tests PRIVATE src)
+    add_test(NAME game_period_startup COMMAND nba97_game_period_startup_tests)
+    add_executable(nba97_game_period_startup_integration_tests tests/game_period_startup_integration_tests.cpp
+        src/recovered/game_period_startup.c src/game_period_startup_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_period_startup_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_startup_integration_tests PRIVATE src)
+    add_test(NAME game_period_startup_integration COMMAND nba97_game_period_startup_integration_tests)
     add_executable(nba97_game_match_hot_start_tests tests/game_match_hot_start_tests.cpp src/recovered/game_match_hot_start.c)
     target_compile_features(nba97_game_match_hot_start_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_match_hot_start_tests PRIVATE src)
@@ -1408,6 +1417,8 @@ target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recover
 target_sources(nba97_boot_decomp PRIVATE src/recovered/feload_entry.c src/feload_entry_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_scene_resources.c
     src/game_scene_resources_adapter.cpp src/game_scene_resources_capture.cpp)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_startup.c
+    src/game_period_startup_adapter.cpp src/game_period_startup_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_hot_start.c
     src/game_match_hot_start_adapter.cpp src/game_match_hot_start_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_scene_startup.c
