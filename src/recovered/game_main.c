@@ -389,6 +389,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * executed delay-slot ra spill, discarded child v0, exact nonzero fast-
      * path return, and live saved-ra reload; it stops no native host device. */
     TRY(direct_call(run, 0x80029b74u, 0x8008f19cu, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029B84 -> 0x800A3A74 is the recovered zero-fill entry.
+     * It clears 0x20 bytes at 0x800D6DEC using the source's shared optimized
+     * fill core before FELOAD is copied. Keep its overlapping SWR/SWL store
+     * traffic, zero-length delay-slot write bug, and unchanged live v0 in the
+     * owner; main deliberately ignores that return value. */
     TRY(direct_call(run, 0x80029b84u, 0x800a3a74u, 2, 0x800d6decu, 0x20u, 0, &value));
     TRY(direct_call(run, 0x80029b94u, 0x800aa468u, 3, run->s1,
         0x801e0000u, run->s2, &value));

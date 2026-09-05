@@ -239,6 +239,16 @@ branch-delay `ra` spill, discarded child `v0`, non-normalized nonzero fast
 path, conditional flag store, and live saved-`ra` reload remain. See
 [controller suspend](game_controller_suspend_workflow.md).
 
+Main's next call at `0x80029B84` now composes the zero-fill entry
+`0x800A3A74`. That one instruction forces the fill byte to zero and falls
+through the complete 80-instruction shared fill core at `0x800A3A78`, clearing
+32 bytes at `0x800D6DEC`. The self-driving diagnostic proves nine source stores
+and 36 bytes of overlapping store traffic; the earlier clock initializer left
+the table already zero, so its before/after frames and byte snapshots are
+unchanged. The original `SWR`/`SWL` overlap, zero-length delay-slot byte write,
+`INT_MIN` huge-loop wrap, 32-bit address arithmetic, and unchanged live `v0`
+remain. See [shutdown-table zero fill](game_memory_zero_workflow.md).
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

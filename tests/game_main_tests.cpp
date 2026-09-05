@@ -32,6 +32,7 @@
 #include "recovered/game_vblank_shutdown.h"
 #include "recovered/game_clock_shutdown.h"
 #include "recovered/game_controller_suspend.h"
+#include "recovered/game_memory_zero.h"
 #include "recovered/game_heap_release.h"
 
 #include <array>
@@ -120,6 +121,7 @@ struct Fixture {
     Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
     Nba97GameClockShutdownProgress clock_shutdown_progress{};
     Nba97GameControllerSuspendProgress controller_suspend_progress{};
+    Nba97GameMemoryZeroProgress memory_zero_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -188,6 +190,7 @@ struct Fixture {
     unsigned clock_shutdown_child_callbacks = 0;
     unsigned controller_suspend_invocations = 0;
     unsigned controller_suspend_child_callbacks = 0;
+    unsigned memory_zero_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -246,6 +249,7 @@ struct Fixture {
     bool compose_vblank_shutdown = false;
     bool compose_clock_shutdown = false;
     bool compose_controller_suspend = false;
+    bool compose_memory_zero = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -1583,6 +1587,24 @@ struct Fixture {
             *value={f.controller_suspend_progress.return_v0,
                 f.controller_suspend_progress.return_v0_known};
         }
+        if(f.compose_memory_zero && event->entry==0x800a3a74u) {
+            if(event->pc!=0x80029b84u || event->argument_count!=2 ||
+               event->argument[0]!=0x800d6decu ||
+               event->argument[1]!=0x20u ||
+               event->stack_pointer!=FrameSp ||
+               event->return_address!=0x80029b8cu)return 0;
+            ++f.memory_zero_invocations;
+            /* 0x800A3A74 never writes v0. In this exact source sequence the
+               preceding recovered suspend owner left known one live. */
+            Nba97GameMemoryZeroContext context{*memory,20,
+                event->argument[0],event->argument[1],
+                f.controller_suspend_progress.return_v0,
+                f.controller_suspend_progress.return_v0_known};
+            if(nba97_game_memory_zero(&context,&f.memory_zero_progress)!=
+               NBA97_TEXT_COMPLETE)return 0;
+            *value={f.memory_zero_progress.return_v0,
+                f.memory_zero_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1680,6 +1702,12 @@ void transferred_path() {
         f.calls[73].pc == 0x80029b74u && f.calls[73].entry == 0x8008f19cu &&
         f.calls[73].argument_count == 0 &&
         f.calls[73].return_address == 0x80029b7cu);
+    check(f.calls[74].pc==0x80029b84u &&
+        f.calls[74].entry==0x800a3a74u &&
+        f.calls[74].argument_count==2 &&
+        f.calls[74].argument[0]==0x800d6decu &&
+        f.calls[74].argument[1]==0x20u &&
+        f.calls[74].return_address==0x80029b8cu);
     for (unsigned i = 0; i < 20; ++i)
         check(f.calls[51 + i].pc == 0x80029b50u && f.calls[51 + i].saved_register[0] == i + 1);
     check(f.calls[75].entry == 0x800aa468u && f.calls[75].argument[0] == 0x80123400u &&
@@ -1853,6 +1881,7 @@ struct Composition {
         game.compose_vblank_shutdown = true;
         game.compose_clock_shutdown = true;
         game.compose_controller_suspend = true;
+        game.compose_memory_zero = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2803,6 +2832,23 @@ void overlay_composition() {
         c.game.controller_suspend_calls[0].argument_count==0 &&
         c.game.controller_suspend_calls[0].stack_pointer==FrameSp-0x18u &&
         c.game.controller_suspend_calls[0].return_address==0x8008f1b8u);
+    check(c.game.memory_zero_invocations==1 &&
+        c.game.memory_zero_progress.completed &&
+        c.game.memory_zero_progress.destination==0x800d6decu &&
+        c.game.memory_zero_progress.requested_length==0x20u &&
+        c.game.memory_zero_progress.operations==9 &&
+        c.game.memory_zero_progress.accesses==9 &&
+        c.game.memory_zero_progress.stores==9 &&
+        c.game.memory_zero_progress.bytes_stored==36 &&
+        c.game.memory_zero_progress.working_destination==0x800d6e08u &&
+        c.game.memory_zero_progress.working_count==0xfffffffcu &&
+        c.game.memory_zero_progress.return_v0==1 &&
+        c.game.memory_zero_progress.return_v0_known &&
+        !c.game.memory_zero_progress.used_small_path &&
+        !c.game.memory_zero_progress.stopped_pc &&
+        !c.game.memory_zero_progress.stopped_address);
+    for(unsigned i=0;i<8;++i)
+        check(c.game.get(0x800d6decu+i*4u)==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

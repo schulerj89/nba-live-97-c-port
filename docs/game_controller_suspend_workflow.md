@@ -61,3 +61,6 @@ child event, JSON receipt, and trace. The two frames must be pixel-identical
 because this routine changes retained input state, not rendering. That proves
 native reachability and absence of a direct visual effect; it is not a claim
 that a retail court or playable possession was rendered.
+
+Main's immediately following zero-fill entry at `0x80029B84` is now recovered
+separately; see [shutdown-table zero fill](game_memory_zero_workflow.md).

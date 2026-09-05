@@ -237,6 +237,13 @@ def main():
             controller_suspend_frames["controller-suspend-after"] ==
             clock_shutdown_frames["clock-shutdown-after"],
             "controller-suspend wrapper unexpectedly changed retained scanout")
+    memory_zero_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["shutdown-table-zero-before", "shutdown-table-zero-after"]}
+    require(memory_zero_frames["shutdown-table-zero-before"] ==
+            memory_zero_frames["shutdown-table-zero-after"] ==
+            controller_suspend_frames["controller-suspend-after"],
+            "shutdown-table zero-fill unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -977,6 +984,37 @@ def main():
                 "visual_effect": "no pixels changed; retained PS1 input state changed from active to suspended",
                 "status": "input-suspended"},
             "recovered 0x8008F19C controller-suspend receipt drifted")
+    require(receipt["memory_zero"] == {
+                "binary": "GAMEONLY", "entry_address": "0x800A3A74",
+                "shared_core_address": "0x800A3A78",
+                "end_exclusive": "0x800A3BB8", "entry_instructions": 1,
+                "shared_core_instructions": 80, "effective_instructions": 81,
+                "entry_sha256":
+                    "3eec77d0e95c14d4c06c9e1d4548029c2bcc34fa7770a485652dbb193a79036c",
+                "shared_core_sha256":
+                    "5cf83e6e51d1bf5e8b4accba1415bedee7aa4d9a5c63c188b29f34b1678825f8",
+                "effective_path_sha256":
+                    "968a1ee3cee7769e2adb6c49db48dfe8836a0c76d91f05581076bf809690f772",
+                "call_pc": "0x80029B84", "destination": "0x800D6DEC",
+                "length": 32, "unique_bytes_cleared": 32,
+                "operations": 9, "accesses": 9, "stores": 9,
+                "store_traffic_bytes": 36,
+                "working_destination": "0x800D6E08",
+                "working_count": "0xFFFFFFFC", "return_v0": 1,
+                "return_v0_known": True,
+                "state_before": "already-zero-from-clock-initialize",
+                "state_after": "zero",
+                "source_quirks": {
+                    "swr_head_store": True, "swl_tail_store": True,
+                    "overlapping_store_traffic": True,
+                    "zero_length_writes_one_byte": True,
+                    "int_min_wraps_to_huge_byte_loop": True,
+                    "incoming_v0_remains_live": True},
+                "captures": ["shutdown-table-zero-before.ppm",
+                             "shutdown-table-zero-after.ppm"],
+                "visual_effect": "no pixels changed; eight already-zero shutdown callback words were explicitly cleared again",
+                "status": "shutdown-table-cleared"},
+            "recovered 0x800A3A74 zero-fill receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -990,6 +1028,7 @@ def main():
                        "vblank_shutdown": "0x800A44D4",
                        "clock_shutdown": "0x8009167C",
                        "controller_suspend": "0x8008F19C",
+                       "memory_zero": "0x800A3A74",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -1012,6 +1051,10 @@ def main():
             calls[73]["entry"] == "0x8008F19C" and
             calls[73]["kind"] == "direct",
             "controller-suspend main boundary drifted")
+    require(calls[74]["pc"] == "0x80029B84" and
+            calls[74]["entry"] == "0x800A3A74" and
+            calls[74]["kind"] == "direct",
+            "shutdown-table zero-fill main boundary drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
     require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
@@ -1352,6 +1395,18 @@ def main():
             "controller-suspend-before.ppm and controller-suspend-after.ppm are pixel-identical" in trace and
             "non-normalized nonzero fast path" in trace and
             "no Windows keyboard or gamepad behavior was invented" in trace and
+            "next recovered boundary 0x800A3A74" in trace and
+            "one-instruction zero-fill entry" in trace and
+            "call PC 0x80029B84 immediately after controller suspend" in trace and
+            "complete 80-instruction optimized fill core at 0x800A3A78" in trace and
+            "9 stores and 36 bytes of overlapping SWR/SW/SWL traffic" in trace and
+            "32-byte shutdown callback table at 0x800D6DEC" in trace and
+            "already zero from the recovered clock initializer" in trace and
+            "shutdown-table-zero-before.ppm and shutdown-table-zero-after.ppm are pixel-identical" in trace and
+            "store metrics were captured natively by the self-driving recovered-input test, not computer control" in trace and
+            "zero-length delay-slot byte write" in trace and
+            "INT_MIN huge-loop wrap" in trace and
+            "unchanged live v0 remain" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1420,6 +1475,9 @@ def main():
           "native controller suspend 0x8008F19C called service 0x80091224 once, changed the retained "
           "PS1 input flag from active to suspended, preserved fast-path/stack quirks, and emitted "
           "pixel-identical native before/after frames without changing host input; "
+          "native zero-fill entry 0x800A3A74 fell through its 80-instruction shared core, issued "
+          "nine source stores over the 32-byte shutdown table, retained delay-slot/overlap quirks, "
+          "and emitted pixel-identical native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 

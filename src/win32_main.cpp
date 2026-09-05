@@ -46,6 +46,7 @@
 #include "recovered/game_vblank_shutdown.h"
 #include "recovered/game_clock_shutdown.h"
 #include "recovered/game_controller_suspend.h"
+#include "recovered/game_memory_zero.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6295,6 +6296,7 @@ private:
             Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
             Nba97GameClockShutdownProgress clock_shutdown_progress{};
             Nba97GameControllerSuspendProgress controller_suspend_progress{};
+            Nba97GameMemoryZeroProgress memory_zero_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6398,6 +6400,10 @@ private:
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> controller_suspend_after=
                 std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> memory_zero_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> memory_zero_after=
+                std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
             std::vector<std::uint16_t> loading_screen_vram_after_first=
@@ -6473,6 +6479,7 @@ private:
             unsigned clock_shutdown_child_callbacks=0;
             unsigned controller_suspend_calls=0;
             unsigned controller_suspend_child_callbacks=0;
+            unsigned memory_zero_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6515,6 +6522,8 @@ private:
             std::array<std::uint32_t,6> frame_rate_words_after{};
             std::array<std::uint32_t,7> match_session_state_before{};
             std::array<std::uint32_t,7> match_session_state_after{};
+            std::array<std::uint8_t,32> memory_zero_bytes_before{};
+            std::array<std::uint8_t,32> memory_zero_bytes_after{};
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -7015,6 +7024,31 @@ private:
                 ++controller_suspend_calls;
                 *value={controller_suspend_progress.return_v0,
                     controller_suspend_progress.return_v0_known};
+                return 1;
+            }
+            int runMemoryZero(const Nba97GameTextMemory* memory,
+                std::uint32_t destination,std::uint32_t length,
+                Nba97GameMainValue* value) {
+                if(!memory || !value || memory_zero_calls ||
+                   destination!=0x800d6decu || length!=0x20u)return 0;
+                captureDisplay(memory_zero_before);
+                for(unsigned i=0;i<memory_zero_bytes_before.size();++i)
+                    memory_zero_bytes_before[i]=getByte(destination+i);
+                /* GAMEONLY 0x800A3A74 leaves v0 untouched. The immediately
+                   preceding recovered controller-suspend owner returned one,
+                   so carry that live value into this composed boundary. */
+                Nba97GameMemoryZeroContext context{*memory,20,destination,
+                    length,controller_suspend_progress.return_v0,
+                    controller_suspend_progress.return_v0_known};
+                if(nba97_game_memory_zero(&context,&memory_zero_progress)!=
+                       NBA97_TEXT_COMPLETE ||
+                   !memory_zero_progress.completed)return 0;
+                for(unsigned i=0;i<memory_zero_bytes_after.size();++i)
+                    memory_zero_bytes_after[i]=getByte(destination+i);
+                captureDisplay(memory_zero_after);
+                ++memory_zero_calls;
+                *value={memory_zero_progress.return_v0,
+                    memory_zero_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8416,6 +8450,15 @@ private:
                 if(!fixture.runControllerSuspend(memory,event->stack_pointer,
                        event->return_address,value))return 0;
             }
+            else if(event->entry==0x800a3a74u) {
+                if(event->pc!=0x80029b84u || event->argument_count!=2 ||
+                   event->argument[0]!=0x800d6decu ||
+                   event->argument[1]!=0x20u ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->return_address!=0x80029b8cu)return 0;
+                if(!fixture.runMemoryZero(memory,event->argument[0],
+                       event->argument[1],value))return 0;
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -9130,6 +9173,31 @@ private:
         const bool controller_suspend_visual_unchanged=
             state.controller_suspend_before==state.controller_suspend_after &&
             state.controller_suspend_before==state.clock_shutdown_after;
+        const bool memory_zero_complete=
+            state.memory_zero_calls==1 &&
+            state.memory_zero_progress.completed &&
+            state.memory_zero_progress.destination==0x800d6decu &&
+            state.memory_zero_progress.requested_length==0x20u &&
+            state.memory_zero_progress.operations==9 &&
+            state.memory_zero_progress.accesses==9 &&
+            state.memory_zero_progress.stores==9 &&
+            state.memory_zero_progress.bytes_stored==36 &&
+            state.memory_zero_progress.working_destination==0x800d6e08u &&
+            state.memory_zero_progress.working_count==0xfffffffcu &&
+            state.memory_zero_progress.return_v0==1 &&
+            state.memory_zero_progress.return_v0_known &&
+            !state.memory_zero_progress.used_small_path &&
+            !state.memory_zero_progress.stopped_pc &&
+            !state.memory_zero_progress.stopped_address &&
+            std::all_of(state.memory_zero_bytes_before.begin(),
+                state.memory_zero_bytes_before.end(),
+                [](std::uint8_t byte){return byte==0;}) &&
+            std::all_of(state.memory_zero_bytes_after.begin(),
+                state.memory_zero_bytes_after.end(),
+                [](std::uint8_t byte){return byte==0;});
+        const bool memory_zero_visual_unchanged=
+            state.memory_zero_before==state.memory_zero_after &&
+            state.memory_zero_before==state.controller_suspend_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -9203,6 +9271,13 @@ private:
                 std::to_string(state.controller_suspend_progress.return_v0));
         if(!controller_suspend_visual_unchanged)
             throw std::runtime_error("translated 0x8008F19C unexpectedly changed retained scanout");
+        if(!memory_zero_complete)
+            throw std::runtime_error("translated 0x800A3A74 diagnostic state drifted: calls="+
+                std::to_string(state.memory_zero_calls)+" stores="+
+                std::to_string(state.memory_zero_progress.stores)+" traffic="+
+                std::to_string(state.memory_zero_progress.bytes_stored));
+        if(!memory_zero_visual_unchanged)
+            throw std::runtime_error("translated 0x800A3A74 unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9584,6 +9659,8 @@ private:
            !clock_shutdown_visual_unchanged ||
            !controller_suspend_complete ||
            !controller_suspend_visual_unchanged ||
+           !memory_zero_complete ||
+           !memory_zero_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9772,6 +9849,10 @@ private:
             capture_root/"controller-suspend-before.ppm");
         writePpm(vram_frame(0,0,&state.controller_suspend_after),
             capture_root/"controller-suspend-after.ppm");
+        writePpm(vram_frame(0,0,&state.memory_zero_before),
+            capture_root/"shutdown-table-zero-before.ppm");
+        writePpm(vram_frame(0,0,&state.memory_zero_after),
+            capture_root/"shutdown-table-zero-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -10492,6 +10573,31 @@ private:
             "\"controller-suspend-after.ppm\"], "
             "\"visual_effect\": \"no pixels changed; retained PS1 input state changed from active to suspended\", "
             "\"status\": \"input-suspended\"},\n"
+            "  \"memory_zero\": {\"binary\": \"GAMEONLY\", "
+            "\"entry_address\": \"0x800A3A74\", \"shared_core_address\": \"0x800A3A78\", "
+            "\"end_exclusive\": \"0x800A3BB8\", \"entry_instructions\": 1, "
+            "\"shared_core_instructions\": 80, \"effective_instructions\": 81, "
+            "\"entry_sha256\": \"3eec77d0e95c14d4c06c9e1d4548029c2bcc34fa7770a485652dbb193a79036c\", "
+            "\"shared_core_sha256\": \"5cf83e6e51d1bf5e8b4accba1415bedee7aa4d9a5c63c188b29f34b1678825f8\", "
+            "\"effective_path_sha256\": \"968a1ee3cee7769e2adb6c49db48dfe8836a0c76d91f05581076bf809690f772\", "
+            "\"call_pc\": \"0x80029B84\", \"destination\": \"0x800D6DEC\", "
+            "\"length\": 32, \"unique_bytes_cleared\": 32, \"operations\": "<<
+            state.memory_zero_progress.operations<<", \"accesses\": "<<
+            state.memory_zero_progress.accesses<<", \"stores\": "<<
+            state.memory_zero_progress.stores<<", \"store_traffic_bytes\": "<<
+            state.memory_zero_progress.bytes_stored<<
+            ", \"working_destination\": \"0x800D6E08\", "
+            "\"working_count\": \"0xFFFFFFFC\", \"return_v0\": "<<
+            state.memory_zero_progress.return_v0<<", \"return_v0_known\": true, "
+            "\"state_before\": \"already-zero-from-clock-initialize\", "
+            "\"state_after\": \"zero\", \"source_quirks\": {"
+            "\"swr_head_store\": true, \"swl_tail_store\": true, "
+            "\"overlapping_store_traffic\": true, \"zero_length_writes_one_byte\": true, "
+            "\"int_min_wraps_to_huge_byte_loop\": true, \"incoming_v0_remains_live\": true}, "
+            "\"captures\": [\"shutdown-table-zero-before.ppm\", "
+            "\"shutdown-table-zero-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; eight already-zero shutdown callback words were explicitly cleared again\", "
+            "\"status\": \"shutdown-table-cleared\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
@@ -10504,6 +10610,7 @@ private:
             "\"vblank_shutdown\": \"0x800A44D4\", "
             "\"clock_shutdown\": \"0x8009167C\", "
             "\"controller_suspend\": \"0x8008F19C\", "
+            "\"memory_zero\": \"0x800A3A74\", "
             "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -10802,6 +10909,20 @@ private:
             "branch-delay ra spill, non-normalized nonzero fast path, conditional "
             "shutdown/store, discarded child v0, and mutable saved-ra reload remain; "
             "no Windows keyboard or gamepad behavior was invented");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x800A3A74 is the one-instruction zero-fill "
+            "entry reached at call PC 0x80029B84 immediately after controller "
+            "suspend; it forced a2 to zero and fell through the complete 80-"
+            "instruction optimized fill core at 0x800A3A78, issuing 9 stores "
+            "and 36 bytes of overlapping SWR/SW/SWL traffic to clear the 32-byte "
+            "shutdown callback table at 0x800D6DEC; the table was already zero "
+            "from the recovered clock initializer, so shutdown-table-zero-before.ppm "
+            "and shutdown-table-zero-after.ppm are pixel-identical and the native "
+            "memory snapshots remain all zero; both frames and store metrics were "
+            "captured natively by the self-driving recovered-input test, not computer "
+            "control; the redundant tail store, zero-length delay-slot byte write, "
+            "INT_MIN huge-loop wrap, 32-bit address arithmetic, and unchanged live "
+            "v0 remain rather than being cleaned up as native memset behavior");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered boundary 0x8009DBF8 is the 6-instruction PsyQ "
             "CdSyncCallback exchange reached at call PC 0x80029B44 immediately "
