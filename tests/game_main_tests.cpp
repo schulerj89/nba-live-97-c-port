@@ -21,6 +21,7 @@
 #include "recovered/game_gpu_sync.h"
 #include "recovered/game_display_mask_set.h"
 #include "recovered/game_resource_validator_install.h"
+#include "recovered/game_frame_rate_reset.h"
 
 #include <array>
 #include <cstdint>
@@ -94,6 +95,7 @@ struct Fixture {
     Nba97GameGpuSyncWord gpu_sync_source_v0{};
     Nba97GameDisplayMaskSetProgress display_mask_progress{};
     Nba97GameResourceValidatorInstallProgress resource_validator_progress{};
+    Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -114,6 +116,7 @@ struct Fixture {
     std::vector<Nba97GameGpuSyncWrite> gpu_sync_writes;
     std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
     std::vector<Nba97GameDisplayMaskSetEvent> display_mask_calls;
+    std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
@@ -128,6 +131,8 @@ struct Fixture {
     unsigned display_mask_invocations = 0;
     unsigned display_mask_child_callbacks = 0;
     unsigned resource_validator_install_invocations = 0;
+    unsigned frame_rate_reset_invocations = 0;
+    unsigned frame_rate_reset_child_callbacks = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -172,6 +177,7 @@ struct Fixture {
     bool compose_gpu_sync = false;
     bool compose_display_mask = false;
     bool compose_resource_validator_install = false;
+    bool compose_frame_rate_reset = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -472,6 +478,27 @@ struct Fixture {
             return 0;
         /* This is the already-recovered 0x800A5810 leaf: it returns the live
            source-clock word without creating host cadence. */
+        *value={f.get(0x800d7a70u),1};
+        return 1;
+    }
+    static int frameRateResetIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameFrameRateResetEvent* event,
+        Nba97GameFrameRateResetValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.frame_rate_reset_child_callbacks;
+        f.frame_rate_reset_calls.push_back(*event);
+        if(event->kind!=NBA97_GAME_FRAME_RATE_RESET_READ_CLOCK ||
+           event->pc!=0x800a7754u || event->entry!=0x800a5810u ||
+           event->stack_pointer!=FrameSp-0x18u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=0x800a775cu || event->argument_count ||
+           f.get(0x800d7b44u)!=0 || f.get(0x800d7b48u)!=0 ||
+           f.get(0x800d7b4cu)!=0x22222222u ||
+           f.get(0x800d7b50u)!=0 || f.get(0x800d7b54u)!=0 ||
+           f.get(0x800d7b58u)!=0)
+            return 0;
+        /* Exact 0x800A5810 fixture: return the retained game clock. All five
+           clears must already be visible, while the old baseline remains. */
         *value={f.get(0x800d7a70u),1};
         return 1;
     }
@@ -934,6 +961,22 @@ struct Fixture {
             *value={f.resource_validator_progress.return_v0,
                 f.resource_validator_progress.return_v0_known};
         }
+        if (f.compose_frame_rate_reset && event->entry == 0x800a7738u) {
+            if(event->pc!=0x80029ad4u || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029adcu)
+                return 0;
+            ++f.frame_rate_reset_invocations;
+            Nba97GameFrameRateResetContext context{*memory,20,
+                event->stack_pointer,event->return_address,
+                event->global_pointer,frameRateResetIo,&f};
+            if(nba97_game_frame_rate_reset(&context,
+                   &f.frame_rate_reset_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.frame_rate_reset_progress.return_v0,
+                f.frame_rate_reset_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1119,6 +1162,14 @@ struct Composition {
         game.put(0x800c5588u,0x8009b16cu);
         game.put(0x800c5590u,0x8009b1f8u);
         game.put(0x800d7b1cu,0);
+        /* Nonzero retained frame-rate state proves 0x800A7738 performs every
+         * clear and leaves the old clock baseline live until its child call. */
+        game.put(0x800d7b44u,9);
+        game.put(0x800d7b48u,0x11111111u);
+        game.put(0x800d7b4cu,0x22222222u);
+        game.put(0x800d7b50u,0x33333333u);
+        game.put(0x800d7b54u,0x44444444u);
+        game.put(0x800d7b58u,0x55555555u);
         game.put(0x800c5668u,0x04ffffffu);
         game.put(0x800c566cu,0x80000000u);
         game.put(0x800c5640u,0x400u,2);
@@ -1165,6 +1216,7 @@ struct Composition {
         game.compose_gpu_sync = true;
         game.compose_display_mask = true;
         game.compose_resource_validator_install = true;
+        game.compose_frame_rate_reset = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1756,6 +1808,38 @@ void overlay_composition() {
         c.game.calls[22].entry==0x800a3e20u &&
         c.game.calls[22].return_address==0x80029ac4u &&
         c.game.calls[22].argument_count==0);
+    check(c.game.frame_rate_reset_invocations==1 &&
+        c.game.frame_rate_reset_child_callbacks==1 &&
+        c.game.frame_rate_reset_calls.size()==1 &&
+        c.game.frame_rate_reset_progress.completed &&
+        c.game.frame_rate_reset_progress.operations==9 &&
+        c.game.frame_rate_reset_progress.accesses==8 &&
+        c.game.frame_rate_reset_progress.reads==1 &&
+        c.game.frame_rate_reset_progress.stores==7 &&
+        c.game.frame_rate_reset_progress.callbacks_completed==1);
+    check(c.game.frame_rate_reset_progress.frame_counter_address==0x800d7b44u &&
+        c.game.frame_rate_reset_progress.auxiliary_address==0x800d7b48u &&
+        c.game.frame_rate_reset_progress.clock_baseline_address==0x800d7b4cu &&
+        c.game.frame_rate_reset_progress.instantaneous_rate_address==0x800d7b50u &&
+        c.game.frame_rate_reset_progress.average_rate_address==0x800d7b54u &&
+        c.game.frame_rate_reset_progress.last_report_clock_address==0x800d7b58u &&
+        c.game.frame_rate_reset_progress.sampled_clock==0 &&
+        c.game.frame_rate_reset_progress.sampled_clock_known &&
+        c.game.frame_rate_reset_progress.return_v0==0 &&
+        c.game.frame_rate_reset_progress.return_v0_known);
+    check(c.game.frame_rate_reset_progress.frame_stack_pointer==FrameSp-0x18u &&
+        c.game.frame_rate_reset_progress.stack_pointer==FrameSp &&
+        c.game.frame_rate_reset_progress.restored_return_address==0x80029adcu &&
+        c.game.frame_rate_reset_calls[0].pc==0x800a7754u &&
+        c.game.frame_rate_reset_calls[0].entry==0x800a5810u &&
+        c.game.frame_rate_reset_calls[0].return_address==0x800a775cu);
+    check(c.game.get(0x800d7b44u)==0 && c.game.get(0x800d7b48u)==0 &&
+        c.game.get(0x800d7b4cu)==0 && c.game.get(0x800d7b50u)==0 &&
+        c.game.get(0x800d7b54u)==0 && c.game.get(0x800d7b58u)==0);
+    check(c.game.calls[23].pc==0x80029ad4u &&
+        c.game.calls[23].entry==0x800a7738u &&
+        c.game.calls[23].return_address==0x80029adcu &&
+        c.game.calls[23].argument_count==0);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

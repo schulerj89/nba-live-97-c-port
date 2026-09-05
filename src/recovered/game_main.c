@@ -299,6 +299,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
     TRY(direct_call(run, 0x80029abcu, 0x800a3e20u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af4u, 0x80029ac8u, 0));
     TRY(write_word(run, 0x800d7af8u, 0x80029ad0u, run->s0));
+    /* GAMEONLY 0x80029AD4 -> 0x800A7738 is the recovered frame-rate tracker
+     * reset. It clears five GP-relative words, then samples retained clock
+     * leaf 0x800A5810 into baseline 0x800D7B4C before match orchestration.
+     * Its pre-callback clear order, unguarded sample store, incidental v0 and
+     * live ra reload remain observable; it creates no host timer or pixels. */
     TRY(direct_call(run, 0x80029ad4u, 0x800a7738u, 0, 0, 0, 0, &value));
     out->reached_match_orchestration = 1;
     TRY(direct_call(run, 0x80029adcu, 0x8002d8d4u, 0, 0, 0, 0, &value));

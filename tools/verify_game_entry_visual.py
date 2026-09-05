@@ -99,6 +99,13 @@ def main():
             validator_hashes["crc-validator-install-after"] ==
             display_hashes["set-disp-mask-after"],
             "CRCF validator registration unexpectedly changed retained scanout")
+    frame_rate_hashes = {
+        name: ppm_hash(args.frames / f"{name}.ppm")
+        for name in ["frame-rate-reset-before", "frame-rate-reset-after"]}
+    require(frame_rate_hashes["frame-rate-reset-before"] ==
+            frame_rate_hashes["frame-rate-reset-after"] ==
+            validator_hashes["crc-validator-install-after"],
+            "frame-rate tracker reset unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -482,6 +489,44 @@ def main():
                 "visual_effect": "callback pointer installed; retained scanout and native frontend unchanged",
                 "status": "crcf-validator-registered"},
             "recovered 0x800A3E20 resource-validator installer receipt drifted")
+    require(receipt["frame_rate_reset"] == {
+                "binary": "GAMEONLY", "address": "0x800A7738",
+                "end_exclusive": "0x800A7770", "instructions": 14,
+                "call_pc": "0x80029AD4",
+                "consumer": "0x800A7460 cmn_frate.c tracker",
+                "words": {
+                    "frame_counter": {"address": "0x800D7B44",
+                                      "before": 9, "after": 0},
+                    "auxiliary": {"address": "0x800D7B48",
+                                  "before": 0x11111111, "after": 0},
+                    "clock_baseline": {"address": "0x800D7B4C",
+                                       "before": 0x22222222, "after": 0},
+                    "instantaneous_rate_fixed": {"address": "0x800D7B50",
+                                                 "before": 0x33333333,
+                                                 "after": 0},
+                    "average_rate_fixed": {"address": "0x800D7B54",
+                                            "before": 0x44444444,
+                                            "after": 0},
+                    "last_report_clock": {"address": "0x800D7B58",
+                                          "before": 0x55555555,
+                                          "after": 0}},
+                "clock_leaf": "0x800A5810", "clock_source": "0x800D7A70",
+                "sampled_clock": 0, "sample_known": True, "return_v0": 0,
+                "operations": 9, "accesses": 8, "reads": 1,
+                "stores": 7, "child_calls": 1,
+                "source_quirks": {
+                    "clears_precede_clock_callback": True,
+                    "unguarded_sample_store": True,
+                    "incidental_sample_return": True,
+                    "gp_relative_words": True,
+                    "live_o32_ra_reload": True,
+                    "auxiliary_role_unproven": True},
+                "visual_fixture": "generated retained scanout, not retail pixels",
+                "captures": ["frame-rate-reset-before.ppm",
+                             "frame-rate-reset-after.ppm"],
+                "visual_effect": "tracker state reset; retained scanout and native frontend unchanged",
+                "status": "frame-rate-tracker-reset"},
+            "recovered 0x800A7738 frame-rate reset receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -545,6 +590,9 @@ def main():
     require(calls[22]["pc"] == "0x80029ABC" and
             calls[22]["entry"] == "0x800A3E20",
             "resource-validator install boundary drifted")
+    require(calls[23]["pc"] == "0x80029AD4" and
+            calls[23]["entry"] == "0x800A7738",
+            "frame-rate reset boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
@@ -704,6 +752,15 @@ def main():
             "original unconditional overwrite, no-read/no-guard registration" in trace and
             "crc-validator-install-before.ppm" in trace and
             "pixel-identical generated retained scanout" in trace and
+            "0x800A7738 from call PC 0x80029AD4" in trace and
+            "recovered 14-instruction frame-rate tracker reset" in trace and
+            "0x800D7B44, auxiliary word 0x800D7B48" in trace and
+            "cleared before the child call" in trace and
+            "0x800A5810 then sampled retained source clock 0 into baseline 0x800D7B4C" in trace and
+            "cmn_frate.c and TIMERHZ NOT SET diagnostics" in trace and
+            "no host cadence was invented" in trace and
+            "original pre-callback store order, unguarded sample store" in trace and
+            "frame-rate-reset-before.ppm" in trace and
             "native frontend renderer" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
@@ -741,6 +798,8 @@ def main():
           "table slot +0x10, captured masked/visible scanout frames, and retained its original quirks; "
           "native 0x800A3E20 installed whole-file CRCF validator 0x800A3D60 at 0x800D7B1C, "
           "captured identical before/after scanout frames, and retained its overwrite/return quirks; "
+          "native 0x800A7738 cleared and re-seeded the source frame-rate tracker through 0x800A5810, "
+          "captured identical before/after scanout frames, and retained its ordering/return quirks; "
           "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
 
 
