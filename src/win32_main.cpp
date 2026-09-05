@@ -48,6 +48,7 @@
 #include "recovered/game_controller_suspend.h"
 #include "recovered/game_memory_zero.h"
 #include "recovered/game_memory_copy.h"
+#include "feload_entry_capture.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6493,6 +6494,7 @@ private:
             unsigned controller_suspend_child_callbacks=0;
             unsigned memory_zero_calls=0;
             unsigned memory_copy_calls=0;
+            nba97::FeloadEntryCapture feload_entry_capture;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6742,7 +6744,7 @@ private:
                 for(unsigned i=0;i<0x1410u;++i)
                     putByte(0x80123400u+i,static_cast<std::uint8_t>(
                         (i*37u+(i>>8u)+0x5au)&0xffu));
-                put(0x80123400u,0x801e0100u);
+                put(0x80123400u,0x801e1410u);
                 feload_descriptor_installed=true;
                 return true;
             }
@@ -8516,7 +8518,11 @@ private:
                 if(!fixture.runMemoryCopy(memory,event->argument[0],
                        event->argument[1],event->argument[2],value))return 0;
             }
-            else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
+            else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) {
+                fixture.captureDisplay(fixture.feload_entry_capture.before);
+                if(!fixture.feload_entry_capture.dispatch(memory,event,value,outcome))return 0;
+                fixture.captureDisplay(fixture.feload_entry_capture.after);
+            }
             return 1;
         };
         Nba97GameMainContext context{{state.regions.data(),state.regions.size()},256,0x807ffff8u,
@@ -9282,7 +9288,7 @@ private:
                 state.memory_copy_destination_after &&
             state.memory_copy_destination_before!=
                 state.memory_copy_destination_after &&
-            state.get(0x801e0000u)==0x801e0100u;
+            state.get(0x801e0000u)==0x801e1410u;
         const bool memory_copy_visual_unchanged=
             state.memory_copy_before==state.memory_copy_after &&
             state.memory_copy_before==state.memory_zero_after;
@@ -9837,7 +9843,7 @@ private:
             state.calls[75].return_address!=0x80029b9cu ||
             state.calls[76].kind!=NBA97_GAME_MAIN_INDIRECT_CALL ||
             state.calls[76].pc!=0x80029ba8u ||
-            state.calls[76].entry!=0x801e0100u)
+            state.calls[76].entry!=0x801e1410u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
             const std::vector<std::uint16_t>* snapshot) {
@@ -9970,6 +9976,11 @@ private:
             capture_root/"feload-memory-copy-before.ppm");
         writePpm(vram_frame(0,0,&state.memory_copy_after),
             capture_root/"feload-memory-copy-after.ppm");
+        writePpm(vram_frame(0,0,&state.feload_entry_capture.before),
+            capture_root/"feload-entry-before.ppm");
+        writePpm(vram_frame(0,0,&state.feload_entry_capture.after),
+            capture_root/"feload-entry-after.ppm");
+        state.feload_entry_capture.writeReceipt(capture_root/"feload_entry_trace.json");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -10730,7 +10741,7 @@ private:
             ", \"store_traffic_bytes\": "<<state.memory_copy_progress.bytes_stored<<
             ", \"destination_changed\": true, \"payload_matches\": true, "
             "\"entry_word_before\": \"0x00000000\", "
-            "\"entry_word_after\": \"0x801E0100\", "
+            "\"entry_word_after\": \"0x801E1410\", "
             "\"source_quirks\": {\"signed_address_comparisons\": true, "
             "\"trapping_signed_end_adds\": true, "
             "\"grouped_loads_precede_grouped_stores\": true, "
@@ -10756,7 +10767,7 @@ private:
             "\"controller_suspend\": \"0x8008F19C\", "
             "\"memory_zero\": \"0x800A3A74\", "
             "\"memory_copy\": \"0x800AA468\", "
-            "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
+            "\"indirect_entry\": \"0x801E1410\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
             json<<"    {\"index\": "<<i<<", \"kind\": \""<<
@@ -10766,7 +10777,7 @@ private:
                 std::setw(8)<<event.saved_register[0]<<"\"}"<<std::dec;
         }
         json<<"\n  ]\n}\n";
-        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; ninth recovered startup callee 0x80099058 executed PsyQ ResetGraph(3), cleared 128 bookkeeping bytes, nested ResetCallback to 0x80098714, called BIOS A0:49 with 0x000C5578, reset the GPU service with argument 1, published reset type 0 and 1024x512 limits at 0x800C55C0, and filled 112 cached environment bytes with 0xFF; the native renderer and captured pixels were unchanged; original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain; 66 remaining acknowledged outer test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E0100; diagnostic only, no court/gameplay frame synthesized");
+        trace_.log("GAME-ENTRY-DIAG","native recovered-input click-through; GAMEONLY 0x80029994: first callee 0x800948D0 executed recovered owner, guard 0x800C4B14 changed 0->1, constructor count 0; second callee 0x800A4830 executed recovered owner, saved gp 0x800D79C8 to 0x800D6E2C; third callee 0x8008FA6C executed recovered heap owner with 220 descriptors, 248 stores and exact LOW/HIGH MB_RAM formatter fixtures; fourth callee 0x80091C08 executed recovered CD-directory owner with 10 child calls, root LBA 23, length 2048 and cache flag 0x800C4ABC set; fifth callee 0x800A35D8 executed recovered path-prefix owner with 2 BIOS string calls, copied cdrom: to 0x800D6DAC and skipped separator append because the source ended in colon; sixth callee 0x80092C7C executed recovered directory-cache owner and registered the preallocated 707-entry, 14140-byte PS1 cache at 0x8001000C through globals 0x800C4AB8 and 0x801046A0; seventh callee 0x800985B4 executed recovered PsyQ SetIntrMask owner, returned prior mask 0x000007FF and cleared mapped PS1 interrupt/callback mask 0x800C54AC before ResetCallback without changing native OS interrupts or rendering; eighth callee 0x800985DC executed recovered PsyQ ResetCallback dispatch wrapper, loaded table 0x800C54B0 through 0x800C54C8 and slot +0x0C target 0x80098714, saved and restored caller RA 0x80029A18, and invoked one explicit diagnostic child fixture; wrapper changed no native OS callbacks or pixels; recovered controller-resume owner 0x8008F1D4 ran at call PCs 0x80029A18 and 0x80029A30 with mode 8: the first saw suspend flag 1, invoked initializer 0x80091184, cleared 0x800C4A70 and stored clock 37 from 0x800A5810 at 0x800C4A74; the second saw input already active and only reasserted mode 8 at 0x800D7A48; mapped PS1 input state changed, but native input devices and pixels did not; ninth recovered startup callee 0x80099058 executed PsyQ ResetGraph(3), cleared 128 bookkeeping bytes, nested ResetCallback to 0x80098714, called BIOS A0:49 with 0x000C5578, reset the GPU service with argument 1, published reset type 0 and 1024x512 limits at 0x800C55C0, and filled 112 cached environment bytes with 0xFF; the native renderer and captured pixels were unchanged; original mode-mask, low-byte truncation, unchecked type index and unguarded dispatch quirks remain; 66 remaining acknowledged outer test boundaries; reached 0x8002D8D4, loaded feload fixture, transferred to 0x801E1410; diagnostic only, no court/gameplay frame synthesized");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered startup callee 0x800992C4 executed PsyQ SetGraphDebug(0): "
             "stored debug level 0 at 0x800C55C2, returned previous level 0, and skipped "
@@ -11073,7 +11084,7 @@ private:
             "optimized memory-copy helper reached at call PC 0x80029B94; it copied "
             "all 5136 retained FELOAD bytes from loader payload 0x80123400 to overlay "
             "base 0x801E0000 with 1284 reads and 1284 stores, then main read copied "
-            "entry 0x801E0100 and transferred there; feload-memory-copy-before.ppm "
+            "entry 0x801E1410 and transferred there; feload-memory-copy-before.ppm "
             "and feload-memory-copy-after.ppm are pixel-identical because this is a "
             "CPU-memory move, while the receipt proves destination bytes changed and "
             "match the source; frames, byte snapshots and logs were captured natively "

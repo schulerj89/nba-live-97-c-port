@@ -116,6 +116,14 @@ try {
     & $memoryCopyUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x800AA468 memory-copy tests failed'}
     $mainUnit=Join-Path $repo "build-windows/$Configuration/nba97_game_main_tests.exe"
+    foreach($target in @('nba97_feload_entry_tests','nba97_feload_entry_integration_tests')) {
+        if(-not $SkipBuild) {
+            & $cmake --build "$repo/build-windows" --config $Configuration --target $target --parallel
+            if($LASTEXITCODE) {throw "FELOAD target build failed: $target"}
+        }
+        & (Join-Path $repo "build-windows/$Configuration/$target.exe")
+        if($LASTEXITCODE) {throw "FELOAD startup verification failed: $target"}
+    }
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}
 

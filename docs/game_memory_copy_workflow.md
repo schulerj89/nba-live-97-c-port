@@ -24,7 +24,7 @@ nba97_game_memory_copy(&copy, &memory_copy_progress);
 ```
 
 The successful diagnostic file service owns a deterministic 5,136-byte
-FELOAD payload whose first word is entry `0x801E0100`. The preceding recovered
+FELOAD payload whose first word is entry `0x801E1410`. The preceding recovered
 heap-size query obtains `0x1410` from the retained allocation descriptor.
 `AA468` then performs 1,284 reads and 1,284 stores—2,568 mapped accesses—and
 main reads the entry from the destination rather than receiving another
@@ -65,7 +65,7 @@ overlaps, exact partial-word traffic, per-byte knowledge, every failure class,
 zero length, both signed endpoint traps, and a bounded `INT_MIN` prefix.
 `tests/game_main_tests.cpp` composes the owner at `0x80029B94`, verifies all
 5,136 destination bytes, and proves the following indirect call reads
-`0x801E0100`. A private differential sweep executes every one of the 200 source
+`0x801E1410`. A private differential sweep executes every one of the 200 source
 instructions across 1,369 cases and compares 159,814 ordered source accesses,
 results, working registers, and complete retained-memory outcomes with the C
 owner.

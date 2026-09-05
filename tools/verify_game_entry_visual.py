@@ -253,6 +253,46 @@ def main():
             "FELOAD CPU-memory copy unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
+    feload = read_json(args.frames / "feload_entry_trace.json")
+    require((feload["program"], feload["address"], feload["inclusive_end"],
+             feload["bytes"], feload["instructions"], feload["call_pc"]) ==
+            ("FELOAD", "0x801E1410", "0x801E14B7", 168, 42, "0x80029BA8"),
+            "FELOAD startup provenance drifted")
+    require(feload["classification"] == "no direct visual effect" and
+            feload["routine_capture_frame_numbers"] == [0, 1] and
+            "synthetic" in feload["scope"] and "no live" in feload["scope"],
+            "FELOAD startup diagnostic scope drifted")
+    require(feload["words_cleared"] == 2067 and
+            feload["bss_before_byte"] == 165 and
+            feload["bss_after_zero_except_saved_ra"] and
+            feload["operations"] == 2075 and feload["reads"] == 3 and
+            feload["stores"] == 2070 and
+            feload["heap_base"] == 0x801EB088 and
+            feload["heap_size"] == 0x10F70 and
+            feload["saved_ra"] == feload["restored_ra"] == 0x80029BB0 and
+            feload["sp"] == feload["s8"] == 0x801FFFF8 and
+            feload["gp"] == 0x801E903C,
+            "FELOAD startup CPU state/order receipt drifted")
+    require(feload["calls"] == [
+        {"pc": 0x801E1498, "entry": 0x801E1590, "a0": 0x801EB08C,
+         "a1": 0x10F70, "ra": 0x801E14A0},
+        {"pc": 0x801E14AC, "entry": 0x801E136C, "a0": 0x801EB08C,
+         "a1": 0x10F70, "ra": 0x801E14B4}],
+        "FELOAD startup call PCs/delay-slot registers drifted")
+    feload_hashes = {name: ppm_hash(args.frames / name)
+                     for name in feload["captures"]}
+    require(len(feload_hashes) == 2 and len(set(feload_hashes.values())) == 1 and
+            next(iter(feload_hashes.values())) ==
+            ppm_hash(args.frames / "feload-memory-copy-after.ppm"),
+            "FELOAD CPU startup changed retained scanout")
+    (args.frames / "feload_entry_verified.json").write_text(json.dumps({
+        "program": "FELOAD", "address": "0x801E1410",
+        "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": feload_hashes,
+        "cpu_receipt": "feload_entry_trace.json",
+        "classification": "no direct visual effect"}, indent=2) + "\n",
+        encoding="utf-8")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
             "diagnostic receipt lost its non-gameplay scope boundary")
     require(receipt["driver"] == {"kind": "native recovered-input handlers",
@@ -1036,7 +1076,7 @@ def main():
                 "store_traffic_bytes": 5136,
                 "destination_changed": True, "payload_matches": True,
                 "entry_word_before": "0x00000000",
-                "entry_word_after": "0x801E0100",
+                "entry_word_after": "0x801E1410",
                 "source_quirks": {
                     "signed_address_comparisons": True,
                     "trapping_signed_end_adds": True,
@@ -1065,7 +1105,7 @@ def main():
                        "controller_suspend": "0x8008F19C",
                        "memory_zero": "0x800A3A74",
                        "memory_copy": "0x800AA468",
-                       "indirect_entry": "0x801E0100"},
+                       "indirect_entry": "0x801E1410"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
     require(len(calls) == 77 and [call["index"] for call in calls] == list(range(77)),
@@ -1163,7 +1203,7 @@ def main():
             calls[75]["entry"] == "0x800AA468" and
             calls[75]["kind"] == "direct" and
             calls[76] == {"index": 76, "kind": "indirect", "pc": "0x80029BA8",
-                          "entry": "0x801E0100", "s0": "0x00000014"},
+                          "entry": "0x801E1410", "s0": "0x00000014"},
             "loaded image copy/transfer boundary drifted")
 
     trace = args.trace.read_text(encoding="utf-8-sig")
@@ -1449,7 +1489,7 @@ def main():
             "complete 200-instruction optimized memory-copy helper" in trace and
             "all 5136 retained FELOAD bytes" in trace and
             "1284 reads and 1284 stores" in trace and
-            "main read copied entry 0x801E0100" in trace and
+            "main read copied entry 0x801E1410" in trace and
             "feload-memory-copy-before.ppm and feload-memory-copy-after.ppm are pixel-identical" in trace and
             "destination bytes changed and match the source" in trace and
             "alignment-bit v0" in trace and

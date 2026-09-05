@@ -252,13 +252,21 @@ remain. See [shutdown-table zero fill](game_memory_zero_workflow.md).
 Main's following call at `0x80029B94` now composes all 200 instructions of the
 optimized copy helper `0x800AA468`. It moves the exact 5,136-byte FELOAD fixture
 from the loader-owned `0x80123400` allocation to overlay base `0x801E0000` with
-1,284 reads and 1,284 stores. Main then obtains indirect entry `0x801E0100`
+1,284 reads and 1,284 stores. Main then obtains indirect entry `0x801E1410`
 from the copied first word. Native byte snapshots prove the destination changed
 and equals the source; before/after frames are pixel-identical because the
 helper writes CPU memory rather than scanout. Signed overlap selection and
 endpoint traps, grouped load-before-store order, partial-word traffic,
 alignment-bit return, and the negative-length runaway bug remain. See
 [FELOAD memory copy](game_memory_copy_workflow.md).
+
+The copied synthetic overlay header now selects the evidenced FELOAD entry
+`0x801E1410`, whose complete 42-instruction owner clears 2,067 BSS words,
+sets guest stack/global pointers and heap parameters, then crosses typed
+`0x801E1590` and `0x801E136C` boundaries. Its native capture records matching
+before/after pixels and changed CPU state. These child providers are explicit
+diagnostic fixtures; returning from the second child reaches the source BREAK
+trap. See [FELOAD startup](feload_entry_workflow.md).
 
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and

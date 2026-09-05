@@ -303,7 +303,7 @@ struct Fixture {
            overlay entry that main reads only after AA468 has copied it. */
         for(unsigned i=0;i<0x1410u;++i)
             put(0x80123400u+i,(i*37u+(i>>8u)+0x5au)&0xffu,1);
-        put(0x80123400u,0x801e0100u);
+        put(0x80123400u,0x801e1410u);
         return true;
     }
     void putText(std::uint32_t address, const char* text) {
@@ -1651,7 +1651,7 @@ struct Fixture {
             value->known = f.mode == MissingSize ? 0 : 1;
         } else if (event->entry == 0x800aa468u && !f.compose_memory_copy) {
             if (f.mode != UnknownEntry) {
-                const auto entry = f.mode == UnalignedEntry ? 0x801e0102u : 0x801e0100u;
+                const auto entry = f.mode == UnalignedEntry ? 0x801e0102u : 0x801e1410u;
                 f.put(0x801e0000u, entry);
             } else {
                 for (unsigned i = 0; i < 4; ++i)
@@ -1692,7 +1692,7 @@ void transferred_path() {
     check(f.get(FrameSp + 0x10u, 2) == 0x200u && f.get(FrameSp + 0x12u, 2) == 0 &&
         f.get(FrameSp + 0x14u, 2) == 0x200u && f.get(FrameSp + 0x16u, 2) == 0x100u);
     check(f.progress.loaded_image == 0x80123400u && f.progress.loaded_image_size == 0x1410u &&
-        f.progress.indirect_entry == 0x801e0100u);
+        f.progress.indirect_entry == 0x801e1410u);
     check(f.calls.front().pc == 0x800299a4u && f.calls.front().entry == 0x800948d0u &&
         f.calls.front().return_address == 0x800299acu && f.calls.front().stack_pointer == FrameSp);
     check(f.calls[2].entry == 0x8008fa6cu && f.calls[2].argument_count == 3 &&
@@ -1739,7 +1739,7 @@ void transferred_path() {
     check(f.calls[75].entry == 0x800aa468u && f.calls[75].argument[0] == 0x80123400u &&
         f.calls[75].argument[1] == 0x801e0000u && f.calls[75].argument[2] == 0x1410u);
     check(f.calls[76].kind == NBA97_GAME_MAIN_INDIRECT_CALL &&
-        f.calls[76].entry == 0x801e0100u && f.calls[76].return_address == 0x80029bb0u &&
+        f.calls[76].entry == 0x801e1410u && f.calls[76].return_address == 0x80029bb0u &&
         f.calls[76].saved_register[0] == 20u);
     check(!f.progress.stopped_pc && !f.progress.stopped_address && !f.progress.stopped_entry);
 }
@@ -1789,7 +1789,7 @@ void memory_and_budget() {
           f.progress.stopped_pc == 0x800299a4u && f.progress.callbacks_completed == 0); }
     { Fixture f; f.context.operation_budget = 92;
       check(f.run() == NBA97_TEXT_LIMIT && f.progress.callbacks_completed == 76 &&
-          f.progress.stopped_pc == 0x80029ba8u && f.progress.stopped_entry == 0x801e0100u); }
+          f.progress.stopped_pc == 0x80029ba8u && f.progress.stopped_entry == 0x801e1410u); }
     { Fixture f; f.regions[1].size = 0x20;
       check(f.run() == NBA97_TEXT_RESOURCE && f.progress.stopped_pc == 0x80029998u); }
     { Fixture f; *f.known(FrameSp + 0x24u) = 2;
@@ -2247,7 +2247,7 @@ void overlay_composition() {
     for(unsigned i=0;i<0x1410u;++i)
         check(c.game.get(0x801e0000u+i,1)==
             c.game.get(0x80123400u+i,1));
-    check(c.main_progress.indirect_entry==0x801e0100u);
+    check(c.main_progress.indirect_entry==0x801e1410u);
     check(c.game.calls[13].pc==0x80029a4cu &&
         c.game.calls[13].entry==0x800914d8u &&
         c.game.calls[13].argument_count==1 &&
