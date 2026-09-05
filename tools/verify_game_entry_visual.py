@@ -230,6 +230,13 @@ def main():
             clock_shutdown_frames["clock-shutdown-after"] ==
             vblank_shutdown_frames["vblank-shutdown-after"],
             "game-clock shutdown wrapper unexpectedly changed retained scanout")
+    controller_suspend_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["controller-suspend-before", "controller-suspend-after"]}
+    require(controller_suspend_frames["controller-suspend-before"] ==
+            controller_suspend_frames["controller-suspend-after"] ==
+            clock_shutdown_frames["clock-shutdown-after"],
+            "controller-suspend wrapper unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -943,6 +950,33 @@ def main():
                 "visual_effect": "no pixels changed; retained game-clock IRQ6 handler state changed from installed to removed",
                 "status": "clock-handler-removed"},
             "recovered 0x8009167C game-clock shutdown receipt drifted")
+    require(receipt["controller_suspend"] == {
+                "binary": "GAMEONLY", "address": "0x8008F19C",
+                "end_exclusive": "0x8008F1D4", "instructions": 14,
+                "source_bytes_sha256":
+                    "40a13c532487813e5aee2bb9caf333e1c69ddbb581cef01b9ae24ea103e10570",
+                "call_pc": "0x80029B74",
+                "suspend_flag_global": "0x800C4A70",
+                "initial_suspend_flag": 0, "final_suspend_flag": 1,
+                "shutdown_service_entry": "0x80091224",
+                "only_caller": "0x80029B74", "operations": 5,
+                "accesses": 4, "reads": 2, "stores": 2,
+                "child_calls": 1, "return_v0": 1,
+                "return_v0_known": True,
+                "child_return_fixture": "unknown-and-discarded",
+                "source_quirks": {
+                    "read_flag_before_frame_allocation": True,
+                    "branch_delay_ra_store_always": True,
+                    "conditional_shutdown_and_flag_store": True,
+                    "child_v0_discarded": True,
+                    "nonzero_fast_path_not_normalized": True,
+                    "live_saved_ra_reload": True},
+                "service_scope": "typed PS1 controller shutdown fixture; no host input device effect claimed",
+                "captures": ["controller-suspend-before.ppm",
+                             "controller-suspend-after.ppm"],
+                "visual_effect": "no pixels changed; retained PS1 input state changed from active to suspended",
+                "status": "input-suspended"},
+            "recovered 0x8008F19C controller-suspend receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -955,6 +989,7 @@ def main():
                        "cd_sync_callback": "0x8009DBF8",
                        "vblank_shutdown": "0x800A44D4",
                        "clock_shutdown": "0x8009167C",
+                       "controller_suspend": "0x8008F19C",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -973,6 +1008,10 @@ def main():
     require(calls[72]["pc"] == "0x80029B6C" and
             calls[72]["entry"] == "0x8009167C",
             "game-clock shutdown main boundary drifted")
+    require(calls[73]["pc"] == "0x80029B74" and
+            calls[73]["entry"] == "0x8008F19C" and
+            calls[73]["kind"] == "direct",
+            "controller-suspend main boundary drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
     require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
@@ -1303,6 +1342,16 @@ def main():
             "removed source Timer 2 handler 0x800916B4" in trace and
             "clock-shutdown-before.ppm and clock-shutdown-after.ppm are pixel-identical" in trace and
             "no Windows interrupt or host timer behavior was invented" in trace and
+            "next recovered boundary 0x8008F19C" in trace and
+            "14-instruction controller-suspend wrapper" in trace and
+            "only call PC 0x80029B74 immediately after game-clock shutdown" in trace and
+            "active flag zero from 0x800C4A70 before allocating its frame" in trace and
+            "controller shutdown service 0x80091224 once" in trace and
+            "discarded the fixture's unknown v0" in trace and
+            "stored suspend flag one" in trace and
+            "controller-suspend-before.ppm and controller-suspend-after.ppm are pixel-identical" in trace and
+            "non-normalized nonzero fast path" in trace and
+            "no Windows keyboard or gamepad behavior was invented" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1368,6 +1417,9 @@ def main():
           "native game-clock shutdown 0x8009167C removed IRQ6 handler 0x800916B4 through "
           "InterruptCallback(6,NULL), retained live v0/stack semantics, and emitted pixel-identical "
           "native before/after frames; "
+          "native controller suspend 0x8008F19C called service 0x80091224 once, changed the retained "
+          "PS1 input flag from active to suspended, preserved fast-path/stack quirks, and emitted "
+          "pixel-identical native before/after frames without changing host input; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 

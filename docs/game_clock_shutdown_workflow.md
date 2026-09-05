@@ -55,3 +55,7 @@ then reaches this wrapper through recovered main. It captures
 event, receipt, and trace. The frames must be pixel-identical because callback
 unregistration performs no rendering. They establish native reachability and
 absence of a direct visual effect, not a retail gameplay frame.
+
+Main's immediately following controller-suspend call at `0x80029B74` is now
+recovered separately; see
+[controller suspend](game_controller_suspend_workflow.md).

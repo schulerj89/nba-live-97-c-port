@@ -35,7 +35,7 @@ The adjacent 14-instruction teardown wrapper at `0x800A44D4` is now recovered
 separately; see [VBlank shutdown](game_vblank_shutdown_workflow.md).
 
 `scripts/verify_game_entry_visual.ps1` drives Game Setup, Team Select, and User
-Setup through native recovered-input handlers, captures all 134 PPM frames and
+Setup through native recovered-input handlers, captures all 136 PPM frames and
 logs, and adds a VBlank receipt to `game_entry_trace.json`. The new routine only
 changes mapped PS1 callback/counter state in that diagnostic, so it is expected
 to have no direct pixel effect; Debug and RelWithDebInfo captures must remain

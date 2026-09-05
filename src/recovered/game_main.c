@@ -383,6 +383,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * game-clock shutdown wrapper. It removes IRQ6 handler 0x800916B4 through
      * InterruptCallback(6,NULL), retaining live child-v0 and stack semantics. */
     TRY(direct_call(run, 0x80029b6cu, 0x8009167cu, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029B74 -> 0x8008F19C is the recovered controller-suspend
+     * wrapper. Active input (flag zero) crosses shutdown service 0x80091224
+     * once and publishes flag one. Preserve its pre-frame flag read, always-
+     * executed delay-slot ra spill, discarded child v0, exact nonzero fast-
+     * path return, and live saved-ra reload; it stops no native host device. */
     TRY(direct_call(run, 0x80029b74u, 0x8008f19cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b84u, 0x800a3a74u, 2, 0x800d6decu, 0x20u, 0, &value));
     TRY(direct_call(run, 0x80029b94u, 0x800aa468u, 3, run->s1,

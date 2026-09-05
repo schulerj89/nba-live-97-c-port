@@ -45,6 +45,7 @@
 #include "recovered/game_cd_sync_callback.h"
 #include "recovered/game_vblank_shutdown.h"
 #include "recovered/game_clock_shutdown.h"
+#include "recovered/game_controller_suspend.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6293,6 +6294,7 @@ private:
             Nba97GameCdSyncCallbackProgress cd_sync_callback_progress{};
             Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
             Nba97GameClockShutdownProgress clock_shutdown_progress{};
+            Nba97GameControllerSuspendProgress controller_suspend_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6322,6 +6324,8 @@ private:
             std::vector<Nba97GameCdSyncEvent> cd_sync_events;
             std::vector<Nba97GameVblankShutdownEvent> vblank_shutdown_events;
             std::vector<Nba97GameClockShutdownEvent> clock_shutdown_events;
+            std::vector<Nba97GameControllerSuspendEvent>
+                controller_suspend_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6389,6 +6393,10 @@ private:
             std::vector<std::uint16_t> clock_shutdown_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> clock_shutdown_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> controller_suspend_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> controller_suspend_after=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
@@ -6463,6 +6471,8 @@ private:
             unsigned vblank_shutdown_child_callbacks=0;
             unsigned clock_shutdown_calls=0;
             unsigned clock_shutdown_child_callbacks=0;
+            unsigned controller_suspend_calls=0;
+            unsigned controller_suspend_child_callbacks=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6486,6 +6496,7 @@ private:
             bool clock_interrupt_installed=false;
             bool clock_interrupt_was_installed=false;
             bool clock_shutdown_registered=false;
+            bool controller_shutdown_service_called=false;
             bool clock_counter_set=false;
             bool clock_counter_started=false;
             bool video_environment_synchronized=false;
@@ -6970,6 +6981,40 @@ private:
                 ++clock_shutdown_calls;
                 *value={clock_shutdown_progress.return_v0,
                     clock_shutdown_progress.return_v0_known};
+                return 1;
+            }
+            static int controllerSuspendIo(void* user,
+                const Nba97GameTextMemory*,
+                const Nba97GameControllerSuspendEvent* event,
+                Nba97GameControllerSuspendValue* value) {
+                auto& state=*static_cast<State*>(user);
+                ++state.controller_suspend_child_callbacks;
+                state.controller_suspend_events.push_back(*event);
+                if(state.get(0x800c4a70u)!=0 ||
+                   event->kind!=NBA97_GAME_CONTROLLER_SUSPEND_SHUTDOWN ||
+                   event->pc!=0x8008f1b0u || event->entry!=0x80091224u ||
+                   event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffb8u ||
+                   event->return_address!=0x8008f1b8u)return 0;
+                state.controller_shutdown_service_called=true;
+                /* Prove that the wrapper overwrites even an unknown child v0. */
+                *value={0xdeadbeefu,0};
+                return 1;
+            }
+            int runControllerSuspend(const Nba97GameTextMemory* memory,
+                std::uint32_t stack_pointer,std::uint32_t return_address,
+                Nba97GameMainValue* value) {
+                if(!memory || !value || controller_suspend_calls)return 0;
+                captureDisplay(controller_suspend_before);
+                Nba97GameControllerSuspendContext context{*memory,10,
+                    stack_pointer,return_address,controllerSuspendIo,this};
+                if(nba97_game_controller_suspend(&context,
+                       &controller_suspend_progress)!=NBA97_TEXT_COMPLETE ||
+                   !controller_suspend_progress.completed)return 0;
+                captureDisplay(controller_suspend_after);
+                ++controller_suspend_calls;
+                *value={controller_suspend_progress.return_v0,
+                    controller_suspend_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8364,6 +8409,13 @@ private:
                        event->return_address,event->global_pointer,value))
                     return 0;
             }
+            else if(event->entry==0x8008f19cu) {
+                if(event->pc!=0x80029b74u || event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->return_address!=0x80029b7cu)return 0;
+                if(!fixture.runControllerSuspend(memory,event->stack_pointer,
+                       event->return_address,value))return 0;
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -9045,6 +9097,39 @@ private:
         const bool clock_shutdown_visual_unchanged=
             state.clock_shutdown_before==state.clock_shutdown_after &&
             state.clock_shutdown_before==state.vblank_shutdown_after;
+        const bool controller_suspend_complete=
+            state.controller_suspend_calls==1 &&
+            state.controller_suspend_child_callbacks==1 &&
+            state.controller_suspend_events.size()==1 &&
+            state.controller_shutdown_service_called &&
+            state.controller_suspend_progress.completed &&
+            state.controller_suspend_progress.operations==5 &&
+            state.controller_suspend_progress.accesses==4 &&
+            state.controller_suspend_progress.reads==2 &&
+            state.controller_suspend_progress.stores==2 &&
+            state.controller_suspend_progress.callbacks_completed==1 &&
+            state.controller_suspend_progress.initial_suspend_flag==0 &&
+            state.controller_suspend_progress.shutdown_called &&
+            state.controller_suspend_progress.input_suspended &&
+            state.controller_suspend_progress.frame_stack_pointer==0x807fffb8u &&
+            state.controller_suspend_progress.stack_pointer==0x807fffd0u &&
+            state.controller_suspend_progress.restored_return_address==0x80029b7cu &&
+            state.controller_suspend_progress.return_v0==1 &&
+            state.controller_suspend_progress.return_v0_known &&
+            !state.controller_suspend_progress.stopped_pc &&
+            !state.controller_suspend_progress.stopped_address &&
+            !state.controller_suspend_progress.stopped_entry &&
+            state.get(0x800c4a70u)==1 &&
+            state.controller_suspend_events[0].kind==
+                NBA97_GAME_CONTROLLER_SUSPEND_SHUTDOWN &&
+            state.controller_suspend_events[0].pc==0x8008f1b0u &&
+            state.controller_suspend_events[0].entry==0x80091224u &&
+            state.controller_suspend_events[0].argument_count==0 &&
+            state.controller_suspend_events[0].stack_pointer==0x807fffb8u &&
+            state.controller_suspend_events[0].return_address==0x8008f1b8u;
+        const bool controller_suspend_visual_unchanged=
+            state.controller_suspend_before==state.controller_suspend_after &&
+            state.controller_suspend_before==state.clock_shutdown_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -9110,6 +9195,14 @@ private:
                 std::to_string(state.clock_shutdown_progress.return_v0));
         if(!clock_shutdown_visual_unchanged)
             throw std::runtime_error("translated 0x8009167C unexpectedly changed retained scanout");
+        if(!controller_suspend_complete)
+            throw std::runtime_error("translated 0x8008F19C diagnostic state drifted: calls="+
+                std::to_string(state.controller_suspend_calls)+" children="+
+                std::to_string(state.controller_suspend_child_callbacks)+" flag="+
+                std::to_string(state.get(0x800c4a70u))+" return="+
+                std::to_string(state.controller_suspend_progress.return_v0));
+        if(!controller_suspend_visual_unchanged)
+            throw std::runtime_error("translated 0x8008F19C unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9489,6 +9582,8 @@ private:
            !vblank_shutdown_visual_unchanged ||
            !clock_shutdown_complete ||
            !clock_shutdown_visual_unchanged ||
+           !controller_suspend_complete ||
+           !controller_suspend_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9506,8 +9601,8 @@ private:
             state.get(0x800c55c4u)!=0x02000400u ||
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
-            state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf7f7f7f7u ||
+            state.get(0x800c4a70u)!=1 || state.get(0x800c4a74u)!=37 ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029b7cu ||
             state.get(0x807fffccu)!=0x80029b74u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
@@ -9549,7 +9644,10 @@ private:
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u ||
             state.calls[71].pc!=0x80029b64u || state.calls[71].entry!=0x800a44d4u ||
-            state.calls[72].pc!=0x80029b6cu || state.calls[72].entry!=0x8009167cu)
+            state.calls[72].pc!=0x80029b6cu || state.calls[72].entry!=0x8009167cu ||
+            state.calls[73].pc!=0x80029b74u || state.calls[73].entry!=0x8008f19cu ||
+            state.calls[73].argument_count!=0 ||
+            state.calls[73].return_address!=0x80029b7cu)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
             const std::vector<std::uint16_t>* snapshot) {
@@ -9670,6 +9768,10 @@ private:
             capture_root/"clock-shutdown-before.ppm");
         writePpm(vram_frame(0,0,&state.clock_shutdown_after),
             capture_root/"clock-shutdown-after.ppm");
+        writePpm(vram_frame(0,0,&state.controller_suspend_before),
+            capture_root/"controller-suspend-before.ppm");
+        writePpm(vram_frame(0,0,&state.controller_suspend_after),
+            capture_root/"controller-suspend-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -9749,9 +9851,9 @@ private:
             "\"end_exclusive\": \"0x8008F224\", \"instructions\": 20, "
             "\"call_pcs\": [\"0x80029A18\", \"0x80029A30\"], \"requested_mode\": 8, "
             "\"pad_mode_global\": \"0x800D7A48\", \"final_pad_mode\": "<<state.get(0x800d7a48u)<<
-            ", \"suspend_flag_global\": \"0x800C4A70\", \"initial_suspend_flag\": "<<
-            state.controller_resume_progress[0].initial_suspend_flag<<", \"final_suspend_flag\": "<<
-            state.get(0x800c4a70u)<<", \"clock_snapshot_global\": \"0x800C4A74\", "
+             ", \"suspend_flag_global\": \"0x800C4A70\", \"initial_suspend_flag\": "<<
+             state.controller_resume_progress[0].initial_suspend_flag<<", \"final_suspend_flag\": "<<
+             state.controller_suspend_progress.initial_suspend_flag<<", \"clock_snapshot_global\": \"0x800C4A74\", "
             "\"clock_snapshot\": "<<state.get(0x800c4a74u)<<", "
             "\"initializer_entry\": \"0x80091184\", \"clock_entry\": \"0x800A5810\", "
             "\"first_call_operations\": "<<state.controller_resume_progress[0].operations<<
@@ -10359,8 +10461,37 @@ private:
             "\"service_scope\": \"typed PS1 callback-table fixture; no host interrupt or timer effect claimed\", "
             "\"captures\": [\"clock-shutdown-before.ppm\", "
             "\"clock-shutdown-after.ppm\"], "
-            "\"visual_effect\": \"no pixels changed; retained game-clock IRQ6 handler state changed from installed to removed\", "
-            "\"status\": \"clock-handler-removed\"},\n"
+             "\"visual_effect\": \"no pixels changed; retained game-clock IRQ6 handler state changed from installed to removed\", "
+             "\"status\": \"clock-handler-removed\"},\n"
+            "  \"controller_suspend\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x8008F19C\", \"end_exclusive\": \"0x8008F1D4\", "
+            "\"instructions\": 14, \"source_bytes_sha256\": "
+            "\"40a13c532487813e5aee2bb9caf333e1c69ddbb581cef01b9ae24ea103e10570\", "
+            "\"call_pc\": \"0x80029B74\", \"suspend_flag_global\": \"0x800C4A70\", "
+            "\"initial_suspend_flag\": "<<
+            state.controller_suspend_progress.initial_suspend_flag<<
+            ", \"final_suspend_flag\": "<<state.get(0x800c4a70u)<<
+            ", \"shutdown_service_entry\": \"0x80091224\", "
+            "\"only_caller\": \"0x80029B74\", \"operations\": "<<
+            state.controller_suspend_progress.operations<<", \"accesses\": "<<
+            state.controller_suspend_progress.accesses<<", \"reads\": "<<
+            state.controller_suspend_progress.reads<<", \"stores\": "<<
+            state.controller_suspend_progress.stores<<", \"child_calls\": "<<
+            state.controller_suspend_progress.callbacks_completed<<
+            ", \"return_v0\": "<<state.controller_suspend_progress.return_v0<<
+            ", \"return_v0_known\": true, "
+            "\"child_return_fixture\": \"unknown-and-discarded\", "
+            "\"source_quirks\": {\"read_flag_before_frame_allocation\": true, "
+            "\"branch_delay_ra_store_always\": true, "
+            "\"conditional_shutdown_and_flag_store\": true, "
+            "\"child_v0_discarded\": true, "
+            "\"nonzero_fast_path_not_normalized\": true, "
+            "\"live_saved_ra_reload\": true}, "
+            "\"service_scope\": \"typed PS1 controller shutdown fixture; no host input device effect claimed\", "
+            "\"captures\": [\"controller-suspend-before.ppm\", "
+            "\"controller-suspend-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; retained PS1 input state changed from active to suspended\", "
+            "\"status\": \"input-suspended\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
@@ -10372,6 +10503,7 @@ private:
             "\"cd_sync_callback\": \"0x8009DBF8\", "
             "\"vblank_shutdown\": \"0x800A44D4\", "
             "\"clock_shutdown\": \"0x8009167C\", "
+            "\"controller_suspend\": \"0x8008F19C\", "
             "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -10656,6 +10788,20 @@ private:
             "hardcoded arguments, unchecked previous handler, live child v0, and "
             "mutable saved-ra/s8 epilogue remain; no Windows interrupt or host timer "
             "behavior was invented");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x8008F19C is the 14-instruction controller-"
+            "suspend wrapper reached at its only call PC 0x80029B74 immediately "
+            "after game-clock shutdown; it read active flag zero from 0x800C4A70 "
+            "before allocating its frame, called controller shutdown service "
+            "0x80091224 once through an explicit diagnostic fixture, discarded the "
+            "fixture's unknown v0, forced known v0 one and stored suspend flag one; "
+            "controller-suspend-before.ppm and controller-suspend-after.ppm are "
+            "pixel-identical because PS1 input shutdown performs no rendering; both "
+            "frames and the exact child-call log were captured natively by the self-"
+            "driving recovered-input test, not computer control; the always-executed "
+            "branch-delay ra spill, non-normalized nonzero fast path, conditional "
+            "shutdown/store, discarded child v0, and mutable saved-ra reload remain; "
+            "no Windows keyboard or gamepad behavior was invented");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered boundary 0x8009DBF8 is the 6-instruction PsyQ "
             "CdSyncCallback exchange reached at call PC 0x80029B44 immediately "

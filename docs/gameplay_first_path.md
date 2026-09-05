@@ -229,6 +229,16 @@ critical section, unchecked old handler, live child `v0`, and mutable saved
 `ra`/`s8` reloads remain. See
 [game-clock shutdown](game_clock_shutdown_workflow.md).
 
+Main's next call at `0x80029B74` now composes all 14 instructions of the
+controller-suspend wrapper `0x8008F19C`. The active zero flag left by the
+earlier recovered resume owner crosses typed shutdown service `0x80091224`
+once, then the wrapper stores one at `0x800C4A70`. The self-driving diagnostic
+captures its exact event and pixel-identical before/after frames without
+stopping native host input. The original pre-frame flag read, unconditional
+branch-delay `ra` spill, discarded child `v0`, non-normalized nonzero fast
+path, conditional flag store, and live saved-`ra` reload remain. See
+[controller suspend](game_controller_suspend_workflow.md).
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

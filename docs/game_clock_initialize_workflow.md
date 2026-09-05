@@ -54,7 +54,7 @@ Evidence stays under
 `.local/verification/native_completion/game_clock_initialize`.
 
 `scripts/verify_game_entry_visual.ps1` drives Game Setup, Team Select, and User
-Setup using the test's native recovered-input handlers, captures 134 PPM frames
+Setup using the test's native recovered-input handlers, captures 136 PPM frames
 and logs, and writes the clock receipt into `game_entry_trace.json`. This
 initializer changes source callback/timer state but cannot directly change a
 pixel; Debug and RelWithDebInfo frames are therefore expected to remain

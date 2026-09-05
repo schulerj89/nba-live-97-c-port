@@ -74,7 +74,8 @@ typedef struct Nba97GameControllerResumeProgress {
  * PsyQ InitPAD/StartPAD), clears that flag, reads clock 0x800A5810, and stores
  * the snapshot at 0x800C4A74. The retail image initializes the flag to one, so
  * the first startup call reinitializes input while the second only reasserts
- * mode 8. Nearby 0x8008F19C performs the inverse suspend operation.
+ * mode 8. Nearby, separately recovered 0x8008F19C performs the inverse
+ * suspend operation at main call PC 0x80029B74.
  *
  * This compatibility owner changes mapped PS1 input state only. It does not
  * start, stop, or poll native host input devices and has no direct pixel
