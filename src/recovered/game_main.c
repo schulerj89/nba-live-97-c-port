@@ -353,6 +353,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
         /* Each source iteration crosses the recovered 0x80029BDC wrapper. */
         TRY(direct_call(run, 0x80029b20u, 0x80029bdcu, 0, 0, 0, 0, &value));
     }
+    /* GAMEONLY 0x80029B34 -> 0x8009DBA0 is the recovered eight-instruction
+     * CdSync wrapper. It forwards mode/result (both zero here) unchanged to
+     * internal service 0x8009E740. Keep that service explicit: this call does
+     * not invent CD hardware progress, normalize its live v0, or add a host
+     * timeout, and it reloads ra from mutable stack exactly as the source. */
     TRY(direct_call(run, 0x80029b34u, 0x8009dba0u, 2, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b3cu, 0x8009dbe0u, 1, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b44u, 0x8009dbf8u, 1, 0, 0, 0, &value));

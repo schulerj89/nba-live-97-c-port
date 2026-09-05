@@ -40,6 +40,7 @@
 #include "recovered/game_loading_screen.h"
 #include "recovered/game_resource_loader.h"
 #include "recovered/game_heap_payload_size.h"
+#include "recovered/game_cd_sync.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6283,6 +6284,7 @@ private:
                 resource_loader_progress{};
             Nba97GameHeapPayloadSizeProgress heap_payload_size_progress{};
             Nba97GameHeapReleaseProgress heap_payload_lookup_progress{};
+            Nba97GameCdSyncProgress cd_sync_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6309,6 +6311,7 @@ private:
             std::vector<Nba97GameResourceLoaderEvent> resource_loader_events;
             std::vector<Nba97GameHeapPayloadSizeEvent>
                 heap_payload_size_events;
+            std::vector<Nba97GameCdSyncEvent> cd_sync_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6356,6 +6359,10 @@ private:
             std::vector<std::uint16_t> heap_payload_size_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> heap_payload_size_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> cd_sync_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> cd_sync_after=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
@@ -6422,6 +6429,8 @@ private:
             unsigned resource_loader_null_results=0;
             unsigned heap_payload_size_calls=0;
             unsigned heap_payload_lookup_calls=0;
+            unsigned cd_sync_calls=0;
+            unsigned cd_sync_service_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6788,6 +6797,42 @@ private:
                 ++heap_payload_size_calls;
                 *value={heap_payload_size_progress.return_v0,
                     heap_payload_size_progress.return_v0_known};
+                return 1;
+            }
+            static int cdSyncIo(void* user,const Nba97GameTextMemory*,
+                const Nba97GameCdSyncEvent* event,
+                Nba97GameCdSyncValue* value) {
+                auto& state=*static_cast<State*>(user);
+                if(!event || !value || event->kind!=NBA97_GAME_CD_SYNC_SERVICE ||
+                   event->pc!=0x8009dba8u || event->entry!=0x8009e740u ||
+                   event->argument_count!=2 || event->argument[0]!=0 ||
+                   event->argument[1]!=0 ||
+                   event->stack_pointer!=0x807fffb8u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x8009dbb0u)return 0;
+                state.cd_sync_events.push_back(*event);
+                ++state.cd_sync_service_calls;
+                /* CdlComplete is a concrete synchronous diagnostic result.
+                   The untranslated 0x8009E740 CD state machine remains a
+                   declared device/service boundary and changes no pixels. */
+                *value={2,1};
+                return 1;
+            }
+            int runCdSync(const Nba97GameTextMemory* memory,
+                std::uint32_t mode,std::uint32_t result_buffer,
+                std::uint32_t stack_pointer,std::uint32_t return_address,
+                std::uint32_t global_pointer,Nba97GameCdSyncValue* value) {
+                if(!memory || !value || cd_sync_calls)return 0;
+                captureDisplay(cd_sync_before);
+                Nba97GameCdSyncContext context{*memory,10,mode,result_buffer,
+                    stack_pointer,return_address,global_pointer,cdSyncIo,this};
+                if(nba97_game_cd_sync(&context,&cd_sync_progress)!=
+                       NBA97_TEXT_COMPLETE || !cd_sync_progress.completed)
+                    return 0;
+                captureDisplay(cd_sync_after);
+                ++cd_sync_calls;
+                *value={cd_sync_progress.return_v0,
+                    cd_sync_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8127,6 +8172,19 @@ private:
                        event->global_pointer,&requested_size))return 0;
                 *value={requested_size.word,requested_size.known};
             }
+            else if(event->entry==0x8009dba0u) {
+                if(event->pc!=0x80029b34u || event->argument_count!=2 ||
+                   event->argument[0]!=0 || event->argument[1]!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029b3cu)return 0;
+                Nba97GameCdSyncValue sync{};
+                if(!fixture.runCdSync(memory,event->argument[0],
+                       event->argument[1],event->stack_pointer,
+                       event->return_address,event->global_pointer,&sync))
+                    return 0;
+                *value={sync.word,sync.known};
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -8661,6 +8719,39 @@ private:
             state.heap_payload_size_before==state.heap_payload_size_after &&
             state.heap_payload_size_before==
                 state.resource_loader_feload_after;
+        const bool cd_sync_complete=
+            state.cd_sync_calls==1 && state.cd_sync_service_calls==1 &&
+            state.cd_sync_events.size()==1 &&
+            state.cd_sync_progress.completed &&
+            state.cd_sync_progress.operations==3 &&
+            state.cd_sync_progress.accesses==2 &&
+            state.cd_sync_progress.reads==1 &&
+            state.cd_sync_progress.stores==1 &&
+            state.cd_sync_progress.callbacks_completed==1 &&
+            state.cd_sync_progress.mode==0 &&
+            state.cd_sync_progress.result_buffer==0 &&
+            state.cd_sync_progress.service_entry==0x8009e740u &&
+            state.cd_sync_progress.frame_stack_pointer==0x807fffb8u &&
+            state.cd_sync_progress.stack_pointer==0x807fffd0u &&
+            state.cd_sync_progress.global_pointer==0x800d79c8u &&
+            state.cd_sync_progress.restored_return_address==0x80029b3cu &&
+            state.cd_sync_progress.return_v0==2 &&
+            state.cd_sync_progress.return_v0_known &&
+            !state.cd_sync_progress.stopped_pc &&
+            !state.cd_sync_progress.stopped_address &&
+            !state.cd_sync_progress.stopped_entry &&
+            state.cd_sync_events[0].kind==NBA97_GAME_CD_SYNC_SERVICE &&
+            state.cd_sync_events[0].pc==0x8009dba8u &&
+            state.cd_sync_events[0].entry==0x8009e740u &&
+            state.cd_sync_events[0].argument_count==2 &&
+            state.cd_sync_events[0].argument[0]==0 &&
+            state.cd_sync_events[0].argument[1]==0 &&
+            state.cd_sync_events[0].stack_pointer==0x807fffb8u &&
+            state.cd_sync_events[0].global_pointer==0x800d79c8u &&
+            state.cd_sync_events[0].return_address==0x8009dbb0u;
+        const bool cd_sync_visual_unchanged=
+            state.cd_sync_before==state.cd_sync_after &&
+            state.cd_sync_before==state.heap_payload_size_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -8688,6 +8779,14 @@ private:
                 std::to_string(state.heap_payload_size_progress.requested_size));
         if(!heap_payload_size_visual_unchanged)
             throw std::runtime_error("translated 0x80090D60 unexpectedly changed retained scanout");
+        if(!cd_sync_complete)
+            throw std::runtime_error("translated 0x8009DBA0 diagnostic state drifted: calls="+
+                std::to_string(state.cd_sync_calls)+" services="+
+                std::to_string(state.cd_sync_service_calls)+" events="+
+                std::to_string(state.cd_sync_events.size())+" return="+
+                std::to_string(state.cd_sync_progress.return_v0));
+        if(!cd_sync_visual_unchanged)
+            throw std::runtime_error("translated 0x8009DBA0 unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9056,6 +9155,8 @@ private:
            !resource_loader_visual_unchanged ||
            !heap_payload_size_complete ||
            !heap_payload_size_visual_unchanged ||
+           !cd_sync_complete ||
+           !cd_sync_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9215,6 +9316,10 @@ private:
             capture_root/"heap-payload-size-before.ppm");
         writePpm(vram_frame(0,0,&state.heap_payload_size_after),
             capture_root/"heap-payload-size-after.ppm");
+        writePpm(vram_frame(0,0,&state.cd_sync_before),
+            capture_root/"cd-sync-before.ppm");
+        writePpm(vram_frame(0,0,&state.cd_sync_after),
+            capture_root/"cd-sync-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -9779,13 +9884,36 @@ private:
             "\"heap-payload-size-after.ppm\"], "
             "\"visual_effect\": \"no pixels changed; the returned allocation size feeds the FELOAD overlay transfer\", "
             "\"status\": \"requested-size-returned\"},\n"
+            "  \"cd_sync\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x8009DBA0\", \"end_exclusive\": \"0x8009DBC0\", "
+            "\"instructions\": 8, \"source_bytes_sha256\": "
+            "\"3950cb563b219b3b5b59d41cd74547b23be952e3f494769fc8d77fe186380db3\", "
+            "\"psyq_name\": \"CdSync\", \"call_pc\": \"0x80029B34\", "
+            "\"mode\": 0, \"result_buffer\": \"0x00000000\", "
+            "\"service_entry\": \"0x8009E740\", \"service_result\": 2, "
+            "\"other_callers\": [\"0x80092028\", \"0x80092164\", "
+            "\"0x80092274\"], \"operations\": "<<state.cd_sync_progress.operations<<
+            ", \"accesses\": "<<state.cd_sync_progress.accesses<<
+            ", \"reads\": "<<state.cd_sync_progress.reads<<
+            ", \"stores\": "<<state.cd_sync_progress.stores<<
+            ", \"child_calls\": "<<state.cd_sync_progress.callbacks_completed<<
+            ", \"service_scope\": \"typed CdlComplete fixture; no CD device or internal state-machine effects claimed\", "
+            "\"source_quirks\": {\"arguments_forwarded_unchanged\": true, "
+            "\"result_pointer_not_dereferenced_by_wrapper\": true, "
+            "\"child_v0_remains_live\": true, "
+            "\"live_o32_epilogue_reload\": true, "
+            "\"wrapper_adds_no_timeout_or_return_normalization\": true}, "
+            "\"captures\": [\"cd-sync-before.ppm\", \"cd-sync-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; the wrapper synchronizes the CD command boundary before callback removal\", "
+            "\"status\": \"cd-command-synchronized\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
             "\"loading_screen\": \"0x80029E58\", "
             "\"resource_loader\": \"0x80029BFC\", "
             "\"heap_payload_size\": \"0x80090D60\", \"loaded_image\": \"0x80123400\", "
-            "\"loaded_size\": 5136, \"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
+            "\"loaded_size\": 5136, \"cd_sync\": \"0x8009DBA0\", "
+            "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
             json<<"    {\"index\": "<<i<<", \"kind\": \""<<
@@ -10012,6 +10140,19 @@ private:
             "computer control; the original unchecked null descriptor read from low RAM "
             "address 0x00000014, 32-bit pointer wrapping, malformed heap-sentinel behavior "
             "and mutable live ra reload remain");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x8009DBA0 is the 8-instruction PsyQ CdSync "
+            "wrapper reached at call PC 0x80029B34 after the first twenty post-FELOAD "
+            "presentation waits; it forwarded mode 0 and null result pointer unchanged "
+            "to internal CD_sync service 0x8009E740, whose typed diagnostic boundary "
+            "returned CdlComplete code 2 without claiming a CD device or the 160-instruction "
+            "internal state machine; the wrapper retained that raw child v0 and reloaded "
+            "its saved ra from live mapped stack; cd-sync-before.ppm and cd-sync-after.ppm "
+            "are pixel-identical because synchronization performs no rendering; both "
+            "frames and the exact child-call log were captured natively by the self-driving "
+            "recovered-input test, not computer control; unchanged raw arguments, no "
+            "wrapper-side result-pointer validation, no added timeout or return-code "
+            "normalization, live child v0 and mutable o32 epilogue behavior remain");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

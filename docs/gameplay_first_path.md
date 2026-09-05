@@ -179,6 +179,16 @@ null-descriptor read from low RAM `0x00000014`, wrapping address addition,
 malformed-sentinel behavior, and live epilogue reload remain. See
 game_heap_payload_size_workflow.md.
 
+After the first twenty post-FELOAD presentation waits, main's call at
+`0x80029B34` now composes the complete eight-instruction PsyQ `CdSync` wrapper
+`0x8009DBA0`. It forwards `(mode=0, result=NULL)` to internal `CD_sync`
+`0x8009E740` and returns the diagnostic service's `CdlComplete` value `2`.
+Before/after frames are pixel-identical because the wrapper performs no
+rendering. The 160-instruction internal CD service remains an explicit boundary;
+no physical device progress or result-buffer effect is invented. Raw arguments,
+live child `v0`, mutable saved `ra`, and the absence of wrapper-added timeout or
+normalization are preserved. See game_cd_sync_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

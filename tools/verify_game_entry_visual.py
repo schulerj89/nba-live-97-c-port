@@ -195,6 +195,13 @@ def main():
             heap_payload_size_frames["heap-payload-size-after"] ==
             resource_loader_frames["resource-loader-feload-after"],
             "heap payload-size query unexpectedly changed retained scanout")
+    cd_sync_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["cd-sync-before", "cd-sync-after"]}
+    require(cd_sync_frames["cd-sync-before"] ==
+            cd_sync_frames["cd-sync-after"] ==
+            heap_payload_size_frames["heap-payload-size-after"],
+            "CdSync wrapper unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -775,6 +782,29 @@ def main():
                 "visual_effect": "no pixels changed; the returned allocation size feeds the FELOAD overlay transfer",
                 "status": "requested-size-returned"},
             "recovered 0x80090D60 heap payload-size receipt drifted")
+    require(receipt["cd_sync"] == {
+                "binary": "GAMEONLY", "address": "0x8009DBA0",
+                "end_exclusive": "0x8009DBC0", "instructions": 8,
+                "source_bytes_sha256":
+                    "3950cb563b219b3b5b59d41cd74547b23be952e3f494769fc8d77fe186380db3",
+                "psyq_name": "CdSync", "call_pc": "0x80029B34",
+                "mode": 0, "result_buffer": "0x00000000",
+                "service_entry": "0x8009E740", "service_result": 2,
+                "other_callers": ["0x80092028", "0x80092164",
+                                  "0x80092274"],
+                "operations": 3, "accesses": 2, "reads": 1,
+                "stores": 1, "child_calls": 1,
+                "service_scope": "typed CdlComplete fixture; no CD device or internal state-machine effects claimed",
+                "source_quirks": {
+                    "arguments_forwarded_unchanged": True,
+                    "result_pointer_not_dereferenced_by_wrapper": True,
+                    "child_v0_remains_live": True,
+                    "live_o32_epilogue_reload": True,
+                    "wrapper_adds_no_timeout_or_return_normalization": True},
+                "captures": ["cd-sync-before.ppm", "cd-sync-after.ppm"],
+                "visual_effect": "no pixels changed; the wrapper synchronizes the CD command boundary before callback removal",
+                "status": "cd-command-synchronized"},
+            "recovered 0x8009DBA0 CdSync receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -782,6 +812,7 @@ def main():
                        "resource_loader": "0x80029BFC",
                        "heap_payload_size": "0x80090D60",
                        "loaded_image": "0x80123400", "loaded_size": 5136,
+                       "cd_sync": "0x8009DBA0",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -1066,6 +1097,18 @@ def main():
             "captured natively by the self-driving recovered-input test, not computer control" in trace and
             "unchecked null descriptor read from low RAM address 0x00000014" in trace and
             "32-bit pointer wrapping" in trace and
+            "next recovered boundary 0x8009DBA0" in trace and
+            "8-instruction PsyQ CdSync wrapper" in trace and
+            "call PC 0x80029B34 after the first twenty post-FELOAD presentation waits" in trace and
+            "forwarded mode 0 and null result pointer unchanged" in trace and
+            "internal CD_sync service 0x8009E740" in trace and
+            "returned CdlComplete code 2" in trace and
+            "without claiming a CD device or the 160-instruction internal state machine" in trace and
+            "retained that raw child v0" in trace and
+            "cd-sync-before.ppm and cd-sync-after.ppm are pixel-identical" in trace and
+            "exact child-call log were captured natively by the self-driving recovered-input test, not computer control" in trace and
+            "no wrapper-side result-pointer validation" in trace and
+            "no added timeout or return-code normalization" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1116,6 +1159,9 @@ def main():
           "native heap payload-size query 0x80090D60 used recovered lookup 0x80090618, returned "
           "the retained FELOAD allocation's 5136-byte requested size, preserved its unchecked-null "
           "low-RAM read, and emitted pixel-identical native before/after frames; "
+          "native PsyQ CdSync wrapper 0x8009DBA0 forwarded mode 0 and null result to typed service "
+          "0x8009E740, retained its raw return/epilogue behavior, and emitted pixel-identical "
+          "native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 
