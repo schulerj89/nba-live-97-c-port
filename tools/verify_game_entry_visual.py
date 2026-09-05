@@ -341,6 +341,26 @@ def main():
         "frame_sha256": initialize_hashes,
         "cpu_receipt": "match_initialize_trace.json",
         "classification": "no direct visual effect"}, indent=2) + "\n", encoding="utf-8")
+    roster = initialize["roster_bindings"]
+    require((roster["program"], roster["address"], roster["inclusive_end"],
+             roster["bytes"], roster["instructions"], roster["call_pc"]) ==
+            ("GAMEONLY", "0x80063D58", "0x80063EDB", 388, 97, "0x8002DBC8"),
+            "roster bindings source identity drifted")
+    require(roster["completed"] and roster["classification"] == "no direct visual effect"
+            and roster["counts"] == [3, 12] and roster["published_table"] == 0x80015034
+            and (roster["operations"], roster["reads"], roster["stores"]) == (159, 50, 109)
+            and roster["home"] == [0x8002208C + (i if i < 3 else 0)*0x6E for i in range(12)]
+            and roster["away"] == [0x800225B4 + i*0x6E for i in range(12)]
+            and roster["home"] == roster["mirror_home"]
+            and roster["away"] == roster["mirror_away"],
+            "recovered roster owner did not publish exact mapped roster bindings")
+    (args.frames / "roster_bindings_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80063D58",
+        "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": initialize_hashes, "cpu_receipt": "match_initialize_trace.json",
+        "state": roster, "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
             "diagnostic receipt lost its non-gameplay scope boundary")
     require(receipt["driver"] == {"kind": "native recovered-input handlers",

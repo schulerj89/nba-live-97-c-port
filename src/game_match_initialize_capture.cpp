@@ -1,5 +1,6 @@
 #include "game_match_initialize_capture.h"
 #include "game_match_initialize_adapter.h"
+#include "recovered/game_roster_bindings.h"
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -29,6 +30,7 @@ struct ChildLog {
     std::vector<Nba97GameMatchInitializeEvent> events;
     std::vector<std::uint32_t> a0;
     bool clear_seen=false;
+    Nba97GameRosterBindingsProgress roster{};
 };
 int child(void* user,const Nba97GameTextMemory* memory,
           const Nba97GameMatchInitializeEvent* event,
@@ -36,6 +38,14 @@ int child(void* user,const Nba97GameTextMemory* memory,
     auto& log=*static_cast<ChildLog*>(user);
     log.events.push_back(*event);
     log.a0.push_back(registers->gpr[NBA97_MATCH_INITIALIZE_A0].word);
+    if(event->entry==0x80063d58u) {
+        Nba97GameRosterBindingsContext context{};
+        context.memory=*memory;context.operation_budget=512;
+        context.registers=*registers;
+        const auto result=nba97_game_roster_bindings(&context,&log.roster);
+        *registers=log.roster.registers;
+        return result==NBA97_TEXT_COMPLETE && log.roster.completed;
+    }
     if(event->entry==0x800763f4u)log.clear_seen=get(*memory,0x80020c18u)==0;
     // Explicit nonretail child response. Do not invent simulation or rendering
     // work for these still-incompatible/unresolved complete-call interfaces.
@@ -56,6 +66,9 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
     std::fill_n(locate(*memory,0x800fdb4cu,0xe7cu),0xe7cu,std::uint8_t{0x5a});
     std::fill_n(locate(*memory,0x80020c18u,4),4,std::uint8_t{0xa5});
     const std::array<std::uint32_t,2> teams={get(*memory,0x80021d74u),get(*memory,0x80021d78u)};
+    // Synthetic counts exercise a short roster and a full twelve-slot roster.
+    *locate(*memory,0x80023aecu+teams[0]*0x68u,1)=3;
+    *locate(*memory,0x80023aecu+teams[1]*0x68u,1)=12;
     ChildLog log;context.io=child;context.user=&log;
     std::array<Nba97GameMatchInitializeAccess,7> accesses{};
     context.access_journal=accesses.data();context.access_journal_capacity=accesses.size();
@@ -66,7 +79,7 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
     bool cleared=true;for(unsigned i=0;i<0xe7cu;++i)cleared=cleared && state[i]==0;
     if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !cleared ||
        !adapter.memory_zero.completed || adapter.memory_zero_invocations!=1 ||
-       log.events.size()!=11 || !log.clear_seen ||
+       log.events.size()!=11 || !log.clear_seen || !log.roster.completed ||
        get(*memory,0x80022084u)!=teams[0] || get(*memory,0x80022adcu)!=teams[1])return false;
     const auto& live=progress.registers.gpr;
     *value={live[NBA97_MATCH_INITIALIZE_V0].word,
@@ -76,7 +89,7 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
         "\"inclusive_end\": \"0x8002DC37\", \"bytes\": 168, \"instructions\": 42,\n"
         "  \"instruction_sha256\": \"c1569d2ae6b58be97cd7511f5dd2bee7be70684d9e1fc9ba9abd3ad9f83ce6f3\",\n"
         "  \"call_pc\": \"0x8002DA7C\", \"classification\": \"no direct visual effect\",\n"
-        "  \"scope\": \"recovered zero owner; eleven synthetic child responses, no advancing match loop\",\n"
+        "  \"scope\": \"recovered zero and roster owners; ten synthetic child responses, no advancing match loop\",\n"
         "  \"driver\": \"native recovered-input handlers: Game Setup, Team Select, User Setup\",\n"
         "  \"operations\": "<<progress.operations<<", \"reads\": "<<progress.reads<<
         ", \"stores\": "<<progress.stores<<", \"calls_completed\": "<<progress.callbacks_completed<<",\n"
@@ -99,7 +112,21 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
         out<<"{\"pc\": "<<accesses[i].pc<<", \"address\": "<<accesses[i].address<<
             ", \"value\": "<<accesses[i].value<<'}';
     }
-    out<<"],\n  \"routine_capture_frame_numbers\": [0, 1],\n"
+    out<<"],\n  \"roster_bindings\": {\"program\": \"GAMEONLY\", "
+        "\"address\": \"0x80063D58\", \"inclusive_end\": \"0x80063EDB\", "
+        "\"bytes\": 388, \"instructions\": 97, \"call_pc\": \"0x8002DBC8\", "
+        "\"classification\": \"no direct visual effect\", "
+        "\"counts\": [3,12], \"completed\": true, \"operations\": "<<log.roster.operations<<
+        ", \"reads\": "<<log.roster.reads<<", \"stores\": "<<log.roster.stores<<
+        ", \"published_table\": "<<get(*memory,0x80015030u)<<", \"home\": [";
+    for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80020b8cu+i*4);}
+    out<<"], \"away\": [";
+    for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80020bbcu+i*4);}
+    out<<"], \"mirror_home\": [";
+    for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80015034u+i*4);}
+    out<<"], \"mirror_away\": [";
+    for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80015064u+i*4);}
+    out<<"]},\n  \"routine_capture_frame_numbers\": [0, 1],\n"
         "  \"captures\": [\"match-initialize-before.ppm\", \"match-initialize-after.ppm\"]\n}\n";
     receipt=out.str();return true;
 }
