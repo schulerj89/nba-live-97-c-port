@@ -29,6 +29,7 @@
 #include "recovered/game_cd_sync.h"
 #include "recovered/game_cd_ready_callback.h"
 #include "recovered/game_cd_sync_callback.h"
+#include "recovered/game_vblank_shutdown.h"
 #include "recovered/game_heap_release.h"
 
 #include <array>
@@ -114,6 +115,7 @@ struct Fixture {
     Nba97GameCdSyncProgress cd_sync_progress{};
     Nba97GameCdReadyCallbackProgress cd_ready_callback_progress{};
     Nba97GameCdSyncCallbackProgress cd_sync_callback_progress{};
+    Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -143,6 +145,7 @@ struct Fixture {
     std::vector<Nba97GameResourceLoaderEvent> resource_loader_calls;
     std::vector<Nba97GameHeapPayloadSizeEvent> heap_payload_size_calls;
     std::vector<Nba97GameCdSyncEvent> cd_sync_calls;
+    std::vector<Nba97GameVblankShutdownEvent> vblank_shutdown_calls;
     std::vector<Nba97GameFrameRateResetEvent>
         match_session_frame_rate_reset_calls;
     std::vector<Nba97GamePresentationWaitEvent>
@@ -173,6 +176,8 @@ struct Fixture {
     unsigned cd_sync_invocations = 0;
     unsigned cd_ready_callback_invocations = 0;
     unsigned cd_sync_callback_invocations = 0;
+    unsigned vblank_shutdown_invocations = 0;
+    unsigned vblank_shutdown_child_callbacks = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -191,6 +196,7 @@ struct Fixture {
     bool video_environment_synchronized = false;
     bool vblank_set_rcnt_rejected = false;
     bool vblank_started_after_rejection = false;
+    bool vblank_interrupt_installed = false;
     bool clock_critical_section = false;
     bool clock_interrupt_installed = false;
     bool clock_shutdown_registered = false;
@@ -225,6 +231,7 @@ struct Fixture {
     bool compose_cd_sync = false;
     bool compose_cd_ready_callback = false;
     bool compose_cd_sync_callback = false;
+    bool compose_vblank_shutdown = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -484,8 +491,29 @@ struct Fixture {
             f.put(0x800d7b00u,0);
             return 1;
         }
+        if(event->entry==0x8009860cu) {
+            if(f.get(0x800c54d0u)!=0)return 0;
+            f.put(0x800c54d0u,0x800a450cu);
+            f.vblank_interrupt_installed=true;
+            return 1;
+        }
         return event->entry==0x800994f4u || event->entry==0x80098394u ||
-            event->entry==0x8009860cu || event->entry==0x80098594u;
+            event->entry==0x80098594u;
+    }
+    static int vblankShutdownIo(void* user,const Nba97GameTextMemory*,
+        const Nba97GameVblankShutdownEvent* event,
+        Nba97GameVblankShutdownValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.vblank_shutdown_child_callbacks;
+        f.vblank_shutdown_calls.push_back(*event);
+        if(!f.vblank_interrupt_installed || f.get(0x800c54d0u)!=0x800a450cu ||
+           event->pc!=0x800a44ecu ||
+           event->entry!=0x8009860cu || event->argument_count!=2 ||
+           event->argument[0]!=0 || event->argument[1]!=0)return 0;
+        f.put(0x800c54d0u,0);
+        f.vblank_interrupt_installed=false;
+        *value={0x800a450cu,1};
+        return 1;
     }
     static int clockIo(void* user, const Nba97GameTextMemory*,
         const Nba97GameClockInitializeEvent* event,
@@ -1466,6 +1494,20 @@ struct Fixture {
                event->return_address!=0x80029b4cu)return 0;
             if(!runCdSyncCallback(f,memory,event->argument[0],value))return 0;
         }
+        if(f.compose_vblank_shutdown && event->entry==0x800a44d4u) {
+            if(event->pc!=0x80029b64u || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029b6cu)return 0;
+            ++f.vblank_shutdown_invocations;
+            Nba97GameVblankShutdownContext context{*memory,10,
+                event->stack_pointer,event->return_address,0xf6f6f6f6u,
+                event->global_pointer,vblankShutdownIo,&f};
+            if(nba97_game_vblank_shutdown(&context,
+                   &f.vblank_shutdown_progress)!=NBA97_TEXT_COMPLETE)return 0;
+            *value={f.vblank_shutdown_progress.return_v0,
+                f.vblank_shutdown_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1557,7 +1599,8 @@ void transferred_path() {
     for (unsigned i = 0; i < 20; ++i)
         check(f.calls[28 + i].pc == 0x80029b20u && f.calls[28 + i].saved_register[0] == i + 1);
     check(f.calls[48].entry == 0x8009dba0u && f.calls[49].entry == 0x8009dbe0u &&
-        f.calls[50].entry == 0x8009dbf8u);
+        f.calls[50].entry == 0x8009dbf8u &&
+        f.calls[71].pc == 0x80029b64u && f.calls[71].entry == 0x800a44d4u);
     for (unsigned i = 0; i < 20; ++i)
         check(f.calls[51 + i].pc == 0x80029b50u && f.calls[51 + i].saved_register[0] == i + 1);
     check(f.calls[75].entry == 0x800aa468u && f.calls[75].argument[0] == 0x80123400u &&
@@ -1641,6 +1684,7 @@ struct Composition {
         game.put(0x800c54acu, 0x7ffu);
         game.put(0x800c54c8u, 0x800c54b0u);
         game.put(0x800c54bcu, 0x80098714u);
+        game.put(0x800c54d0u, 0);
         /* Raw GAMEONLY data starts suspended, so the first 0x8008F1D4 call
          * takes its resume branch and the later startup call takes fast path. */
         game.put(0x800c4a70u,1);
@@ -1726,6 +1770,7 @@ struct Composition {
         game.compose_cd_sync = true;
         game.compose_cd_ready_callback = true;
         game.compose_cd_sync_callback = true;
+        game.compose_vblank_shutdown = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2581,6 +2626,40 @@ void overlay_composition() {
         !c.game.cd_sync_callback_progress.stopped_pc &&
         !c.game.cd_sync_callback_progress.stopped_address &&
         c.game.get(0x800c57e8u)==0);
+    check(c.game.vblank_shutdown_invocations==1 &&
+        c.game.vblank_shutdown_child_callbacks==1 &&
+        c.game.vblank_shutdown_calls.size()==1 &&
+        c.game.vblank_shutdown_progress.completed &&
+        c.game.vblank_shutdown_progress.operations==5 &&
+        c.game.vblank_shutdown_progress.accesses==4 &&
+        c.game.vblank_shutdown_progress.reads==2 &&
+        c.game.vblank_shutdown_progress.stores==2 &&
+        c.game.vblank_shutdown_progress.callbacks_completed==1 &&
+        c.game.vblank_shutdown_progress.interrupt_callback_entry==0x8009860cu &&
+        c.game.vblank_shutdown_progress.interrupt_number==0 &&
+        c.game.vblank_shutdown_progress.replacement_callback==0 &&
+        c.game.vblank_shutdown_progress.frame_stack_pointer==FrameSp-0x18u &&
+        c.game.vblank_shutdown_progress.stack_pointer==FrameSp &&
+        c.game.vblank_shutdown_progress.global_pointer==0x800d79c8u &&
+        c.game.vblank_shutdown_progress.incoming_frame_pointer==0xf6f6f6f6u &&
+        c.game.vblank_shutdown_progress.restored_return_address==0x80029b6cu &&
+        c.game.vblank_shutdown_progress.restored_frame_pointer==0xf6f6f6f6u &&
+        c.game.vblank_shutdown_progress.return_v0==0x800a450cu &&
+        c.game.vblank_shutdown_progress.return_v0_known &&
+        !c.game.vblank_shutdown_progress.stopped_pc &&
+        !c.game.vblank_shutdown_progress.stopped_address &&
+        !c.game.vblank_shutdown_progress.stopped_entry &&
+        !c.game.vblank_interrupt_installed &&
+        c.game.get(0x800c54d0u)==0);
+    check(c.game.vblank_shutdown_calls[0].pc==0x800a44ecu &&
+        c.game.vblank_shutdown_calls[0].entry==0x8009860cu &&
+        c.game.vblank_shutdown_calls[0].argument_count==2 &&
+        c.game.vblank_shutdown_calls[0].argument[0]==0 &&
+        c.game.vblank_shutdown_calls[0].argument[1]==0 &&
+        c.game.vblank_shutdown_calls[0].stack_pointer==FrameSp-0x18u &&
+        c.game.vblank_shutdown_calls[0].frame_pointer==FrameSp-0x18u &&
+        c.game.vblank_shutdown_calls[0].global_pointer==0x800d79c8u &&
+        c.game.vblank_shutdown_calls[0].return_address==0x800a44f4u);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -2588,10 +2667,10 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* The later main delay wait rewrites s0's slot; the match-session
-           frame remains the final owner of the adjacent saved-ra word. */
-        c.game.get(FrameSp - 8u) == 0x80029b58u &&
-        c.game.get(FrameSp - 4u) == 0x80029ae4u);
+        /* The newly composed VBlank-shutdown frame is the final owner of the
+           adjacent saved-s8 and saved-ra words in the shared stack fixture. */
+        c.game.get(FrameSp - 8u) == 0xf6f6f6f6u &&
+        c.game.get(FrameSp - 4u) == 0x80029b6cu);
     check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
         c.game.get(0x800d7a88u)==52 && c.game.get(0x800d7b3cu)==0 &&
         c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);

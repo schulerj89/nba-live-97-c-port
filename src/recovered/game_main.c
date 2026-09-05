@@ -375,6 +375,9 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
         /* Preserve the second twenty-presentation delay independently. */
         TRY(direct_call(run, 0x80029b50u, 0x80029bdcu, 0, 0, 0, 0, &value));
     }
+    /* GAMEONLY 0x80029B64 -> 0x800A44D4 is the recovered 14-instruction
+     * VBlank shutdown wrapper. It calls InterruptCallback(0,NULL), leaves the
+     * service's old-handler v0 live, and reloads ra/s8 from mutable stack. */
     TRY(direct_call(run, 0x80029b64u, 0x800a44d4u, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b6cu, 0x8009167cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b74u, 0x8008f19cu, 0, 0, 0, 0, &value));

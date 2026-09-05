@@ -31,8 +31,11 @@ stop. Private source evidence is kept under
 `.local/verification/native_completion/game_call_800a43e8`; the routine bytes
 have SHA-256 `71826dc26fa486efe0c88f3b3397c7322c444966b3910997bab5d6f16a83a4e7`.
 
+The adjacent 14-instruction teardown wrapper at `0x800A44D4` is now recovered
+separately; see [VBlank shutdown](game_vblank_shutdown_workflow.md).
+
 `scripts/verify_game_entry_visual.ps1` drives Game Setup, Team Select, and User
-Setup through native recovered-input handlers, captures all 98 PPM frames and
+Setup through native recovered-input handlers, captures all 132 PPM frames and
 logs, and adds a VBlank receipt to `game_entry_trace.json`. The new routine only
 changes mapped PS1 callback/counter state in that diagnostic, so it is expected
 to have no direct pixel effect; Debug and RelWithDebInfo captures must remain

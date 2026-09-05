@@ -216,6 +216,13 @@ def main():
             cd_sync_callback_frames["cd-sync-callback-after"] ==
             cd_ready_callback_frames["cd-ready-callback-after"],
             "CdSyncCallback exchange unexpectedly changed retained scanout")
+    vblank_shutdown_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["vblank-shutdown-before", "vblank-shutdown-after"]}
+    require(vblank_shutdown_frames["vblank-shutdown-before"] ==
+            vblank_shutdown_frames["vblank-shutdown-after"] ==
+            cd_sync_callback_frames["cd-sync-callback-after"],
+            "VBlank shutdown wrapper unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -874,6 +881,33 @@ def main():
                 "visual_effect": "no pixels changed; the sync callback slot changed from 0x8009DA04 to NULL",
                 "status": "sync-callback-cleared"},
             "recovered 0x8009DBF8 CdSyncCallback receipt drifted")
+    require(receipt["vblank_shutdown"] == {
+                "binary": "GAMEONLY", "address": "0x800A44D4",
+                "end_exclusive": "0x800A450C", "instructions": 14,
+                "source_bytes_sha256":
+                    "d30124f93b39486830bd850d0f764977363aebcc9919f7546bf0c1917be5a54c",
+                "call_pc": "0x80029B64", "service": "InterruptCallback",
+                "service_entry": "0x8009860C", "interrupt_number": 0,
+                "callback_slot": "0x800C54D0",
+                "replacement_callback": "0x00000000",
+                "previous_handler": "0x800A450C",
+                "fixture_origin": "handler installed by the earlier recovered VBlank initializer",
+                "only_caller": "0x80029B64", "operations": 5,
+                "accesses": 4, "reads": 2, "stores": 2,
+                "child_calls": 1,
+                "source_quirks": {
+                    "no_critical_section": True,
+                    "hardcoded_interrupt_and_null_callback": True,
+                    "child_v0_remains_live": True,
+                    "live_saved_ra_reload": True,
+                    "live_saved_s8_reload": True,
+                    "previous_handler_not_checked": True},
+                "service_scope": "typed PS1 callback-table fixture; no host interrupt or timing effect claimed",
+                "captures": ["vblank-shutdown-before.ppm",
+                             "vblank-shutdown-after.ppm"],
+                "visual_effect": "no pixels changed; retained VBlank handler state changed from installed to removed",
+                "status": "vblank-handler-removed"},
+            "recovered 0x800A44D4 VBlank shutdown receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -884,6 +918,7 @@ def main():
                        "cd_sync": "0x8009DBA0",
                        "cd_ready_callback": "0x8009DBE0",
                        "cd_sync_callback": "0x8009DBF8",
+                       "vblank_shutdown": "0x800A44D4",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -896,6 +931,9 @@ def main():
             calls[50]["pc"] == "0x80029B44" and
             calls[50]["entry"] == "0x8009DBF8",
             "CdSync/callback-exchange main boundaries drifted")
+    require(calls[71]["pc"] == "0x80029B64" and
+            calls[71]["entry"] == "0x800A44D4",
+            "VBlank shutdown main boundary drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
     require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
@@ -1208,6 +1246,16 @@ def main():
             "internal CD_sync 0x8009E740 reads this exact slot at 0x8009E8BC" in trace and
             "cd-sync-callback-before.ppm and cd-sync-callback-after.ppm are pixel-identical" in trace and
             "both frames and the old/new pointer log were captured natively by the self-driving recovered-input test, not computer control" in trace and
+            "next recovered boundary 0x800A44D4" in trace and
+            "14-instruction VBlank shutdown wrapper" in trace and
+            "call PC 0x80029B64 after the second twenty-presentation wait" in trace and
+            "PsyQ InterruptCallback(0,NULL) at 0x8009860C through callback slot 0x800C54D0" in trace and
+            "removed source handler 0x800A450C" in trace and
+            "left that old-handler value live in v0" in trace and
+            "vblank-shutdown-before.ppm and vblank-shutdown-after.ppm are pixel-identical" in trace and
+            "lack of a critical section" in trace and
+            "mutable saved-ra/s8 epilogue remain" in trace and
+            "no Windows interrupt or host timing behavior was invented" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1267,6 +1315,9 @@ def main():
           "native PsyQ CdSyncCallback 0x8009DBF8 returned default callback 0x8009DA04, cleared "
           "slot 0x800C57E8, retained raw exchange semantics, and emitted pixel-identical native "
           "before/after frames; "
+          "native VBlank shutdown 0x800A44D4 removed handler 0x800A450C through "
+          "InterruptCallback(0,NULL), retained live v0/stack semantics, and emitted pixel-identical "
+          "native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 

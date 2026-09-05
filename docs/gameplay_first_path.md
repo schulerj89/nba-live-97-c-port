@@ -208,6 +208,16 @@ pixel-identical because this retained PS1 state exchange does no rendering. Raw
 unchecked pointers, read-before-store ordering, and unknown-old propagation are
 preserved. See game_cd_sync_callback_workflow.md.
 
+After the second twenty-presentation wait, main's call at `0x80029B64` now
+composes the complete 14-instruction VBlank shutdown wrapper `0x800A44D4`. It
+calls PsyQ `InterruptCallback(0,NULL)` at `0x8009860C`, removes handler
+`0x800A450C` installed by the earlier recovered initializer, and reloads live
+saved `ra`/`s8`. The diagnostic records the installed-to-removed transition and
+pixel-identical before/after frames without touching host interrupts. The
+source's missing critical section, hardcoded arguments, unchecked prior
+handler, live child `v0`, and mutable epilogue remain. See
+game_vblank_shutdown_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.
