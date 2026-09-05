@@ -223,6 +223,13 @@ def main():
             vblank_shutdown_frames["vblank-shutdown-after"] ==
             cd_sync_callback_frames["cd-sync-callback-after"],
             "VBlank shutdown wrapper unexpectedly changed retained scanout")
+    clock_shutdown_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["clock-shutdown-before", "clock-shutdown-after"]}
+    require(clock_shutdown_frames["clock-shutdown-before"] ==
+            clock_shutdown_frames["clock-shutdown-after"] ==
+            vblank_shutdown_frames["vblank-shutdown-after"],
+            "game-clock shutdown wrapper unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -908,6 +915,34 @@ def main():
                 "visual_effect": "no pixels changed; retained VBlank handler state changed from installed to removed",
                 "status": "vblank-handler-removed"},
             "recovered 0x800A44D4 VBlank shutdown receipt drifted")
+    require(receipt["clock_shutdown"] == {
+                "binary": "GAMEONLY", "address": "0x8009167C",
+                "end_exclusive": "0x800916B4", "instructions": 14,
+                "source_bytes_sha256":
+                    "0724e7dd8a73dd92dde6a9128d2435f60888f950b29d1bf83f6d8e29f259c5dd",
+                "call_pc": "0x80029B6C", "service": "InterruptCallback",
+                "service_entry": "0x8009860C", "interrupt_number": 6,
+                "callback_slot": "0x800C54E8",
+                "replacement_callback": "0x00000000",
+                "previous_handler": "0x800916B4",
+                "fixture_origin": "handler installed by the earlier recovered game-clock initializer",
+                "direct_caller": "0x80029B6C",
+                "registered_shutdown_handler": True, "operations": 5,
+                "accesses": 4, "reads": 2, "stores": 2,
+                "child_calls": 1,
+                "source_quirks": {
+                    "no_critical_section": True,
+                    "hardcoded_interrupt_and_null_callback": True,
+                    "child_v0_remains_live": True,
+                    "live_saved_ra_reload": True,
+                    "live_saved_s8_reload": True,
+                    "previous_handler_not_checked": True},
+                "service_scope": "typed PS1 callback-table fixture; no host interrupt or timer effect claimed",
+                "captures": ["clock-shutdown-before.ppm",
+                             "clock-shutdown-after.ppm"],
+                "visual_effect": "no pixels changed; retained game-clock IRQ6 handler state changed from installed to removed",
+                "status": "clock-handler-removed"},
+            "recovered 0x8009167C game-clock shutdown receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -919,6 +954,7 @@ def main():
                        "cd_ready_callback": "0x8009DBE0",
                        "cd_sync_callback": "0x8009DBF8",
                        "vblank_shutdown": "0x800A44D4",
+                       "clock_shutdown": "0x8009167C",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -934,6 +970,9 @@ def main():
     require(calls[71]["pc"] == "0x80029B64" and
             calls[71]["entry"] == "0x800A44D4",
             "VBlank shutdown main boundary drifted")
+    require(calls[72]["pc"] == "0x80029B6C" and
+            calls[72]["entry"] == "0x8009167C",
+            "game-clock shutdown main boundary drifted")
     require(calls[0]["pc"] == "0x800299A4" and calls[0]["entry"] == "0x800948D0",
             "first initialization boundary drifted")
     require(calls[1]["pc"] == "0x800299AC" and calls[1]["entry"] == "0x800A4830",
@@ -1256,6 +1295,14 @@ def main():
             "lack of a critical section" in trace and
             "mutable saved-ra/s8 epilogue remain" in trace and
             "no Windows interrupt or host timing behavior was invented" in trace and
+            "next recovered boundary 0x8009167C" in trace and
+            "14-instruction game-clock shutdown wrapper" in trace and
+            "call PC 0x80029B6C immediately after VBlank shutdown" in trace and
+            "PsyQ InterruptCallback(6,NULL) at 0x8009860C" in trace and
+            "callback slot 0x800C54E8" in trace and
+            "removed source Timer 2 handler 0x800916B4" in trace and
+            "clock-shutdown-before.ppm and clock-shutdown-after.ppm are pixel-identical" in trace and
+            "no Windows interrupt or host timer behavior was invented" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1317,6 +1364,9 @@ def main():
           "before/after frames; "
           "native VBlank shutdown 0x800A44D4 removed handler 0x800A450C through "
           "InterruptCallback(0,NULL), retained live v0/stack semantics, and emitted pixel-identical "
+          "native before/after frames; "
+          "native game-clock shutdown 0x8009167C removed IRQ6 handler 0x800916B4 through "
+          "InterruptCallback(6,NULL), retained live v0/stack semantics, and emitted pixel-identical "
           "native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 

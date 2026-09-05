@@ -218,6 +218,17 @@ source's missing critical section, hardcoded arguments, unchecked prior
 handler, live child `v0`, and mutable epilogue remain. See
 game_vblank_shutdown_workflow.md.
 
+Main's next call at `0x80029B6C` now composes the complete 14-instruction
+game-clock shutdown wrapper `0x8009167C`. It calls PsyQ
+`InterruptCallback(6,NULL)` at `0x8009860C`, removing Timer 2 handler
+`0x800916B4` from callback slot `0x800C54E8`. The earlier recovered clock
+initializer supplies the installed handler fixture, so the diagnostic records
+the natural installed-to-removed lifecycle plus pixel-identical frames. No
+host timer or Windows interrupt behavior is fabricated. The source's missing
+critical section, unchecked old handler, live child `v0`, and mutable saved
+`ra`/`s8` reloads remain. See
+[game-clock shutdown](game_clock_shutdown_workflow.md).
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

@@ -30,6 +30,7 @@
 #include "recovered/game_cd_ready_callback.h"
 #include "recovered/game_cd_sync_callback.h"
 #include "recovered/game_vblank_shutdown.h"
+#include "recovered/game_clock_shutdown.h"
 #include "recovered/game_heap_release.h"
 
 #include <array>
@@ -116,6 +117,7 @@ struct Fixture {
     Nba97GameCdReadyCallbackProgress cd_ready_callback_progress{};
     Nba97GameCdSyncCallbackProgress cd_sync_callback_progress{};
     Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
+    Nba97GameClockShutdownProgress clock_shutdown_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -146,6 +148,7 @@ struct Fixture {
     std::vector<Nba97GameHeapPayloadSizeEvent> heap_payload_size_calls;
     std::vector<Nba97GameCdSyncEvent> cd_sync_calls;
     std::vector<Nba97GameVblankShutdownEvent> vblank_shutdown_calls;
+    std::vector<Nba97GameClockShutdownEvent> clock_shutdown_calls;
     std::vector<Nba97GameFrameRateResetEvent>
         match_session_frame_rate_reset_calls;
     std::vector<Nba97GamePresentationWaitEvent>
@@ -178,6 +181,8 @@ struct Fixture {
     unsigned cd_sync_callback_invocations = 0;
     unsigned vblank_shutdown_invocations = 0;
     unsigned vblank_shutdown_child_callbacks = 0;
+    unsigned clock_shutdown_invocations = 0;
+    unsigned clock_shutdown_child_callbacks = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -199,6 +204,7 @@ struct Fixture {
     bool vblank_interrupt_installed = false;
     bool clock_critical_section = false;
     bool clock_interrupt_installed = false;
+    bool clock_interrupt_was_installed = false;
     bool clock_shutdown_registered = false;
     bool clock_counter_set = false;
     bool clock_counter_started = false;
@@ -232,6 +238,7 @@ struct Fixture {
     bool compose_cd_ready_callback = false;
     bool compose_cd_sync_callback = false;
     bool compose_vblank_shutdown = false;
+    bool compose_clock_shutdown = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -515,6 +522,21 @@ struct Fixture {
         *value={0x800a450cu,1};
         return 1;
     }
+    static int clockShutdownIo(void* user,const Nba97GameTextMemory*,
+        const Nba97GameClockShutdownEvent* event,
+        Nba97GameClockShutdownValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.clock_shutdown_child_callbacks;
+        f.clock_shutdown_calls.push_back(*event);
+        if(!f.clock_interrupt_installed || f.get(0x800c54e8u)!=0x800916b4u ||
+           event->pc!=0x80091694u ||
+           event->entry!=0x8009860cu || event->argument_count!=2 ||
+           event->argument[0]!=6 || event->argument[1]!=0)return 0;
+        f.put(0x800c54e8u,0);
+        f.clock_interrupt_installed=false;
+        *value={0x800916b4u,1};
+        return 1;
+    }
     static int clockIo(void* user, const Nba97GameTextMemory*,
         const Nba97GameClockInitializeEvent* event,
         Nba97GameClockInitializeValue* value) {
@@ -530,7 +552,11 @@ struct Fixture {
             if(!f.clock_critical_section || event->pc!=0x80091578u ||
                event->argument_count!=2 || event->argument[0]!=6 ||
                event->argument[1]!=0x800916b4u)return 0;
-            f.clock_interrupt_installed=true;return 1;
+            if(f.get(0x800c54e8u)!=0)return 0;
+            f.put(0x800c54e8u,0x800916b4u);
+            f.clock_interrupt_installed=true;
+            f.clock_interrupt_was_installed=true;
+            return 1;
         case 0x800a575cu:
             if(!f.clock_critical_section || event->pc!=0x80091594u ||
                event->argument_count!=1 || event->argument[0]!=0x8009167cu)
@@ -1508,6 +1534,20 @@ struct Fixture {
             *value={f.vblank_shutdown_progress.return_v0,
                 f.vblank_shutdown_progress.return_v0_known};
         }
+        if(f.compose_clock_shutdown && event->entry==0x8009167cu) {
+            if(event->pc!=0x80029b6cu || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029b74u)return 0;
+            ++f.clock_shutdown_invocations;
+            Nba97GameClockShutdownContext context{*memory,10,
+                event->stack_pointer,event->return_address,0xf7f7f7f7u,
+                event->global_pointer,clockShutdownIo,&f};
+            if(nba97_game_clock_shutdown(&context,
+                   &f.clock_shutdown_progress)!=NBA97_TEXT_COMPLETE)return 0;
+            *value={f.clock_shutdown_progress.return_v0,
+                f.clock_shutdown_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1600,7 +1640,8 @@ void transferred_path() {
         check(f.calls[28 + i].pc == 0x80029b20u && f.calls[28 + i].saved_register[0] == i + 1);
     check(f.calls[48].entry == 0x8009dba0u && f.calls[49].entry == 0x8009dbe0u &&
         f.calls[50].entry == 0x8009dbf8u &&
-        f.calls[71].pc == 0x80029b64u && f.calls[71].entry == 0x800a44d4u);
+        f.calls[71].pc == 0x80029b64u && f.calls[71].entry == 0x800a44d4u &&
+        f.calls[72].pc == 0x80029b6cu && f.calls[72].entry == 0x8009167cu);
     for (unsigned i = 0; i < 20; ++i)
         check(f.calls[51 + i].pc == 0x80029b50u && f.calls[51 + i].saved_register[0] == i + 1);
     check(f.calls[75].entry == 0x800aa468u && f.calls[75].argument[0] == 0x80123400u &&
@@ -1685,6 +1726,7 @@ struct Composition {
         game.put(0x800c54c8u, 0x800c54b0u);
         game.put(0x800c54bcu, 0x80098714u);
         game.put(0x800c54d0u, 0);
+        game.put(0x800c54e8u, 0);
         /* Raw GAMEONLY data starts suspended, so the first 0x8008F1D4 call
          * takes its resume branch and the later startup call takes fast path. */
         game.put(0x800c4a70u,1);
@@ -1771,6 +1813,7 @@ struct Composition {
         game.compose_cd_ready_callback = true;
         game.compose_cd_sync_callback = true;
         game.compose_vblank_shutdown = true;
+        game.compose_clock_shutdown = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2075,7 +2118,8 @@ void overlay_composition() {
         c.game.clock_calls[3].argument[1]==35280 &&
         c.game.clock_calls[4].entry==0x80098488u &&
         c.game.clock_calls[6].entry==0x800a5880u);
-    check(c.game.clock_interrupt_installed &&
+    check(c.game.clock_interrupt_was_installed &&
+        !c.game.clock_interrupt_installed &&
         c.game.clock_shutdown_registered && c.game.clock_counter_set &&
         c.game.clock_counter_started && !c.game.clock_critical_section &&
         c.game.get(0x800c4aa4u)==1 && c.game.get(0x800d7234u)==0x8009167cu &&
@@ -2660,6 +2704,40 @@ void overlay_composition() {
         c.game.vblank_shutdown_calls[0].frame_pointer==FrameSp-0x18u &&
         c.game.vblank_shutdown_calls[0].global_pointer==0x800d79c8u &&
         c.game.vblank_shutdown_calls[0].return_address==0x800a44f4u);
+    check(c.game.clock_shutdown_invocations==1 &&
+        c.game.clock_shutdown_child_callbacks==1 &&
+        c.game.clock_shutdown_calls.size()==1 &&
+        c.game.clock_shutdown_progress.completed &&
+        c.game.clock_shutdown_progress.operations==5 &&
+        c.game.clock_shutdown_progress.accesses==4 &&
+        c.game.clock_shutdown_progress.reads==2 &&
+        c.game.clock_shutdown_progress.stores==2 &&
+        c.game.clock_shutdown_progress.callbacks_completed==1 &&
+        c.game.clock_shutdown_progress.interrupt_callback_entry==0x8009860cu &&
+        c.game.clock_shutdown_progress.interrupt_number==6 &&
+        c.game.clock_shutdown_progress.replacement_callback==0 &&
+        c.game.clock_shutdown_progress.frame_stack_pointer==FrameSp-0x18u &&
+        c.game.clock_shutdown_progress.stack_pointer==FrameSp &&
+        c.game.clock_shutdown_progress.global_pointer==0x800d79c8u &&
+        c.game.clock_shutdown_progress.incoming_frame_pointer==0xf7f7f7f7u &&
+        c.game.clock_shutdown_progress.restored_return_address==0x80029b74u &&
+        c.game.clock_shutdown_progress.restored_frame_pointer==0xf7f7f7f7u &&
+        c.game.clock_shutdown_progress.return_v0==0x800916b4u &&
+        c.game.clock_shutdown_progress.return_v0_known &&
+        !c.game.clock_shutdown_progress.stopped_pc &&
+        !c.game.clock_shutdown_progress.stopped_address &&
+        !c.game.clock_shutdown_progress.stopped_entry &&
+        !c.game.clock_interrupt_installed &&
+        c.game.get(0x800c54e8u)==0);
+    check(c.game.clock_shutdown_calls[0].pc==0x80091694u &&
+        c.game.clock_shutdown_calls[0].entry==0x8009860cu &&
+        c.game.clock_shutdown_calls[0].argument_count==2 &&
+        c.game.clock_shutdown_calls[0].argument[0]==6 &&
+        c.game.clock_shutdown_calls[0].argument[1]==0 &&
+        c.game.clock_shutdown_calls[0].stack_pointer==FrameSp-0x18u &&
+        c.game.clock_shutdown_calls[0].frame_pointer==FrameSp-0x18u &&
+        c.game.clock_shutdown_calls[0].global_pointer==0x800d79c8u &&
+        c.game.clock_shutdown_calls[0].return_address==0x8009169cu);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -2667,10 +2745,10 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* The newly composed VBlank-shutdown frame is the final owner of the
+        /* The newly composed clock-shutdown frame is the final owner of the
            adjacent saved-s8 and saved-ra words in the shared stack fixture. */
-        c.game.get(FrameSp - 8u) == 0xf6f6f6f6u &&
-        c.game.get(FrameSp - 4u) == 0x80029b6cu);
+        c.game.get(FrameSp - 8u) == 0xf7f7f7f7u &&
+        c.game.get(FrameSp - 4u) == 0x80029b74u);
     check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
         c.game.get(0x800d7a88u)==52 && c.game.get(0x800d7b3cu)==0 &&
         c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);

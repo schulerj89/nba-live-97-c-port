@@ -54,3 +54,6 @@ then reaches this wrapper through recovered main. It captures
 event, receipt, and trace. The frames must be pixel-identical because callback
 unregistration performs no rendering. They establish native reachability and
 absence of a direct visual effect, not a retail gameplay frame.
+
+Main's immediately following game-clock shutdown call at `0x80029B6C` is now
+recovered separately; see [game-clock shutdown](game_clock_shutdown_workflow.md).

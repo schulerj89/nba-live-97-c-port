@@ -54,12 +54,14 @@ Evidence stays under
 `.local/verification/native_completion/game_clock_initialize`.
 
 `scripts/verify_game_entry_visual.ps1` drives Game Setup, Team Select, and User
-Setup using the test's native recovered-input handlers, captures 98 PPM frames
+Setup using the test's native recovered-input handlers, captures 134 PPM frames
 and logs, and writes the clock receipt into `game_entry_trace.json`. This
 initializer changes source callback/timer state but cannot directly change a
 pixel; Debug and RelWithDebInfo frames are therefore expected to remain
-byte-identical. Ticking `0x800916B4` naturally is a later timer/interrupt
-integration boundary. The immediately following `0x800A584C` delta sampler is
-now recovered separately and observes the initializer's zero baseline without
-inventing that cadence. The capture still does not claim a playable court or
-gameplay frame.
+byte-identical. The registered shutdown wrapper `0x8009167C` is now recovered
+separately and removes handler `0x800916B4` during main teardown; see
+[game-clock shutdown](game_clock_shutdown_workflow.md). Ticking the handler
+naturally remains a later timer/interrupt integration boundary. The immediately
+following `0x800A584C` delta sampler is recovered separately and observes the
+initializer's zero baseline without inventing that cadence. The capture still
+does not claim a playable court or gameplay frame.

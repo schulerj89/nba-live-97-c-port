@@ -379,6 +379,9 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * VBlank shutdown wrapper. It calls InterruptCallback(0,NULL), leaves the
      * service's old-handler v0 live, and reloads ra/s8 from mutable stack. */
     TRY(direct_call(run, 0x80029b64u, 0x800a44d4u, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029B6C -> 0x8009167C is the recovered 14-instruction
+     * game-clock shutdown wrapper. It removes IRQ6 handler 0x800916B4 through
+     * InterruptCallback(6,NULL), retaining live child-v0 and stack semantics. */
     TRY(direct_call(run, 0x80029b6cu, 0x8009167cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b74u, 0x8008f19cu, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029b84u, 0x800a3a74u, 2, 0x800d6decu, 0x20u, 0, &value));

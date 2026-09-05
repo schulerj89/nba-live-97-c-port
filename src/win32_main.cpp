@@ -44,6 +44,7 @@
 #include "recovered/game_cd_ready_callback.h"
 #include "recovered/game_cd_sync_callback.h"
 #include "recovered/game_vblank_shutdown.h"
+#include "recovered/game_clock_shutdown.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6291,6 +6292,7 @@ private:
             Nba97GameCdReadyCallbackProgress cd_ready_callback_progress{};
             Nba97GameCdSyncCallbackProgress cd_sync_callback_progress{};
             Nba97GameVblankShutdownProgress vblank_shutdown_progress{};
+            Nba97GameClockShutdownProgress clock_shutdown_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6319,6 +6321,7 @@ private:
                 heap_payload_size_events;
             std::vector<Nba97GameCdSyncEvent> cd_sync_events;
             std::vector<Nba97GameVblankShutdownEvent> vblank_shutdown_events;
+            std::vector<Nba97GameClockShutdownEvent> clock_shutdown_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6382,6 +6385,10 @@ private:
             std::vector<std::uint16_t> vblank_shutdown_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> vblank_shutdown_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> clock_shutdown_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> clock_shutdown_after=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
@@ -6454,6 +6461,8 @@ private:
             unsigned cd_sync_callback_calls=0;
             unsigned vblank_shutdown_calls=0;
             unsigned vblank_shutdown_child_callbacks=0;
+            unsigned clock_shutdown_calls=0;
+            unsigned clock_shutdown_child_callbacks=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6475,6 +6484,7 @@ private:
             bool vblank_critical_section=false;
             bool clock_critical_section=false;
             bool clock_interrupt_installed=false;
+            bool clock_interrupt_was_installed=false;
             bool clock_shutdown_registered=false;
             bool clock_counter_set=false;
             bool clock_counter_started=false;
@@ -6508,6 +6518,7 @@ private:
                 put(0x800c54c8u,0x800c54b0u);
                 put(0x800c54bcu,0x80098714u);
                 put(0x800c54d0u,0);
+                put(0x800c54e8u,0);
                 /* Raw GAMEONLY initial data: input begins suspended. This
                    makes startup's first 0x8008F1D4 call resume it and its
                    second call take the already-active path. */
@@ -6927,6 +6938,40 @@ private:
                     vblank_shutdown_progress.return_v0_known};
                 return 1;
             }
+            static int clockShutdownIo(void* user,
+                const Nba97GameTextMemory*,
+                const Nba97GameClockShutdownEvent* event,
+                Nba97GameClockShutdownValue* value) {
+                auto& state=*static_cast<State*>(user);
+                ++state.clock_shutdown_child_callbacks;
+                state.clock_shutdown_events.push_back(*event);
+                if(!state.clock_interrupt_installed ||
+                   state.get(0x800c54e8u)!=0x800916b4u ||
+                   event->pc!=0x80091694u || event->entry!=0x8009860cu ||
+                   event->argument_count!=2 || event->argument[0]!=6 ||
+                   event->argument[1]!=0)return 0;
+                state.put(0x800c54e8u,0);
+                state.clock_interrupt_installed=false;
+                *value={0x800916b4u,1};
+                return 1;
+            }
+            int runClockShutdown(const Nba97GameTextMemory* memory,
+                std::uint32_t stack_pointer,std::uint32_t return_address,
+                std::uint32_t global_pointer,Nba97GameMainValue* value) {
+                if(!memory || !value || clock_shutdown_calls)return 0;
+                captureDisplay(clock_shutdown_before);
+                Nba97GameClockShutdownContext context{*memory,10,
+                    stack_pointer,return_address,0xf7f7f7f7u,global_pointer,
+                    clockShutdownIo,this};
+                if(nba97_game_clock_shutdown(&context,
+                       &clock_shutdown_progress)!=NBA97_TEXT_COMPLETE ||
+                   !clock_shutdown_progress.completed)return 0;
+                captureDisplay(clock_shutdown_after);
+                ++clock_shutdown_calls;
+                *value={clock_shutdown_progress.return_v0,
+                    clock_shutdown_progress.return_v0_known};
+                return 1;
+            }
             void completeGpuWork() {
                 for(const auto& command:pending_moves) {
                     std::vector<std::uint16_t> pixels(
@@ -7334,7 +7379,10 @@ private:
                            clock_event->argument_count!=2 ||
                            clock_event->argument[0]!=6 ||
                            clock_event->argument[1]!=0x800916b4u)return 0;
+                        if(state.get(0x800c54e8u)!=0)return 0;
+                        state.put(0x800c54e8u,0x800916b4u);
                         state.clock_interrupt_installed=true;
+                        state.clock_interrupt_was_installed=true;
                         return 1;
                     case 0x800a575cu:
                         if(!state.clock_critical_section ||
@@ -8307,6 +8355,15 @@ private:
                        event->return_address,event->global_pointer,value))
                     return 0;
             }
+            else if(event->entry==0x8009167cu) {
+                if(event->pc!=0x80029b6cu || event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029b74u)return 0;
+                if(!fixture.runClockShutdown(memory,event->stack_pointer,
+                       event->return_address,event->global_pointer,value))
+                    return 0;
+            }
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
@@ -8950,6 +9007,44 @@ private:
         const bool vblank_shutdown_visual_unchanged=
             state.vblank_shutdown_before==state.vblank_shutdown_after &&
             state.vblank_shutdown_before==state.cd_sync_callback_after;
+        const bool clock_shutdown_complete=
+            state.clock_shutdown_calls==1 &&
+            state.clock_shutdown_child_callbacks==1 &&
+            state.clock_shutdown_events.size()==1 &&
+            state.clock_shutdown_progress.completed &&
+            state.clock_shutdown_progress.operations==5 &&
+            state.clock_shutdown_progress.accesses==4 &&
+            state.clock_shutdown_progress.reads==2 &&
+            state.clock_shutdown_progress.stores==2 &&
+            state.clock_shutdown_progress.callbacks_completed==1 &&
+            state.clock_shutdown_progress.interrupt_callback_entry==0x8009860cu &&
+            state.clock_shutdown_progress.interrupt_number==6 &&
+            state.clock_shutdown_progress.replacement_callback==0 &&
+            state.clock_shutdown_progress.frame_stack_pointer==0x807fffb8u &&
+            state.clock_shutdown_progress.stack_pointer==0x807fffd0u &&
+            state.clock_shutdown_progress.global_pointer==0x800d79c8u &&
+            state.clock_shutdown_progress.incoming_frame_pointer==0xf7f7f7f7u &&
+            state.clock_shutdown_progress.restored_return_address==0x80029b74u &&
+            state.clock_shutdown_progress.restored_frame_pointer==0xf7f7f7f7u &&
+            state.clock_shutdown_progress.return_v0==0x800916b4u &&
+            state.clock_shutdown_progress.return_v0_known &&
+            !state.clock_shutdown_progress.stopped_pc &&
+            !state.clock_shutdown_progress.stopped_address &&
+            !state.clock_shutdown_progress.stopped_entry &&
+            !state.clock_interrupt_installed &&
+            state.get(0x800c54e8u)==0 &&
+            state.clock_shutdown_events[0].pc==0x80091694u &&
+            state.clock_shutdown_events[0].entry==0x8009860cu &&
+            state.clock_shutdown_events[0].argument_count==2 &&
+            state.clock_shutdown_events[0].argument[0]==6 &&
+            state.clock_shutdown_events[0].argument[1]==0 &&
+            state.clock_shutdown_events[0].stack_pointer==0x807fffb8u &&
+            state.clock_shutdown_events[0].frame_pointer==0x807fffb8u &&
+            state.clock_shutdown_events[0].global_pointer==0x800d79c8u &&
+            state.clock_shutdown_events[0].return_address==0x8009169cu;
+        const bool clock_shutdown_visual_unchanged=
+            state.clock_shutdown_before==state.clock_shutdown_after &&
+            state.clock_shutdown_before==state.vblank_shutdown_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -9007,6 +9102,14 @@ private:
                 std::to_string(state.vblank_shutdown_progress.return_v0));
         if(!vblank_shutdown_visual_unchanged)
             throw std::runtime_error("translated 0x800A44D4 unexpectedly changed retained scanout");
+        if(!clock_shutdown_complete)
+            throw std::runtime_error("translated 0x8009167C diagnostic state drifted: calls="+
+                std::to_string(state.clock_shutdown_calls)+" children="+
+                std::to_string(state.clock_shutdown_child_callbacks)+" installed="+
+                std::to_string(state.clock_interrupt_installed)+" return="+
+                std::to_string(state.clock_shutdown_progress.return_v0));
+        if(!clock_shutdown_visual_unchanged)
+            throw std::runtime_error("translated 0x8009167C unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9248,7 +9351,8 @@ private:
             state.clock_progress.stack_pointer!=0x807fffd0u ||
             state.clock_progress.restored_return_address!=0x80029a54u ||
             state.clock_progress.restored_frame_pointer!=0xf5f5f5f5u ||
-            !state.clock_interrupt_installed ||
+            !state.clock_interrupt_was_installed ||
+            state.clock_interrupt_installed ||
             !state.clock_shutdown_registered || !state.clock_counter_set ||
             !state.clock_counter_started || state.clock_critical_section ||
             state.clock_hardware_mode!=0x258u ||
@@ -9383,6 +9487,8 @@ private:
            !cd_sync_callback_visual_unchanged ||
            !vblank_shutdown_complete ||
            !vblank_shutdown_visual_unchanged ||
+           !clock_shutdown_complete ||
+           !clock_shutdown_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9401,8 +9507,8 @@ private:
             state.get(0x800c55d0u)!=0xffffffffu ||
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
-            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf6f6f6f6u ||
-            state.get(0x807fffccu)!=0x80029b6cu ||
+            state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0xf7f7f7f7u ||
+            state.get(0x807fffccu)!=0x80029b74u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
@@ -9442,7 +9548,8 @@ private:
             state.calls[25].return_address!=0x80029aecu ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u ||
-            state.calls[71].pc!=0x80029b64u || state.calls[71].entry!=0x800a44d4u)
+            state.calls[71].pc!=0x80029b64u || state.calls[71].entry!=0x800a44d4u ||
+            state.calls[72].pc!=0x80029b6cu || state.calls[72].entry!=0x8009167cu)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
             const std::vector<std::uint16_t>* snapshot) {
@@ -9559,6 +9666,10 @@ private:
             capture_root/"vblank-shutdown-before.ppm");
         writePpm(vram_frame(0,0,&state.vblank_shutdown_after),
             capture_root/"vblank-shutdown-after.ppm");
+        writePpm(vram_frame(0,0,&state.clock_shutdown_before),
+            capture_root/"clock-shutdown-before.ppm");
+        writePpm(vram_frame(0,0,&state.clock_shutdown_after),
+            capture_root/"clock-shutdown-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -10223,6 +10334,33 @@ private:
             "\"vblank-shutdown-after.ppm\"], "
             "\"visual_effect\": \"no pixels changed; retained VBlank handler state changed from installed to removed\", "
             "\"status\": \"vblank-handler-removed\"},\n"
+            "  \"clock_shutdown\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x8009167C\", \"end_exclusive\": \"0x800916B4\", "
+            "\"instructions\": 14, \"source_bytes_sha256\": "
+            "\"0724e7dd8a73dd92dde6a9128d2435f60888f950b29d1bf83f6d8e29f259c5dd\", "
+            "\"call_pc\": \"0x80029B6C\", \"service\": \"InterruptCallback\", "
+            "\"service_entry\": \"0x8009860C\", \"interrupt_number\": 6, "
+            "\"callback_slot\": \"0x800C54E8\", "
+            "\"replacement_callback\": \"0x00000000\", "
+            "\"previous_handler\": \"0x800916B4\", "
+            "\"fixture_origin\": \"handler installed by the earlier recovered game-clock initializer\", "
+            "\"direct_caller\": \"0x80029B6C\", "
+            "\"registered_shutdown_handler\": true, \"operations\": "<<
+            state.clock_shutdown_progress.operations<<", \"accesses\": "<<
+            state.clock_shutdown_progress.accesses<<", \"reads\": "<<
+            state.clock_shutdown_progress.reads<<", \"stores\": "<<
+            state.clock_shutdown_progress.stores<<", \"child_calls\": "<<
+            state.clock_shutdown_progress.callbacks_completed<<
+            ", \"source_quirks\": {\"no_critical_section\": true, "
+            "\"hardcoded_interrupt_and_null_callback\": true, "
+            "\"child_v0_remains_live\": true, "
+            "\"live_saved_ra_reload\": true, \"live_saved_s8_reload\": true, "
+            "\"previous_handler_not_checked\": true}, "
+            "\"service_scope\": \"typed PS1 callback-table fixture; no host interrupt or timer effect claimed\", "
+            "\"captures\": [\"clock-shutdown-before.ppm\", "
+            "\"clock-shutdown-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; retained game-clock IRQ6 handler state changed from installed to removed\", "
+            "\"status\": \"clock-handler-removed\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
@@ -10233,6 +10371,7 @@ private:
             "\"cd_ready_callback\": \"0x8009DBE0\", "
             "\"cd_sync_callback\": \"0x8009DBF8\", "
             "\"vblank_shutdown\": \"0x800A44D4\", "
+            "\"clock_shutdown\": \"0x8009167C\", "
             "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -10502,6 +10641,21 @@ private:
             "lack of a critical section, hardcoded arguments, unchecked previous "
             "handler, live child v0, and mutable saved-ra/s8 epilogue remain; no "
             "Windows interrupt or host timing behavior was invented");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x8009167C is the 14-instruction game-clock "
+            "shutdown wrapper reached at call PC 0x80029B6C immediately after "
+            "VBlank shutdown; it called PsyQ InterruptCallback(6,NULL) at "
+            "0x8009860C through callback slot 0x800C54E8 in an explicit diagnostic "
+            "callback-table fixture, removed source Timer 2 handler 0x800916B4 "
+            "installed by the earlier recovered game-clock initializer, and left "
+            "that old-handler value live in v0; clock-shutdown-before.ppm and "
+            "clock-shutdown-after.ppm are pixel-identical because interrupt "
+            "unregistration performs no rendering; both frames and the exact "
+            "child-call log were captured natively by the self-driving recovered-input "
+            "test, not computer control; the source's lack of a critical section, "
+            "hardcoded arguments, unchecked previous handler, live child v0, and "
+            "mutable saved-ra/s8 epilogue remain; no Windows interrupt or host timer "
+            "behavior was invented");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered boundary 0x8009DBF8 is the 6-instruction PsyQ "
             "CdSyncCallback exchange reached at call PC 0x80029B44 immediately "
