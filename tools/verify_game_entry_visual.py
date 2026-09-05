@@ -402,6 +402,37 @@ def main():
         "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    warmup = scene["random_warmup"]
+    require((warmup["program"], warmup["address"], warmup["inclusive_end"],
+             warmup["bytes"], warmup["instructions"], warmup["call_pc"]) ==
+            ("GAMEONLY", "0x800802AC", "0x80080303", 88, 22, "0x8002DB70"),
+            "random warm-up provenance drifted")
+    require(warmup["classification"] == "no direct visual effect" and
+            "synthetic" in warmup["scope"] and warmup["completed"] == 1 and
+            (warmup["operations"], warmup["reads"], warmup["stores"], warmup["calls_completed"]) ==
+            (73, 2, 2, 69) and warmup["count"] == 65 and warmup["seed"] == 0xCAFE and
+            warmup["frame_sp"] == 0x807FFF78 and warmup["restored_ra"] == 0x8002DB78 and
+            warmup["step_counts"] == list(range(64, -1, -1)),
+            "random warm-up count, delay decrement, seed or stack state drifted")
+    expected_warmup_calls = [(0x800802B4, 0x800800F8), (0x800802BC, 0x8002AB70),
+                            (0x800802C8, 0x8002AB70), (0x800802D0, 0x80093694)] + \
+                           [(0x800802E0, 0x800935C4)] * 65
+    require(warmup["children"] == [{"pc": pc, "entry": entry, "delay_slot_pc": pc + 4}
+                                   for pc, entry in expected_warmup_calls] and
+            warmup["accesses"] == [
+                {"pc": pc, "address": address, "value": value, "known_mask": 15}
+                for pc, address, value in [
+                    (0x800802B0, 0x807FFF8C, 0x8002DB78),
+                    (0x800802B8, 0x807FFF88, warmup["restored_s0"]),
+                    (0x800802F0, 0x807FFF8C, 0x8002DB78),
+                    (0x800802F4, 0x807FFF88, warmup["restored_s0"]) ]],
+            "random warm-up exact child or memory journal drifted")
+    (args.frames / "scene_random_warmup_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x800802AC", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
+        "state": warmup, "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     loop = read_json(args.frames / "loop_entry_trace.json")
     require((loop["program"], loop["address"], loop["inclusive_end"],
              loop["bytes"], loop["instructions"], loop["call_pc"]) ==

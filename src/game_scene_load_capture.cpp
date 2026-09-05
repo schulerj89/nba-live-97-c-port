@@ -1,5 +1,6 @@
 #include "game_scene_load_capture.h"
 #include "game_scene_load_adapter.h"
+#include "game_scene_random_warmup_adapter.h"
 #include <array>
 #include <fstream>
 #include <sstream>
@@ -19,11 +20,31 @@ std::uint32_t readCaptureWord(const Nba97GameTextMemory& memory,std::uint32_t ad
     }
     throw std::runtime_error("scene wrapper capture escaped retained memory");
 }
-struct Children { std::vector<Nba97GameSceneLoadEvent> events; };
+struct Children {
+    std::vector<Nba97GameSceneLoadEvent> events;
+    std::vector<Nba97GameSceneRandomWarmupEvent> warmup_events;
+    std::vector<std::uint32_t> step_counts;
+};
+int syntheticWarmupChild(void* user,const Nba97GameTextMemory*,
+    const Nba97GameSceneRandomWarmupEvent* event,
+    Nba97GameSceneRandomWarmupRegisters* registers) {
+    auto& children=*static_cast<Children*>(user);
+    children.warmup_events.push_back(*event);
+    // Explicit deterministic service fixtures, not the original RNG algorithm.
+    if(event->kind==NBA97_GAME_SCENE_RANDOM_WARMUP_RANDOM_8002AB70)
+        registers->gpr[NBA97_MATCH_INITIALIZE_V0]={
+            event->invocation==1?0xdead0081u:0xbeefcafeu,0xf};
+    if(event->kind==NBA97_GAME_SCENE_RANDOM_WARMUP_STEP_800935C4) {
+        children.step_counts.push_back(registers->gpr[NBA97_MATCH_INITIALIZE_S0].word);
+        registers->gpr[NBA97_MATCH_INITIALIZE_V0]={
+            0x60000000u+static_cast<std::uint32_t>(event->invocation),0xf};
+    }
+    return 1;
+}
 int syntheticChild(void* user,const Nba97GameTextMemory*,
     const Nba97GameSceneLoadEvent* event,Nba97GameSceneLoadRegisters* registers) {
     static_cast<Children*>(user)->events.push_back(*event);
-    // Explicit fixture response only. The wrapper owns no scene or RNG work.
+    // Explicit scene-startup fixture; this callback owns no child algorithm.
     registers->gpr[NBA97_MATCH_INITIALIZE_V0]={event->entry,0xf};
     return 1;
 }
@@ -41,7 +62,14 @@ bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
     std::array<Nba97GameSceneLoadAccess,2> journal{};
     context.access_journal=journal.data();context.access_journal_capacity=journal.size();
     Nba97GameSceneLoadProgress progress{};
-    const auto result=nba97_game_scene_load(&context,&progress);
+    Nba97GameSceneRandomWarmupContext warmup{};
+    warmup.operation_budget=256;warmup.io=syntheticWarmupChild;warmup.user=&children;
+    std::array<Nba97GameSceneRandomWarmupAccess,4> warmup_journal{};
+    warmup.access_journal=warmup_journal.data();warmup.access_journal_capacity=warmup_journal.size();
+    Nba97GameSceneRandomWarmupAdapterProgress adapter{};
+    const auto result=nba97_game_scene_load_with_random_warmup(&context,&warmup,&progress,&adapter);
+    if(adapter.warmup_invocations==1)
+        children.events.insert(children.events.begin(),adapter.warmup_event);
     if(result!=NBA97_TEXT_COMPLETE || !progress.completed || children.events.size()!=2)
         return false;
     const auto& live=progress.registers.gpr;
@@ -51,7 +79,7 @@ bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
     out<<"{\n\"program\":\"GAMEONLY\",\"address\":\"0x8002DB68\","
         "\"inclusive_end\":\"0x8002DB8F\",\"bytes\":40,\"instructions\":10,"
         "\"call_pc\":\"0x8002DA84\",\"classification\":\"no direct visual effect\",\n"
-        "\"scope\":\"recovered wrapper; two synthetic child responses, no advancing match loop\","
+        "\"scope\":\"recovered wrapper and random warm-up; synthetic service responses, no advancing match loop\","
         "\"operations\":"<<progress.operations<<",\"reads\":"<<progress.reads<<
         ",\"stores\":"<<progress.stores<<",\"calls_completed\":"<<progress.callbacks_completed<<
         ",\"saved_address\":"<<saved_address<<",\"saved_before\":"<<saved_before<<
@@ -70,7 +98,34 @@ bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
         out<<"{\"pc\":"<<journal[i].pc<<",\"address\":"<<journal[i].address<<
             ",\"value\":"<<journal[i].value<<'}';
     }
-    out<<"],\"routine_capture_frame_numbers\":[0,1],"
+    const auto& random=adapter.warmup;
+    out<<"],\"random_warmup\":{\"program\":\"GAMEONLY\",\"address\":\"0x800802AC\","
+        "\"inclusive_end\":\"0x80080303\",\"bytes\":88,\"instructions\":22,"
+        "\"call_pc\":\"0x8002DB70\",\"classification\":\"no direct visual effect\","
+        "\"scope\":\"source owner with synthetic startup/random/seed/step responses\","
+        "\"completed\":"<<unsigned(random.completed)<<",\"operations\":"<<random.operations<<
+        ",\"reads\":"<<random.reads<<",\"stores\":"<<random.stores<<
+        ",\"calls_completed\":"<<random.callbacks_completed<<",\"count\":"<<random.warmup_count.word<<
+        ",\"seed\":"<<random.seed_argument.word<<",\"frame_sp\":"<<random.frame_stack_pointer<<
+        ",\"restored_ra\":"<<random.restored_return_address.word<<
+        ",\"restored_s0\":"<<random.restored_s0.word<<",\"step_counts\":[";
+    for(std::size_t i=0;i<children.step_counts.size();++i) {
+        if(i)out<<',';out<<children.step_counts[i];
+    }
+    out<<"],\"children\":[";
+    for(std::size_t i=0;i<children.warmup_events.size();++i) {
+        if(i)out<<',';
+        const auto& child=children.warmup_events[i];
+        out<<"{\"pc\":"<<child.pc<<",\"entry\":"<<child.entry<<
+            ",\"delay_slot_pc\":"<<child.delay_slot_pc<<'}';
+    }
+    out<<"],\"accesses\":[";
+    for(std::size_t i=0;i<random.access_events;++i) {
+        if(i)out<<',';const auto& access=warmup_journal[i];
+        out<<"{\"pc\":"<<access.pc<<",\"address\":"<<access.address<<
+            ",\"value\":"<<access.value<<",\"known_mask\":"<<unsigned(access.known_mask)<<'}';
+    }
+    out<<"]},\"routine_capture_frame_numbers\":[0,1],"
         "\"captures\":[\"scene-load-before.ppm\",\"scene-load-after.ppm\"]}\n";
     receipt=out.str();return true;
 }
