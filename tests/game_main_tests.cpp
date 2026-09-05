@@ -23,6 +23,7 @@
 #include "recovered/game_resource_validator_install.h"
 #include "recovered/game_frame_rate_reset.h"
 #include "recovered/game_match_session.h"
+#include "recovered/game_loading_screen.h"
 
 #include <array>
 #include <cstdint>
@@ -100,6 +101,7 @@ struct Fixture {
     Nba97GameResourceValidatorInstallProgress resource_validator_progress{};
     Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
     Nba97GameMatchSessionProgress match_session_progress{};
+    Nba97GameLoadingScreenProgress loading_screen_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -125,6 +127,7 @@ struct Fixture {
     std::vector<Nba97GameDisplayMaskSetEvent> display_mask_calls;
     std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_calls;
     std::vector<Nba97GameMatchSessionEvent> match_session_calls;
+    std::vector<Nba97GameLoadingScreenEvent> loading_screen_calls;
     std::vector<Nba97GameFrameRateResetEvent>
         match_session_frame_rate_reset_calls;
     std::vector<Nba97GamePresentationWaitEvent>
@@ -149,6 +152,7 @@ struct Fixture {
     unsigned match_session_frame_rate_reset_child_callbacks = 0;
     unsigned match_session_presentation_wait_invocations = 0;
     unsigned match_session_vblank_signals = 0;
+    unsigned loading_screen_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -195,6 +199,7 @@ struct Fixture {
     bool compose_resource_validator_install = false;
     bool compose_frame_rate_reset = false;
     bool compose_match_session = false;
+    bool compose_loading_screen = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -684,6 +689,61 @@ struct Fixture {
             return 0;
         }
     }
+    static int loadingScreenIo(void* user, const Nba97GameTextMemory*,
+        const Nba97GameLoadingScreenEvent* event,
+        Nba97GameLoadingScreenValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        const auto call=f.loading_screen_calls.size();
+        f.loading_screen_calls.push_back(*event);
+        static constexpr std::uint32_t pcs[10]={0x80029e70u,0x80029e8cu,
+            0x80029e98u,0x80029eb0u,0x80029eb8u,0x80029ed0u,
+            0x80029ed8u,0x80029ef0u,0x80029ef8u,0x80029f00u};
+        static constexpr std::uint32_t entries[10]={0x80029bfcu,
+            0x800a5478u,0x800994f4u,0x800946b8u,0x800994f4u,
+            0x800946b8u,0x800994f4u,0x800946b8u,0x800994f4u,
+            0x80090698u};
+        if(call>=10 || event->pc!=pcs[call] || event->entry!=entries[call] ||
+           event->stack_pointer!=FrameSp-0x28u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=event->pc+8u)
+            return 0;
+        *value={0,1};
+        if(call==0) {
+            if(event->kind!=NBA97_GAME_LOADING_SCREEN_LOAD_RESOURCE ||
+               event->argument_count!=2 ||
+               event->argument[0]!=0x800247f8u || event->argument[1]!=0)
+                return 0;
+            *value={0x80130000u,1};
+        } else if(call==1) {
+            if(event->kind!=NBA97_GAME_LOADING_SCREEN_FIND_IMAGE ||
+               event->argument_count!=2 ||
+               event->argument[0]!=0x80130000u ||
+               event->argument[1]!=0x80024808u)
+                return 0;
+            *value={0x80140000u,1};
+        } else if(call==9) {
+            if(event->kind!=NBA97_GAME_LOADING_SCREEN_RELEASE_RESOURCE ||
+               event->argument_count!=1 ||
+               event->argument[0]!=0x80130000u)
+                return 0;
+        } else if(call==2 || call==4 || call==6 || call==8) {
+            if(event->kind!=NBA97_GAME_LOADING_SCREEN_DRAW_SYNC ||
+               event->argument_count!=1 || event->argument[0]!=0)
+                return 0;
+        } else {
+            const unsigned upload=(static_cast<unsigned>(call)-3u)/2u;
+            static constexpr std::uint32_t x[3]={0,0,0x200u};
+            static constexpr std::uint32_t y[3]={0,0x100u,0};
+            if(event->kind!=NBA97_GAME_LOADING_SCREEN_UPLOAD_IMAGE ||
+               event->argument_count!=5 ||
+               event->argument[0]!=0x80140000u ||
+               event->argument[1]!=x[upload] ||
+               event->argument[2]!=y[upload] ||
+               event->argument[3]!=0 || event->argument[4]!=0)
+                return 0;
+        }
+        return 1;
+    }
     static int videoEnvironmentIo(void* user, const Nba97GameTextMemory*,
         const Nba97GameVideoEnvironmentInitializeEvent* event,
         Nba97GameVideoEnvironmentInitializeValue* value) {
@@ -1154,6 +1214,23 @@ struct Fixture {
             *value={f.match_session_progress.return_v0,
                 f.match_session_progress.return_v0_known};
         }
+        if (f.compose_loading_screen && event->entry == 0x80029e58u) {
+            if(event->pc!=0x80029ae4u || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029aecu)
+                return 0;
+            ++f.loading_screen_invocations;
+            Nba97GameLoadingScreenContext context{*memory,30,
+                event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1]},
+                event->global_pointer,loadingScreenIo,&f};
+            if(nba97_game_loading_screen(&context,
+                   &f.loading_screen_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.loading_screen_progress.return_v0,
+                f.loading_screen_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1363,6 +1440,9 @@ struct Composition {
         game.gpu_sync_state.c5714_timer_status_ptr=0x1f801124u;
         game.gpu_sync_state.c5718_timer_counter_ptr=0x1f801120u;
         game.putText(0x800247e4u,"cdrom:");
+        game.putText(0x800247ecu,"feload.bin");
+        game.putText(0x800247f8u,"zloadscr.psh");
+        game.putText(0x80024808u,"LdS1");
         game.put(0x800d7a0cu,0x5cu,1);
         game.put(0x800d7a0du,0,1);
         /* Raw BSS state used by 0x800A9CC0's ordinary one-VBlank path. */
@@ -1399,6 +1479,7 @@ struct Composition {
         game.compose_resource_validator_install = true;
         game.compose_frame_rate_reset = true;
         game.compose_match_session = true;
+        game.compose_loading_screen = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2099,6 +2180,34 @@ void overlay_composition() {
         c.game.calls[25].pc==0x80029ae4u &&
         c.game.calls[25].entry==0x80029e58u &&
         c.game.calls[25].return_address==0x80029aecu);
+    check(c.game.loading_screen_invocations==1 &&
+        c.game.loading_screen_progress.completed &&
+        c.game.loading_screen_progress.operations==16 &&
+        c.game.loading_screen_progress.accesses==6 &&
+        c.game.loading_screen_progress.reads==3 &&
+        c.game.loading_screen_progress.stores==3 &&
+        c.game.loading_screen_progress.callbacks_completed==10 &&
+        c.game.loading_screen_progress.load_calls==1 &&
+        c.game.loading_screen_progress.lookup_calls==1 &&
+        c.game.loading_screen_progress.draw_sync_calls==4 &&
+        c.game.loading_screen_progress.upload_calls==3 &&
+        c.game.loading_screen_progress.release_calls==1 &&
+        c.game.loading_screen_progress.loaded_resource==0x80130000u &&
+        c.game.loading_screen_progress.resolved_image==0x80140000u &&
+        c.game.loading_screen_progress.image_lookup_completed &&
+        c.game.loading_screen_progress.resolved_image_known &&
+        c.game.loading_screen_progress.frame_stack_pointer==FrameSp-0x28u &&
+        c.game.loading_screen_progress.stack_pointer==FrameSp &&
+        c.game.loading_screen_progress.restored_return_address==0x80029aecu &&
+        c.game.loading_screen_progress.restored_saved_register[0]==1 &&
+        c.game.loading_screen_progress.restored_saved_register[1]==0 &&
+        c.game.loading_screen_calls.size()==10);
+    check(c.game.loading_screen_calls[0].entry==0x80029bfcu &&
+        c.game.loading_screen_calls[1].entry==0x800a5478u &&
+        c.game.loading_screen_calls[3].entry==0x800946b8u &&
+        c.game.loading_screen_calls[5].entry==0x800946b8u &&
+        c.game.loading_screen_calls[7].entry==0x800946b8u &&
+        c.game.loading_screen_calls[9].entry==0x80090698u);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&

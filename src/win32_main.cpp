@@ -37,6 +37,8 @@
 #include "recovered/game_resource_validator_install.h"
 #include "recovered/game_frame_rate_reset.h"
 #include "recovered/game_match_session.h"
+#include "recovered/game_loading_screen.h"
+#include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6273,6 +6275,10 @@ private:
                 resource_validator_progress{};
             Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
             Nba97GameMatchSessionProgress match_session_progress{};
+            Nba97GameLoadingScreenProgress loading_screen_progress{};
+            std::array<Nba97GameImageUploadProgress,3>
+                loading_screen_image_progress{};
+            Nba97GameImageUploadState loading_screen_upload_state{0,1};
             Nba97GameFrameRateResetProgress
                 match_session_frame_rate_reset_progress{};
             std::array<Nba97GamePresentationWaitProgress,11>
@@ -6292,6 +6298,7 @@ private:
             std::vector<Nba97GameDisplayMaskSetEvent> display_mask_events;
             std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_events;
             std::vector<Nba97GameMatchSessionEvent> match_session_events;
+            std::vector<Nba97GameLoadingScreenEvent> loading_screen_events;
             std::vector<Nba97GameFrameRateResetEvent>
                 match_session_frame_rate_reset_events;
             std::vector<Nba97GamePresentationWaitEvent>
@@ -6324,6 +6331,18 @@ private:
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> match_session_after=
                 std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> loading_screen_display_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> loading_screen_display_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> loading_screen_vram_before=
+                std::vector<std::uint16_t>(1024u*512u);
+            std::vector<std::uint16_t> loading_screen_vram_after_first=
+                std::vector<std::uint16_t>(1024u*512u);
+            std::vector<std::uint16_t> loading_screen_vram_after_second=
+                std::vector<std::uint16_t>(1024u*512u);
+            std::vector<std::uint16_t> loading_screen_vram_after_third=
+                std::vector<std::uint16_t>(1024u*512u);
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
             unsigned heap_calls=0;
@@ -6371,6 +6390,11 @@ private:
             unsigned match_session_frame_rate_reset_child_callbacks=0;
             unsigned match_session_presentation_wait_calls=0;
             unsigned match_session_vblank_signals=0;
+            unsigned loading_screen_calls=0;
+            unsigned loading_screen_sync_calls=0;
+            unsigned loading_screen_upload_calls=0;
+            unsigned loading_screen_transfer_callbacks=0;
+            unsigned loading_screen_release_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6401,6 +6425,8 @@ private:
             std::uint32_t active_draw_environment=0;
             std::uint32_t display_control_word=0xffffffffu;
             bool display_visible=false;
+            bool loading_screen_resource_loaded=false;
+            bool loading_screen_resource_released=false;
             std::uint32_t resource_validator_callback_before=0xffffffffu;
             std::uint32_t resource_validator_callback_after=0xffffffffu;
             std::array<std::uint32_t,6> frame_rate_words_before{};
@@ -6412,6 +6438,9 @@ private:
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
                     Nba97GameTextRegion{0x80000000u,ram.data(),ram_known.data(),ram.size()}};
                 putText(0x800247e4u,"cdrom:");
+                putText(0x800247ecu,"feload.bin");
+                putText(0x800247f8u,"zloadscr.psh");
+                putText(0x80024808u,"LdS1");
                 putByte(0x800d7a0cu,0x5c);
                 putByte(0x800d7a0du,0);
                 put(0x800c54acu,0x7ffu);
@@ -6500,6 +6529,26 @@ private:
                 }
                 for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x)
                     move_image_before_top[y*512u+x]=diagnostic_vram[y*1024u+x];
+                /* Generated retained LdS1 fixture. It is deliberately not
+                   retail artwork: the recovered 0x800946B8 owner consumes
+                   this ordinary 16-bit 512x240 header/payload three times. */
+                constexpr std::uint32_t image=0x80140000u;
+                put(image,0x42u);putHalf(image+4u,512);putHalf(image+6u,240);
+                put(image+8u,0);putHalf(image+12u,0);putHalf(image+14u,0);
+                for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x) {
+                    const bool border=x<5u || x>=507u || y<5u || y>=235u;
+                    const bool cross=(x>=248u && x<264u) ||
+                        (y>=112u && y<128u);
+                    const bool diagonal=((x+y)/12u)%2u==0;
+                    const std::uint16_t r=border ? 31u : cross ? 31u :
+                        static_cast<std::uint16_t>((x/17u+6u)&31u);
+                    const std::uint16_t g=border ? 6u : cross ? 26u :
+                        static_cast<std::uint16_t>((y/9u+10u)&31u);
+                    const std::uint16_t b=border ? 24u : cross ? 2u :
+                        static_cast<std::uint16_t>(diagonal ? 25u : 8u);
+                    putHalf(image+16u+(y*512u+x)*2u,
+                        static_cast<std::uint16_t>(r|(g<<5u)|(b<<10u)));
+                }
             }
             void put(std::uint32_t address,std::uint32_t value) {
                 for(auto& region:regions)if(address>=region.base && std::uint64_t(address-region.base)+4<=region.size) {
@@ -7704,6 +7753,172 @@ private:
                 fixture.captureDisplay(fixture.match_session_after);
                 *value={fixture.match_session_progress.return_v0,
                     fixture.match_session_progress.return_v0_known};
+            } else if(event->entry==0x80029e58u) {
+                if(event->pc!=0x80029ae4u || event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029aecu)return 0;
+                ++fixture.loading_screen_calls;
+                fixture.captureDisplay(fixture.loading_screen_display_before);
+                fixture.loading_screen_vram_before=fixture.diagnostic_vram;
+                const auto loading_io=[](void* user,
+                    const Nba97GameTextMemory*,
+                    const Nba97GameLoadingScreenEvent* loading_event,
+                    Nba97GameLoadingScreenValue* loading_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    const auto call=state.loading_screen_events.size();
+                    state.loading_screen_events.push_back(*loading_event);
+                    static constexpr std::uint32_t pcs[10]={0x80029e70u,
+                        0x80029e8cu,0x80029e98u,0x80029eb0u,0x80029eb8u,
+                        0x80029ed0u,0x80029ed8u,0x80029ef0u,0x80029ef8u,
+                        0x80029f00u};
+                    static constexpr std::uint32_t entries[10]={0x80029bfcu,
+                        0x800a5478u,0x800994f4u,0x800946b8u,0x800994f4u,
+                        0x800946b8u,0x800994f4u,0x800946b8u,0x800994f4u,
+                        0x80090698u};
+                    if(call>=10 || loading_event->pc!=pcs[call] ||
+                       loading_event->entry!=entries[call] ||
+                       loading_event->stack_pointer!=0x807fffa8u ||
+                       loading_event->global_pointer!=0x800d79c8u ||
+                       loading_event->return_address!=loading_event->pc+8u)
+                        return 0;
+                    *loading_value={0,1};
+                    const auto has_text=[&](std::uint32_t address,
+                        const char* expected) {
+                        do {
+                            if(state.getByte(address++)!=
+                               static_cast<std::uint8_t>(*expected))
+                                return false;
+                        } while(*expected++);
+                        return true;
+                    };
+                    switch(loading_event->kind) {
+                    case NBA97_GAME_LOADING_SCREEN_LOAD_RESOURCE:
+                        if(call!=0 || loading_event->argument_count!=2 ||
+                           loading_event->argument[0]!=0x800247f8u ||
+                           loading_event->argument[1]!=0 ||
+                           !has_text(loading_event->argument[0],
+                               "zloadscr.psh"))return 0;
+                        state.loading_screen_resource_loaded=true;
+                        *loading_value={0x80130000u,1};
+                        return 1;
+                    case NBA97_GAME_LOADING_SCREEN_FIND_IMAGE:
+                        if(call!=1 || !state.loading_screen_resource_loaded ||
+                           loading_event->argument_count!=2 ||
+                           loading_event->argument[0]!=0x80130000u ||
+                           loading_event->argument[1]!=0x80024808u ||
+                           !has_text(loading_event->argument[1],"LdS1"))
+                            return 0;
+                        *loading_value={0x80140000u,1};
+                        return 1;
+                    case NBA97_GAME_LOADING_SCREEN_DRAW_SYNC:
+                        if(loading_event->argument_count!=1 ||
+                           loading_event->argument[0]!=0 ||
+                           state.loading_screen_sync_calls>=4)return 0;
+                        ++state.loading_screen_sync_calls;
+                        return 1;
+                    case NBA97_GAME_LOADING_SCREEN_UPLOAD_IMAGE: {
+                        const auto upload=state.loading_screen_upload_calls;
+                        static constexpr std::uint32_t x[3]={0,0,0x200u};
+                        static constexpr std::uint32_t y[3]={0,0x100u,0};
+                        if(upload>=3 || loading_event->argument_count!=5 ||
+                           loading_event->argument[0]!=0x80140000u ||
+                           loading_event->argument[1]!=x[upload] ||
+                           loading_event->argument[2]!=y[upload] ||
+                           loading_event->argument[3]!=0 ||
+                           loading_event->argument[4]!=0)return 0;
+                        constexpr std::size_t offset=0x140000u;
+                        constexpr std::size_t image_size=
+                            16u+512u*240u*2u;
+                        Nba97GameImageMemory image_memory{
+                            state.ram.data()+offset,
+                            state.ram_known.data()+offset,image_size,0,1};
+                        const auto transfer=[](void* transfer_user,
+                            const Nba97GameImageTransfer* transfer_event)->int {
+                            auto& transfer_state=
+                                *static_cast<State*>(transfer_user);
+                            if(!transfer_event ||
+                               !transfer_event->footprint_known ||
+                               !transfer_event->through_944f4 ||
+                               transfer_event->rect.w!=512 ||
+                               transfer_event->rect.h!=240 ||
+                               transfer_event->pixel_words!=512u*240u ||
+                               transfer_event->cpu_words!=512u*240u/2u ||
+                               !transfer_event->source.memory ||
+                               transfer_event->source.offset!=16)
+                                return 0;
+                            const auto& source=*transfer_event->source.memory;
+                            const auto source_offset=static_cast<std::size_t>(
+                                transfer_event->source.offset);
+                            if(source_offset>source.size ||
+                               512u*240u*2u>source.size-source_offset)
+                                return 0;
+                            for(std::size_t i=0;i<512u*240u*2u;++i)
+                                if(source.known && !source.known[source_offset+i])
+                                    return 0;
+                            for(unsigned row=0;row<240;++row)
+                                for(unsigned column=0;column<512;++column) {
+                                    const auto source_word=source_offset+
+                                        (row*512u+column)*2u;
+                                    const std::uint16_t pixel=static_cast<
+                                        std::uint16_t>(source.data[source_word] |
+                                        (std::uint16_t(source.data[
+                                            source_word+1u])<<8u));
+                                    transfer_state.diagnostic_vram[
+                                        (static_cast<unsigned>(
+                                            transfer_event->rect.y)+row)*1024u+
+                                        static_cast<unsigned>(
+                                            transfer_event->rect.x)+column]=pixel;
+                                }
+                            ++transfer_state.loading_screen_transfer_callbacks;
+                            return 1;
+                        };
+                        const Nba97GameImagePlacement placement{
+                            static_cast<std::int32_t>(loading_event->argument[1]),
+                            static_cast<std::int32_t>(loading_event->argument[2]),
+                            0,0};
+                        if(nba97_game_image_upload(
+                               &state.loading_screen_upload_state,
+                               {&image_memory,0},placement,2,transfer,&state,
+                               &state.loading_screen_image_progress[upload])!=
+                                   NBA97_IMAGE_COMPLETE)
+                            return 0;
+                        ++state.loading_screen_upload_calls;
+                        if(upload==0)
+                            state.loading_screen_vram_after_first=
+                                state.diagnostic_vram;
+                        else if(upload==1)
+                            state.loading_screen_vram_after_second=
+                                state.diagnostic_vram;
+                        else
+                            state.loading_screen_vram_after_third=
+                                state.diagnostic_vram;
+                        return 1;
+                    }
+                    case NBA97_GAME_LOADING_SCREEN_RELEASE_RESOURCE:
+                        if(call!=9 || !state.loading_screen_resource_loaded ||
+                           state.loading_screen_resource_released ||
+                           loading_event->argument_count!=1 ||
+                           loading_event->argument[0]!=0x80130000u ||
+                           state.loading_screen_upload_calls!=3 ||
+                           state.loading_screen_sync_calls!=4)return 0;
+                        state.loading_screen_resource_released=true;
+                        ++state.loading_screen_release_calls;
+                        return 1;
+                    default:
+                        return 0;
+                    }
+                };
+                Nba97GameLoadingScreenContext loading_context{*memory,30,
+                    event->stack_pointer,event->return_address,
+                    {event->saved_register[0],event->saved_register[1]},
+                    event->global_pointer,loading_io,&fixture};
+                if(nba97_game_loading_screen(&loading_context,
+                       &fixture.loading_screen_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.loading_screen_progress.completed)return 0;
+                fixture.captureDisplay(fixture.loading_screen_display_after);
+                *value={fixture.loading_screen_progress.return_v0,
+                    fixture.loading_screen_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7788,10 +8003,10 @@ private:
         bool move_image_vram_matches=true;
         for(unsigned y=0;y<256;++y)for(unsigned x=0;x<512;++x)
             move_image_vram_matches=move_image_vram_matches &&
-                state.diagnostic_vram[y*1024u+x]==
-                    state.diagnostic_vram[y*1024u+512u+x] &&
-                state.diagnostic_vram[(y+256u)*1024u+x]==
-                    state.diagnostic_vram[y*1024u+512u+x];
+                state.loading_screen_vram_before[y*1024u+x]==
+                    state.loading_screen_vram_before[y*1024u+512u+x] &&
+                state.loading_screen_vram_before[(y+256u)*1024u+x]==
+                    state.loading_screen_vram_before[y*1024u+512u+x];
         const bool gpu_sync_complete=state.gpu_sync_calls==1 &&
             state.gpu_sync_dispatch_resolutions==1 &&
             state.gpu_sync_backend_observations==2 &&
@@ -7842,7 +8057,7 @@ private:
             draw_sync_visual_transition=draw_sync_visual_transition &&
                 state.draw_sync_before_top[at]==state.move_image_before_top[at] &&
                 state.draw_sync_after_top[at]==
-                    state.diagnostic_vram[y*1024u+512u+x];
+                    state.loading_screen_vram_before[y*1024u+512u+x];
         }
         draw_sync_visual_transition=draw_sync_visual_transition &&
             state.draw_sync_before_top!=state.draw_sync_after_top;
@@ -8041,6 +8256,108 @@ private:
         const bool match_session_visual_unchanged=
             state.match_session_before==state.match_session_after &&
             state.match_session_before==state.frame_rate_reset_after;
+        bool loading_screen_complete=
+            state.loading_screen_calls==1 &&
+            state.loading_screen_events.size()==10 &&
+            state.loading_screen_progress.completed &&
+            state.loading_screen_progress.operations==16 &&
+            state.loading_screen_progress.accesses==6 &&
+            state.loading_screen_progress.reads==3 &&
+            state.loading_screen_progress.stores==3 &&
+            state.loading_screen_progress.callbacks_completed==10 &&
+            state.loading_screen_progress.load_calls==1 &&
+            state.loading_screen_progress.lookup_calls==1 &&
+            state.loading_screen_progress.draw_sync_calls==4 &&
+            state.loading_screen_progress.upload_calls==3 &&
+            state.loading_screen_progress.release_calls==1 &&
+            state.loading_screen_progress.loaded_resource==0x80130000u &&
+            state.loading_screen_progress.resolved_image==0x80140000u &&
+            state.loading_screen_progress.resource_loaded &&
+            state.loading_screen_progress.image_lookup_completed &&
+            state.loading_screen_progress.resolved_image_known &&
+            !state.loading_screen_progress.skipped_for_null_resource &&
+            state.loading_screen_progress.return_v0==0 &&
+            state.loading_screen_progress.return_v0_known &&
+            state.loading_screen_progress.frame_stack_pointer==0x807fffa8u &&
+            state.loading_screen_progress.stack_pointer==0x807fffd0u &&
+            state.loading_screen_progress.restored_return_address==0x80029aecu &&
+            state.loading_screen_progress.restored_saved_register[0]==1 &&
+            state.loading_screen_progress.restored_saved_register[1]==0 &&
+            state.loading_screen_resource_loaded &&
+            state.loading_screen_resource_released &&
+            state.loading_screen_sync_calls==4 &&
+            state.loading_screen_upload_calls==3 &&
+            state.loading_screen_transfer_callbacks==3 &&
+            state.loading_screen_release_calls==1 &&
+            state.loading_screen_upload_state.pending_d7b14==1 &&
+            state.loading_screen_upload_state.pending_known==1 &&
+            state.getByte(0x80140000u)==0x4au &&
+            state.getHalf(0x8014000cu)==0x200u &&
+            state.getHalf(0x8014000eu)==0;
+        for(unsigned i=0;i<3;++i)
+            loading_screen_complete=loading_screen_complete &&
+                state.loading_screen_image_progress[i].headers_visited==1 &&
+                state.loading_screen_image_progress[i].uploads_completed==1 &&
+                !state.loading_screen_image_progress[i].temporary_height_active;
+        static constexpr std::uint32_t loading_pc[10]={0x80029e70u,
+            0x80029e8cu,0x80029e98u,0x80029eb0u,0x80029eb8u,
+            0x80029ed0u,0x80029ed8u,0x80029ef0u,0x80029ef8u,
+            0x80029f00u};
+        static constexpr std::uint32_t loading_entry[10]={0x80029bfcu,
+            0x800a5478u,0x800994f4u,0x800946b8u,0x800994f4u,
+            0x800946b8u,0x800994f4u,0x800946b8u,0x800994f4u,
+            0x80090698u};
+        if(loading_screen_complete)
+            for(unsigned i=0;i<10;++i)
+                loading_screen_complete=loading_screen_complete &&
+                    state.loading_screen_events[i].pc==loading_pc[i] &&
+                    state.loading_screen_events[i].entry==loading_entry[i] &&
+                    state.loading_screen_events[i].stack_pointer==0x807fffa8u &&
+                    state.loading_screen_events[i].return_address==
+                        loading_pc[i]+8u;
+        bool loading_screen_visual_exact=
+            state.loading_screen_display_before==state.match_session_after &&
+            state.loading_screen_display_before!=state.loading_screen_display_after &&
+            state.loading_screen_vram_before!=state.loading_screen_vram_after_first &&
+            state.loading_screen_vram_after_first!=
+                state.loading_screen_vram_after_second &&
+            state.loading_screen_vram_after_second!=
+                state.loading_screen_vram_after_third &&
+            state.loading_screen_vram_after_third==state.diagnostic_vram;
+        for(unsigned y=0;y<512 && loading_screen_visual_exact;++y)
+            for(unsigned x=0;x<1024 && loading_screen_visual_exact;++x) {
+                const auto at=y*1024u+x;
+                const auto before=state.loading_screen_vram_before[at];
+                std::uint16_t first=before,second=before,third=before;
+                if(x<512u && y<240u)
+                    first=state.getHalf(0x80140010u+(y*512u+x)*2u);
+                second=first;
+                if(x<512u && y>=256u && y<496u)
+                    second=state.getHalf(0x80140010u+
+                        ((y-256u)*512u+x)*2u);
+                third=second;
+                if(x>=512u && y<240u)
+                    third=state.getHalf(0x80140010u+
+                        (y*512u+x-512u)*2u);
+                loading_screen_visual_exact=
+                    state.loading_screen_vram_after_first[at]==first &&
+                    state.loading_screen_vram_after_second[at]==second &&
+                    state.loading_screen_vram_after_third[at]==third;
+                if(x<512u && y<240u)
+                    loading_screen_visual_exact=loading_screen_visual_exact &&
+                        state.loading_screen_display_after[y*512u+x]==first;
+            }
+        if(!loading_screen_complete)
+            throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
+                std::to_string(state.loading_screen_calls)+" events="+
+                std::to_string(state.loading_screen_events.size())+" operations="+
+                std::to_string(state.loading_screen_progress.operations)+" uploads="+
+                std::to_string(state.loading_screen_upload_calls)+" transfers="+
+                std::to_string(state.loading_screen_transfer_callbacks)+" syncs="+
+                std::to_string(state.loading_screen_sync_calls)+" releases="+
+                std::to_string(state.loading_screen_release_calls));
+        if(!loading_screen_visual_exact)
+            throw std::runtime_error("translated 0x80029E58 incremental VRAM placement drifted");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -8394,6 +8711,8 @@ private:
            !frame_rate_reset_visual_unchanged ||
            !match_session_complete ||
            !match_session_visual_unchanged ||
+           !loading_screen_complete ||
+           !loading_screen_visual_exact ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -8469,12 +8788,46 @@ private:
             }
             return image;
         };
+        const auto vram_canvas=[&](const std::vector<std::uint16_t>& snapshot) {
+            PshImage image;image.tag="GAMEONLY 0x80029E58 loading-screen VRAM diagnostic";
+            image.width=1024;image.height=512;image.rgba.resize(1024u*512u*4u);
+            for(unsigned y=0;y<512;++y)for(unsigned x=0;x<1024;++x) {
+                const auto pixel=snapshot[y*1024u+x];
+                const auto at=(y*1024u+x)*4u;
+                image.rgba[at]=static_cast<std::uint8_t>((pixel&31u)*255u/31u);
+                image.rgba[at+1u]=static_cast<std::uint8_t>(
+                    ((pixel>>5u)&31u)*255u/31u);
+                image.rgba[at+2u]=static_cast<std::uint8_t>(
+                    ((pixel>>10u)&31u)*255u/31u);
+                image.rgba[at+3u]=255;
+            }
+            return image;
+        };
+        const auto vram_canvas_slice=[&](unsigned origin_x,unsigned origin_y,
+            const std::vector<std::uint16_t>& snapshot) {
+            PshImage image;image.tag="GAMEONLY retained-VRAM diagnostic slice";
+            image.width=512;image.height=240;image.rgba.resize(512u*240u*4u);
+            for(unsigned y=0;y<240;++y)for(unsigned x=0;x<512;++x) {
+                const auto pixel=snapshot[(origin_y+y)*1024u+origin_x+x];
+                const auto at=(y*512u+x)*4u;
+                image.rgba[at]=static_cast<std::uint8_t>((pixel&31u)*255u/31u);
+                image.rgba[at+1u]=static_cast<std::uint8_t>(
+                    ((pixel>>5u)&31u)*255u/31u);
+                image.rgba[at+2u]=static_cast<std::uint8_t>(
+                    ((pixel>>10u)&31u)*255u/31u);
+                image.rgba[at+3u]=255;
+            }
+            return image;
+        };
         const auto capture_root=output.parent_path();
         writePpm(vram_frame(0,0,&state.move_image_before_top),
             capture_root/"move-image-before-buffer0.ppm");
-        writePpm(vram_frame(512,0,nullptr),capture_root/"move-image-source.ppm");
-        writePpm(vram_frame(0,0,nullptr),capture_root/"move-image-buffer0.ppm");
-        writePpm(vram_frame(0,256,nullptr),capture_root/"move-image-buffer1.ppm");
+        writePpm(vram_canvas_slice(512,0,state.loading_screen_vram_before),
+            capture_root/"move-image-source.ppm");
+        writePpm(vram_canvas_slice(0,0,state.loading_screen_vram_before),
+            capture_root/"move-image-buffer0.ppm");
+        writePpm(vram_canvas_slice(0,256,state.loading_screen_vram_before),
+            capture_root/"move-image-buffer1.ppm");
         writePpm(vram_frame(0,0,&state.draw_sync_before_top),
             capture_root/"draw-sync-before-buffer0.ppm");
         writePpm(vram_frame(0,0,&state.draw_sync_after_top),
@@ -8495,6 +8848,18 @@ private:
             capture_root/"match-session-before.ppm");
         writePpm(vram_frame(0,0,&state.match_session_after),
             capture_root/"match-session-after.ppm");
+        writePpm(vram_frame(0,0,&state.loading_screen_display_before),
+            capture_root/"loading-screen-display-before.ppm");
+        writePpm(vram_frame(0,0,&state.loading_screen_display_after),
+            capture_root/"loading-screen-display-after.ppm");
+        writePpm(vram_canvas(state.loading_screen_vram_before),
+            capture_root/"loading-screen-vram-before.ppm");
+        writePpm(vram_canvas(state.loading_screen_vram_after_first),
+            capture_root/"loading-screen-vram-after-top-left.ppm");
+        writePpm(vram_canvas(state.loading_screen_vram_after_second),
+            capture_root/"loading-screen-vram-after-bottom-left.ppm");
+        writePpm(vram_canvas(state.loading_screen_vram_after_third),
+            capture_root/"loading-screen-vram-complete.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -8958,9 +9323,50 @@ private:
             "\"match-session-after.ppm\"], "
             "\"visual_effect\": \"session state and environment controls changed; retained scanout stayed pixel-identical because downstream gameplay stages remain explicit boundaries\", "
             "\"status\": \"match-session-orchestrated\"},\n"
+            "  \"loading_screen\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x80029E58\", \"end_exclusive\": \"0x80029F20\", "
+            "\"instructions\": 50, \"call_pc\": \"0x80029AE4\", "
+            "\"instruction_sha256\": \"a7cd09cf9222d55787b6188292a434ef2d3645f61fc8cbe214251ac39827bf7e\", "
+            "\"resource_name\": {\"address\": \"0x800247F8\", "
+            "\"text\": \"zloadscr.psh\"}, \"image_key\": {\"address\": "
+            "\"0x80024808\", \"text\": \"LdS1\"}, \"resource_handle\": "
+            "\"0x80130000\", \"image_address\": \"0x80140000\", "
+            "\"path\": \"loaded-resource\", \"operations\": "<<
+            state.loading_screen_progress.operations<<", \"accesses\": "<<
+            state.loading_screen_progress.accesses<<", \"reads\": "<<
+            state.loading_screen_progress.reads<<", \"stores\": "<<
+            state.loading_screen_progress.stores<<", \"child_calls\": "<<
+            state.loading_screen_progress.callbacks_completed<<
+            ", \"child_entries\": [\"0x80029BFC\", \"0x800A5478\", "
+            "\"0x800994F4\", \"0x800946B8\", \"0x800994F4\", "
+            "\"0x800946B8\", \"0x800994F4\", \"0x800946B8\", "
+            "\"0x800994F4\", \"0x80090698\"], \"draw_sync_calls\": "<<
+            state.loading_screen_sync_calls<<", \"uploads\": {\"owner\": "
+            "\"0x800946B8\", \"coordinates\": [[0, 0], [0, 256], "
+            "[512, 0]], \"source_format\": \"16-bit retained fixture\", "
+            "\"source_extent\": [512, 240], \"transfer_callbacks\": "<<
+            state.loading_screen_transfer_callbacks<<", \"pixel_words\": "<<
+            state.loading_screen_transfer_callbacks*512u*240u<<"}, "
+            "\"resource_released\": true, \"return_v0\": 0, "
+            "\"source_quirks\": {\"null_resource_silently_skips\": true, "
+            "\"null_image_is_not_guarded\": true, "
+            "\"sync_before_each_upload_and_after_last\": true, "
+            "\"fifth_upload_argument_is_delay_slot_zero\": true, "
+            "\"release_v0_remains_live\": true, "
+            "\"live_o32_epilogue_reload\": true}, "
+            "\"visual_fixture\": \"generated retained 512x240 image, not retail art\", "
+            "\"captures\": [\"loading-screen-display-before.ppm\", "
+            "\"loading-screen-display-after.ppm\", "
+            "\"loading-screen-vram-before.ppm\", "
+            "\"loading-screen-vram-after-top-left.ppm\", "
+            "\"loading-screen-vram-after-bottom-left.ppm\", "
+            "\"loading-screen-vram-complete.ppm\"], "
+            "\"visual_effect\": \"the same generated image was uploaded to the exact three source coordinates; the full-VRAM captures expose each incremental placement\", "
+            "\"status\": \"loading-screen-composited\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
-            ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
+            ", \"match_orchestration\": \"0x8002D8D4\", "
+            "\"loading_screen\": \"0x80029E58\", \"loaded_image\": \"0x80123400\", "
             "\"loaded_size\": 5136, \"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -9140,6 +9546,25 @@ private:
             "match-session-before.ppm and match-session-after.ppm are pixel-identical "
             "generated retained scanout because no downstream court or gameplay work "
             "was fabricated; outer execution continued at 0x80029E58");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next executed startup callee 0x80029E58 from call PC 0x80029AE4 "
+            "through its recovered 50-instruction loading-screen compositor: exact "
+            "resource name zloadscr.psh at 0x800247F8 loaded as retained fixture "
+            "0x80130000, key LdS1 at 0x80024808 resolved generated 16-bit image "
+            "0x80140000, and the existing recovered 0x800946B8 owner performed three "
+            "512x240 transfers at (0,0), (0,256) and (512,0); four explicit "
+            "DrawSync(0) boundaries bracketed those transfers and release 0x80090698 "
+            "retired the fixture; loading-screen-vram-before.ppm, "
+            "loading-screen-vram-after-top-left.ppm, "
+            "loading-screen-vram-after-bottom-left.ppm and "
+            "loading-screen-vram-complete.ppm expose the placements incrementally, "
+            "while loading-screen-display-before.ppm and "
+            "loading-screen-display-after.ppm show the visible-page change; all art "
+            "is generated diagnostic evidence, not retail pixels; the original silent "
+            "null-resource return, unchecked null-image dispatch, four-sync order, "
+            "JAL-delay-slot fifth arguments, live release v0 and mutable o32 epilogue "
+            "remain; the self-driving test supplied inputs through recovered handlers, "
+            "not computer control, and outer execution then continued to FELOAD");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

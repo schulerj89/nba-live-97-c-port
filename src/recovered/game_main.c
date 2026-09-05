@@ -314,6 +314,11 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * custom-location recheck and repeated unchecked team-index loads: a
      * changing flag/index can skip, invent or split the two restore stores. */
     TRY(direct_call(run, 0x80029adcu, 0x8002d8d4u, 0, 0, 0, 0, &value));
+    /* GAMEONLY 0x80029AE4 -> 0x80029E58 is the recovered loading-screen
+     * compositor. It loads zloadscr.psh, resolves LdS1, DrawSyncs around
+     * uploads at (0,0), (0,256) and (512,0), then releases the archive. Its
+     * silent null-resource path and unchecked null-image dispatch remain in
+     * that owner rather than being normalized by main. */
     TRY(direct_call(run, 0x80029ae4u, 0x80029e58u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af8u, 0x80029af8u, run->s0));
     TRY(direct_call(run, 0x80029afcu, 0x80029bfcu, 2, 0x800247ecu, 0, 0, &value));

@@ -149,6 +149,16 @@ tail while retaining the original late-flag and reloaded-index bugs. Its four
 stage children remain explicit boundaries, so this does not change the scene or
 playable-possession acceptance criteria below. See game_match_session_workflow.md.
 
+After that owner returns, main's next call at `0x80029AE4` now enters the
+complete loading-screen compositor `0x80029E58`. It loads `zloadscr.psh`,
+looks up `LdS1`, synchronizes and uploads the same image to three framebuffer
+locations, then releases the archive. The self-driving native diagnostic uses
+the existing image owner and captures every incremental retained-VRAM
+placement; it does not substitute retail art or imply that the four earlier
+match-stage boundaries launch gameplay. The original silent null-archive path
+and unchecked null-image behavior are retained. See
+game_loading_screen_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

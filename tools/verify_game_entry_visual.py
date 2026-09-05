@@ -15,16 +15,42 @@ def read_json(path):
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
-def ppm_pixels(path):
+def ppm_pixels(path, width=512, height=240):
     data = path.read_bytes()
     parts = data.split(b"\n", 3)
-    require(parts[:3] == [b"P6", b"512 240", b"255"], f"bad PPM header: {path}")
-    require(len(parts) == 4 and len(parts[3]) == 512 * 240 * 3, f"bad PPM extent: {path}")
+    extent = f"{width} {height}".encode("ascii")
+    require(parts[:3] == [b"P6", extent, b"255"], f"bad PPM header: {path}")
+    require(len(parts) == 4 and len(parts[3]) == width * height * 3,
+            f"bad PPM extent: {path}")
     return parts[3]
 
 
-def ppm_hash(path):
-    return hashlib.sha256(ppm_pixels(path)).hexdigest()
+def ppm_hash(path, width=512, height=240):
+    return hashlib.sha256(ppm_pixels(path, width, height)).hexdigest()
+
+
+def crop_rgb(pixels, source_width, x, y, width, height):
+    rows = []
+    for row in range(y, y + height):
+        begin = (row * source_width + x) * 3
+        rows.append(pixels[begin:begin + width * 3])
+    return b"".join(rows)
+
+
+def equal_outside_rect(before, after, canvas_width, canvas_height,
+                       x, y, width, height):
+    for row in range(canvas_height):
+        begin = row * canvas_width * 3
+        end = begin + canvas_width * 3
+        if y <= row < y + height:
+            left = begin + x * 3
+            right = left + width * 3
+            if before[begin:left] != after[begin:left] or \
+                    before[right:end] != after[right:end]:
+                return False
+        elif before[begin:end] != after[begin:end]:
+            return False
+    return True
 
 
 def main():
@@ -113,6 +139,40 @@ def main():
             match_session_hashes["match-session-after"] ==
             frame_rate_hashes["frame-rate-reset-after"],
             "match-session owner unexpectedly fabricated retained scanout")
+    loading_display = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["loading-screen-display-before",
+                     "loading-screen-display-after"]}
+    require(hashlib.sha256(loading_display["loading-screen-display-before"]).hexdigest() ==
+            match_session_hashes["match-session-after"],
+            "loading-screen capture did not begin at the retained visible page")
+    require(loading_display["loading-screen-display-before"] !=
+            loading_display["loading-screen-display-after"],
+            "loading-screen compositor did not visibly replace the active page")
+    loading_vram_names = ["loading-screen-vram-before",
+                          "loading-screen-vram-after-top-left",
+                          "loading-screen-vram-after-bottom-left",
+                          "loading-screen-vram-complete"]
+    loading_vram = {
+        name: ppm_pixels(args.frames / f"{name}.ppm", 1024, 512)
+        for name in loading_vram_names}
+    require(len({hashlib.sha256(loading_vram[name]).hexdigest()
+                 for name in loading_vram_names}) == 4,
+            "the three loading-screen VRAM uploads are not visually distinct stages")
+    before = loading_vram["loading-screen-vram-before"]
+    first = loading_vram["loading-screen-vram-after-top-left"]
+    second = loading_vram["loading-screen-vram-after-bottom-left"]
+    complete = loading_vram["loading-screen-vram-complete"]
+    loading_pixels = loading_display["loading-screen-display-after"]
+    require(crop_rgb(first, 1024, 0, 0, 512, 240) == loading_pixels and
+            equal_outside_rect(before, first, 1024, 512, 0, 0, 512, 240),
+            "first loading-screen upload escaped (0,0,512,240)")
+    require(crop_rgb(second, 1024, 0, 256, 512, 240) == loading_pixels and
+            equal_outside_rect(first, second, 1024, 512, 0, 256, 512, 240),
+            "second loading-screen upload escaped (0,256,512,240)")
+    require(crop_rgb(complete, 1024, 512, 0, 512, 240) == loading_pixels and
+            equal_outside_rect(second, complete, 1024, 512, 512, 0, 512, 240),
+            "third loading-screen upload escaped (512,0,512,240)")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -592,9 +652,55 @@ def main():
                 "visual_effect": "session state and environment controls changed; retained scanout stayed pixel-identical because downstream gameplay stages remain explicit boundaries",
                 "status": "match-session-orchestrated"},
             "recovered 0x8002D8D4 match-session receipt drifted")
+    require(receipt["loading_screen"] == {
+                "binary": "GAMEONLY", "address": "0x80029E58",
+                "end_exclusive": "0x80029F20", "instructions": 50,
+                "call_pc": "0x80029AE4",
+                "instruction_sha256":
+                    "a7cd09cf9222d55787b6188292a434ef2d3645f61fc8cbe214251ac39827bf7e",
+                "resource_name": {"address": "0x800247F8",
+                                  "text": "zloadscr.psh"},
+                "image_key": {"address": "0x80024808", "text": "LdS1"},
+                "resource_handle": "0x80130000",
+                "image_address": "0x80140000",
+                "path": "loaded-resource", "operations": 16,
+                "accesses": 6, "reads": 3, "stores": 3,
+                "child_calls": 10,
+                "child_entries": ["0x80029BFC", "0x800A5478",
+                                  "0x800994F4", "0x800946B8",
+                                  "0x800994F4", "0x800946B8",
+                                  "0x800994F4", "0x800946B8",
+                                  "0x800994F4", "0x80090698"],
+                "draw_sync_calls": 4,
+                "uploads": {"owner": "0x800946B8",
+                            "coordinates": [[0, 0], [0, 256], [512, 0]],
+                            "source_format": "16-bit retained fixture",
+                            "source_extent": [512, 240],
+                            "transfer_callbacks": 3,
+                            "pixel_words": 368640},
+                "resource_released": True, "return_v0": 0,
+                "source_quirks": {
+                    "null_resource_silently_skips": True,
+                    "null_image_is_not_guarded": True,
+                    "sync_before_each_upload_and_after_last": True,
+                    "fifth_upload_argument_is_delay_slot_zero": True,
+                    "release_v0_remains_live": True,
+                    "live_o32_epilogue_reload": True},
+                "visual_fixture":
+                    "generated retained 512x240 image, not retail art",
+                "captures": ["loading-screen-display-before.ppm",
+                             "loading-screen-display-after.ppm",
+                             "loading-screen-vram-before.ppm",
+                             "loading-screen-vram-after-top-left.ppm",
+                             "loading-screen-vram-after-bottom-left.ppm",
+                             "loading-screen-vram-complete.ppm"],
+                "visual_effect": "the same generated image was uploaded to the exact three source coordinates; the full-VRAM captures expose each incremental placement",
+                "status": "loading-screen-composited"},
+            "recovered 0x80029E58 loading-screen receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
+                       "loading_screen": "0x80029E58",
                        "loaded_image": "0x80123400", "loaded_size": 5136,
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
@@ -845,6 +951,18 @@ def main():
             "match-session-before.ppm and match-session-after.ppm are pixel-identical" in trace and
             "no downstream court or gameplay work was fabricated" in trace and
             "outer execution continued at 0x80029E58" in trace and
+            "0x80029E58 from call PC 0x80029AE4" in trace and
+            "recovered 50-instruction loading-screen compositor" in trace and
+            "resource name zloadscr.psh at 0x800247F8" in trace and
+            "key LdS1 at 0x80024808" in trace and
+            "existing recovered 0x800946B8 owner performed three" in trace and
+            "512x240 transfers at (0,0), (0,256) and (512,0)" in trace and
+            "four explicit DrawSync(0) boundaries" in trace and
+            "loading-screen-vram-complete.ppm" in trace and
+            "original silent null-resource return, unchecked null-image dispatch" in trace and
+            "self-driving test supplied inputs through recovered handlers" in trace and
+            "not computer control" in trace and
+            "continued to FELOAD" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -886,7 +1004,10 @@ def main():
           "native match-session owner 0x8002D8D4 configured both buffer pairs, crossed 23 exact child "
           "boundaries and eleven source VBlanks, retained the retail location/index restore bugs, and "
           "captured identical before/after scanout without fabricating downstream gameplay; "
-          "77-call GAMEONLY 0x80029994 diagnostic continued at 0x80029E58 and reached FELOAD transfer")
+          "native loading-screen compositor 0x80029E58 loaded zloadscr.psh/LdS1 and used the recovered "
+          "image owner to place one generated 512x240 fixture at all three exact VRAM coordinates, with "
+          "incremental PPM proof and original null-handling quirks retained; "
+          "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 
 if __name__ == "__main__":
