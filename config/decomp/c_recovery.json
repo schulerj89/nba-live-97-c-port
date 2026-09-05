@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80048D5C",
+      "original_name": "Game_SceneStartup",
+      "symbol": "nba97_game_scene_startup",
+      "source": "src/recovered/game_scene_startup.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_scene_startup_tests; nba97_game_scene_startup_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800802AC",
       "original_name": "Game_SceneRandomWarmup",
       "symbol": "nba97_game_scene_random_warmup",

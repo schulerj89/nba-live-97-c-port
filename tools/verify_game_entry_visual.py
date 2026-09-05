@@ -433,6 +433,43 @@ def main():
         "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
         "state": warmup, "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    startup = scene["scene_startup"]
+    require((startup["program"], startup["address"], startup["inclusive_end"],
+             startup["bytes"], startup["instructions"], startup["call_pc"]) ==
+            ("GAMEONLY", "0x80048D5C", "0x80048FE3", 648, 162, 0x8002DB78),
+            "scene startup provenance drifted")
+    require(startup["classification"] == "no direct visual effect" and
+            "synthetic" in startup["scope"] and startup["completed"] == 1 and
+            startup["operations"] == startup["reads"] + startup["stores"] + 19 and
+            startup["reads"] + startup["stores"] == startup["access_count"] == 165 and
+            startup["calls_completed"] == 19 and startup["controller_iterations"] == 8 and
+            startup["controller_matches"] == 4 and startup["roster_iterations"] == 12 and
+            startup["entity_iterations"] == 10 and startup["frame_sp"] == 0x807FFF68 and
+            startup["restored_ra"] == 0x8002DB80 and startup["selector_before"] == 7 and
+            startup["selector_after"] == 1 and startup["render_enable"] == 1 and
+            startup["camera"] == [0, 0, 0x2E00, 0x55AA, 0xF95C, 0, 0] and
+            startup["controllers"] == [2, 0] * 4 and
+            startup["home_ids"] == [(i-300) & 0xFFFFFFFF for i in range(12)] and
+            startup["away_ids"] == list(range(200, 212)) and
+            startup["entity_ids"] == [(1000+i if i%2 else -1000-i) & 0xFFFFFFFF for i in range(10)],
+            "scene startup controller/ID/camera/buffer state drifted")
+    startup_calls = [(0x80048DAC, 0x8008F224)] * 8 + [
+        (0x80048DF0, 0x8004D38C), (0x80048E94, 0x80052C20), (0x80048E9C, 0x800A7738),
+        (0x80048EAC, 0x80056074), (0x80048EB8, 0x8005605C), (0x80048F20, 0x80099CA4),
+        (0x80048F4C, 0x80099ACC), (0x80048F78, 0x80099CA4), (0x80048FA0, 0x80099ACC),
+        (0x80048FB4, 0x80063EDC), (0x80048FBC, 0x80056944)]
+    require([(c["pc"], c["entry"]) for c in startup["children"]] == startup_calls and
+            all(c["delay_slot_pc"] == c["pc"]+4 and c["ra"] == c["pc"]+8 for c in startup["children"]) and
+            [c["a0"] for c in startup["children"][:8]] == list(range(8)) and
+            [c["a0"] for c in startup["children"][13:17]] ==
+            [0x8002205C, 0x80021EEC, 0x80022070, 0x80021F48],
+            "scene startup child/delay/buffer argument order drifted")
+    (args.frames / "scene_startup_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80048D5C", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
+        "state": startup, "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     loop = read_json(args.frames / "loop_entry_trace.json")
     require((loop["program"], loop["address"], loop["inclusive_end"],
              loop["bytes"], loop["instructions"], loop["call_pc"]) ==
@@ -735,7 +772,7 @@ def main():
                 "set_def_calls": 4, "put_calls": 4, "draw_sync_calls": 1,
                 "operations": 44, "accesses": 35, "reads": 7,
                 "stores": 28, "direct_control_byte_stores": 16,
-                "buffer_selector": "0x8001EDE8", "buffer_selector_value": 0,
+                "buffer_selector": "0x8001EDE8", "buffer_selector_value": 1,
                 "last_active_pair": 1, "return_v0": 0,
                 "source_quirks": {
                     "fifth_arguments_are_delay_slot_stack_stores": True,
@@ -927,7 +964,7 @@ def main():
                     "display": ["0x8002205C", "0x80022070"],
                     "extent": [512, 240]},
                 "state": {
-                    "video_halfword_0x80021498": {"before": 0, "after": 0},
+                    "video_halfword_0x80021498": {"before": 0, "after": 1},
                     "draw_control_0x80021F04": {"before": 0, "after": 1},
                     "draw_control_0x80021F60": {"before": 0, "after": 1},
                     "session_flag_0x800EB680": {"before": 0, "after": 1},

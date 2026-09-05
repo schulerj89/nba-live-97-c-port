@@ -8827,8 +8827,8 @@ private:
             state.match_session_state_before==
                 std::array<std::uint32_t,7>{0,0,0,0,0,1,0} &&
             state.match_session_state_after==
-                std::array<std::uint32_t,7>{0,1,1,1,0,12,0} &&
-            state.getHalf(0x80021498u)==0 &&
+                std::array<std::uint32_t,7>{1,1,1,1,0,12,0} &&
+            state.getHalf(0x80021498u)==1 &&
             state.getByte(0x80021f04u)==1 &&
             state.getByte(0x80021f60u)==1 &&
             state.getByte(0x800eb680u)==1 &&
@@ -9755,7 +9755,7 @@ private:
             state.getByte(0x80022019u)!=0xd3u ||
             state.getByte(0x8002206du)!=0 ||
             state.getByte(0x80022081u)!=0 ||
-            state.get(0x8001ede8u)!=0 ||
+            state.get(0x8001ede8u)!=1 ||
             state.active_display_environment!=0x80022070u ||
             state.active_draw_environment!=0x80021f48u ||
             !state.video_environment_synchronized ||
@@ -9869,7 +9869,11 @@ private:
             state.calls[76].kind!=NBA97_GAME_MAIN_INDIRECT_CALL ||
             state.calls[76].pc!=0x80029ba8u ||
             state.calls[76].entry!=0x801e1410u)
-            throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
+            throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer; session="+
+                std::to_string(match_session_complete)+" session-result="+
+                std::to_string(state.match_session_progress.completed)+" scene-receipt="+
+                std::to_string(!state.scene_load_capture.receipt.empty())+" calls="+
+                std::to_string(state.calls.size())+" video="+std::to_string(state.getHalf(0x80021498u)));
         const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
             const std::vector<std::uint16_t>* snapshot) {
             PshImage image;image.tag="GAMEONLY MoveImage diagnostic";
@@ -10888,7 +10892,7 @@ private:
             "0x8002205C/0x80022070, while opposite draw rectangles at y=0/y=256 were "
             "written at 0x80021EEC/0x80021F48; four SetDef calls, four Put calls and "
             "DrawSync(0) completed through typed source-service fixtures, leaving pair 1 "
-            "last installed while selector 0x8001EDE8 was reset to 0; all four o32 fifth "
+            "last installed while selector 0x8001EDE8 was reset to 0; later scene-startup fixture finishes selector 1; all four o32 fifth "
             "arguments executed as mapped JAL delay-slot stores; original quirks remain: "
             "mode is truncated to a byte, dtd/isbg are changed in two adjacent DRAWENV "
             "records never passed to SetDefDrawEnv, and RGB is cleared only in the two "

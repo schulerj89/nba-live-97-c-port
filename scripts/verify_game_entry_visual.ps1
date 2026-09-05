@@ -131,6 +131,7 @@ try {
         'nba97_game_scene_load_tests','nba97_game_scene_load_integration_tests',
         'nba97_game_audio_initialize_tests','nba97_game_audio_initialize_integration_tests',
         'nba97_game_scene_random_warmup_tests','nba97_game_scene_random_warmup_integration_tests',
+        'nba97_game_scene_startup_tests','nba97_game_scene_startup_integration_tests',
         'nba97_game_loop_entry_tests','nba97_game_loop_entry_integration_tests')) {
         if(-not $SkipBuild) {
             & $cmake --build "$repo/build-windows" --config $Configuration --target $target --parallel

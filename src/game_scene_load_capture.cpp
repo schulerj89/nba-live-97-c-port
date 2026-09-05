@@ -1,6 +1,7 @@
 #include "game_scene_load_capture.h"
 #include "game_scene_load_adapter.h"
 #include "game_scene_random_warmup_adapter.h"
+#include "game_scene_startup_capture.h"
 #include <array>
 #include <fstream>
 #include <sstream>
@@ -24,6 +25,7 @@ struct Children {
     std::vector<Nba97GameSceneLoadEvent> events;
     std::vector<Nba97GameSceneRandomWarmupEvent> warmup_events;
     std::vector<std::uint32_t> step_counts;
+    GameSceneStartupCapture startup;
 };
 int syntheticWarmupChild(void* user,const Nba97GameTextMemory*,
     const Nba97GameSceneRandomWarmupEvent* event,
@@ -41,12 +43,11 @@ int syntheticWarmupChild(void* user,const Nba97GameTextMemory*,
     }
     return 1;
 }
-int syntheticChild(void* user,const Nba97GameTextMemory*,
+int sceneChild(void* user,const Nba97GameTextMemory* memory,
     const Nba97GameSceneLoadEvent* event,Nba97GameSceneLoadRegisters* registers) {
-    static_cast<Children*>(user)->events.push_back(*event);
-    // Explicit scene-startup fixture; this callback owns no child algorithm.
-    registers->gpr[NBA97_MATCH_INITIALIZE_V0]={event->entry,0xf};
-    return 1;
+    auto& children=*static_cast<Children*>(user);
+    children.events.push_back(*event);
+    return children.startup.dispatch(memory,event,registers);
 }
 }
 bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
@@ -58,7 +59,7 @@ bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
        !=NBA97_TEXT_COMPLETE)return false;
     const auto saved_address=event->stack_pointer-8u;
     const auto saved_before=readCaptureWord(*memory,saved_address);
-    Children children;context.io=syntheticChild;context.user=&children;
+    Children children;context.io=sceneChild;context.user=&children;
     std::array<Nba97GameSceneLoadAccess,2> journal{};
     context.access_journal=journal.data();context.access_journal_capacity=journal.size();
     Nba97GameSceneLoadProgress progress{};
@@ -125,7 +126,8 @@ bool GameSceneLoadCapture::dispatch(const Nba97GameTextMemory* memory,
         out<<"{\"pc\":"<<access.pc<<",\"address\":"<<access.address<<
             ",\"value\":"<<access.value<<",\"known_mask\":"<<unsigned(access.known_mask)<<'}';
     }
-    out<<"]},\"routine_capture_frame_numbers\":[0,1],"
+    out<<"]},\"scene_startup\":"<<children.startup.receipt<<
+        ",\"routine_capture_frame_numbers\":[0,1],"
         "\"captures\":[\"scene-load-before.ppm\",\"scene-load-after.ppm\"]}\n";
     receipt=out.str();return true;
 }
