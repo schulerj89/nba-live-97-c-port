@@ -50,6 +50,7 @@
 #include "recovered/game_memory_copy.h"
 #include "feload_entry_capture.h"
 #include "game_match_initialize_capture.h"
+#include "game_scene_load_capture.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6497,6 +6498,7 @@ private:
             unsigned memory_copy_calls=0;
             nba97::FeloadEntryCapture feload_entry_capture;
             nba97::GameMatchInitializeCapture match_initialize_capture;
+            nba97::GameSceneLoadCapture scene_load_capture;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -8159,7 +8161,13 @@ private:
                         state.captureDisplay(state.match_initialize_capture.after);
                         return accepted;
                     }
-                    case NBA97_GAME_MATCH_SESSION_LOAD_SCENE:
+                    case NBA97_GAME_MATCH_SESSION_LOAD_SCENE: {
+                        state.captureDisplay(state.scene_load_capture.before);
+                        const auto accepted=state.scene_load_capture.dispatch(
+                            session_memory,session_event,session_value);
+                        state.captureDisplay(state.scene_load_capture.after);
+                        return accepted;
+                    }
                     case NBA97_GAME_MATCH_SESSION_RUN_LOOP:
                     case NBA97_GAME_MATCH_SESSION_TEARDOWN:
                         /* These are retained, named synchronous boundaries.
@@ -9994,6 +10002,11 @@ private:
         writePpm(vram_frame(0,0,&state.match_initialize_capture.after),
             capture_root/"match-initialize-after.ppm");
         state.match_initialize_capture.writeReceipt(capture_root/"match_initialize_trace.json");
+        writePpm(vram_frame(0,0,&state.scene_load_capture.before),
+            capture_root/"scene-load-before.ppm");
+        writePpm(vram_frame(0,0,&state.scene_load_capture.after),
+            capture_root/"scene-load-after.ppm");
+        state.scene_load_capture.writeReceipt(capture_root/"scene_load_trace.json");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"

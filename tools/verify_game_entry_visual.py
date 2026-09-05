@@ -341,6 +341,36 @@ def main():
         "frame_sha256": initialize_hashes,
         "cpu_receipt": "match_initialize_trace.json",
         "classification": "no direct visual effect"}, indent=2) + "\n", encoding="utf-8")
+    scene = read_json(args.frames / "scene_load_trace.json")
+    require((scene["program"], scene["address"], scene["inclusive_end"],
+             scene["bytes"], scene["instructions"], scene["call_pc"]) ==
+            ("GAMEONLY", "0x8002DB68", "0x8002DB8F", 40, 10, "0x8002DA84"),
+            "scene wrapper provenance drifted")
+    require(scene["classification"] == "no direct visual effect" and
+            "synthetic" in scene["scope"] and "no advancing" in scene["scope"] and
+            (scene["operations"], scene["reads"], scene["stores"], scene["calls_completed"]) == (4, 1, 1, 2)
+            and scene["saved_address"] == 0x807FFFA0 and scene["saved_before"] == 0x8002DA84
+            and scene["saved_after"] == scene["restored_ra"] == 0x8002DA8C
+            and scene["sp"] == 0x807FFFA8 and scene["return_v0"] == 0x80048D5C,
+            "scene wrapper stack/call state drifted")
+    require(scene["children"] == [
+        {"pc": 0x8002DB70, "entry": 0x800802AC, "delay_slot_pc": 0x8002DB74},
+        {"pc": 0x8002DB78, "entry": 0x80048D5C, "delay_slot_pc": 0x8002DB7C}]
+        and scene["accesses"] == [
+            {"pc": pc, "address": 0x807FFFA0, "value": 0x8002DA8C}
+            for pc in (0x8002DB6C, 0x8002DB80)],
+        "scene wrapper access or typed-child order drifted")
+    scene_hashes = {name: ppm_hash(args.frames / name) for name in scene["captures"]}
+    require(scene["routine_capture_frame_numbers"] == [0, 1] and len(scene_hashes) == 2
+            and len(set(scene_hashes.values())) == 1
+            and next(iter(scene_hashes.values())) == next(iter(initialize_hashes.values())),
+            "scene wrapper changed retained scanout")
+    (args.frames / "scene_load_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8002DB68", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
+        "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     roster = initialize["roster_bindings"]
     require((roster["program"], roster["address"], roster["inclusive_end"],
              roster["bytes"], roster["instructions"], roster["call_pc"]) ==
