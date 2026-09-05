@@ -470,6 +470,47 @@ def main():
         "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
         "state": startup, "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    resources = startup["resources"]
+    require((resources["program"], resources["address"], resources["inclusive_end"],
+             resources["bytes"], resources["instructions"], resources["call_pc"]) ==
+            ("GAMEONLY", "0x80052C20", "0x800530FB", 1244, 311, 0x80048E94),
+            "scene resources provenance drifted")
+    require(resources["classification"] == "no direct visual effect" and
+            "synthetic" in resources["scope"] and resources["completed"] == 1 and
+            (resources["operations"], resources["reads"], resources["stores"], resources["calls_completed"]) ==
+            (182, 46, 64, 72) and resources["typed_calls"] == 66 and resources["loader_count"] == 6 and
+            resources["frame_sp"] == 0x807FFF48 and resources["restored_ra"] == 0x80048E9C,
+            "scene resources operation or stack prefix drifted")
+    resource_names = [0x8002639C, 0x8011B000, 0x8011B100, 0x800263AC, 0x800263BC, 0x80026404]
+    resource_roots = [0x80140000 + (name & 0xFFFF) for name in resource_names]
+    require(resources["loaders"] == [
+        {"operations": 8, "attempts": 2, "nulls": 1, "return_v0": root} for root in resource_roots] and
+        resources["attempts"] == [
+            {"pc": 0x80029C18, "entry": 0x800941C8, "filename": name,
+             "flags": 0x20 if i == 0 else 0, "attempt": attempt}
+            for i, name in enumerate(resource_names) for attempt in (1, 2)],
+        "scene resource recovered retry-loader arguments/null prefix drifted")
+    require(resources["publications"] == [list(pair) for pair in [
+        (0x800B72DC, 1), (0x800FB820, 0), (0x800FAC20, 0xFFFFFFFD), (0x800F9FC0, resource_roots[0]),
+        (0x800F0EDC, resource_roots[1]), (0x800F0FAC, resource_roots[2]),
+        (0x800EBC38, resource_roots[1]), (0x800F0F64, resource_roots[2]),
+        (0x800FABCC, resource_roots[3]), (0x800D9284, 0), (0x801041A0, resource_roots[4]),
+        (0x800FDB34, 0x8011D000), (0x800DCBE8, 0x8011E000), (0x80103F44, resource_roots[5])]] and
+        resources["lookup_tables"] == [[root + 4*i for i in range(count)]
+            for root, count in ((resource_roots[1], 10), (resource_roots[2], 10), (resource_roots[3], 26))],
+        "scene resource publications or lookup table values drifted")
+    release_calls = [c for c in resources["children"] if c["entry"] == 0x80090698]
+    require([(c["pc"], c["a0"]) for c in release_calls] == [
+        (0x80052FA4, resource_roots[4]), (0x80052FC8, 0x8011C000),
+        (0x80052FD8, 0x8011E000), (0x80052FE8, 0x8011D000),
+        (0x8005301C, 0x8011C100), (0x8005302C, resource_roots[0])],
+        "scene resource exact release order drifted")
+    (args.frames / "scene_resources_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80052C20", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": scene_hashes, "cpu_receipt": "scene_load_trace.json",
+        "state": resources, "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     loop = read_json(args.frames / "loop_entry_trace.json")
     require((loop["program"], loop["address"], loop["inclusive_end"],
              loop["bytes"], loop["instructions"], loop["call_pc"]) ==

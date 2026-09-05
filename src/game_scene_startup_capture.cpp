@@ -1,4 +1,5 @@
 #include "game_scene_startup_capture.h"
+#include "game_scene_resources_capture.h"
 #include <array>
 #include <cstdint>
 #include <sstream>
@@ -30,9 +31,13 @@ struct Child {
     Nba97GameSceneStartupEvent event;
     Nba97GameSceneStartupRegisters registers;
 };
-int fixture(void* user,const Nba97GameTextMemory*,
+struct Children { std::vector<Child> calls;GameSceneResourcesCapture resources; };
+int fixture(void* user,const Nba97GameTextMemory* memory,
     const Nba97GameSceneStartupEvent* event,Nba97GameSceneStartupRegisters* registers) {
-    static_cast<std::vector<Child>*>(user)->push_back({*event,*registers});
+    auto& children=*static_cast<Children*>(user);
+    children.calls.push_back({*event,*registers});
+    if(event->entry==0x80052c20u)
+        return children.resources.dispatch(memory,event,registers);
     // Explicit CPU evidence fixture. No resource loader or GPU behavior is inferred.
     if(event->entry==0x8008f224u)
         registers->gpr[NBA97_MATCH_INITIALIZE_V0]={
@@ -63,10 +68,10 @@ int GameSceneStartupCapture::dispatch(const Nba97GameTextMemory* memory,
     word(*memory,0x800b729cu,4,true,0x8011abc0u);
     word(*memory,0x8001ede8u,4,true,7);
     word(*memory,0x800fa636u,2,true,0x55aau);
-    std::vector<Child> calls;
+    Children children;
     std::array<Nba97GameSceneStartupAccess,200> journal{};
     Nba97GameSceneStartupBinding binding{};
-    binding.operation_budget=512;binding.io=fixture;binding.user=&calls;
+    binding.operation_budget=512;binding.io=fixture;binding.user=&children;
     binding.access_journal=journal.data();binding.access_journal_capacity=journal.size();
     const auto accepted=nba97_game_scene_startup_from_scene_load(
         &binding,memory,event,registers);
@@ -94,13 +99,13 @@ int GameSceneStartupCapture::dispatch(const Nba97GameTextMemory* memory,
     out<<"],\"entity_ids\":[";
     for(unsigned i=0;i<10;++i) {if(i)out<<',';out<<word(*memory,0x800fee90u+4*i);}
     out<<"],\"children\":[";
-    for(std::size_t i=0;i<calls.size();++i) {
-        if(i)out<<',';const auto& c=calls[i];
+    for(std::size_t i=0;i<children.calls.size();++i) {
+        if(i)out<<',';const auto& c=children.calls[i];
         out<<"{\"pc\":"<<c.event.pc<<",\"entry\":"<<c.event.entry<<
             ",\"delay_slot_pc\":"<<c.event.delay_slot_pc<<",\"a0\":"<<c.registers.gpr[4].word<<
             ",\"a1\":"<<c.registers.gpr[5].word<<",\"ra\":"<<c.registers.gpr[31].word<<'}';
     }
-    out<<"],\"access_count\":"<<p.access_events<<'}';
+    out<<"],\"access_count\":"<<p.access_events<<",\"resources\":"<<children.resources.receipt<<'}';
     receipt=out.str();return 1;
 }
 }
