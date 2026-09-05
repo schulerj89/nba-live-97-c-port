@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80029114",
+      "original_name": "Game_AudioInitialize",
+      "symbol": "nba97_game_audio_initialize",
+      "source": "src/recovered/game_audio_initialize.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_audio_initialize_tests; nba97_game_audio_initialize_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8002DB68",
       "original_name": "Game_SceneLoad",
       "symbol": "nba97_game_scene_load",

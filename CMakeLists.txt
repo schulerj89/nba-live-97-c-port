@@ -10,6 +10,19 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_audio_initialize_tests
+        tests/game_audio_initialize_tests.cpp src/recovered/game_audio_initialize.c)
+    target_compile_features(nba97_game_audio_initialize_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_audio_initialize_tests PRIVATE src)
+    add_test(NAME game_audio_initialize COMMAND nba97_game_audio_initialize_tests)
+    add_executable(nba97_game_audio_initialize_integration_tests
+        tests/game_audio_initialize_integration_tests.cpp src/recovered/game_audio_initialize.c
+        src/game_audio_initialize_adapter.cpp src/recovered/game_resource_loader.c
+        src/recovered/game_match_initialize.c src/game_match_initialize_adapter.cpp
+        src/recovered/game_memory_zero.c)
+    target_compile_features(nba97_game_audio_initialize_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_audio_initialize_integration_tests PRIVATE src)
+    add_test(NAME game_audio_initialize_integration COMMAND nba97_game_audio_initialize_integration_tests)
     add_executable(nba97_game_scene_load_tests
         tests/game_scene_load_tests.cpp src/recovered/game_scene_load.c)
     target_compile_features(nba97_game_scene_load_tests PRIVATE c_std_99 cxx_std_17)
@@ -1336,6 +1349,8 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/feload_entry.c src/feload_entry_capture.cpp)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_audio_initialize.c
+    src/game_audio_initialize_adapter.cpp src/game_audio_initialize_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_scene_load.c
     src/game_scene_load_adapter.cpp src/game_scene_load_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_roster_bindings.c src/recovered/game_match_initialize.c

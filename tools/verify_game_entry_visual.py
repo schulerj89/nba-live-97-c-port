@@ -341,6 +341,37 @@ def main():
         "frame_sha256": initialize_hashes,
         "cpu_receipt": "match_initialize_trace.json",
         "classification": "no direct visual effect"}, indent=2) + "\n", encoding="utf-8")
+    audio = initialize["audio_initialize"]
+    require((audio["program"], audio["address"], audio["inclusive_end"],
+             audio["bytes"], audio["instructions"], audio["call_pc"]) ==
+            ("GAMEONLY", "0x80029114", "0x800291FF", 236, 59, "0x8002DBD0"),
+            "audio initializer provenance drifted")
+    require(audio["classification"] == "no direct visual effect" and
+            "synthetic" in audio["scope"] and "no audible" in audio["scope"] and
+            (audio["operations"], audio["reads"], audio["stores"], audio["calls_completed"]) == (20, 5, 4, 11)
+            and audio["old_header"] == 0x80117000 and audio["loaded_header"] == 0x80118000
+            and audio["live_header"] == 0x80118100 and audio["body"] == 0x80119000
+            and audio["setting"] == 9 and audio["scaled_volume"] == 127
+            and audio["result_before"] == 0xA5A5A5A5
+            and audio["raw_return"] == audio["result_after"] == 0xFEEDBEEF
+            and audio["restored_ra"] == 0x8002DBD8 and audio["sp"] == 0x807FFF90
+            and audio["upload_args"] == [0x80021D6C, 0x80118100, 0x80119000],
+            "audio initializer live bank/volume/stack state drifted")
+    require(audio["loaders"] == [{"operations": 8, "attempts": 2, "null_results": 1}]*2
+            and audio["typed_children"] == [
+                {"pc": pc, "entry": entry} for pc, entry in (
+                    (0x8002912C, 0x80090698), (0x80029164, 0x8008F4F0),
+                    (0x8002916C, 0x800ADB48), (0x80029180, 0x8008CDC0),
+                    (0x80029188, 0x8008CC28), (0x800291A0, 0x800AD360),
+                    (0x800291A8, 0x80090698), (0x800291B0, 0x800ACA08),
+                    (0x800291DC, 0x80088E84))],
+            "audio initializer source call order or recovered retry behavior drifted")
+    (args.frames / "audio_initialize_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80029114", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": initialize_hashes, "cpu_receipt": "match_initialize_trace.json",
+        "state": audio, "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     scene = read_json(args.frames / "scene_load_trace.json")
     require((scene["program"], scene["address"], scene["inclusive_end"],
              scene["bytes"], scene["instructions"], scene["call_pc"]) ==

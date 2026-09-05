@@ -128,7 +128,8 @@ try {
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}
     foreach($target in @('nba97_game_match_initialize_tests','nba97_game_match_initialize_integration_tests',
         'nba97_game_roster_bindings_tests','nba97_game_roster_bindings_integration_tests',
-        'nba97_game_scene_load_tests','nba97_game_scene_load_integration_tests')) {
+        'nba97_game_scene_load_tests','nba97_game_scene_load_integration_tests',
+        'nba97_game_audio_initialize_tests','nba97_game_audio_initialize_integration_tests')) {
         if(-not $SkipBuild) {
             & $cmake --build "$repo/build-windows" --config $Configuration --target $target --parallel
             if($LASTEXITCODE) {throw "Match initializer target build failed: $target"}

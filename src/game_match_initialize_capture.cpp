@@ -1,6 +1,7 @@
 #include "game_match_initialize_capture.h"
 #include "game_match_initialize_adapter.h"
 #include "recovered/game_roster_bindings.h"
+#include "game_audio_initialize_capture.h"
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -31,6 +32,7 @@ struct ChildLog {
     std::vector<std::uint32_t> a0;
     bool clear_seen=false;
     Nba97GameRosterBindingsProgress roster{};
+    GameAudioInitializeCapture audio;
 };
 int child(void* user,const Nba97GameTextMemory* memory,
           const Nba97GameMatchInitializeEvent* event,
@@ -46,6 +48,7 @@ int child(void* user,const Nba97GameTextMemory* memory,
         *registers=log.roster.registers;
         return result==NBA97_TEXT_COMPLETE && log.roster.completed;
     }
+    if(event->entry==0x80029114u)return log.audio.dispatch(memory,event,registers);
     if(event->entry==0x800763f4u)log.clear_seen=get(*memory,0x80020c18u)==0;
     // Explicit nonretail child response. Do not invent simulation or rendering
     // work for these still-incompatible/unresolved complete-call interfaces.
@@ -89,7 +92,7 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
         "\"inclusive_end\": \"0x8002DC37\", \"bytes\": 168, \"instructions\": 42,\n"
         "  \"instruction_sha256\": \"c1569d2ae6b58be97cd7511f5dd2bee7be70684d9e1fc9ba9abd3ad9f83ce6f3\",\n"
         "  \"call_pc\": \"0x8002DA7C\", \"classification\": \"no direct visual effect\",\n"
-        "  \"scope\": \"recovered zero and roster owners; ten synthetic child responses, no advancing match loop\",\n"
+        "  \"scope\": \"recovered zero, roster and audio owners; synthetic dependent services, no advancing match loop\",\n"
         "  \"driver\": \"native recovered-input handlers: Game Setup, Team Select, User Setup\",\n"
         "  \"operations\": "<<progress.operations<<", \"reads\": "<<progress.reads<<
         ", \"stores\": "<<progress.stores<<", \"calls_completed\": "<<progress.callbacks_completed<<",\n"
@@ -126,7 +129,8 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
     for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80015034u+i*4);}
     out<<"], \"mirror_away\": [";
     for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80015064u+i*4);}
-    out<<"]},\n  \"routine_capture_frame_numbers\": [0, 1],\n"
+    out<<"]},\n  \"audio_initialize\": "<<log.audio.receipt<<
+        ",\n  \"routine_capture_frame_numbers\": [0, 1],\n"
         "  \"captures\": [\"match-initialize-before.ppm\", \"match-initialize-after.ppm\"]\n}\n";
     receipt=out.str();return true;
 }
