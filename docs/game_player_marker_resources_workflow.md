@@ -101,8 +101,9 @@ The later player/ball frame owners supply those fields before consumption.
   its old coordinates. Ball-shadow packets receive the newer coordinates.
 - `AA468` copies in load/store groups, not a whole-span snapshot. Overlapping
   copies preserve forward/backward ordering and the signed ADD overflow traps
-  at `AA65C`/`AA670`. Unaligned and other-length copy domains explicitly refuse
-  as unsupported native domains, not claimed original CPU alignment traps.
+  at `AA65C`/`AA670`. This initializer-local owner still refuses domains it
+  never reaches; the separately recovered [complete `AA468`
+  owner](game_memory_copy_workflow.md) covers unaligned and other-length calls.
 - Original globals still contain numeric image addresses after resource
   release. These are not retained native owners or permission to dereference
   freed objects. Packet and VRAM outputs have separate lifetimes.

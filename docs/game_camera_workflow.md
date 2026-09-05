@@ -35,8 +35,10 @@ original clamps at `0x12` and `0x90`; the final source height scale is retained.
 The three template copy requests are exactly 26 bytes. Their forward and
 overlapping backward paths preserve the source load/store batches, including
 LWL/LWR and SWL/SWR byte spans. They propagate unknown copied bytes without
-inventing knowledge. This is not a general replacement for every `AA468`
-caller or length.
+inventing knowledge. This camera-local owner deliberately remains limited to
+the reached 26-byte domain; the separately recovered
+[complete `AA468` owner](game_memory_copy_workflow.md) covers every path and
+length without changing this frozen camera composition.
 
 The pass preserves debug-selection wrapping, independent simultaneous held
 camera bits, angle masking, visibility-mask rereads and exact court boundary

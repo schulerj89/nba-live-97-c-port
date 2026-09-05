@@ -70,6 +70,6 @@ then reaches the owner through recovered main. It writes
 `shutdown-table-zero-before.ppm`, `shutdown-table-zero-after.ppm`, the byte
 state, store metrics, receipt, and trace. The two frames must be byte-identical
 because the routine changes CPU callback-table state rather than scanout. The
-138-frame suite proves native reachability and absence of a direct visual
+140-frame suite proves native reachability and absence of a direct visual
 effect; it does not claim the typed downstream boundaries rendered a playable
 court or possession.

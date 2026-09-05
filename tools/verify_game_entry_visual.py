@@ -244,6 +244,13 @@ def main():
             memory_zero_frames["shutdown-table-zero-after"] ==
             controller_suspend_frames["controller-suspend-after"],
             "shutdown-table zero-fill unexpectedly changed retained scanout")
+    memory_copy_frames = {
+        name: ppm_pixels(args.frames / f"{name}.ppm")
+        for name in ["feload-memory-copy-before", "feload-memory-copy-after"]}
+    require(memory_copy_frames["feload-memory-copy-before"] ==
+            memory_copy_frames["feload-memory-copy-after"] ==
+            memory_zero_frames["shutdown-table-zero-after"],
+            "FELOAD CPU-memory copy unexpectedly changed retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -1015,6 +1022,34 @@ def main():
                 "visual_effect": "no pixels changed; eight already-zero shutdown callback words were explicitly cleared again",
                 "status": "shutdown-table-cleared"},
             "recovered 0x800A3A74 zero-fill receipt drifted")
+    require(receipt["memory_copy"] == {
+                "binary": "GAMEONLY", "address": "0x800AA468",
+                "end_exclusive": "0x800AA788", "instructions": 200,
+                "instruction_sha256":
+                    "2d9ed18f5de6fe3edc1fab9996769b418452b1c32eb3fd2cce7ed1f2b0c2350d",
+                "call_pc": "0x80029B94", "source": "0x80123400",
+                "destination": "0x801E0000", "length": 5136,
+                "direction": "forward", "alignment_result_v0": 0,
+                "operations": 2568, "accesses": 2568,
+                "reads": 1284, "stores": 1284,
+                "read_traffic_bytes": 5136,
+                "store_traffic_bytes": 5136,
+                "destination_changed": True, "payload_matches": True,
+                "entry_word_before": "0x00000000",
+                "entry_word_after": "0x801E0100",
+                "source_quirks": {
+                    "signed_address_comparisons": True,
+                    "trapping_signed_end_adds": True,
+                    "grouped_loads_precede_grouped_stores": True,
+                    "unaligned_lwl_lwr_swl_swr_pairs": True,
+                    "aligned_backward_tail_repeats_partial_word_traffic": True,
+                    "negative_length_can_wrap_to_huge_loop": True,
+                    "return_is_alignment_bits_not_destination": True},
+                "captures": ["feload-memory-copy-before.ppm",
+                             "feload-memory-copy-after.ppm"],
+                "visual_effect": "no pixels changed; 5136 retained CPU bytes moved and main then read the copied overlay entry",
+                "status": "feload-image-copied"},
+            "recovered 0x800AA468 memory-copy receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -1029,6 +1064,7 @@ def main():
                        "clock_shutdown": "0x8009167C",
                        "controller_suspend": "0x8008F19C",
                        "memory_zero": "0x800A3A74",
+                       "memory_copy": "0x800AA468",
                        "indirect_entry": "0x801E0100"},
             "translated game-entry result drifted")
     calls = receipt["calls"]
@@ -1123,7 +1159,9 @@ def main():
             [call["s0"] for call in calls[51:71]] ==
             [f"0x{value:08X}" for value in range(1, 21)],
             "delay-slot loop register order drifted")
-    require(calls[75]["entry"] == "0x800AA468" and
+    require(calls[75]["pc"] == "0x80029B94" and
+            calls[75]["entry"] == "0x800AA468" and
+            calls[75]["kind"] == "direct" and
             calls[76] == {"index": 76, "kind": "indirect", "pc": "0x80029BA8",
                           "entry": "0x801E0100", "s0": "0x00000014"},
             "loaded image copy/transfer boundary drifted")
@@ -1407,6 +1445,15 @@ def main():
             "zero-length delay-slot byte write" in trace and
             "INT_MIN huge-loop wrap" in trace and
             "unchanged live v0 remain" in trace and
+            "next recovered boundary 0x800AA468" in trace and
+            "complete 200-instruction optimized memory-copy helper" in trace and
+            "all 5136 retained FELOAD bytes" in trace and
+            "1284 reads and 1284 stores" in trace and
+            "main read copied entry 0x801E0100" in trace and
+            "feload-memory-copy-before.ppm and feload-memory-copy-after.ppm are pixel-identical" in trace and
+            "destination bytes changed and match the source" in trace and
+            "alignment-bit v0" in trace and
+            "negative-length runaway behavior remain" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -1478,6 +1525,9 @@ def main():
           "native zero-fill entry 0x800A3A74 fell through its 80-instruction shared core, issued "
           "nine source stores over the 32-byte shutdown table, retained delay-slot/overlap quirks, "
           "and emitted pixel-identical native before/after frames; "
+          "native memory-copy 0x800AA468 moved all 5136 FELOAD bytes with 2568 exact accesses, "
+          "preserved overlap/alignment/runaway quirks, exposed matching CPU snapshots, and emitted "
+          "pixel-identical native before/after frames; "
           "77-call GAMEONLY 0x80029994 diagnostic reached FELOAD transfer")
 
 

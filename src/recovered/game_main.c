@@ -395,6 +395,12 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * traffic, zero-length delay-slot write bug, and unchanged live v0 in the
      * owner; main deliberately ignores that return value. */
     TRY(direct_call(run, 0x80029b84u, 0x800a3a74u, 2, 0x800d6decu, 0x20u, 0, &value));
+    /* GAMEONLY 0x80029B94 -> 0x800AA468 is the complete recovered optimized
+     * memory-copy helper. It moves exactly the loader's requested FELOAD size
+     * to overlay base 0x801E0000 before main reads word zero as an entry. Its
+     * signed overlap tests, grouped load-before-store order, partial-word
+     * accesses, alignment-bit v0, signed-ADD traps and negative-length loop
+     * quirks live in that owner; main intentionally ignores its return. */
     TRY(direct_call(run, 0x80029b94u, 0x800aa468u, 3, run->s1,
         0x801e0000u, run->s2, &value));
     TRY(read_word(run, 0x801e0000u, 0x80029ba0u, &indirect));

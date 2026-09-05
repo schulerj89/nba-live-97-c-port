@@ -33,6 +33,7 @@
 #include "recovered/game_clock_shutdown.h"
 #include "recovered/game_controller_suspend.h"
 #include "recovered/game_memory_zero.h"
+#include "recovered/game_memory_copy.h"
 #include "recovered/game_heap_release.h"
 
 #include <array>
@@ -122,6 +123,7 @@ struct Fixture {
     Nba97GameClockShutdownProgress clock_shutdown_progress{};
     Nba97GameControllerSuspendProgress controller_suspend_progress{};
     Nba97GameMemoryZeroProgress memory_zero_progress{};
+    Nba97GameMemoryCopyProgress memory_copy_progress{};
     Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
     std::array<Nba97GamePresentationWaitProgress,11>
         match_session_presentation_wait_progress{};
@@ -191,6 +193,7 @@ struct Fixture {
     unsigned controller_suspend_invocations = 0;
     unsigned controller_suspend_child_callbacks = 0;
     unsigned memory_zero_invocations = 0;
+    unsigned memory_copy_invocations = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -250,6 +253,7 @@ struct Fixture {
     bool compose_clock_shutdown = false;
     bool compose_controller_suspend = false;
     bool compose_memory_zero = false;
+    bool compose_memory_copy = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -295,6 +299,11 @@ struct Fixture {
         put(descriptor+0x24u,0x8010b61cu);
         put(0x8010b61cu+0x20u,descriptor);
         put(0x8010b644u+0x24u,descriptor);
+        /* Diagnostic 941C8 fixture owns these bytes. Word zero is the actual
+           overlay entry that main reads only after AA468 has copied it. */
+        for(unsigned i=0;i<0x1410u;++i)
+            put(0x80123400u+i,(i*37u+(i>>8u)+0x5au)&0xffu,1);
+        put(0x80123400u,0x801e0100u);
         return true;
     }
     void putText(std::uint32_t address, const char* text) {
@@ -1605,6 +1614,23 @@ struct Fixture {
             *value={f.memory_zero_progress.return_v0,
                 f.memory_zero_progress.return_v0_known};
         }
+        if(f.compose_memory_copy && event->entry==0x800aa468u) {
+            if(event->pc!=0x80029b94u || event->argument_count!=3 ||
+               event->argument[0]!=0x80123400u ||
+               event->argument[1]!=0x801e0000u ||
+               event->argument[2]!=0x1410u ||
+               event->stack_pointer!=FrameSp ||
+               event->return_address!=0x80029b9cu ||
+               f.memory_copy_invocations)return 0;
+            Nba97GameMemoryCopyContext context{*memory,3000,
+                event->argument[0],event->argument[1],event->argument[2]};
+            if(nba97_game_memory_copy(&context,&f.memory_copy_progress)!=
+                   NBA97_TEXT_COMPLETE || !f.memory_copy_progress.completed)
+                return 0;
+            ++f.memory_copy_invocations;
+            *value={f.memory_copy_progress.return_v0,
+                f.memory_copy_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1623,7 +1649,7 @@ struct Fixture {
                    !f.compose_heap_payload_size) {
             value->word = 0x1410u;
             value->known = f.mode == MissingSize ? 0 : 1;
-        } else if (event->entry == 0x800aa468u) {
+        } else if (event->entry == 0x800aa468u && !f.compose_memory_copy) {
             if (f.mode != UnknownEntry) {
                 const auto entry = f.mode == UnalignedEntry ? 0x801e0102u : 0x801e0100u;
                 f.put(0x801e0000u, entry);
@@ -1882,6 +1908,7 @@ struct Composition {
         game.compose_clock_shutdown = true;
         game.compose_controller_suspend = true;
         game.compose_memory_zero = true;
+        game.compose_memory_copy = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -2197,6 +2224,30 @@ void overlay_composition() {
         c.game.get(0x800d7b28u)==0);
     for(unsigned i=0;i<8;++i)
         check(c.game.get(0x800d6decu+i*4u)==0);
+    check(c.game.memory_copy_invocations==1 &&
+        c.game.memory_copy_progress.completed &&
+        c.game.memory_copy_progress.source==0x80123400u &&
+        c.game.memory_copy_progress.destination==0x801e0000u &&
+        c.game.memory_copy_progress.requested_length==0x1410u &&
+        c.game.memory_copy_progress.operations==2568 &&
+        c.game.memory_copy_progress.accesses==2568 &&
+        c.game.memory_copy_progress.reads==1284 &&
+        c.game.memory_copy_progress.stores==1284 &&
+        c.game.memory_copy_progress.bytes_read==0x1410u &&
+        c.game.memory_copy_progress.bytes_stored==0x1410u &&
+        c.game.memory_copy_progress.working_source==0x80124810u &&
+        c.game.memory_copy_progress.working_destination==0x801e1410u &&
+        c.game.memory_copy_progress.working_count==0xffffffffu &&
+        c.game.memory_copy_progress.return_v0==0 &&
+        c.game.memory_copy_progress.return_v0_known &&
+        !c.game.memory_copy_progress.backward &&
+        !c.game.memory_copy_progress.unaligned &&
+        !c.game.memory_copy_progress.stopped_pc &&
+        !c.game.memory_copy_progress.stopped_address);
+    for(unsigned i=0;i<0x1410u;++i)
+        check(c.game.get(0x801e0000u+i,1)==
+            c.game.get(0x80123400u+i,1));
+    check(c.main_progress.indirect_entry==0x801e0100u);
     check(c.game.calls[13].pc==0x80029a4cu &&
         c.game.calls[13].entry==0x800914d8u &&
         c.game.calls[13].argument_count==1 &&

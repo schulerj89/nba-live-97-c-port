@@ -47,6 +47,7 @@
 #include "recovered/game_clock_shutdown.h"
 #include "recovered/game_controller_suspend.h"
 #include "recovered/game_memory_zero.h"
+#include "recovered/game_memory_copy.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6297,6 +6298,7 @@ private:
             Nba97GameClockShutdownProgress clock_shutdown_progress{};
             Nba97GameControllerSuspendProgress controller_suspend_progress{};
             Nba97GameMemoryZeroProgress memory_zero_progress{};
+            Nba97GameMemoryCopyProgress memory_copy_progress{};
             std::array<Nba97GameImageUploadProgress,3>
                 loading_screen_image_progress{};
             Nba97GameImageUploadState loading_screen_upload_state{0,1};
@@ -6404,6 +6406,16 @@ private:
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> memory_zero_after=
                 std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> memory_copy_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> memory_copy_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint8_t> memory_copy_source_before=
+                std::vector<std::uint8_t>(0x1410u);
+            std::vector<std::uint8_t> memory_copy_destination_before=
+                std::vector<std::uint8_t>(0x1410u);
+            std::vector<std::uint8_t> memory_copy_destination_after=
+                std::vector<std::uint8_t>(0x1410u);
             std::vector<std::uint16_t> loading_screen_vram_before=
                 std::vector<std::uint16_t>(1024u*512u);
             std::vector<std::uint16_t> loading_screen_vram_after_first=
@@ -6480,6 +6492,7 @@ private:
             unsigned controller_suspend_calls=0;
             unsigned controller_suspend_child_callbacks=0;
             unsigned memory_zero_calls=0;
+            unsigned memory_copy_calls=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6723,6 +6736,13 @@ private:
                 put(descriptor+0x24u,low);
                 put(low+0x20u,descriptor);
                 put(high+0x24u,descriptor);
+                /* The typed 941C8 diagnostic owns a deterministic FELOAD
+                   payload. AA468 must move these actual retained bytes before
+                   main can discover the entry in word zero. */
+                for(unsigned i=0;i<0x1410u;++i)
+                    putByte(0x80123400u+i,static_cast<std::uint8_t>(
+                        (i*37u+(i>>8u)+0x5au)&0xffu));
+                put(0x80123400u,0x801e0100u);
                 feload_descriptor_installed=true;
                 return true;
             }
@@ -7049,6 +7069,33 @@ private:
                 ++memory_zero_calls;
                 *value={memory_zero_progress.return_v0,
                     memory_zero_progress.return_v0_known};
+                return 1;
+            }
+            int runMemoryCopy(const Nba97GameTextMemory* memory,
+                std::uint32_t source,std::uint32_t destination,
+                std::uint32_t length,Nba97GameMainValue* value) {
+                if(!memory || !value || memory_copy_calls ||
+                   source!=0x80123400u || destination!=0x801e0000u ||
+                   length!=0x1410u)return 0;
+                captureDisplay(memory_copy_before);
+                for(unsigned i=0;i<length;++i) {
+                    memory_copy_source_before[i]=getByte(source+i);
+                    memory_copy_destination_before[i]=getByte(destination+i);
+                }
+                /* GAMEONLY 0x800AA468 is an optimized memmove-like CPU leaf.
+                   Compose it over mapped PS1 bytes; it does not need or touch
+                   the native renderer, loader, or host address space. */
+                Nba97GameMemoryCopyContext context{*memory,3000,source,
+                    destination,length};
+                if(nba97_game_memory_copy(&context,&memory_copy_progress)!=
+                       NBA97_TEXT_COMPLETE ||
+                   !memory_copy_progress.completed)return 0;
+                for(unsigned i=0;i<length;++i)
+                    memory_copy_destination_after[i]=getByte(destination+i);
+                captureDisplay(memory_copy_after);
+                ++memory_copy_calls;
+                *value={memory_copy_progress.return_v0,
+                    memory_copy_progress.return_v0_known};
                 return 1;
             }
             void completeGpuWork() {
@@ -8459,7 +8506,16 @@ private:
                 if(!fixture.runMemoryZero(memory,event->argument[0],
                        event->argument[1],value))return 0;
             }
-            else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
+            else if(event->entry==0x800aa468u) {
+                if(event->pc!=0x80029b94u || event->argument_count!=3 ||
+                   event->argument[0]!=0x80123400u ||
+                   event->argument[1]!=0x801e0000u ||
+                   event->argument[2]!=0x1410u ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->return_address!=0x80029b9cu)return 0;
+                if(!fixture.runMemoryCopy(memory,event->argument[0],
+                       event->argument[1],event->argument[2],value))return 0;
+            }
             else if(event->kind==NBA97_GAME_MAIN_INDIRECT_CALL) *outcome=NBA97_GAME_MAIN_CALLEE_TRANSFERRED;
             return 1;
         };
@@ -9198,6 +9254,38 @@ private:
         const bool memory_zero_visual_unchanged=
             state.memory_zero_before==state.memory_zero_after &&
             state.memory_zero_before==state.controller_suspend_after;
+        const bool memory_copy_complete=
+            state.memory_copy_calls==1 &&
+            state.memory_copy_progress.completed &&
+            state.memory_copy_progress.source==0x80123400u &&
+            state.memory_copy_progress.destination==0x801e0000u &&
+            state.memory_copy_progress.requested_length==0x1410u &&
+            state.memory_copy_progress.operations==2568 &&
+            state.memory_copy_progress.accesses==2568 &&
+            state.memory_copy_progress.reads==1284 &&
+            state.memory_copy_progress.stores==1284 &&
+            state.memory_copy_progress.bytes_read==0x1410u &&
+            state.memory_copy_progress.bytes_stored==0x1410u &&
+            state.memory_copy_progress.working_source==0x80124810u &&
+            state.memory_copy_progress.working_destination==0x801e1410u &&
+            state.memory_copy_progress.working_count==0xffffffffu &&
+            state.memory_copy_progress.return_v0==0 &&
+            state.memory_copy_progress.return_v0_known &&
+            !state.memory_copy_progress.backward &&
+            !state.memory_copy_progress.unaligned &&
+            !state.memory_copy_progress.stopped_pc &&
+            !state.memory_copy_progress.stopped_address &&
+            std::all_of(state.memory_copy_destination_before.begin(),
+                state.memory_copy_destination_before.end(),
+                [](std::uint8_t byte){return byte==0;}) &&
+            state.memory_copy_source_before==
+                state.memory_copy_destination_after &&
+            state.memory_copy_destination_before!=
+                state.memory_copy_destination_after &&
+            state.get(0x801e0000u)==0x801e0100u;
+        const bool memory_copy_visual_unchanged=
+            state.memory_copy_before==state.memory_copy_after &&
+            state.memory_copy_before==state.memory_zero_after;
         if(!loading_screen_complete)
             throw std::runtime_error("translated 0x80029E58 diagnostic state drifted: outer="+
                 std::to_string(state.loading_screen_calls)+" events="+
@@ -9278,6 +9366,14 @@ private:
                 std::to_string(state.memory_zero_progress.bytes_stored));
         if(!memory_zero_visual_unchanged)
             throw std::runtime_error("translated 0x800A3A74 unexpectedly changed retained scanout");
+        if(!memory_copy_complete)
+            throw std::runtime_error("translated 0x800AA468 diagnostic state drifted: calls="+
+                std::to_string(state.memory_copy_calls)+" accesses="+
+                std::to_string(state.memory_copy_progress.accesses)+" reads="+
+                std::to_string(state.memory_copy_progress.reads)+" stores="+
+                std::to_string(state.memory_copy_progress.stores));
+        if(!memory_copy_visual_unchanged)
+            throw std::runtime_error("translated 0x800AA468 unexpectedly changed retained scanout");
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -9661,6 +9757,8 @@ private:
            !controller_suspend_visual_unchanged ||
            !memory_zero_complete ||
            !memory_zero_visual_unchanged ||
+           !memory_copy_complete ||
+           !memory_copy_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -9724,7 +9822,22 @@ private:
             state.calls[72].pc!=0x80029b6cu || state.calls[72].entry!=0x8009167cu ||
             state.calls[73].pc!=0x80029b74u || state.calls[73].entry!=0x8008f19cu ||
             state.calls[73].argument_count!=0 ||
-            state.calls[73].return_address!=0x80029b7cu)
+            state.calls[73].return_address!=0x80029b7cu ||
+            state.calls[74].pc!=0x80029b84u ||
+            state.calls[74].entry!=0x800a3a74u ||
+            state.calls[74].argument_count!=2 ||
+            state.calls[74].argument[0]!=0x800d6decu ||
+            state.calls[74].argument[1]!=0x20u ||
+            state.calls[75].pc!=0x80029b94u ||
+            state.calls[75].entry!=0x800aa468u ||
+            state.calls[75].argument_count!=3 ||
+            state.calls[75].argument[0]!=0x80123400u ||
+            state.calls[75].argument[1]!=0x801e0000u ||
+            state.calls[75].argument[2]!=0x1410u ||
+            state.calls[75].return_address!=0x80029b9cu ||
+            state.calls[76].kind!=NBA97_GAME_MAIN_INDIRECT_CALL ||
+            state.calls[76].pc!=0x80029ba8u ||
+            state.calls[76].entry!=0x801e0100u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
         const auto vram_frame=[&](unsigned origin_x,unsigned origin_y,
             const std::vector<std::uint16_t>* snapshot) {
@@ -9853,6 +9966,10 @@ private:
             capture_root/"shutdown-table-zero-before.ppm");
         writePpm(vram_frame(0,0,&state.memory_zero_after),
             capture_root/"shutdown-table-zero-after.ppm");
+        writePpm(vram_frame(0,0,&state.memory_copy_before),
+            capture_root/"feload-memory-copy-before.ppm");
+        writePpm(vram_frame(0,0,&state.memory_copy_after),
+            capture_root/"feload-memory-copy-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -10598,6 +10715,33 @@ private:
             "\"shutdown-table-zero-after.ppm\"], "
             "\"visual_effect\": \"no pixels changed; eight already-zero shutdown callback words were explicitly cleared again\", "
             "\"status\": \"shutdown-table-cleared\"},\n"
+            "  \"memory_copy\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x800AA468\", \"end_exclusive\": \"0x800AA788\", "
+            "\"instructions\": 200, \"instruction_sha256\": "
+            "\"2d9ed18f5de6fe3edc1fab9996769b418452b1c32eb3fd2cce7ed1f2b0c2350d\", "
+            "\"call_pc\": \"0x80029B94\", \"source\": \"0x80123400\", "
+            "\"destination\": \"0x801E0000\", \"length\": 5136, "
+            "\"direction\": \"forward\", \"alignment_result_v0\": 0, "
+            "\"operations\": "<<state.memory_copy_progress.operations<<
+            ", \"accesses\": "<<state.memory_copy_progress.accesses<<
+            ", \"reads\": "<<state.memory_copy_progress.reads<<
+            ", \"stores\": "<<state.memory_copy_progress.stores<<
+            ", \"read_traffic_bytes\": "<<state.memory_copy_progress.bytes_read<<
+            ", \"store_traffic_bytes\": "<<state.memory_copy_progress.bytes_stored<<
+            ", \"destination_changed\": true, \"payload_matches\": true, "
+            "\"entry_word_before\": \"0x00000000\", "
+            "\"entry_word_after\": \"0x801E0100\", "
+            "\"source_quirks\": {\"signed_address_comparisons\": true, "
+            "\"trapping_signed_end_adds\": true, "
+            "\"grouped_loads_precede_grouped_stores\": true, "
+            "\"unaligned_lwl_lwr_swl_swr_pairs\": true, "
+            "\"aligned_backward_tail_repeats_partial_word_traffic\": true, "
+            "\"negative_length_can_wrap_to_huge_loop\": true, "
+            "\"return_is_alignment_bits_not_destination\": true}, "
+            "\"captures\": [\"feload-memory-copy-before.ppm\", "
+            "\"feload-memory-copy-after.ppm\"], "
+            "\"visual_effect\": \"no pixels changed; 5136 retained CPU bytes moved and main then read the copied overlay entry\", "
+            "\"status\": \"feload-image-copied\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", "
@@ -10611,6 +10755,7 @@ private:
             "\"clock_shutdown\": \"0x8009167C\", "
             "\"controller_suspend\": \"0x8008F19C\", "
             "\"memory_zero\": \"0x800A3A74\", "
+            "\"memory_copy\": \"0x800AA468\", "
             "\"indirect_entry\": \"0x801E0100\"},\n  \"calls\": [\n";
         for(std::size_t i=0;i<state.calls.size();++i) {
             const auto& event=state.calls[i];if(i)json<<",\n";
@@ -10923,6 +11068,19 @@ private:
             "control; the redundant tail store, zero-length delay-slot byte write, "
             "INT_MIN huge-loop wrap, 32-bit address arithmetic, and unchanged live "
             "v0 remain rather than being cleaned up as native memset behavior");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next recovered boundary 0x800AA468 is the complete 200-instruction "
+            "optimized memory-copy helper reached at call PC 0x80029B94; it copied "
+            "all 5136 retained FELOAD bytes from loader payload 0x80123400 to overlay "
+            "base 0x801E0000 with 1284 reads and 1284 stores, then main read copied "
+            "entry 0x801E0100 and transferred there; feload-memory-copy-before.ppm "
+            "and feload-memory-copy-after.ppm are pixel-identical because this is a "
+            "CPU-memory move, while the receipt proves destination bytes changed and "
+            "match the source; frames, byte snapshots and logs were captured natively "
+            "by the self-driving recovered-input test, not computer control; signed "
+            "address comparisons and trapping ADDs, per-group overlap order, LWL/LWR/"
+            "SWL/SWR traffic, alignment-bit v0, and negative-length runaway behavior "
+            "remain exactly as source quirks instead of being normalized to host memmove");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered boundary 0x8009DBF8 is the 6-instruction PsyQ "
             "CdSyncCallback exchange reached at call PC 0x80029B44 immediately "
