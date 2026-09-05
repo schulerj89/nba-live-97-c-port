@@ -293,6 +293,54 @@ def main():
         "cpu_receipt": "feload_entry_trace.json",
         "classification": "no direct visual effect"}, indent=2) + "\n",
         encoding="utf-8")
+    initialize = read_json(args.frames / "match_initialize_trace.json")
+    require((initialize["program"], initialize["address"], initialize["inclusive_end"],
+             initialize["bytes"], initialize["instructions"], initialize["call_pc"]) ==
+            ("GAMEONLY", "0x8002DB90", "0x8002DC37", 168, 42, "0x8002DA7C"),
+            "match initializer provenance drifted")
+    require(initialize["classification"] == "no direct visual effect" and
+            initialize["routine_capture_frame_numbers"] == [0, 1] and
+            "synthetic" in initialize["scope"] and "no advancing" in initialize["scope"],
+            "match initializer scope drifted")
+    require(initialize["operations"] == 19 and initialize["reads"] == 3 and
+            initialize["stores"] == 4 and initialize["calls_completed"] == 12 and
+            initialize["zero_bytes"] == 3708 and initialize["zero_stores"] == 928 and
+            initialize["zero_before_byte"] == 90 and initialize["zero_after"] and
+            initialize["final_flag_before"] == 0xA5A5A5A5 and
+            initialize["final_flag_after"] == 0 and initialize["final_child_saw_clear"] and
+            initialize["return_v0"] == 0x800763F4 and
+            initialize["restored_ra"] == 0x8002DA84 and initialize["sp"] == 0x807FFFA8,
+            "match initializer CPU state receipt drifted")
+    children = initialize["typed_children"]
+    require([call["pc"] for call in children] == [
+        0x8002DBC8, 0x8002DBD0, 0x8002DBD8, 0x8002DBE0, 0x8002DBE8,
+        0x8002DBF0, 0x8002DBF8, 0x8002DC00, 0x8002DC08, 0x8002DC10, 0x8002DC20] and
+        [call["entry"] for call in children] == [
+        0x80063D58, 0x80029114, 0x8007FD40, 0x800294F8, 0x8002AB30,
+        0x800640D8, 0x800659F0, 0x80065DB0, 0x80031E00, 0x80038A18, 0x800763F4] and
+        children[9]["a0"] == children[10]["a0"] == 0xFFFFFFFF,
+        "match initializer child order/delay-slot argument drifted")
+    accesses = initialize["parent_accesses"]
+    require([access["pc"] for access in accesses] == [
+        0x8002DB94, 0x8002DB9C, 0x8002DBAC, 0x8002DBB4, 0x8002DBBC, 0x8002DC1C, 0x8002DC28] and
+        [access["address"] for access in accesses] == [
+        0x80021D74, 0x80021D78, 0x807FFFA0, 0x80022084, 0x80022ADC, 0x80020C18, 0x807FFFA0] and
+        [accesses[0]["value"], accesses[1]["value"]] == initialize["team_snapshots"] and
+        [accesses[3]["value"], accesses[4]["value"]] == initialize["team_snapshots"],
+        "match initializer memory order/snapshots drifted")
+    initialize_hashes = {name: ppm_hash(args.frames / name)
+                         for name in initialize["captures"]}
+    require(len(initialize_hashes) == 2 and len(set(initialize_hashes.values())) == 1 and
+            next(iter(initialize_hashes.values())) ==
+            ppm_hash(args.frames / "match-session-before.ppm"),
+            "match initializer changed retained scanout")
+    (args.frames / "match_initialize_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8002DB90",
+        "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": initialize_hashes,
+        "cpu_receipt": "match_initialize_trace.json",
+        "classification": "no direct visual effect"}, indent=2) + "\n", encoding="utf-8")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
             "diagnostic receipt lost its non-gameplay scope boundary")
     require(receipt["driver"] == {"kind": "native recovered-input handlers",
@@ -751,7 +799,7 @@ def main():
                                  "source_vblank_signals": 11,
                                  "host_sleep_used": False},
                 "downstream_stages": {
-                    "initialize_0x8002DB90": "acknowledged-boundary",
+                    "initialize_0x8002DB90": "recovered-owner-with-typed-children",
                     "load_scene_0x8002DB68": "acknowledged-boundary",
                     "run_loop_0x8002DC38": "acknowledged-boundary",
                     "teardown_0x8002DC58": "acknowledged-boundary"},
@@ -1366,7 +1414,7 @@ def main():
             "recovered 165-instruction match-session owner" in trace and
             "two clear boundaries bracketed four 512x240" in trace and
             "nested 0x800A7738 reset completed" in trace and
-            "initialize 0x8002DB90, scene load 0x8002DB68, game loop 0x8002DC38 and teardown 0x8002DC58" in trace and
+            "initialize 0x8002DB90 executed its recovered owner and zero-fill child" in trace and
             "ordinary no-custom-location path performed no team-table patch" in trace and
             "eleven recovered presentation wrappers" in trace and
             "without host sleeps" in trace and

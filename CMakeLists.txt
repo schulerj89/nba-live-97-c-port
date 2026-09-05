@@ -10,6 +10,19 @@ if(MSVC)
     add_compile_options(/FS)
 endif()
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_initialize_tests
+        tests/game_match_initialize_tests.cpp src/recovered/game_match_initialize.c
+        src/game_match_initialize_adapter.cpp src/recovered/game_memory_zero.c)
+    target_compile_features(nba97_game_match_initialize_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_initialize_tests PRIVATE src)
+    add_test(NAME game_match_initialize COMMAND nba97_game_match_initialize_tests)
+    add_executable(nba97_game_match_initialize_integration_tests
+        tests/game_match_initialize_integration_tests.cpp src/recovered/game_match_initialize.c
+        src/game_match_initialize_adapter.cpp src/recovered/game_memory_zero.c
+        src/recovered/game_match_session.c)
+    target_compile_features(nba97_game_match_initialize_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_initialize_integration_tests PRIVATE src)
+    add_test(NAME game_match_initialize_integration COMMAND nba97_game_match_initialize_integration_tests)
     add_executable(nba97_feload_entry_tests tests/feload_entry_tests.cpp
         src/recovered/feload_entry.c)
     target_compile_features(nba97_feload_entry_tests PRIVATE c_std_99 cxx_std_17)
@@ -1300,6 +1313,8 @@ target_sources(nba97_boot_decomp PRIVATE src/frontend_plate.cpp src/recovered/ma
     src/recovered/gameplay_mocap.c src/gameplay_mocap.cpp src/recovered/music_routing.c)
 target_sources(nba97_boot_decomp PRIVATE src/roster_reset_assets.cpp src/recovered/roster_reset.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/feload_entry.c src/feload_entry_capture.cpp)
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_initialize.c
+    src/game_match_initialize_adapter.cpp src/game_match_initialize_capture.cpp)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/create_player.c)
 target_sources(nba97_boot_decomp PRIVATE src/recovered/team_select.c src/recovered/team_ratings.c src/recovered/game_setup.c
     src/team_select_assets.cpp src/recovered/user_setup.c src/user_setup_assets.cpp src/user_setup_session.cpp)

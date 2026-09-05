@@ -126,6 +126,14 @@ try {
     }
     & $mainUnit
     if($LASTEXITCODE) {throw 'GAMEONLY 0x80029994 unit/composition tests failed'}
+    foreach($target in @('nba97_game_match_initialize_tests','nba97_game_match_initialize_integration_tests')) {
+        if(-not $SkipBuild) {
+            & $cmake --build "$repo/build-windows" --config $Configuration --target $target --parallel
+            if($LASTEXITCODE) {throw "Match initializer target build failed: $target"}
+        }
+        & (Join-Path $repo "build-windows/$Configuration/$target.exe")
+        if($LASTEXITCODE) {throw "Match initializer verification failed: $target"}
+    }
 
     $stamp=(Get-Date -Format 'yyyyMMdd-HHmmss')+'-'+[Guid]::NewGuid().ToString('N').Substring(0,8)
     # The existing capture owner enforces this private root and requires every

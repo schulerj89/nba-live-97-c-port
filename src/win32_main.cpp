@@ -49,6 +49,7 @@
 #include "recovered/game_memory_zero.h"
 #include "recovered/game_memory_copy.h"
 #include "feload_entry_capture.h"
+#include "game_match_initialize_capture.h"
 #include "recovered/game_heap_release.h"
 #include "recovered/game_image_upload.h"
 #include "recovered/game_heap_initialize.h"
@@ -6495,6 +6496,7 @@ private:
             unsigned memory_zero_calls=0;
             unsigned memory_copy_calls=0;
             nba97::FeloadEntryCapture feload_entry_capture;
+            nba97::GameMatchInitializeCapture match_initialize_capture;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -8150,7 +8152,13 @@ private:
                         *session_value={p,1};
                         return 1;
                     }
-                    case NBA97_GAME_MATCH_SESSION_INITIALIZE:
+                    case NBA97_GAME_MATCH_SESSION_INITIALIZE: {
+                        state.captureDisplay(state.match_initialize_capture.before);
+                        const auto accepted=state.match_initialize_capture.dispatch(
+                            session_memory,session_event,session_value);
+                        state.captureDisplay(state.match_initialize_capture.after);
+                        return accepted;
+                    }
                     case NBA97_GAME_MATCH_SESSION_LOAD_SCENE:
                     case NBA97_GAME_MATCH_SESSION_RUN_LOOP:
                     case NBA97_GAME_MATCH_SESSION_TEARDOWN:
@@ -9981,6 +9989,11 @@ private:
         writePpm(vram_frame(0,0,&state.feload_entry_capture.after),
             capture_root/"feload-entry-after.ppm");
         state.feload_entry_capture.writeReceipt(capture_root/"feload_entry_trace.json");
+        writePpm(vram_frame(0,0,&state.match_initialize_capture.before),
+            capture_root/"match-initialize-before.ppm");
+        writePpm(vram_frame(0,0,&state.match_initialize_capture.after),
+            capture_root/"match-initialize-after.ppm");
+        state.match_initialize_capture.writeReceipt(capture_root/"match_initialize_trace.json");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -10428,7 +10441,7 @@ private:
             state.match_session_presentation_wait_calls<<
             ", \"source_vblank_signals\": "<<state.match_session_vblank_signals<<
             ", \"host_sleep_used\": false}, \"downstream_stages\": {"
-            "\"initialize_0x8002DB90\": \"acknowledged-boundary\", "
+            "\"initialize_0x8002DB90\": \"recovered-owner-with-typed-children\", "
             "\"load_scene_0x8002DB68\": \"acknowledged-boundary\", "
             "\"run_loop_0x8002DC38\": \"acknowledged-boundary\", "
             "\"teardown_0x8002DC58\": \"acknowledged-boundary\"}, "
@@ -10935,7 +10948,8 @@ private:
             "through its recovered 165-instruction match-session owner: two clear "
             "boundaries bracketed four 512x240 SetDefDrawEnv/SetDefDispEnv calls, "
             "the nested 0x800A7738 reset completed, 14 direct control-byte stores "
-            "completed, and initialize 0x8002DB90, scene load 0x8002DB68, game loop "
+            "completed, and initialize 0x8002DB90 executed its recovered owner and zero-fill child; "
+            "scene load 0x8002DB68, game loop "
             "0x8002DC38 and teardown 0x8002DC58 remained explicit acknowledged "
             "boundaries; the ordinary no-custom-location path performed no team-table "
             "patch, then DrawSync(0) and eleven recovered presentation wrappers "

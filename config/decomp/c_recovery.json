@@ -3,6 +3,16 @@
   "candidate_directory": ".local/build/ps1/functions",
   "functions": [
     {
+      "binary": "gameonly",
+      "address": "0x8002DB90",
+      "original_name": "Game_MatchInitialize",
+      "symbol": "nba97_game_match_initialize",
+      "source": "src/recovered/game_match_initialize.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_match_initialize_tests; nba97_game_match_initialize_integration_tests"
+    },
+    {
       "binary": "feload",
       "address": "0x801E1410",
       "original_name": "FELOAD_StartupEntry",

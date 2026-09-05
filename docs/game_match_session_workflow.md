@@ -30,9 +30,12 @@ presentation wait, DrawSync(0), then ten more presentation waits
 restore the live o32 frame and return zero
 ```
 
-The four stage children remain explicit mandatory boundaries. This recovery
-does not claim that `0x8002DB90`, `0x8002DB68`, `0x8002DC38` or `0x8002DC58`
-has thereby become a native court, possession, gameplay loop or teardown.
+The initializer `0x8002DB90` now composes its complete recovered owner and the
+existing zero-fill owner through a narrow adapter; see
+[match initializer](game_match_initialize_workflow.md). Its eleven downstream
+services still require providers. The remaining `0x8002DB68`, `0x8002DC38` and
+`0x8002DC58` stages remain explicit mandatory boundaries. These recoveries do
+not establish a native court, possession, gameplay loop or teardown.
 The parent is useful because it now preserves and exposes their exact order,
 arguments, surrounding state, presentation tail and continuation point.
 
@@ -60,7 +63,7 @@ input test traverses Game Setup, Team Select and User Setup without computer
 control, then runs this parent on the ordinary no-custom-location path. The
 receipt records all 23 child entries, the 14 control-byte stores and eleven
 deterministic source VBlanks. It emits `match-session-before.ppm` and
-`match-session-after.ppm`; they must be pixel-identical because the four
-downstream gameplay stages are acknowledged boundaries and the test does not
+`match-session-after.ppm`; they remain pixel-identical because the initializer
+changes CPU state while the remaining stages are boundaries; the test does not
 fabricate their rendering. The frames are generated retained-scanout evidence,
 not retail art or proof of a playable possession.
