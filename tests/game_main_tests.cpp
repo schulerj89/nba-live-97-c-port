@@ -22,6 +22,7 @@
 #include "recovered/game_display_mask_set.h"
 #include "recovered/game_resource_validator_install.h"
 #include "recovered/game_frame_rate_reset.h"
+#include "recovered/game_match_session.h"
 
 #include <array>
 #include <cstdint>
@@ -31,13 +32,15 @@
 
 namespace {
 unsigned checks;
-void check(bool value) {
+void checkAt(bool value, unsigned line) {
     ++checks;
     if (!value) {
-        std::fprintf(stderr, "game main check %u failed\n", checks);
+        std::fprintf(stderr, "game main check %u failed at line %u\n", checks,
+            line);
         std::exit(1);
     }
 }
+#define check(value) checkAt((value), __LINE__)
 
 constexpr std::uint32_t Ram = 0x80000000u;
 constexpr std::uint32_t Stack = 0x807fff00u;
@@ -96,6 +99,10 @@ struct Fixture {
     Nba97GameDisplayMaskSetProgress display_mask_progress{};
     Nba97GameResourceValidatorInstallProgress resource_validator_progress{};
     Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
+    Nba97GameMatchSessionProgress match_session_progress{};
+    Nba97GameFrameRateResetProgress match_session_frame_rate_reset_progress{};
+    std::array<Nba97GamePresentationWaitProgress,11>
+        match_session_presentation_wait_progress{};
     std::vector<Nba97GameHeapInitializeEvent> heap_journal =
         std::vector<Nba97GameHeapInitializeEvent>(300);
     std::vector<Nba97GameMainEvent> calls;
@@ -117,6 +124,11 @@ struct Fixture {
     std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
     std::vector<Nba97GameDisplayMaskSetEvent> display_mask_calls;
     std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_calls;
+    std::vector<Nba97GameMatchSessionEvent> match_session_calls;
+    std::vector<Nba97GameFrameRateResetEvent>
+        match_session_frame_rate_reset_calls;
+    std::vector<Nba97GamePresentationWaitEvent>
+        match_session_presentation_wait_calls;
     unsigned heap_format_calls = 0;
     unsigned controller_resume_invocations = 0;
     unsigned presentation_wait_invocations = 0;
@@ -133,6 +145,10 @@ struct Fixture {
     unsigned resource_validator_install_invocations = 0;
     unsigned frame_rate_reset_invocations = 0;
     unsigned frame_rate_reset_child_callbacks = 0;
+    unsigned match_session_invocations = 0;
+    unsigned match_session_frame_rate_reset_child_callbacks = 0;
+    unsigned match_session_presentation_wait_invocations = 0;
+    unsigned match_session_vblank_signals = 0;
     unsigned gpu_sync_dma_busy_reads = 0;
     std::uint64_t gpu_submitted = 0;
     std::uint64_t gpu_completed = 0;
@@ -178,6 +194,7 @@ struct Fixture {
     bool compose_display_mask = false;
     bool compose_resource_validator_install = false;
     bool compose_frame_rate_reset = false;
+    bool compose_match_session = false;
 
     std::uint8_t* byte(std::uint32_t address) {
         for (auto& region : regions)
@@ -524,6 +541,148 @@ struct Fixture {
         ++f.presentation_vblank_signals;
         *value={1,1};
         return 1;
+    }
+    static int matchSessionFrameRateResetIo(void* user,
+        const Nba97GameTextMemory*,
+        const Nba97GameFrameRateResetEvent* event,
+        Nba97GameFrameRateResetValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        ++f.match_session_frame_rate_reset_child_callbacks;
+        f.match_session_frame_rate_reset_calls.push_back(*event);
+        if(event->kind!=NBA97_GAME_FRAME_RATE_RESET_READ_CLOCK ||
+           event->pc!=0x800a7754u || event->entry!=0x800a5810u ||
+           event->stack_pointer!=FrameSp-0x40u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=0x800a775cu || event->argument_count ||
+           f.get(0x800d7b44u)!=0 || f.get(0x800d7b48u)!=0 ||
+           f.get(0x800d7b4cu)!=0 || f.get(0x800d7b50u)!=0 ||
+           f.get(0x800d7b54u)!=0 || f.get(0x800d7b58u)!=0)
+            return 0;
+        *value={f.get(0x800d7a70u),1};
+        return 1;
+    }
+    static int matchSessionPresentationWaitIo(void* user,
+        const Nba97GameTextMemory*,
+        const Nba97GamePresentationWaitEvent* event,
+        Nba97GamePresentationWaitValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.match_session_presentation_wait_calls.push_back(*event);
+        if(event->kind!=NBA97_GAME_PRESENTATION_WAIT_SERVICE ||
+           event->pc!=0x80029be4u || event->entry!=0x800a9cc0u ||
+           event->stack_pointer!=FrameSp-0x40u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=0x80029becu || event->argument_count ||
+           f.get(event->global_pointer+0x1b4u)!=0 ||
+           f.get(0x800d7a84u)!=0 || f.get(0x800d7b3cu)!=0 ||
+           f.get(0x800d7b40u)!=0)
+            return 0;
+        /* Deterministic source-service fixture: no host clock or input is
+           synthesized. Each recovered wrapper observes one acknowledged
+           VBlank exactly as the existing click-through does. */
+        f.put(0x800d7a80u,0);
+        f.put(0x800d7a80u,1);
+        f.put(0x800d7a88u,f.get(0x800d7a88u)+1u);
+        f.put(event->global_pointer+0x1b4u,0);
+        ++f.match_session_vblank_signals;
+        *value={1,1};
+        return 1;
+    }
+    static int matchSessionIo(void* user, const Nba97GameTextMemory* memory,
+        const Nba97GameMatchSessionEvent* event,
+        Nba97GameMatchSessionValue* value) {
+        auto& f=*static_cast<Fixture*>(user);
+        f.match_session_calls.push_back(*event);
+        if(event->stack_pointer!=FrameSp-0x28u ||
+           event->global_pointer!=0x800d79c8u ||
+           event->return_address!=event->pc+8u)
+            return 0;
+        *value={0,1};
+        switch(event->kind) {
+        case NBA97_GAME_MATCH_SESSION_CLEAR_RECTANGLE:
+            if(event->entry!=0x800aa0bcu || event->argument_count!=5)
+                return 0;
+            return 1;
+        case NBA97_GAME_MATCH_SESSION_FRAME_RATE_RESET: {
+            if(event->pc!=0x8002d908u || event->entry!=0x800a7738u ||
+               event->argument_count)
+                return 0;
+            Nba97GameFrameRateResetContext context{*memory,20,
+                event->stack_pointer,event->return_address,
+                event->global_pointer,matchSessionFrameRateResetIo,&f};
+            if(nba97_game_frame_rate_reset(&context,
+                   &f.match_session_frame_rate_reset_progress)!=
+                       NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.match_session_frame_rate_reset_progress.return_v0,
+                f.match_session_frame_rate_reset_progress.return_v0_known};
+            return 1;
+        }
+        case NBA97_GAME_MATCH_SESSION_SET_DEF_DRAW_ENV:
+        case NBA97_GAME_MATCH_SESSION_SET_DEF_DISP_ENV: {
+            const bool draw=event->kind==
+                NBA97_GAME_MATCH_SESSION_SET_DEF_DRAW_ENV;
+            if(event->entry!=(draw ? 0x8009ca00u : 0x8009cad0u) ||
+               event->argument_count!=5)
+                return 0;
+            const auto p=event->argument[0];
+            f.put(p,event->argument[1],2);
+            f.put(p+2u,event->argument[2],2);
+            f.put(p+4u,event->argument[3],2);
+            f.put(p+6u,event->argument[4],2);
+            if(draw) {
+                f.put(p+8u,event->argument[1],2);
+                f.put(p+10u,event->argument[2],2);
+                for(unsigned offset=12;offset<20;offset+=2)
+                    f.put(p+offset,0,2);
+                f.put(p+20u,10,2);
+                f.put(p+22u,1,1);
+                f.put(p+23u,1,1);
+                for(unsigned offset=24;offset<28;++offset)
+                    f.put(p+offset,0,1);
+            } else {
+                for(unsigned offset=8;offset<16;offset+=2)
+                    f.put(p+offset,0,2);
+                for(unsigned offset=16;offset<20;++offset)
+                    f.put(p+offset,0,1);
+            }
+            *value={p,1};
+            return 1;
+        }
+        case NBA97_GAME_MATCH_SESSION_INITIALIZE:
+        case NBA97_GAME_MATCH_SESSION_LOAD_SCENE:
+        case NBA97_GAME_MATCH_SESSION_RUN_LOOP:
+        case NBA97_GAME_MATCH_SESSION_TEARDOWN:
+            if(event->argument_count)
+                return 0;
+            return 1;
+        case NBA97_GAME_MATCH_SESSION_PRESENTATION_WAIT: {
+            if(event->entry!=0x80029bdcu || event->argument_count ||
+               f.match_session_presentation_wait_invocations>=
+                   f.match_session_presentation_wait_progress.size())
+                return 0;
+            auto& progress=f.match_session_presentation_wait_progress[
+                f.match_session_presentation_wait_invocations];
+            Nba97GamePresentationWaitContext context{*memory,10,
+                event->stack_pointer,event->return_address,
+                event->global_pointer,matchSessionPresentationWaitIo,&f};
+            if(nba97_game_presentation_wait(&context,&progress)!=
+                    NBA97_TEXT_COMPLETE)
+                return 0;
+            ++f.match_session_presentation_wait_invocations;
+            *value={progress.return_v0,progress.return_v0_known};
+            return 1;
+        }
+        case NBA97_GAME_MATCH_SESSION_DRAW_SYNC:
+            /* DrawSync is already recovered independently. This parent test
+               acknowledges its synchronous boundary without inventing a GPU
+               packet; the scanout remains available for visual comparison. */
+            if(event->entry!=0x800994f4u || event->argument_count!=1 ||
+               event->argument[0]!=0)
+                return 0;
+            return 1;
+        default:
+            return 0;
+        }
     }
     static int videoEnvironmentIo(void* user, const Nba97GameTextMemory*,
         const Nba97GameVideoEnvironmentInitializeEvent* event,
@@ -977,6 +1136,24 @@ struct Fixture {
             *value={f.frame_rate_reset_progress.return_v0,
                 f.frame_rate_reset_progress.return_v0_known};
         }
+        if (f.compose_match_session && event->entry == 0x8002d8d4u) {
+            if(event->pc!=0x80029adcu || event->argument_count!=0 ||
+               event->stack_pointer!=FrameSp ||
+               event->global_pointer!=0x800d79c8u ||
+               event->return_address!=0x80029ae4u)
+                return 0;
+            ++f.match_session_invocations;
+            Nba97GameMatchSessionContext context{*memory,100,
+                event->stack_pointer,event->return_address,
+                {event->saved_register[0],event->saved_register[1],
+                 event->saved_register[2]},event->global_pointer,
+                matchSessionIo,&f};
+            if(nba97_game_match_session(&context,
+                   &f.match_session_progress)!=NBA97_TEXT_COMPLETE)
+                return 0;
+            *value={f.match_session_progress.return_v0,
+                f.match_session_progress.return_v0_known};
+        }
         if (f.mode == Refuse && f.calls.size() == f.fail_call)
             return 0;
         if (f.mode == InvalidOutcome && f.calls.size() == f.fail_call) {
@@ -1170,6 +1347,10 @@ struct Composition {
         game.put(0x800d7b50u,0x33333333u);
         game.put(0x800d7b54u,0x44444444u);
         game.put(0x800d7b58u,0x55555555u);
+        /* Exercise the ordinary retail path; optional-location mutation and
+         * its preserved recheck/index bugs have dedicated routine tests. */
+        game.put(0x8001ec94u,0);
+        game.put(0x80021d74u,1);
         game.put(0x800c5668u,0x04ffffffu);
         game.put(0x800c566cu,0x80000000u);
         game.put(0x800c5640u,0x400u,2);
@@ -1217,6 +1398,7 @@ struct Composition {
         game.compose_display_mask = true;
         game.compose_resource_validator_install = true;
         game.compose_frame_rate_reset = true;
+        game.compose_match_session = true;
     }
     static int overlayIo(void* user, const Nba97GameTextMemory* memory,
         const Nba97GameOverlayEntryEvent* event, Nba97GameOverlayEntryCalleeOutcome* outcome) {
@@ -1462,9 +1644,10 @@ void overlay_composition() {
         c.game.vblank_calls[7].entry == 0x800a3e48u);
     for(unsigned i=0;i<8;++i)
         check(c.game.get(0x800d6e0cu+i*4u)==0);
-    /* The initializer reset 7A88 to zero; the later 41 acknowledged waits
-       advance it once apiece through their explicit VBlank fixtures. */
-    check(c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7afcu)==0 &&
+    /* The initializer reset 7A88 to zero; the main owner's 41 waits plus the
+       recovered match-session owner's eleven waits each acknowledge one
+       deterministic source VBlank. */
+    check(c.game.get(0x800d7a88u)==52 && c.game.get(0x800d7afcu)==0 &&
         c.game.get(0x800d7b00u)==0 && c.game.calls[12].pc==0x80029a38u &&
         c.game.calls[12].entry==0x800a43e8u &&
         c.game.calls[12].argument_count==0);
@@ -1647,8 +1830,8 @@ void overlay_composition() {
         c.game.get(0x80021f48u+22u,1)==0 &&
         c.game.get(0x80021eecu+23u,1)==1 &&
         c.game.get(0x80021f48u+23u,1)==1 &&
-        c.game.get(0x80021eecu+24u,1)==0 &&
-        c.game.get(0x80021f48u+24u,1)==0 &&
+        c.game.get(0x80021eecu+24u,1)==1 &&
+        c.game.get(0x80021f48u+24u,1)==1 &&
         c.game.get(0x80021fa4u+22u,1)==0 &&
         c.game.get(0x80021fa4u+23u,1)==0xcdu &&
         c.game.get(0x80021fa4u+24u,1)==0 &&
@@ -1840,6 +2023,82 @@ void overlay_composition() {
         c.game.calls[23].entry==0x800a7738u &&
         c.game.calls[23].return_address==0x80029adcu &&
         c.game.calls[23].argument_count==0);
+    check(c.game.match_session_invocations==1 &&
+        c.game.match_session_progress.completed &&
+        c.game.match_session_calls.size()==23 &&
+        c.game.match_session_progress.operations==54 &&
+        c.game.match_session_progress.accesses==31 &&
+        c.game.match_session_progress.reads==6 &&
+        c.game.match_session_progress.stores==25 &&
+        c.game.match_session_progress.callbacks_completed==23 &&
+        c.game.match_session_progress.direct_control_bytes_written==14);
+    check(c.game.match_session_progress.clear_rectangle_calls==2 &&
+        c.game.match_session_progress.frame_rate_reset_calls==1 &&
+        c.game.match_session_progress.environment_calls==4 &&
+        c.game.match_session_progress.location_lookup_calls==0 &&
+        c.game.match_session_progress.session_stage_calls==4 &&
+        c.game.match_session_progress.presentation_wait_calls==11 &&
+        c.game.match_session_progress.draw_sync_calls==1 &&
+        !c.game.match_session_progress.initial_custom_location_active &&
+        !c.game.match_session_progress.final_custom_location_active &&
+        c.game.match_session_progress.return_v0==0 &&
+        c.game.match_session_progress.return_v0_known);
+    check(c.game.match_session_progress.frame_stack_pointer==FrameSp-0x28u &&
+        c.game.match_session_progress.stack_pointer==FrameSp &&
+        c.game.match_session_progress.restored_return_address==0x80029ae4u &&
+        c.game.match_session_progress.restored_saved_register[0]==1 &&
+        c.game.match_session_progress.restored_saved_register[1]==0 &&
+        c.game.match_session_progress.restored_saved_register[2]==0);
+    check(c.game.match_session_frame_rate_reset_child_callbacks==1 &&
+        c.game.match_session_frame_rate_reset_calls.size()==1 &&
+        c.game.match_session_frame_rate_reset_progress.completed &&
+        c.game.match_session_frame_rate_reset_progress.operations==9 &&
+        c.game.match_session_frame_rate_reset_progress.accesses==8 &&
+        c.game.match_session_frame_rate_reset_progress.reads==1 &&
+        c.game.match_session_frame_rate_reset_progress.stores==7 &&
+        c.game.match_session_frame_rate_reset_progress.callbacks_completed==1 &&
+        c.game.match_session_frame_rate_reset_progress.frame_stack_pointer==
+            FrameSp-0x40u &&
+        c.game.match_session_frame_rate_reset_progress.stack_pointer==
+            FrameSp-0x28u &&
+        c.game.match_session_frame_rate_reset_progress.restored_return_address==
+            0x8002d910u);
+    check(c.game.match_session_presentation_wait_invocations==11 &&
+        c.game.match_session_vblank_signals==11 &&
+        c.game.match_session_presentation_wait_calls.size()==11);
+    for(unsigned i=0;i<11;++i) {
+        const auto& wait=c.game.match_session_presentation_wait_progress[i];
+        check(wait.completed && wait.operations==3 && wait.accesses==2 &&
+            wait.reads==1 && wait.stores==1 && wait.callbacks_completed==1 &&
+            wait.frame_stack_pointer==FrameSp-0x40u &&
+            wait.stack_pointer==FrameSp-0x28u &&
+            wait.global_pointer==0x800d79c8u &&
+            wait.restored_return_address==(i ? 0x8002db40u : 0x8002db30u));
+    }
+    static constexpr std::uint32_t match_stage_entry[4]={0x8002db90u,
+        0x8002db68u,0x8002dc38u,0x8002dc58u};
+    for(unsigned i=0;i<4;++i)
+        check(c.game.match_session_calls[6+i].entry==match_stage_entry[i]);
+    check(c.game.match_session_calls[0].entry==0x800aa0bcu &&
+        c.game.match_session_calls[1].entry==0x800a7738u &&
+        c.game.match_session_calls[10].entry==0x800aa0bcu &&
+        c.game.match_session_calls[11].entry==0x80029bdcu &&
+        c.game.match_session_calls[12].entry==0x800994f4u &&
+        c.game.match_session_calls[22].entry==0x80029bdcu);
+    check(c.game.get(0x80021498u,2)==0 &&
+        c.game.get(0x80021f05u,1)==0 &&
+        c.game.get(0x80021f60u,1)==1 &&
+        c.game.get(0x8002206du,1)==0 &&
+        c.game.get(0x80022081u,1)==0 &&
+        c.game.get(0x800eb680u,1)==1 &&
+        c.game.get(0x80015021u,1)==0);
+    check(c.game.calls[24].pc==0x80029adcu &&
+        c.game.calls[24].entry==0x8002d8d4u &&
+        c.game.calls[24].return_address==0x80029ae4u &&
+        c.game.calls[24].argument_count==0 &&
+        c.game.calls[25].pc==0x80029ae4u &&
+        c.game.calls[25].entry==0x80029e58u &&
+        c.game.calls[25].return_address==0x80029aecu);
     check(c.game.get(0x800c55c0u) == 0x00000100u &&
         c.game.get(0x800c55c4u) == 0x02000400u &&
         c.game.get(0x800c55d0u) == UINT32_MAX &&
@@ -1847,12 +2106,12 @@ void overlay_composition() {
     check(c.game.get(0x800c4a70u) == 0 &&
         c.game.get(0x800c4a74u) == 37 &&
         c.game.get(0x800d7a48u) == 8 &&
-        /* All 41 0x80029BDC invocations reuse DrawSync's saved-s0 slot. Its
-           saved-ra slot retains the later 0x800994F4 caller return address. */
+        /* The later main delay wait rewrites s0's slot; the match-session
+           frame remains the final owner of the adjacent saved-ra word. */
         c.game.get(FrameSp - 8u) == 0x80029b58u &&
-        c.game.get(FrameSp - 4u) == 0x80029ab4u);
+        c.game.get(FrameSp - 4u) == 0x80029ae4u);
     check(c.game.get(0x800d7a80u)==1 && c.game.get(0x800d7a84u)==0 &&
-        c.game.get(0x800d7a88u)==41 && c.game.get(0x800d7b3cu)==0 &&
+        c.game.get(0x800d7a88u)==52 && c.game.get(0x800d7b3cu)==0 &&
         c.game.get(0x800d7b40u)==0 && c.game.get(0x800d7b7cu)==0);
     check(c.game.get(0x800d7bb8u) == 0x99887766u &&
         c.overlay_progress.restored_return_address == 0x99887766u);

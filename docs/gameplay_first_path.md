@@ -142,6 +142,13 @@ loads ZMOCAP.BIN, ZDOMTLST.BIN, home D/V and away E/W model resources, both S
 resources, and home X/Y court resources. Court owner800479B8 constructs packet
 and runtime arrays;800504A8 builds ten player instances with stride0xBCC.
 
+The complete 165-instruction parent8002D8D4 is now native and connected to
+main caller80029ADC. It proves the two buffer definitions, optional team-location
+patch/restore, exact four-stage order, exit clear and eleven-wait presentation
+tail while retaining the original late-flag and reloaded-index bugs. Its four
+stage children remain explicit boundaries, so this does not change the scene or
+playable-possession acceptance criteria below. See game_match_session_workflow.md.
+
 Before reuse of the frontend model libraries, compare counts, offsets, strides,
 relocation, signed vertices, hierarchy/mocap data, matrices, camera fields and
 packets at each boundary. Keep the existing verified Create Player path intact.

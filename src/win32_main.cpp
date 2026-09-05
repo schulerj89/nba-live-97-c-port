@@ -36,6 +36,7 @@
 #include "recovered/game_display_mask_set.h"
 #include "recovered/game_resource_validator_install.h"
 #include "recovered/game_frame_rate_reset.h"
+#include "recovered/game_match_session.h"
 #include "recovered/game_heap_initialize.h"
 #include "recovered/game_main.h"
 #include "recovered/game_static_initializers.h"
@@ -6271,6 +6272,11 @@ private:
             Nba97GameResourceValidatorInstallProgress
                 resource_validator_progress{};
             Nba97GameFrameRateResetProgress frame_rate_reset_progress{};
+            Nba97GameMatchSessionProgress match_session_progress{};
+            Nba97GameFrameRateResetProgress
+                match_session_frame_rate_reset_progress{};
+            std::array<Nba97GamePresentationWaitProgress,11>
+                match_session_presentation_wait_progress{};
             std::array<Nba97GameHeapInitializeEvent,300> heap_journal{};
             std::vector<Nba97GameResetGraphEvent> reset_graph_events;
             std::vector<Nba97GameGraphDebugSetEvent> graph_debug_events;
@@ -6285,6 +6291,11 @@ private:
             std::vector<Nba97GameGpuSyncCall> gpu_sync_callbacks;
             std::vector<Nba97GameDisplayMaskSetEvent> display_mask_events;
             std::vector<Nba97GameFrameRateResetEvent> frame_rate_reset_events;
+            std::vector<Nba97GameMatchSessionEvent> match_session_events;
+            std::vector<Nba97GameFrameRateResetEvent>
+                match_session_frame_rate_reset_events;
+            std::vector<Nba97GamePresentationWaitEvent>
+                match_session_presentation_wait_events;
             struct PendingMove {
                 unsigned sx,sy,dx,dy,width,height;
             };
@@ -6308,6 +6319,10 @@ private:
             std::vector<std::uint16_t> frame_rate_reset_before=
                 std::vector<std::uint16_t>(512u*240u);
             std::vector<std::uint16_t> frame_rate_reset_after=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> match_session_before=
+                std::vector<std::uint16_t>(512u*240u);
+            std::vector<std::uint16_t> match_session_after=
                 std::vector<std::uint16_t>(512u*240u);
             unsigned static_calls=0;
             unsigned global_pointer_calls=0;
@@ -6352,6 +6367,10 @@ private:
             unsigned resource_validator_install_calls=0;
             unsigned frame_rate_reset_calls=0;
             unsigned frame_rate_reset_child_callbacks=0;
+            unsigned match_session_calls=0;
+            unsigned match_session_frame_rate_reset_child_callbacks=0;
+            unsigned match_session_presentation_wait_calls=0;
+            unsigned match_session_vblank_signals=0;
             std::uint64_t move_image_pixel_words=0;
             std::uint64_t gpu_submitted=0;
             std::uint64_t gpu_completed=0;
@@ -6386,6 +6405,8 @@ private:
             std::uint32_t resource_validator_callback_after=0xffffffffu;
             std::array<std::uint32_t,6> frame_rate_words_before{};
             std::array<std::uint32_t,6> frame_rate_words_after{};
+            std::array<std::uint32_t,7> match_session_state_before{};
+            std::array<std::uint32_t,7> match_session_state_after{};
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
@@ -6426,6 +6447,11 @@ private:
                 put(0x800d7b50u,0x33333333u);
                 put(0x800d7b54u,0x44444444u);
                 put(0x800d7b58u,0x55555555u);
+                /* Ordinary match path. The translated routine's optional
+                   location path and retail mutation quirks are unit-tested
+                   separately with changing flag/index fixtures. */
+                put(0x8001ec94u,0);
+                put(0x80021d74u,1);
                 /* A concrete retained CPU/GTE fixture lets the translated
                    initializer prove both changed and deliberately-live state. */
                 gte_state.cop0_status={0x10900401u,1};
@@ -7481,6 +7507,203 @@ private:
                 fixture.captureDisplay(fixture.frame_rate_reset_after);
                 *value={fixture.frame_rate_reset_progress.return_v0,
                     fixture.frame_rate_reset_progress.return_v0_known};
+            } else if(event->entry==0x8002d8d4u) {
+                if(event->pc!=0x80029adcu || event->argument_count!=0 ||
+                   event->stack_pointer!=0x807fffd0u ||
+                   event->global_pointer!=0x800d79c8u ||
+                   event->return_address!=0x80029ae4u)return 0;
+                ++fixture.match_session_calls;
+                fixture.match_session_state_before={
+                    fixture.getHalf(0x80021498u),
+                    fixture.getByte(0x80021f04u),
+                    fixture.getByte(0x80021f60u),
+                    fixture.getByte(0x800eb680u),
+                    fixture.getByte(0x80015021u),
+                    fixture.get(0x800d7a88u),
+                    fixture.get(0x800d7b44u)};
+                fixture.captureDisplay(fixture.match_session_before);
+                const auto session_io=[](void* user,
+                    const Nba97GameTextMemory* session_memory,
+                    const Nba97GameMatchSessionEvent* session_event,
+                    Nba97GameMatchSessionValue* session_value)->int {
+                    auto& state=*static_cast<State*>(user);
+                    state.match_session_events.push_back(*session_event);
+                    if(session_event->stack_pointer!=0x807fffa8u ||
+                       session_event->global_pointer!=0x800d79c8u ||
+                       session_event->return_address!=session_event->pc+8u)
+                        return 0;
+                    *session_value={0,1};
+                    switch(session_event->kind) {
+                    case NBA97_GAME_MATCH_SESSION_CLEAR_RECTANGLE:
+                        return session_event->entry==0x800aa0bcu &&
+                            session_event->argument_count==5;
+                    case NBA97_GAME_MATCH_SESSION_FRAME_RATE_RESET: {
+                        if(session_event->pc!=0x8002d908u ||
+                           session_event->entry!=0x800a7738u ||
+                           session_event->argument_count)return 0;
+                        const auto clock=[](void* clock_user,
+                            const Nba97GameTextMemory*,
+                            const Nba97GameFrameRateResetEvent* clock_event,
+                            Nba97GameFrameRateResetValue* clock_value)->int {
+                            auto& clock_state=*static_cast<State*>(clock_user);
+                            ++clock_state.
+                                match_session_frame_rate_reset_child_callbacks;
+                            clock_state.match_session_frame_rate_reset_events.
+                                push_back(*clock_event);
+                            if(clock_event->kind!=
+                                   NBA97_GAME_FRAME_RATE_RESET_READ_CLOCK ||
+                               clock_event->pc!=0x800a7754u ||
+                               clock_event->entry!=0x800a5810u ||
+                               clock_event->stack_pointer!=0x807fff90u ||
+                               clock_event->global_pointer!=0x800d79c8u ||
+                               clock_event->return_address!=0x800a775cu ||
+                               clock_event->argument_count ||
+                               clock_state.get(0x800d7b44u)!=0 ||
+                               clock_state.get(0x800d7b48u)!=0 ||
+                               clock_state.get(0x800d7b4cu)!=0 ||
+                               clock_state.get(0x800d7b50u)!=0 ||
+                               clock_state.get(0x800d7b54u)!=0 ||
+                               clock_state.get(0x800d7b58u)!=0)return 0;
+                            *clock_value={clock_state.get(0x800d7a70u),1};
+                            return 1;
+                        };
+                        Nba97GameFrameRateResetContext reset_context{
+                            *session_memory,20,session_event->stack_pointer,
+                            session_event->return_address,
+                            session_event->global_pointer,clock,&state};
+                        if(nba97_game_frame_rate_reset(&reset_context,
+                               &state.match_session_frame_rate_reset_progress)!=
+                                   NBA97_TEXT_COMPLETE)return 0;
+                        *session_value={
+                            state.match_session_frame_rate_reset_progress.return_v0,
+                            state.match_session_frame_rate_reset_progress.
+                                return_v0_known};
+                        return 1;
+                    }
+                    case NBA97_GAME_MATCH_SESSION_SET_DEF_DRAW_ENV:
+                    case NBA97_GAME_MATCH_SESSION_SET_DEF_DISP_ENV: {
+                        const bool draw=session_event->kind==
+                            NBA97_GAME_MATCH_SESSION_SET_DEF_DRAW_ENV;
+                        if(session_event->entry!=(draw ? 0x8009ca00u :
+                               0x8009cad0u) ||
+                           session_event->argument_count!=5)return 0;
+                        const auto p=session_event->argument[0];
+                        state.putHalf(p,static_cast<std::uint16_t>(
+                            session_event->argument[1]));
+                        state.putHalf(p+2u,static_cast<std::uint16_t>(
+                            session_event->argument[2]));
+                        state.putHalf(p+4u,static_cast<std::uint16_t>(
+                            session_event->argument[3]));
+                        state.putHalf(p+6u,static_cast<std::uint16_t>(
+                            session_event->argument[4]));
+                        if(draw) {
+                            state.putHalf(p+8u,static_cast<std::uint16_t>(
+                                session_event->argument[1]));
+                            state.putHalf(p+10u,static_cast<std::uint16_t>(
+                                session_event->argument[2]));
+                            for(unsigned offset=12;offset<20;offset+=2)
+                                state.putHalf(p+offset,0);
+                            state.putHalf(p+20u,10);
+                            state.putByte(p+22u,1);
+                            state.putByte(p+23u,1);
+                            for(unsigned offset=24;offset<28;++offset)
+                                state.putByte(p+offset,0);
+                        } else {
+                            for(unsigned offset=8;offset<16;offset+=2)
+                                state.putHalf(p+offset,0);
+                            for(unsigned offset=16;offset<20;++offset)
+                                state.putByte(p+offset,0);
+                        }
+                        *session_value={p,1};
+                        return 1;
+                    }
+                    case NBA97_GAME_MATCH_SESSION_INITIALIZE:
+                    case NBA97_GAME_MATCH_SESSION_LOAD_SCENE:
+                    case NBA97_GAME_MATCH_SESSION_RUN_LOOP:
+                    case NBA97_GAME_MATCH_SESSION_TEARDOWN:
+                        /* These are retained, named synchronous boundaries.
+                           This diagnostic does not fabricate their court or
+                           gameplay work. */
+                        return session_event->argument_count==0;
+                    case NBA97_GAME_MATCH_SESSION_PRESENTATION_WAIT: {
+                        if(session_event->entry!=0x80029bdcu ||
+                           session_event->argument_count ||
+                           state.match_session_presentation_wait_calls>=
+                               state.match_session_presentation_wait_progress.
+                                   size())return 0;
+                        const auto wait=[](void* wait_user,
+                            const Nba97GameTextMemory*,
+                            const Nba97GamePresentationWaitEvent* wait_event,
+                            Nba97GamePresentationWaitValue* wait_value)->int {
+                            auto& wait_state=*static_cast<State*>(wait_user);
+                            wait_state.match_session_presentation_wait_events.
+                                push_back(*wait_event);
+                            if(wait_event->kind!=
+                                   NBA97_GAME_PRESENTATION_WAIT_SERVICE ||
+                               wait_event->pc!=0x80029be4u ||
+                               wait_event->entry!=0x800a9cc0u ||
+                               wait_event->stack_pointer!=0x807fff90u ||
+                               wait_event->global_pointer!=0x800d79c8u ||
+                               wait_event->return_address!=0x80029becu ||
+                               wait_event->argument_count ||
+                               wait_state.get(wait_event->global_pointer+
+                                   0x1b4u)!=0 ||
+                               wait_state.get(0x800d7a84u)!=0 ||
+                               wait_state.get(0x800d7b3cu)!=0 ||
+                               wait_state.get(0x800d7b40u)!=0)return 0;
+                            wait_state.put(0x800d7a80u,0);
+                            wait_state.put(0x800d7a80u,1);
+                            wait_state.put(0x800d7a88u,
+                                wait_state.get(0x800d7a88u)+1u);
+                            wait_state.put(wait_event->global_pointer+0x1b4u,0);
+                            ++wait_state.match_session_vblank_signals;
+                            *wait_value={1,1};
+                            return 1;
+                        };
+                        auto& wait_progress=
+                            state.match_session_presentation_wait_progress[
+                                state.match_session_presentation_wait_calls];
+                        Nba97GamePresentationWaitContext wait_context{
+                            *session_memory,10,session_event->stack_pointer,
+                            session_event->return_address,
+                            session_event->global_pointer,wait,&state};
+                        if(nba97_game_presentation_wait(&wait_context,
+                               &wait_progress)!=NBA97_TEXT_COMPLETE)return 0;
+                        ++state.match_session_presentation_wait_calls;
+                        *session_value={wait_progress.return_v0,
+                            wait_progress.return_v0_known};
+                        return 1;
+                    }
+                    case NBA97_GAME_MATCH_SESSION_DRAW_SYNC:
+                        /* No packet was submitted by the acknowledged stages;
+                           preserve the already-recovered synchronous boundary
+                           without inventing GPU work. */
+                        return session_event->entry==0x800994f4u &&
+                            session_event->argument_count==1 &&
+                            session_event->argument[0]==0;
+                    default:
+                        return 0;
+                    }
+                };
+                Nba97GameMatchSessionContext session_context{*memory,100,
+                    event->stack_pointer,event->return_address,
+                    {event->saved_register[0],event->saved_register[1],
+                     event->saved_register[2]},event->global_pointer,
+                    session_io,&fixture};
+                if(nba97_game_match_session(&session_context,
+                       &fixture.match_session_progress)!=NBA97_TEXT_COMPLETE ||
+                   !fixture.match_session_progress.completed)return 0;
+                fixture.match_session_state_after={
+                    fixture.getHalf(0x80021498u),
+                    fixture.getByte(0x80021f04u),
+                    fixture.getByte(0x80021f60u),
+                    fixture.getByte(0x800eb680u),
+                    fixture.getByte(0x80015021u),
+                    fixture.get(0x800d7a88u),
+                    fixture.get(0x800d7b44u)};
+                fixture.captureDisplay(fixture.match_session_after);
+                *value={fixture.match_session_progress.return_v0,
+                    fixture.match_session_progress.return_v0_known};
             } else if(event->entry==0x80029bfcu) {*value={0x80123400u,1};}
             else if(event->entry==0x80090d60u) {*value={0x1410u,1};}
             else if(event->entry==0x800aa468u) fixture.put(0x801e0000u,0x801e0100u);
@@ -7717,6 +7940,107 @@ private:
         const bool frame_rate_reset_visual_unchanged=
             state.frame_rate_reset_before==state.frame_rate_reset_after &&
             state.frame_rate_reset_after==state.resource_validator_after;
+        bool match_session_complete=
+            state.match_session_calls==1 &&
+            state.match_session_events.size()==23 &&
+            state.match_session_progress.completed &&
+            state.match_session_progress.operations==54 &&
+            state.match_session_progress.accesses==31 &&
+            state.match_session_progress.reads==6 &&
+            state.match_session_progress.stores==25 &&
+            state.match_session_progress.callbacks_completed==23 &&
+            state.match_session_progress.clear_rectangle_calls==2 &&
+            state.match_session_progress.frame_rate_reset_calls==1 &&
+            state.match_session_progress.environment_calls==4 &&
+            state.match_session_progress.location_lookup_calls==0 &&
+            state.match_session_progress.session_stage_calls==4 &&
+            state.match_session_progress.presentation_wait_calls==11 &&
+            state.match_session_progress.draw_sync_calls==1 &&
+            state.match_session_progress.direct_control_bytes_written==14 &&
+            !state.match_session_progress.initial_custom_location_active &&
+            !state.match_session_progress.final_custom_location_active &&
+            state.match_session_progress.return_v0==0 &&
+            state.match_session_progress.return_v0_known &&
+            state.match_session_progress.frame_stack_pointer==0x807fffa8u &&
+            state.match_session_progress.stack_pointer==0x807fffd0u &&
+            state.match_session_progress.restored_return_address==0x80029ae4u &&
+            state.match_session_progress.restored_saved_register[0]==1 &&
+            state.match_session_progress.restored_saved_register[1]==0 &&
+            state.match_session_progress.restored_saved_register[2]==0 &&
+            state.match_session_frame_rate_reset_child_callbacks==1 &&
+            state.match_session_frame_rate_reset_events.size()==1 &&
+            state.match_session_frame_rate_reset_progress.completed &&
+            state.match_session_frame_rate_reset_progress.operations==9 &&
+            state.match_session_frame_rate_reset_progress.accesses==8 &&
+            state.match_session_frame_rate_reset_progress.reads==1 &&
+            state.match_session_frame_rate_reset_progress.stores==7 &&
+            state.match_session_frame_rate_reset_progress.callbacks_completed==1 &&
+            state.match_session_frame_rate_reset_progress.frame_stack_pointer==
+                0x807fff90u &&
+            state.match_session_frame_rate_reset_progress.stack_pointer==
+                0x807fffa8u &&
+            state.match_session_frame_rate_reset_progress.
+                restored_return_address==0x8002d910u &&
+            state.match_session_presentation_wait_calls==11 &&
+            state.match_session_vblank_signals==11 &&
+            state.match_session_presentation_wait_events.size()==11 &&
+            state.match_session_state_before==
+                std::array<std::uint32_t,7>{0,0,0,0,0,1,0} &&
+            state.match_session_state_after==
+                std::array<std::uint32_t,7>{0,1,1,1,0,12,0} &&
+            state.getHalf(0x80021498u)==0 &&
+            state.getByte(0x80021f04u)==1 &&
+            state.getByte(0x80021f60u)==1 &&
+            state.getByte(0x800eb680u)==1 &&
+            state.getByte(0x80015021u)==0;
+        if(match_session_complete) {
+            static constexpr std::uint32_t environment_pc[4]={0x8002d928u,
+                0x8002d948u,0x8002d960u,0x8002d978u};
+            static constexpr std::uint32_t environment_entry[4]={0x8009ca00u,
+                0x8009cad0u,0x8009ca00u,0x8009cad0u};
+            static constexpr std::uint32_t environment_pointer[4]={
+                0x80021eecu,0x8002205cu,0x80021f48u,0x80022070u};
+            static constexpr std::uint32_t environment_y[4]={0,0x100u,
+                0x100u,0};
+            for(unsigned i=0;i<4;++i)
+                match_session_complete=match_session_complete &&
+                    state.match_session_events[2+i].pc==environment_pc[i] &&
+                    state.match_session_events[2+i].entry==environment_entry[i] &&
+                    state.match_session_events[2+i].argument_count==5 &&
+                    state.match_session_events[2+i].argument[0]==
+                        environment_pointer[i] &&
+                    state.match_session_events[2+i].argument[1]==0 &&
+                    state.match_session_events[2+i].argument[2]==environment_y[i] &&
+                    state.match_session_events[2+i].argument[3]==0x200u &&
+                    state.match_session_events[2+i].argument[4]==0xf0u;
+            static constexpr std::uint32_t stage_entry[4]={0x8002db90u,
+                0x8002db68u,0x8002dc38u,0x8002dc58u};
+            for(unsigned i=0;i<4;++i)
+                match_session_complete=match_session_complete &&
+                    state.match_session_events[6+i].entry==stage_entry[i] &&
+                    state.match_session_events[6+i].argument_count==0;
+            match_session_complete=match_session_complete &&
+                state.match_session_events[0].entry==0x800aa0bcu &&
+                state.match_session_events[1].entry==0x800a7738u &&
+                state.match_session_events[10].entry==0x800aa0bcu &&
+                state.match_session_events[11].entry==0x80029bdcu &&
+                state.match_session_events[12].entry==0x800994f4u &&
+                state.match_session_events[22].entry==0x80029bdcu;
+            for(unsigned i=0;i<11;++i) {
+                const auto& wait=
+                    state.match_session_presentation_wait_progress[i];
+                match_session_complete=match_session_complete && wait.completed &&
+                    wait.operations==3 && wait.accesses==2 && wait.reads==1 &&
+                    wait.stores==1 && wait.callbacks_completed==1 &&
+                    wait.frame_stack_pointer==0x807fff90u &&
+                    wait.stack_pointer==0x807fffa8u &&
+                    wait.restored_return_address==(i ? 0x8002db40u :
+                        0x8002db30u);
+            }
+        }
+        const bool match_session_visual_unchanged=
+            state.match_session_before==state.match_session_after &&
+            state.match_session_before==state.frame_rate_reset_after;
         if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !progress.transferred ||
            !progress.reached_match_orchestration || state.calls.size()!=77 || state.static_calls!=1 ||
            !state.static_progress.completed || !state.static_progress.initialized ||
@@ -7907,7 +8231,7 @@ private:
             !state.vblank_set_rcnt_rejected ||
             !state.vblank_started_after_rejection ||
             !state.vblank_interrupt_installed || state.vblank_critical_section ||
-            !vblank_slots_cleared || state.get(0x800d7a88u)!=41 ||
+            !vblank_slots_cleared || state.get(0x800d7a88u)!=52 ||
             state.get(0x800d7afcu)!=0 || state.get(0x800d7b00u)!=0 ||
             state.vblank_events[0].pc!=0x800a43f8u ||
             state.vblank_events[0].entry!=0x800a4830u ||
@@ -8043,10 +8367,10 @@ private:
             state.getHalf(0x80021f4au)!=0x100u ||
             state.getByte(0x80021f02u)!=0 ||
             state.getByte(0x80021f03u)!=1 ||
-            state.getByte(0x80021f04u)!=0 ||
+            state.getByte(0x80021f04u)!=1 ||
             state.getByte(0x80021f5eu)!=0 ||
             state.getByte(0x80021f5fu)!=1 ||
-            state.getByte(0x80021f60u)!=0 ||
+            state.getByte(0x80021f60u)!=1 ||
             state.getByte(0x80021fbau)!=0 ||
             state.getByte(0x80021fbbu)!=0xb2u ||
             state.getByte(0x80021fbcu)!=0 ||
@@ -8068,6 +8392,8 @@ private:
            !resource_validator_visual_unchanged ||
            !frame_rate_reset_complete ||
            !frame_rate_reset_visual_unchanged ||
+           !match_session_complete ||
+           !match_session_visual_unchanged ||
             state.move_image_events[0].kind!=
                 NBA97_GAME_MOVE_IMAGE_DIAGNOSTIC ||
             state.move_image_events[1].kind!=
@@ -8087,7 +8413,7 @@ private:
             state.get(0x800c562cu)!=0xffffffffu ||
             state.get(0x800c4a70u)!=0 || state.get(0x800c4a74u)!=37 ||
             state.get(0x800d7a48u)!=8 || state.get(0x807fffc8u)!=0x80029b58u ||
-            state.get(0x807fffccu)!=0x80029ab4u ||
+            state.get(0x807fffccu)!=0x80029ae4u ||
             state.calls[8].pc!=0x80029a18u || state.calls[8].entry!=0x8008f1d4u ||
             state.calls[9].pc!=0x80029a20u || state.calls[9].entry!=0x80099058u ||
             state.calls[10].pc!=0x80029a28u || state.calls[10].entry!=0x800992c4u ||
@@ -8121,6 +8447,10 @@ private:
             state.calls[23].argument_count!=0 ||
             state.calls[23].return_address!=0x80029adcu ||
             state.calls[24].pc!=0x80029adcu || state.calls[24].entry!=0x8002d8d4u ||
+            state.calls[24].argument_count!=0 ||
+            state.calls[24].return_address!=0x80029ae4u ||
+            state.calls[25].pc!=0x80029ae4u || state.calls[25].entry!=0x80029e58u ||
+            state.calls[25].return_address!=0x80029aecu ||
             state.calls[28].pc!=0x80029b20u || state.calls[47].pc!=0x80029b20u ||
             state.calls[51].pc!=0x80029b50u || state.calls[70].pc!=0x80029b50u)
             throw std::runtime_error("translated 0x80029994 diagnostic did not reach its proven FELOAD transfer");
@@ -8161,6 +8491,10 @@ private:
             capture_root/"frame-rate-reset-before.ppm");
         writePpm(vram_frame(0,0,&state.frame_rate_reset_after),
             capture_root/"frame-rate-reset-after.ppm");
+        writePpm(vram_frame(0,0,&state.match_session_before),
+            capture_root/"match-session-before.ppm");
+        writePpm(vram_frame(0,0,&state.match_session_after),
+            capture_root/"match-session-after.ppm");
         std::ofstream json(output);if(!json)throw std::runtime_error("cannot create game-entry diagnostic receipt");
         json<<"{\n  \"schema_version\": 1,\n  \"source\": {\"binary\": \"GAMEONLY\", \"address\": \"0x80029994\", "
             "\"end_exclusive\": \"0x80029BCC\", \"instructions\": 142},\n"
@@ -8379,7 +8713,8 @@ private:
             ", \"fixture_path\": \"cold-one-vblank\", \"ready_global\": \"0x800D7A80\", "
             "\"frame_counter_global\": \"0x800D7A88\", \"vblank_signals\": "<<
             state.presentation_vblank_signals<<", \"final_frame_counter\": "<<
-            state.get(0x800d7a88u)<<
+            state.get(0x800d7a88u)<<", \"later_match_session_vblank_signals\": "<<
+            state.match_session_vblank_signals<<
             ", \"operations_per_call\": 3, \"accesses_per_call\": 2, "
             "\"reads_per_call\": 1, \"stores_per_call\": 1, "
             "\"source_quirks\": {\"live_ra_reload\": true, "
@@ -8557,6 +8892,72 @@ private:
             "\"frame-rate-reset-after.ppm\"], "
             "\"visual_effect\": \"tracker state reset; retained scanout and native frontend unchanged\", "
             "\"status\": \"frame-rate-tracker-reset\"},\n"
+            "  \"match_session\": {\"binary\": \"GAMEONLY\", "
+            "\"address\": \"0x8002D8D4\", \"end_exclusive\": \"0x8002DB68\", "
+            "\"instructions\": 165, \"call_pc\": \"0x80029ADC\", "
+            "\"instruction_sha256\": \"8b903bb9beff9912b32380c6def33d0d05dae91c37bef14f99228587c1a9851e\", "
+            "\"path\": \"ordinary-no-custom-location\", \"operations\": "<<
+            state.match_session_progress.operations<<", \"accesses\": "<<
+            state.match_session_progress.accesses<<", \"reads\": "<<
+            state.match_session_progress.reads<<", \"stores\": "<<
+            state.match_session_progress.stores<<", \"child_calls\": "<<
+            state.match_session_progress.callbacks_completed<<
+            ", \"child_entries\": [\"0x800AA0BC\", \"0x800A7738\", "
+            "\"0x8009CA00\", \"0x8009CAD0\", \"0x8009CA00\", "
+            "\"0x8009CAD0\", \"0x8002DB90\", \"0x8002DB68\", "
+            "\"0x8002DC38\", \"0x8002DC58\", \"0x800AA0BC\", "
+            "\"0x80029BDC\", \"0x800994F4\", \"0x80029BDC\", "
+            "\"0x80029BDC\", \"0x80029BDC\", \"0x80029BDC\", "
+            "\"0x80029BDC\", \"0x80029BDC\", \"0x80029BDC\", "
+            "\"0x80029BDC\", \"0x80029BDC\", \"0x80029BDC\"], "
+            "\"calls\": {\"clear_rectangle\": 2, \"frame_rate_reset\": 1, "
+            "\"set_default_environment\": 4, \"location_lookup\": 0, "
+            "\"session_stage\": 4, \"presentation_wait\": 11, "
+            "\"draw_sync\": 1}, \"environments\": {"
+            "\"draw\": [\"0x80021EEC\", \"0x80021F48\"], "
+            "\"display\": [\"0x8002205C\", \"0x80022070\"], "
+            "\"extent\": [512, 240]}, \"state\": {"
+            "\"video_halfword_0x80021498\": {\"before\": "<<
+            state.match_session_state_before[0]<<", \"after\": "<<
+            state.match_session_state_after[0]<<"}, "
+            "\"draw_control_0x80021F04\": {\"before\": "<<
+            state.match_session_state_before[1]<<", \"after\": "<<
+            state.match_session_state_after[1]<<"}, "
+            "\"draw_control_0x80021F60\": {\"before\": "<<
+            state.match_session_state_before[2]<<", \"after\": "<<
+            state.match_session_state_after[2]<<"}, "
+            "\"session_flag_0x800EB680\": {\"before\": "<<
+            state.match_session_state_before[3]<<", \"after\": "<<
+            state.match_session_state_after[3]<<"}, "
+            "\"exit_byte_0x80015021\": {\"before\": "<<
+            state.match_session_state_before[4]<<", \"after\": "<<
+            state.match_session_state_after[4]<<"}, "
+            "\"vblank_counter_0x800D7A88\": {\"before\": "<<
+            state.match_session_state_before[5]<<", \"after\": "<<
+            state.match_session_state_after[5]<<"}, "
+            "\"frame_counter_0x800D7B44\": {\"before\": "<<
+            state.match_session_state_before[6]<<", \"after\": "<<
+            state.match_session_state_after[6]<<"}}, "
+            "\"presentation\": {\"waits\": "<<
+            state.match_session_presentation_wait_calls<<
+            ", \"source_vblank_signals\": "<<state.match_session_vblank_signals<<
+            ", \"host_sleep_used\": false}, \"downstream_stages\": {"
+            "\"initialize_0x8002DB90\": \"acknowledged-boundary\", "
+            "\"load_scene_0x8002DB68\": \"acknowledged-boundary\", "
+            "\"run_loop_0x8002DC38\": \"acknowledged-boundary\", "
+            "\"teardown_0x8002DC58\": \"acknowledged-boundary\"}, "
+            "\"source_quirks\": {\"independent_location_recheck\": true, "
+            "\"late_enable_can_restore_zero_fields\": true, "
+            "\"late_disable_can_skip_restore\": true, "
+            "\"team_index_reloaded_for_each_phase\": true, "
+            "\"changing_index_can_split_records\": true, "
+            "\"team_index_unchecked\": true, \"signed_low16_location\": true, "
+            "\"live_o32_epilogue_reload\": true}, "
+            "\"visual_fixture\": \"generated retained scanout, not retail pixels\", "
+            "\"captures\": [\"match-session-before.ppm\", "
+            "\"match-session-after.ppm\"], "
+            "\"visual_effect\": \"session state and environment controls changed; retained scanout stayed pixel-identical because downstream gameplay stages remain explicit boundaries\", "
+            "\"status\": \"match-session-orchestrated\"},\n"
             "  \"result\": {\"status\": \"transferred\", \"callbacks\": "<<progress.callbacks_completed<<
             ", \"stores\": "<<progress.stores<<", \"reads\": "<<progress.reads<<
             ", \"match_orchestration\": \"0x8002D8D4\", \"loaded_image\": \"0x80123400\", "
@@ -8628,7 +9029,8 @@ private:
             "saved live ra, crossed explicit synchronization service 0x800A9CC0, "
             "and reloaded the saved word; the concrete cold-path fixture cleared "
             "ready flag 0x800D7A80, acknowledged one source 0x800A450C VBlank ISR, "
-            "set the flag, and incremented frame counter 0x800D7A88, ending at 41; "
+            "set the flag, and contributed 41 increments to frame counter 0x800D7A88; "
+            "the embedded match-session owner contributed eleven more for a final 52; "
             "the child's incidental v0 remained live and no timeout was added, "
             "preserving the original unbounded-wait behavior; this did not sleep on "
             "a host clock, drive the native renderer, or change any of the 98 captured "
@@ -8722,6 +9124,22 @@ private:
             "pixel-identical generated retained scanout, and the native frontend's "
             "98 click-through frames were unchanged; 13 remaining outer calls are "
             "still acknowledged fixtures before and after match orchestration");
+        trace_.log("GAME-ENTRY-DIAG",
+            "next executed startup callee 0x8002D8D4 from call PC 0x80029ADC "
+            "through its recovered 165-instruction match-session owner: two clear "
+            "boundaries bracketed four 512x240 SetDefDrawEnv/SetDefDispEnv calls, "
+            "the nested 0x800A7738 reset completed, 14 direct control-byte stores "
+            "completed, and initialize 0x8002DB90, scene load 0x8002DB68, game loop "
+            "0x8002DC38 and teardown 0x8002DC58 remained explicit acknowledged "
+            "boundaries; the ordinary no-custom-location path performed no team-table "
+            "patch, then DrawSync(0) and eleven recovered presentation wrappers "
+            "acknowledged eleven source VBlanks without host sleeps; independent "
+            "location recheck, signed low-16 venue code, repeated unchecked team-index "
+            "loads, possible late-enable zero restore, late-disable skipped restore, "
+            "split-record writes and live o32 reload bugs remain; "
+            "match-session-before.ppm and match-session-after.ppm are pixel-identical "
+            "generated retained scanout because no downstream court or gameplay work "
+            "was fabricated; outer execution continued at 0x80029E58");
     }
     void updateUserSetup() {
         if(frontend_page_!=nba97::FrontendPage::UserSetup || frontend_transition_active_) return;

@@ -106,6 +106,13 @@ def main():
             frame_rate_hashes["frame-rate-reset-after"] ==
             validator_hashes["crc-validator-install-after"],
             "frame-rate tracker reset unexpectedly changed retained scanout")
+    match_session_hashes = {
+        name: ppm_hash(args.frames / f"{name}.ppm")
+        for name in ["match-session-before", "match-session-after"]}
+    require(match_session_hashes["match-session-before"] ==
+            match_session_hashes["match-session-after"] ==
+            frame_rate_hashes["frame-rate-reset-after"],
+            "match-session owner unexpectedly fabricated retained scanout")
 
     receipt = read_json(args.frames / "game_entry_trace.json")
     require("not a live loader" in receipt["scope"] and "gameplay frame" in receipt["scope"],
@@ -336,7 +343,8 @@ def main():
                 "service_child_calls": 41, "fixture_path": "cold-one-vblank",
                 "ready_global": "0x800D7A80",
                 "frame_counter_global": "0x800D7A88",
-                "vblank_signals": 41, "final_frame_counter": 41,
+                "vblank_signals": 41, "final_frame_counter": 52,
+                "later_match_session_vblank_signals": 11,
                 "operations_per_call": 3, "accesses_per_call": 2,
                 "reads_per_call": 1, "stores_per_call": 1,
                 "source_quirks": {"live_ra_reload": True,
@@ -527,6 +535,63 @@ def main():
                 "visual_effect": "tracker state reset; retained scanout and native frontend unchanged",
                 "status": "frame-rate-tracker-reset"},
             "recovered 0x800A7738 frame-rate reset receipt drifted")
+    require(receipt["match_session"] == {
+                "binary": "GAMEONLY", "address": "0x8002D8D4",
+                "end_exclusive": "0x8002DB68", "instructions": 165,
+                "call_pc": "0x80029ADC",
+                "instruction_sha256":
+                    "8b903bb9beff9912b32380c6def33d0d05dae91c37bef14f99228587c1a9851e",
+                "path": "ordinary-no-custom-location", "operations": 54,
+                "accesses": 31, "reads": 6, "stores": 25,
+                "child_calls": 23,
+                "child_entries": [
+                    "0x800AA0BC", "0x800A7738", "0x8009CA00",
+                    "0x8009CAD0", "0x8009CA00", "0x8009CAD0",
+                    "0x8002DB90", "0x8002DB68", "0x8002DC38",
+                    "0x8002DC58", "0x800AA0BC", "0x80029BDC",
+                    "0x800994F4", "0x80029BDC", "0x80029BDC",
+                    "0x80029BDC", "0x80029BDC", "0x80029BDC",
+                    "0x80029BDC", "0x80029BDC", "0x80029BDC",
+                    "0x80029BDC", "0x80029BDC"],
+                "calls": {"clear_rectangle": 2, "frame_rate_reset": 1,
+                          "set_default_environment": 4,
+                          "location_lookup": 0, "session_stage": 4,
+                          "presentation_wait": 11, "draw_sync": 1},
+                "environments": {
+                    "draw": ["0x80021EEC", "0x80021F48"],
+                    "display": ["0x8002205C", "0x80022070"],
+                    "extent": [512, 240]},
+                "state": {
+                    "video_halfword_0x80021498": {"before": 0, "after": 0},
+                    "draw_control_0x80021F04": {"before": 0, "after": 1},
+                    "draw_control_0x80021F60": {"before": 0, "after": 1},
+                    "session_flag_0x800EB680": {"before": 0, "after": 1},
+                    "exit_byte_0x80015021": {"before": 0, "after": 0},
+                    "vblank_counter_0x800D7A88": {"before": 1, "after": 12},
+                    "frame_counter_0x800D7B44": {"before": 0, "after": 0}},
+                "presentation": {"waits": 11,
+                                 "source_vblank_signals": 11,
+                                 "host_sleep_used": False},
+                "downstream_stages": {
+                    "initialize_0x8002DB90": "acknowledged-boundary",
+                    "load_scene_0x8002DB68": "acknowledged-boundary",
+                    "run_loop_0x8002DC38": "acknowledged-boundary",
+                    "teardown_0x8002DC58": "acknowledged-boundary"},
+                "source_quirks": {
+                    "independent_location_recheck": True,
+                    "late_enable_can_restore_zero_fields": True,
+                    "late_disable_can_skip_restore": True,
+                    "team_index_reloaded_for_each_phase": True,
+                    "changing_index_can_split_records": True,
+                    "team_index_unchecked": True,
+                    "signed_low16_location": True,
+                    "live_o32_epilogue_reload": True},
+                "visual_fixture": "generated retained scanout, not retail pixels",
+                "captures": ["match-session-before.ppm",
+                             "match-session-after.ppm"],
+                "visual_effect": "session state and environment controls changed; retained scanout stayed pixel-identical because downstream gameplay stages remain explicit boundaries",
+                "status": "match-session-orchestrated"},
+            "recovered 0x8002D8D4 match-session receipt drifted")
     result = receipt["result"]
     require(result == {"status": "transferred", "callbacks": 77, "stores": 15,
                        "reads": 1, "match_orchestration": "0x8002D8D4",
@@ -595,6 +660,8 @@ def main():
             "frame-rate reset boundary drifted")
     require(calls[24]["pc"] == "0x80029ADC" and calls[24]["entry"] == "0x8002D8D4",
             "match orchestration boundary drifted")
+    require(calls[25]["pc"] == "0x80029AE4" and calls[25]["entry"] == "0x80029E58",
+            "execution did not continue after the recovered match-session owner")
     require(calls[26]["entry"] == "0x80029BFC" and calls[27]["entry"] == "0x80090D60",
             "FELOAD load/size boundaries drifted")
     require([call["s0"] for call in calls[28:48]] ==
@@ -690,7 +757,8 @@ def main():
             "explicit synchronization service 0x800A9CC0" in trace and
             "ready flag 0x800D7A80" in trace and
             "source 0x800A450C VBlank ISR" in trace and
-            "frame counter 0x800D7A88, ending at 41" in trace and
+            "contributed 41 increments to frame counter 0x800D7A88" in trace and
+            "embedded match-session owner contributed eleven more for a final 52" in trace and
             "incidental v0 remained live and no timeout was added" in trace and
             "did not sleep on a host clock, drive the native renderer" in trace and
             "0x80029F20 initialized GAMEONLY's PS1 double-buffer environments" in trace and
@@ -762,6 +830,21 @@ def main():
             "original pre-callback store order, unguarded sample store" in trace and
             "frame-rate-reset-before.ppm" in trace and
             "native frontend renderer" in trace and
+            "0x8002D8D4 from call PC 0x80029ADC" in trace and
+            "recovered 165-instruction match-session owner" in trace and
+            "two clear boundaries bracketed four 512x240" in trace and
+            "nested 0x800A7738 reset completed" in trace and
+            "initialize 0x8002DB90, scene load 0x8002DB68, game loop 0x8002DC38 and teardown 0x8002DC58" in trace and
+            "ordinary no-custom-location path performed no team-table patch" in trace and
+            "eleven recovered presentation wrappers" in trace and
+            "without host sleeps" in trace and
+            "independent location recheck, signed low-16 venue code" in trace and
+            "repeated unchecked team-index loads" in trace and
+            "late-enable zero restore, late-disable skipped restore" in trace and
+            "split-record writes and live o32 reload bugs remain" in trace and
+            "match-session-before.ppm and match-session-after.ppm are pixel-identical" in trace and
+            "no downstream court or gameplay work was fabricated" in trace and
+            "outer execution continued at 0x80029E58" in trace and
             "no court/gameplay frame synthesized" in trace and "TEAM-CAPTURE PASS:" in trace,
             "required visual/diagnostic trace stages are missing")
     print("GAME ENTRY VISUAL PASS: Setup -> Team Select -> User Setup frames; "
@@ -800,7 +883,10 @@ def main():
           "captured identical before/after scanout frames, and retained its overwrite/return quirks; "
           "native 0x800A7738 cleared and re-seeded the source frame-rate tracker through 0x800A5810, "
           "captured identical before/after scanout frames, and retained its ordering/return quirks; "
-          "77-call GAMEONLY 0x80029994 diagnostic reached 0x8002D8D4 and FELOAD transfer")
+          "native match-session owner 0x8002D8D4 configured both buffer pairs, crossed 23 exact child "
+          "boundaries and eleven source VBlanks, retained the retail location/index restore bugs, and "
+          "captured identical before/after scanout without fabricating downstream gameplay; "
+          "77-call GAMEONLY 0x80029994 diagnostic continued at 0x80029E58 and reached FELOAD transfer")
 
 
 if __name__ == "__main__":

@@ -306,6 +306,13 @@ int nba97_game_main(Nba97GameMainContext* context, Nba97GameMainProgress* out) {
      * live ra reload remain observable; it creates no host timer or pixels. */
     TRY(direct_call(run, 0x80029ad4u, 0x800a7738u, 0, 0, 0, 0, &value));
     out->reached_match_orchestration = 1;
+    /* GAMEONLY 0x80029ADC -> 0x8002D8D4 is the recovered match-session
+     * owner. It configures the two 512x240 draw/display pairs, applies the
+     * optional venue-name substitution, runs the initialize/load/loop/
+     * teardown stages, restores the team record, clears the transition and
+     * waits eleven presentations. Keep the retail routine's independent
+     * custom-location recheck and repeated unchecked team-index loads: a
+     * changing flag/index can skip, invent or split the two restore stores. */
     TRY(direct_call(run, 0x80029adcu, 0x8002d8d4u, 0, 0, 0, 0, &value));
     TRY(direct_call(run, 0x80029ae4u, 0x80029e58u, 0, 0, 0, 0, &value));
     TRY(write_word(run, 0x800d7af8u, 0x80029af8u, run->s0));
