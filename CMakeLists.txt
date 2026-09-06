@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_service_publish_tests tests/game_match_service_publish_tests.cpp src/recovered/game_match_service_publish.c)
+    target_compile_features(nba97_game_match_service_publish_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_service_publish_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_service_publish COMMAND nba97_game_match_service_publish_tests)
+    add_executable(nba97_game_match_service_publish_integration_tests tests/game_match_service_publish_integration_tests.cpp
+        src/recovered/game_match_service_publish.c src/game_match_service_publish_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_match_service_publish_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_service_publish_integration_tests PRIVATE src)
+    add_test(NAME game_match_service_publish_integration COMMAND nba97_game_match_service_publish_integration_tests)
     add_executable(nba97_game_period_expiry_tests tests/game_period_expiry_tests.cpp src/recovered/game_period_expiry.c)
     target_compile_features(nba97_game_period_expiry_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_period_expiry_tests PRIVATE src src/recovered)
@@ -1639,3 +1648,7 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_audio_stream_service
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_expiry.c src/game_period_expiry_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/game_period_expiry_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_service_publish.c src/game_match_service_publish_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/game_match_service_publish_capture.cpp)

@@ -627,7 +627,7 @@ def main():
                 (0xFFFF8000, 0x80123400, 0x4321, 0x8765)
             and period["frame_stack_pointer"] == 0x801FFEE8 and period["restored_ra"] == 0x80068C54
             and (period["next_pc"], period["next_entry"], period["simulation_steps"], period["frame_pumps"]) ==
-                (0x80068D7C, 0x8002DE34, 0, 0), "period startup native CPU fixture drifted")
+                (0x80068D84, 0x8006801C, 0, 0), "period startup native CPU fixture drifted")
     (args.frames / "period_startup_verified.json").write_text(json.dumps({
         "program": "GAMEONLY", "address": "0x80067468", "driver_frame_count": len(states),
         "input_transition_frames": {name: states.index(by_id[name]) for name in required},
@@ -649,7 +649,7 @@ def main():
                 and first["frame_stack_pointer"] == 0x801FFED0 and first["restored_ra"] == 0x8006749C
                 and case["signed_selector"] == 0 and case["call_pcs"][2] == 0x80067494
                 and (case["next_pc"],case["next_entry"],case["simulation_steps"],case["frame_pumps"]) ==
-                    (0x80068D7C,0x8002DE34,0,0), "first-period native CPU fixture drifted")
+                    (0x80068D84,0x8006801C,0,0), "first-period native CPU fixture drifted")
     (args.frames / "first_period_startup_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800673F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
@@ -770,6 +770,25 @@ def main():
         "program":"GAMEONLY","address":"0x80067664","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":expiry_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
+    publication_cases = [case["service_publication"] for case in limit_cases]
+    for publication, phase in zip(publication_cases,(0,0x81,0)):
+        require((publication["program"],publication["address"],publication["inclusive_end"],publication["bytes"],publication["instructions"]) ==
+                ("GAMEONLY","0x8002DE34","0x8002DE73",64,16), "service publication provenance drifted")
+        require(publication["completed"] and publication["classification"] == "no direct visual effect"
+                and "actual period-expiry output" in publication["scope"] and publication["call_pc"] == 0x80068D7C
+                and (publication["operations"],publication["reads"],publication["stores"],publication["child_calls"]) == (7,3,3,1)
+                and publication["child_pc"] == 0x8002DE5C
+                and (publication["status_before"],publication["status_after"],publication["phase_before"],publication["phase_after"]) ==
+                    (0xBEEF,0xFFFF,0xDEADBEEF,phase)
+                and (publication["child_v0"],publication["child_v1"]) == (0x13572468,0x24681357)
+                and publication["frame_stack_pointer"] == 0x801FFEE8 and publication["restored_ra"] == 0x80068D84,
+                "service publication native CPU fixture drifted")
+    (args.frames / "match_service_publish_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8002DE34","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":publication_cases,
         "classification":"no direct visual effect"
     },indent=2)+chr(10),encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]
