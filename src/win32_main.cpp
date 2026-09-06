@@ -1,3 +1,4 @@
+#include "frontend_resource_lookup_capture.h"
 #include "gameload_entry_capture.h"
 #include "frontend_resource_load_capture.h"
 #include "frontend_memory_copy_capture.h"
@@ -1220,6 +1221,9 @@ private:
         frame("gameload-entry-before");
         std::ofstream(output/"gameload_entry_trace.json")<<nba97::captureGameloadEntry();
         frame("gameload-entry-after");
+        frame("frontend-resource-lookup-before");
+        std::ofstream(output/"frontend_resource_lookup_trace.json")<<nba97::captureFrontendResourceLookup();
+        frame("frontend-resource-lookup-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");

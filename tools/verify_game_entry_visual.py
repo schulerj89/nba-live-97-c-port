@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 126, "native click-through frame count drifted")
+    require(len(states) == 128, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1220,6 +1220,44 @@ def main():
     ge_hashes=[ppm_hash(args.frames/f"{n}.ppm") for n in ge_frames]
     require(ge_hashes[0] == ge_hashes[1] == rlhashes[1], "GAMELOAD entry CPU probe changed native pixels")
     (args.frames/"gameload_entry_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E1410",end="0x801E14B7",driver_frame_count=len(states),source_receipt=ge,before_sha256=ge_hashes[0],after_sha256=ge_hashes[1],gameplay_shown="BLOCKED"),indent=2))
+
+    lookup=json.loads((args.frames/"frontend_resource_lookup_trace.json").read_text())
+    require(lookup["program"] == "FEONLY" and lookup["address"] == "0x8008a2c8" and lookup["inclusive_end"] == "0x8008a407"
+            and lookup["bytes"] == 320 and lookup["instructions"] == 80 and lookup["source_sha256"] == "2bc268004a25001f37dc4a8df569c9a94b5dea9e5253ab3533dbc18e08df00d1", "Resource lookup identity drifted")
+    require(lookup["result"] == 1 and lookup["completed"] == 1 and lookup["contract_failure"] == 0 and lookup["gameplay_shown"] == "BLOCKED", "Resource lookup outcome drifted")
+    lk=lookup["owner"]
+    require([lk[n] for n in ("operations","accesses","reads","stores")] == [20,16,10,6], "Resource lookup counts drifted")
+    require(lk["instruction_trace"] == [f"0x{pc:08x}" for pc in list(range(0x8008a2c8,0x8008a328,4))+list(range(0x8008a330,0x8008a354,4))+list(range(0x8008a3e8,0x8008a408,4))], "Resource lookup exact PC trace drifted")
+    lkregs=[lp_word(0x71000000+i*0x101) for i in range(32)]
+    for i,v in {0:0,4:0x80024854,29:0x801f0000,31:0x8007b1f8}.items():lkregs[i]=lp_word(v)
+    lkentry=[w.copy() for w in lkregs]
+    lkframe=0x801effd8
+    lkaccess=[lp_access(pc,lkframe+offset,int(lkentry[reg]["word"],16),op,2) for pc,offset,reg,op in [(0x8008a2cc,24,18,1),(0x8008a2d4,32,31,2),(0x8008a2d8,28,19,3),(0x8008a2dc,20,17,4),(0x8008a2e4,16,16,5)]]
+    lkaccess += [lp_access(0x8008a2f4,0x80110018,8,7,1),lp_access(0x8008a308,0x80110018,0,8,2),lp_access(0x8008a30c,0x80110014,8,9,1),lp_access(0x8008a330,0x80110000,0x80120000,11,1),lp_access(0x8008a334,0x80130000,0x80140000,12,1,9),lp_access(0x8008a338,0x80110014,8,13,1)]
+    lkaccess += [lp_access(pc,lkframe+offset,int(lkentry[reg]["word"],16),op,1) for pc,offset,reg,op in [(0x8008a3e8,32,31,16),(0x8008a3ec,28,19,17),(0x8008a3f0,24,18,18),(0x8008a3f4,20,17,19),(0x8008a3f8,16,16,20)]]
+    require(lk["access_journal"] == lkaccess, "Resource lookup exact access journal drifted")
+    def lk_machine():return dict(gpr=[w.copy() for w in lkregs],hi=lp_word(0x12345678,5),lo=lp_word(0x9abcdef0,10))
+    lkregs[18]=lkentry[4].copy();lkregs[29]=lp_word(lkframe);lkregs[31]=lp_word(0x8008a2e8)
+    lk_calls=[]
+    def lk_call(pc,target,op,site,argc):
+        lk_calls.append(dict(pc=f"0x{pc:08x}",delay=f"0x{pc+4:08x}",target=f"0x{target:08x}",operation=op,invocation=1,site=site,program=1,argument_count=argc,machine=lk_machine()))
+    lk_call(0x8008a2e0,0x8008a0a8,6,1,1)
+    for i,v in {2:0,3:0xfffffff7,5:8,6:0,7:0,17:0x80110000,31:0x8008a31c}.items():lkregs[i]=lp_word(v)
+    lk_call(0x8008a314,0x800771f0,10,2,4)
+    for i,v in {2:0x80130000,4:0x80120000,6:8,16:0x80130000,31:0x8008a344}.items():lkregs[i]=lp_word(v)
+    lkregs[5]=lp_word(0x80140000,9)
+    lk_call(0x8008a33c,0x800909a8,14,3,3)
+    lkregs[4]=lp_word(0x80110000);lkregs[31]=lp_word(0x8008a34c)
+    lk_call(0x8008a344,0x80077638,15,4,1)
+    require(lk["calls"] == lk_calls, "Resource lookup full child CPU contracts drifted")
+    for i in (16,17,18,19,29,31):lkregs[i]=lkentry[i].copy()
+    require(lookup["final_machine"] == lk_machine() and "Synthetic standalone" in lookup["fixture_contract"]
+            and "0x8008A2E0" in lookup["next_unbound_boundary"], "Resource lookup full return/fixture contract drifted")
+    lkframes=["frontend-resource-lookup-before","frontend-resource-lookup-after"]
+    require(all(n in by_id for n in lkframes), "Resource lookup native frames missing")
+    lkhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in lkframes]
+    require(lkhashes[0] == lkhashes[1] == ge_hashes[1], "Resource lookup CPU probe changed native pixels")
+    (args.frames/"frontend_resource_lookup_verified.json").write_text(json.dumps(dict(program="FEONLY",address="0x8008A2C8",end="0x8008A407",driver_frame_count=len(states),source_receipt=lookup,before_sha256=lkhashes[0],after_sha256=lkhashes[1],gameplay_shown="BLOCKED"),indent=2))
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

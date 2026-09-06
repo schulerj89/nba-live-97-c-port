@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_resource_lookup_tests tests/frontend_resource_lookup_tests.cpp src/recovered/frontend_resource_lookup.c src/frontend_resource_lookup_adapter.cpp src/recovered/frontend_resource_load.c src/recovered/frontend_memory_copy.c)
+    target_compile_features(nba97_frontend_resource_lookup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_lookup_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_resource_lookup COMMAND nba97_frontend_resource_lookup_tests)
+    add_executable(nba97_frontend_resource_lookup_integration_tests tests/frontend_resource_lookup_integration_tests.cpp src/recovered/frontend_resource_lookup.c src/frontend_resource_lookup_adapter.cpp src/recovered/frontend_resource_load.c src/recovered/frontend_memory_copy.c src/frontend_resource_lookup_capture.cpp)
+    target_compile_features(nba97_frontend_resource_lookup_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_lookup_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_resource_lookup_integration COMMAND nba97_frontend_resource_lookup_integration_tests)
     add_executable(nba97_gameload_entry_tests tests/gameload_entry_tests.cpp src/recovered/gameload_entry.c)
     target_compile_features(nba97_gameload_entry_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_gameload_entry_tests PRIVATE src src/recovered)
@@ -2542,3 +2550,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_memory_copy.c sr
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_load.c src/frontend_resource_load_adapter.cpp src/frontend_resource_load_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/gameload_entry.c src/gameload_entry_adapter.cpp src/gameload_entry_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_lookup.c src/frontend_resource_lookup_adapter.cpp src/frontend_resource_lookup_capture.cpp)
