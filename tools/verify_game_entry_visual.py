@@ -1277,7 +1277,21 @@ def main():
     require(frame_ui["completed"] and frame_ui["parent_completed"] and frame_ui["same_parent_memory"]
             and (frame_ui["call_pc"],frame_ui["instruction_count"],frame_ui["reads"],frame_ui["stores"],frame_ui["callbacks"],frame_ui["prerequisite_calls"],frame_ui["synthetic_frame_completions"],frame_ui["v0"],frame_ui["sp"],frame_ui["ra"]) == (0x8002DDAC,18,3,1,1,31,1,1,0x801FF000,0x8002DDB4)
             and frame_ui["hilo_known_masks"] == [7,11]
-            and frame_ui["blocked_children"] == ["0x8003287C","0x80031C5C","0x8003066C","0x80032774"], "Frame UI natural state drifted")
+            and frame_ui["blocked_children"] == ["0x80031C5C","0x8003066C","0x80032774"], "Frame UI natural state drifted")
+    countdown = frame_ui["countdown_update"]
+    require((countdown["program"], countdown["address"], countdown["inclusive_end"], countdown["bytes"], countdown["instructions"])
+            == ("GAMEONLY", "0x8003287C", "0x80032B0F", 660, 165), "Countdown provenance drifted")
+    require(countdown["classification"] == "BLOCKED" and countdown["completed"] and countdown["same_parent_memory"]
+            and (countdown["call_pc"], countdown["cache_before"], countdown["cache_after"], countdown["generated_table_bytes"], countdown["callbacks"], countdown["sp"], countdown["ra"])
+            == (0x80032B18, 7, 65535, 22, 1, 0x801FEFE8, 0x80032B20)
+            and (countdown["instruction_count"], countdown["operations"], countdown["reads"], countdown["stores"]) == (52, 34, 17, 16)
+            and countdown["blocked_children"] == ["0x8003066C", "0x80030D18", "0x80094540"], "Countdown natural state drifted")
+    (args.frames / "countdown_ui_update_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY", "address":"0x8003287C", "driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes, "cpu_receipt":"loop_entry_trace.json", "state":countdown,
+        "classification":"BLOCKED"
+    }, indent=2)+"\n", encoding="utf-8")
     order=frame_ui["ordered_checkpoint_indices"]
     require(len(order)==6 and all(a<b for a,b in zip(order,order[1:])), "Frame UI source order drifted")
     (args.frames / "frame_ui_service_verified.json").write_text(json.dumps({

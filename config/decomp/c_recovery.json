@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8003287C",
+      "original_name": "Game_CountdownUiUpdate",
+      "symbol": "nba97_game_countdown_ui_update",
+      "source": "src/recovered/game_countdown_ui_update.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_countdown_ui_update_tests; nba97_game_countdown_ui_update_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800798B4",
       "original_name": "Game_CameraElapsedDispatch",
       "symbol": "nba97_game_camera_elapsed_dispatch",

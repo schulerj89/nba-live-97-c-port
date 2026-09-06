@@ -1,5 +1,6 @@
 #include "game_frame_ui_service_capture.h"
 #include "game_frame_ui_service_adapter.h"
+#include "game_countdown_ui_update_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -57,6 +58,7 @@ struct Fixture {
                              bytes.size()};
   Nba97GameFrameUiServiceMachine caller{};
   Nba97GameFrameUiServiceBinding binding{};
+  Nba97GameCountdownUiUpdateBinding countdown{};
   Nba97MatchTickProgress parentProgress{};
   std::vector<Nba97MatchTickCall> services;
   std::vector<Trace> trace;
@@ -89,6 +91,13 @@ struct Fixture {
     put(0x800fdb68u, 0, 2);
     put(0x800fdb78u, 0, 1);
     put(0x800fdbdeu, 0, 2);
+    put(0x800fdba4u, 601, 4);
+    put(0x800fea2eu, 7, 2);
+    for (unsigned i = 0; i < 22; ++i)
+      put(0x800249e4u + i, 0x20u + i, 1);
+    countdown.operation_budget = 256;
+    countdown.io = countdownChild;
+    countdown.user = this;
     binding.memory = {&region, 1};
     binding.explicit_caller_machine = &caller;
     binding.operation_budget = 32;
@@ -194,7 +203,18 @@ struct Fixture {
     return NBA97_BODY_OK;
   }
 
-  static int ui(void *opaque, const Nba97GameTextMemory *,
+  static int countdownChild(void *, const Nba97GameTextMemory *,
+                            const Nba97GameCountdownUiUpdateEvent *event,
+                            Nba97GameCountdownUiUpdateMachine *machine) {
+    /* Explicit typed clear-text completion; no text renderer is claimed. */
+    check(event->pc == 0x8003295cu && event->delay_slot_pc == 0x80032960u &&
+          event->entry == 0x8003066cu && event->argument_count == 1 &&
+          machine->registers.gpr[4].word == 0xc9u &&
+          machine->registers.gpr[31].word == 0x80032964u);
+    return 1;
+  }
+
+  static int ui(void *opaque, const Nba97GameTextMemory *memory,
                 const Nba97GameFrameUiServiceEvent *event,
                 Nba97GameFrameUiServiceMachine *machine) {
     auto &f = *static_cast<Fixture *>(opaque);
@@ -202,8 +222,8 @@ struct Fixture {
     f.trace.push_back({event->pc, event->entry, 0, 7});
     check(event->pc == 0x80032b18u && event->entry == 0x8003287cu &&
           event->delay_slot_pc == 0x80032b1cu && event->argument_count == 0);
-    machine->registers.gpr[2] = {0x76543210u, 15};
-    return 1;
+    return nba97_game_countdown_ui_update_from_frame_ui_service(
+        &f.countdown, memory, event, machine);
   }
 
   int run(bool withMachine = true) {
@@ -251,12 +271,17 @@ std::string captureGameFrameUiService() {
   check(p.machine.registers.gpr[29].word == 0x801ff000 &&
         p.machine.registers.gpr[31].word == 0x8002ddb4 &&
         p.machine.registers.gpr[2].word == 1);
+  const auto &c = f.countdown.progress;
+  check(c.completed && f.countdown.completions == 1 &&
+        c.callbacks_completed == 1 && !c.active_gate && !c.record_uploaded &&
+        f.bytes[f.at(0x800fea2eu, 2)] == 255 &&
+        f.bytes[f.at(0x800fea2fu, 1)] == 255);
   std::ostringstream o;
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80032B10\",\"inclusive_end\":"
        "\"0x80032BB7\",\"bytes\":168,\"instructions\":42,\"classification\":"
        "\"BLOCKED\",\"scope\":\"independent synthetic actual match-tick "
        "caller; explicit full caller machine; whitelisted typed prerequisite "
-       "services; UI children and match-frame completion remain synthetic; no "
+       "services; countdown owner composed; text clear and match-frame completion remain synthetic; no "
        "rendered match "
        "frame\",\"completed\":true,\"parent_completed\":true,\"same_parent_"
        "memory\":true,\"call_pc\":"
@@ -277,7 +302,18 @@ std::string captureGameFrameUiService() {
       o << ',';
     o << order[i];
   }
-  o << "],\"blocked_children\":[\"0x8003287C\",\"0x80031C5C\",\"0x8003066C\","
+  o << "],\"countdown_update\":{\"program\":\"GAMEONLY\",\"address\":\"0x8003287C\","
+       "\"inclusive_end\":\"0x80032B0F\",\"bytes\":660,\"instructions\":165,"
+       "\"classification\":\"BLOCKED\",\"completed\":true,\"same_parent_memory\":true,"
+       "\"call_pc\":" << f.countdown.event.pc
+    << ",\"instruction_count\":" << c.instruction_count
+    << ",\"operations\":" << c.operations << ",\"reads\":" << c.reads
+    << ",\"stores\":" << c.stores << ",\"callbacks\":" << c.callbacks_completed
+    << ",\"cache_before\":7,\"cache_after\":65535,\"generated_table_bytes\":22"
+    << ",\"sp\":" << c.machine.registers.gpr[29].word
+    << ",\"ra\":" << c.machine.registers.gpr[31].word
+    << ",\"blocked_children\":[\"0x8003066C\",\"0x80030D18\",\"0x80094540\"]}"
+    << ",\"blocked_children\":[\"0x80031C5C\",\"0x8003066C\","
        "\"0x80032774\"]}";
   return o.str();
 }
