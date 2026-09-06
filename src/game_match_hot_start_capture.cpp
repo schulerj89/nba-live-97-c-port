@@ -1,5 +1,6 @@
 #include "game_match_hot_start_capture.h"
 #include "game_match_hot_start_adapter.h"
+#include "game_camera_startup_capture.h"
 #include <algorithm>
 #include <cstdint>
 #include <sstream>
@@ -13,6 +14,7 @@ struct Fixture {
     Nba97GameMatchHotStartContext context{};
     Nba97GameMatchHotStartProgress progress{};
     Nba97GameMatchHotStartTickAdapter adapter{};
+    GameCameraStartupCapture camera;
     unsigned loads=0,calls=0;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(unsigned i=0;i<width;++i)bytes.at(a-0x80000000u+i)=std::uint8_t(v>>(8*i));
@@ -31,7 +33,9 @@ struct Fixture {
         r->gpr[2]={0x12345678u,15};return 1;
     }
     static int service(void* user,const Nba97MatchTickCall* call,Nba97GamePeriodValue* value) {
-        return nba97_game_match_hot_start_dispatch_tick(&static_cast<Fixture*>(user)->adapter,call,value);
+        auto& f=*static_cast<Fixture*>(user);
+        if(call->pc==0x80068c2cu){const Nba97GameTextMemory m{&f.region,1};return f.camera.dispatch(&m,call,&f.progress);}
+        return nba97_game_match_hot_start_dispatch_tick(&f.adapter,call,value);
     }
     static int access(void*,std::uint32_t,std::uint32_t,unsigned,unsigned,Nba97PlayerFrameValue*) {return NBA97_BODY_ARGUMENT;}
 };
@@ -57,7 +61,7 @@ std::string captureGameMatchHotStart() {
     f.adapter.hot_start_context=&f.context;f.adapter.hot_start_progress=&f.progress;
     Nba97MatchTickContext tick{};tick.access=Fixture::access;tick.service=Fixture::service;tick.user=&f;tick.operation_budget=1024;
     Nba97MatchTickProgress tp{};const auto result=nba97_game_match_tick(&tick,&tp);
-    if(result!=NBA97_MATCH_TICK_SERVICE_REQUIRED || tp.stopped_pc!=0x80068c2cu || tp.stopped_entry!=0x80079664u ||
+    if(result!=NBA97_MATCH_TICK_SERVICE_REQUIRED || tp.stopped_pc!=0x80068c4cu || tp.stopped_entry!=0x80067468u ||
        !f.progress.completed || f.loads!=2 || f.calls!=4 || f.progress.prefixes_written!=84 ||
        f.get(0x800fe91cu)!=0x80130000u || f.get(0x800d7af8u)!=1 || f.get(0x8002148cu,2)!=0)
         throw std::runtime_error("hot-start native CPU fixture drifted");
@@ -71,7 +75,7 @@ std::string captureGameMatchHotStart() {
     o<<"],\"hot_pointer\":"<<f.get(0x800fe91cu)<<",\"load_flag\":"<<f.get(0x800d7af8u)<<",\"cleared_halfword\":"<<f.get(0x8002148cu,2)<<
        ",\"frame_stack_pointer\":"<<f.progress.frame_stack_pointer<<",\"restored_ra\":"<<f.progress.restored_return_address.word<<
        ",\"final_v0\":"<<f.progress.registers.gpr[2].word<<",\"next_pc\":"<<tp.stopped_pc<<",\"next_entry\":"<<tp.stopped_entry<<
-       ",\"simulation_steps\":"<<tp.simulation_steps<<",\"frame_pumps\":"<<tp.frame_pumps<<"}";
+       ",\"simulation_steps\":"<<tp.simulation_steps<<",\"frame_pumps\":"<<tp.frame_pumps<<",\"camera_startup\":"<<f.camera.receipt<<"}";
     return o.str();
 }
 }

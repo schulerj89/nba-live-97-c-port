@@ -573,13 +573,29 @@ def main():
             and hot["frame_stack_pointer"] == 0x801FFEE0 and hot["restored_ra"] == 0x80068C2C
             and hot["final_v0"] == 0x12345678
             and (hot["next_pc"], hot["next_entry"], hot["simulation_steps"], hot["frame_pumps"]) ==
-                (0x80068C2C, 0x80079664, 0, 0), "hot-start native CPU fixture drifted")
+                (0x80068C4C, 0x80067468, 0, 0), "hot-start native CPU fixture drifted")
     (args.frames / "match_hot_start_verified.json").write_text(json.dumps({
         "program": "GAMEONLY", "address": "0x80066F88", "driver_frame_count": len(states),
         "input_transition_frames": {name: states.index(by_id[name]) for name in required},
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": hot,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    camera = hot["camera_startup"]
+    require((camera["program"], camera["address"], camera["inclusive_end"], camera["bytes"], camera["instructions"]) ==
+            ("GAMEONLY", "0x80079664", "0x80079757", 244, 61), "camera startup provenance drifted")
+    require(camera["completed"] and "recovered hot-start output" in camera["scope"]
+            and camera["classification"] == "no direct visual effect"
+            and (camera["operations"], camera["reads"], camera["stores"], camera["calls"]) == (23,6,16,1)
+            and (camera["call_pc"], camera["child_pc"], camera["child_args"]) == (0x80068C2C,0x800796B8,[12,0])
+            and camera["camera_bytes"] == [0xE7,0x91] and camera["vector"] == [0xFFFF1234,0x12345678,0x87654321]
+            and (camera["frame_stack_pointer"], camera["restored_ra"], camera["final_v0"]) ==
+                (0x801FFEE8,0x80068C34,0xFFFFFFFF), "camera startup native CPU fixture drifted")
+    (args.frames / "camera_startup_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80079664","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":camera,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     period = loop["period_startup"]
     require((period["program"], period["address"], period["inclusive_end"], period["bytes"], period["instructions"]) ==
             ("GAMEONLY", "0x80067468", "0x8006754F", 232, 58), "period startup provenance drifted")
