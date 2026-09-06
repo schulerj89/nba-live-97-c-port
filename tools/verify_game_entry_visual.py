@@ -1402,6 +1402,20 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    music_cases = [case["first_period_startup"]["music_start"] for case in first_cases]
+    for i, music in enumerate(music_cases):
+        require((music["program"],music["address"],music["inclusive_end"],music["bytes"],music["instructions"]) == ("GAMEONLY","0x800295D0","0x8002968B",188,47), "Period music provenance drifted")
+        require(music["completed"] and music["same_parent_memory"] and music["classification"] == "no direct visual effect"
+                and (music["call_pc"],music["volume_fixture"],music["loaded_before"],music["loaded_after"],music["playing_after"],music["scaled_volume"],music["operations"],music["reads"],music["stores"],music["callbacks"],music["load_executed"],music["return_address"],music["sp"]) == (0x800673F8,14+i,i,1,1,126+i,16-4*i,7-2*i,4-i,5-i,1-i,0x80067400,0x801FFED0)
+                and music["hilo_known_masks"] == [0,0]
+                and music["call_pcs"] == ([0x80029618] if i==0 else [])+[0x8002964C,0x80029654,0x8002965C,0x80029664]
+                and music["arguments"] == ([0x80150000,0x80160000] if i==0 else [])+[0,0,126+i,120], "Period music state or calls drifted")
+    (args.frames / "period_music_start_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800295D0","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":music_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     announcements = [case["first_period_startup"]["announcement"] for case in first_cases]
     for announcement, mode in zip(announcements, (2,1)):
         require((announcement["program"],announcement["address"],announcement["inclusive_end"],announcement["bytes"],announcement["instructions"]) ==

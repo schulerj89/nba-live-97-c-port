@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800295D0",
+      "original_name": "Game_PeriodMusicStart",
+      "symbol": "nba97_game_period_music_start",
+      "source": "src/recovered/game_period_music_start.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_period_music_start_tests; nba97_game_period_music_start_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800767FC",
       "original_name": "Game_MatchBufferCompress",
       "symbol": "nba97_game_match_buffer_compress",
