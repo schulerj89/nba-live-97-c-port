@@ -100,5 +100,12 @@ Local capture `game-entry-20260905-180608-00ed238c` contains
 `scene_random_warmup_verified.json` and `scene_load_trace.json`. Native before/after
 scanout hashes both equal
 `391c073b39664372b8277dcd1f82c30d946fc96300959d1bd09fe794f625d58d`.
-The unchanged image is the User Setup menu, not an advancing match. Capture
-files and the independent oracle remain ignored local evidence.
+The unchanged scanout is the diagnostic color pattern. The separate frontend
+handoff capture shows User Setup; neither establishes an advancing match.
+Capture files and the independent oracle remain ignored local evidence.
+
+The first warm-up child now composes the recovered speech startup at
+`0x800800F8` through its production adapter. The six-word seed also uses its
+existing production adapter; only the random/count and step services remain
+synthetic here. The nested speech receipt verifies the signed timeout after
+an equality retry without claiming audible playback.

@@ -637,6 +637,26 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    playback = scene["random_warmup"]["speech_startup"]
+    require((playback["program"],playback["address"],playback["inclusive_end"],playback["bytes"],playback["instructions"]) ==
+            ("GAMEONLY","0x800800F8","0x80080247",336,84), "speech startup provenance drifted")
+    require(playback["completed"] and playback["classification"] == "no direct visual effect"
+            and "explicit synthetic audio/time services" in playback["scope"] and playback["call_pc"] == 0x800802B4
+            and (playback["operations"],playback["reads"],playback["stores"],playback["calls"]) == (26,4,7,15)
+            and playback["call_pcs"] == [0x80080114,0x80080124,0x8008018C,0x8008019C,0x800801BC,0x800801C8,
+                0x800801DC,0x800801E4,0x800801EC,0x800801F8,0x80080208,0x8008021C,0x800801F8,0x80080208,0x8008022C]
+            and (playback["language"],playback["filename"],playback["handle"],playback["voice"],playback["fifth_argument"]) ==
+                (1,0x80027BB0,0x80170000,0x80170100,1)
+            and playback["clock_samples"] == [1000,1240,1241] and playback["deadline"] == 1240
+            and (playback["ready_polls"],playback["service_pumps"]) == (2,2) and playback["cleared_globals"] == [0,0]
+            and playback["frame_stack_pointer"] == 0x807FFF58 and playback["restored_ra"] == 0x800802BC,
+            "speech startup native CPU fixture drifted")
+    (args.frames / "speech_startup_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800800F8","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":scene_hashes,"cpu_receipt":"scene_load_trace.json","state":playback,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     speech = initialize["speech_initialize"]
     require((speech["program"], speech["address"], speech["inclusive_end"], speech["bytes"], speech["instructions"]) ==
             ("GAMEONLY", "0x8007FD40", "0x800800F7", 952, 238), "speech initializer provenance drifted")

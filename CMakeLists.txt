@@ -3,6 +3,16 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_speech_startup_tests tests/game_speech_startup_tests.cpp src/recovered/game_speech_startup.c)
+    target_compile_features(nba97_game_speech_startup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_speech_startup_tests PRIVATE src/recovered)
+    add_test(NAME game_speech_startup COMMAND nba97_game_speech_startup_tests)
+    add_executable(nba97_game_speech_startup_integration_tests tests/game_speech_startup_integration_tests.cpp
+        src/recovered/game_speech_startup.c src/game_speech_startup_adapter.cpp src/recovered/game_scene_random_warmup.c
+        src/recovered/game_random_seed.c src/game_random_seed_adapter.cpp)
+    target_compile_features(nba97_game_speech_startup_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_speech_startup_integration_tests PRIVATE src)
+    add_test(NAME game_speech_startup_integration COMMAND nba97_game_speech_startup_integration_tests)
     add_executable(nba97_game_first_period_startup_tests tests/game_first_period_startup_tests.cpp src/recovered/game_first_period_startup.c)
     target_compile_features(nba97_game_first_period_startup_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_first_period_startup_tests PRIVATE src)
@@ -1507,3 +1517,5 @@ else()
 endif()
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_first_period_startup.c src/game_first_period_startup_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_speech_startup.c src/game_speech_startup_adapter.cpp src/game_speech_startup_capture.cpp)
