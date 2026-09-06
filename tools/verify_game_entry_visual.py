@@ -1402,6 +1402,18 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    audio_noops = [case["first_period_startup"]["audio_noop"] for case in first_cases]
+    for i, noop in enumerate(audio_noops):
+        require((noop["program"],noop["address"],noop["inclusive_end"],noop["bytes"],noop["instructions"]) == ("GAMEONLY","0x8002A254","0x8002A25B",8,2), "Audio no-op provenance drifted")
+        require(noop["completed"] and noop["same_parent_memory"] and noop["memory_and_registers_unchanged"] and noop["classification"] == "no direct visual effect"
+                and (noop["call_pc"],noop["operations"],noop["accesses"],noop["a0"],noop["v0"],noop["return_address"],noop["sp"]) == (0x80067434,0,0,1,[0,0x80046C2C][i],0x8006743C,0x801FFED0)
+                and noop["hilo_known_masks"] == [0,0], "Audio no-op state drifted")
+    (args.frames / "period_audio_noop_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8002A254","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":audio_noops,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     audio_flags = [case["first_period_startup"]["audio_flag_clear"] for case in first_cases]
     for flag in audio_flags:
         require((flag["program"],flag["address"],flag["inclusive_end"],flag["bytes"],flag["instructions"]) == ("GAMEONLY","0x8002A244","0x8002A253",16,4), "Audio flag clear provenance drifted")

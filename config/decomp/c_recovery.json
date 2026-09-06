@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8002A254",
+      "original_name": "Game_PeriodAudioNoop",
+      "symbol": "nba97_game_period_audio_noop",
+      "source": "src/recovered/game_period_audio_noop.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_period_audio_noop_tests; nba97_game_period_audio_noop_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8002A244",
       "original_name": "Game_PeriodAudioFlagClear",
       "symbol": "nba97_game_period_audio_flag_clear",
