@@ -344,14 +344,14 @@ def main():
     reset = initialize["match_state_reset"]
     require((reset["program"],reset["address"],reset["inclusive_end"],reset["bytes"],reset["instructions"],reset["call_pc"]) == ("GAMEONLY","0x800659F0","0x80065B17",296,74,"0x8002DBF8"), "Match-state reset provenance drifted")
     require(reset["completed"] and reset["same_parent_memory"] and reset["classification"] == "no direct visual effect"
-            and "eight typed" in reset["scope"] and "no advancing" in reset["scope"]
+            and "six typed" in reset["scope"] and "no advancing" in reset["scope"]
             and (reset["operations"],reset["reads"],reset["stores"],reset["calls_completed"],reset["spin_iterations"]) == (26,4,8,14,24)
             and (reset["zero_calls"],reset["roster_calls"],reset["restored_ra"],reset["sp"]) == (4,1,0x8002DC00,0x807FFF90)
             and reset["hilo_known_masks"] == [0,0] and reset["final_halfwords"] == [0,65535,5,0]
             and reset["mode_98"] == int(reset["mode"] == 98)
             and initialize["zero_after_checkpoint"] == "immediately after parent zero before first child", "Match-state reset state drifted")
     require([(z["address"],z["length"],z["stores"],z["completed"]) for z in reset["zero_ranges"]] == [(0x8001F33C,0x4B0,301,1),(0x8001F7EC,0x1320,1225,1),(0x8001EDF4,0xC4,50,1),(0x8001EEB8,0xC4,50,1)], "Match-state reset zero ranges drifted")
-    require([c["pc"] for c in reset["typed_children"]] == [0x80065A88,0x80065A94,0x80065A9C,0x80065AA4,0x80065ABC,0x80065AC4,0x80065ACC,0x80065AE8 if reset["mode"] == 98 else 0x80065AF8], "Match-state reset child order drifted")
+    require([c["pc"] for c in reset["typed_children"]] == [0x80065A9C,0x80065AA4,0x80065ABC,0x80065AC4,0x80065ACC,0x80065AE8 if reset["mode"] == 98 else 0x80065AF8], "Match-state reset child order drifted")
     (args.frames / "match_state_reset_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800659F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
@@ -369,6 +369,23 @@ def main():
         "program":"GAMEONLY","address":"0x80083490","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":profile,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
+    headers = reset["team_header_initialize"]
+    require((headers["program"],headers["address"],headers["inclusive_end"],headers["bytes"],headers["instructions"]) == ("GAMEONLY","0x800655B0","0x8006581F",624,156), "Team-header provenance drifted")
+    require(headers["completed"] and headers["same_parent_memory"] and headers["classification"] == "no direct visual effect" and "runtime-generated" in headers["scope"] and len(headers["calls"]) == 2, "Team-header composition drifted")
+    for item,pc,team,side in zip(headers["calls"],[0x80065A88,0x80065A94],[0x8001EDF4,0x8001EEB8],[0,5]):
+        n=item["active_count"];d=int(item["difficulty"]>=2);r54,r57=item["ranks"]
+        require(item["statuses_verified"] and item["actors_verified"] and item["lineups_verified"] and 0<=n<=12
+                and (item["call_pc"],item["team"],item["side"],item["return_address"],item["sp"]) == (pc,team,side,pc+8,0x807FFF70)
+                and (item["operations"],item["reads"],item["stores"],item["status_iterations"],item["unused_iterations"],item["actor_iterations"]) == (79+n+d,38+n,41+d,n,12-n,5)
+                and item["direction"] == (0x14E00 if side else 0xFFFEB200)
+                and item["thresholds"] == [(120-2*r57)&65535,(r57+28)//(2 if d else 1),(1260-32*r54)&65535]
+                and item["hilo_known_masks"] == [0,0], "Team-header source state drifted")
+    (args.frames / "team_header_initialize_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800655B0","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":headers,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     audio = initialize["audio_initialize"]

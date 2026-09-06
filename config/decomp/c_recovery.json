@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800655B0",
+      "original_name": "Game_TeamHeaderInitialize",
+      "symbol": "nba97_game_team_header_initialize",
+      "source": "src/recovered/game_team_header_initialize.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_team_header_initialize_tests; nba97_game_team_header_initialize_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80083490",
       "original_name": "Game_ControllerProfileReset",
       "symbol": "nba97_game_controller_profile_reset",
