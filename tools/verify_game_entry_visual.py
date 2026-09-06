@@ -712,6 +712,27 @@ def main():
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]
+    pumps = playback["audio_stream_pumps"] + [case["audio_stream_pump"] for case in reset_cases]
+    require(len(pumps)==5, "stream pump native parent coverage missing")
+    for pump, caller, mode in zip(pumps,(0x800801E4,0x8008021C,0x8006764C,0x8006764C,0x8006764C),(5,6,5,5,5)):
+        require((pump["program"],pump["address"],pump["inclusive_end"],pump["bytes"],pump["instructions"]) ==
+                ("GAMEONLY","0x80083EEC","0x800840EF",516,129), "stream pump provenance drifted")
+        expected_calls = ([0x80083F00,0x80083F78,0x80083F88,0x80083FC4,0x80083F78,0x80083F88] if mode==5 else
+                          [0x80083F00,0x80084034,0x80084044,0x80084034,0x80084044])
+        require(pump["completed"] and pump["classification"] == "no direct visual effect"
+                and "explicit synthetic stream services" in pump["scope"] and pump["call_pc"] == caller and pump["mode"] == mode
+                and (pump["operations"],pump["reads"],pump["stores"]) == ((26,13,7) if mode==5 else (23,13,5))
+                and pump["call_pcs"] == expected_calls and pump["status_queries"] == 2
+                and pump["handler_calls"] == (1 if mode==5 else 0) and pump["handler_value"] == (0x12345678 if mode==5 else 0)
+                and pump["returned_value"] == 0 and pump["restored_ra"] == caller+8
+                and pump["frame_stack_pointer"] == (0x801FFEC0 if caller==0x8006764C else 0x807FFF38),
+                "stream pump native CPU fixture drifted")
+    (args.frames / "audio_stream_pump_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80083EEC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":pumps,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     require((playback["program"],playback["address"],playback["inclusive_end"],playback["bytes"],playback["instructions"]) ==
             ("GAMEONLY","0x800800F8","0x80080247",336,84), "speech startup provenance drifted")
     require(playback["completed"] and playback["classification"] == "no direct visual effect"

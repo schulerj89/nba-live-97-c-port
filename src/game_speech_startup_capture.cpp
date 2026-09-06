@@ -1,4 +1,5 @@
 #include "game_speech_startup_capture.h"
+#include "game_audio_stream_pump_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -8,6 +9,7 @@ namespace {
 struct Fixture {
     const Nba97GameTextMemory* memory;
     std::vector<std::uint32_t> pcs;
+    GameAudioStreamPumpCapture stream;
     unsigned clocks=0,ready=0,pumps=0;
     std::uint32_t filename=0,stack_argument=0;
     std::uint32_t get(std::uint32_t a) const {
@@ -27,7 +29,7 @@ struct Fixture {
         if(e->entry==0x800abfbcu && (r->gpr[4].word!=0x80170100u || r->gpr[5].word!=0))return 0;
         if(e->entry==0x800a5810u){result=f.clocks==0?1000u:(f.clocks==1?1240u:1241u);++f.clocks;}
         if(e->entry==0x8008847cu){result=0;++f.ready;}
-        if(e->entry==0x80083eecu)++f.pumps;
+        if(e->entry==0x80083eecu){++f.pumps;return f.stream.fromSpeech(f.memory,e,r);}
         if(e->entry==0x8002abb4u && (r->gpr[4].word!=0 || r->gpr[5].word!=0))return 0;
         r->gpr[2]={result,15};return 1;
     }
@@ -53,6 +55,9 @@ int GameSpeechStartupCapture::dispatch(const Nba97GameTextMemory* memory,
      <<",\"fifth_argument\":"<<f.stack_argument<<",\"clock_samples\":[1000,1240,1241],\"deadline\":"<<p.deadline.word
      <<",\"ready_polls\":"<<f.ready<<",\"service_pumps\":"<<f.pumps<<",\"cleared_globals\":["<<f.get(0x80103fb0u)<<','<<f.get(0x800c4568u)
      <<"],\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
+    auto prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"audio_stream_pumps\":[";
+    for(std::size_t i=0;i<f.stream.receipts.size();++i){if(i)o<<',';o<<f.stream.receipts[i];}
+    o<<"]}";
     receipt=o.str();return 1;
 }
 }

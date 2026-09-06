@@ -1,4 +1,5 @@
 #include "game_controller_frame_reset_capture.h"
+#include "game_audio_stream_pump_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -7,6 +8,7 @@ namespace {
 struct Fixture {
     const Nba97GameTextMemory* memory;
     unsigned calls=0;
+    GameAudioStreamPumpCapture stream;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
             if(a<r.base || std::uint64_t(a-r.base)+width>r.size)continue;
@@ -22,8 +24,7 @@ struct Fixture {
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameControllerFrameResetEvent* e,Nba97GameControllerFrameResetRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);++f.calls;
         if(e->pc!=0x8006764cu || e->entry!=0x80083eecu || r->gpr[4].word!=8 || r->gpr[3].word!=0x800fdc70u)return 0;
-        // Explicit stream-service fixture, without audible playback or rendering.
-        r->gpr[2]={0xfeedbeefu,15};return 1;
+        return f.stream.fromController(f.memory,e,r);
     }
 };
 }
@@ -46,12 +47,13 @@ int GameControllerFrameResetCapture::dispatch(const Nba97GameTextMemory* memory,
         throw std::runtime_error("controller reset native CPU fixture drifted");
     for(unsigned i=0;i<8;++i)if(f.get(0x80140028u+i*64u,2)!=0)throw std::runtime_error("controller reset retained field drifted");
     std::ostringstream o;o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x800675E4\",\"inclusive_end\":\"0x80067663\",\"bytes\":128,\"instructions\":32,"
-      "\"classification\":\"no direct visual effect\",\"scope\":\"recovered limit-leaf output plus adjacent JAL/NOP; explicit root and stream-service fixtures, no live tick prologue claim\","
+      "\"classification\":\"no direct visual effect\",\"scope\":\"recovered limit-leaf output plus adjacent JAL/NOP; explicit root and nested stream-service fixtures, no live tick prologue claim\","
       "\"completed\":true,\"call_pc\":"<<call->pc<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"calls\":"<<f.calls
      <<",\"child_pc\":2147907148,\"timer_before\":"<<p.initial_timer.word<<",\"delta\":"<<p.delta.word<<",\"timer_after\":"<<f.get(0x800fe90eu,2)
      <<",\"cleared_slots\":"<<unsigned(p.controller_slots_cleared)<<",\"controller_fields\":[";
     for(unsigned i=0;i<8;++i){if(i)o<<',';o<<f.get(0x80140028u+i*64u,2);}
     o<<"],\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
+    auto prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"audio_stream_pump\":"<<f.stream.receipts.at(0)<<"}";
     receipt=o.str();return result;
 }
 }
