@@ -778,6 +778,26 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    clear_table = period["clear_ordering_table_probe"]
+    require((clear_table["program"], clear_table["address"], clear_table["inclusive_end"], clear_table["bytes"], clear_table["instructions"]) ==
+            ("GAMEONLY", "0x80099960", "0x800999F7", 152, 38), "clear-table provenance drifted")
+    require(clear_table["completed"] and clear_table["frame_completed"]
+            and clear_table["classification"] == "no direct visual effect"
+            and "independent full entry machines" in clear_table["scope"] and "typed clear backend" in clear_table["scope"]
+            and clear_table["heads_before"] == [0, 0] and clear_table["heads_after"] == [0xC567C, 0xC567C],
+            "clear-table head state drifted")
+    for i, call in enumerate(clear_table["calls"]):
+        pc = [0x80049084, 0x80049094][i]
+        require(call == {"pc": pc, "count": [32, 4096][i], "target": 0x8009A97C, "operations": 11,
+                         "returned_sp": 0x80180000 + (i + 1) * 0x100, "restored_ra": pc + 8},
+                "clear-table native call state drifted")
+    require(len(clear_table["calls"]) == 2, "clear-table call count drifted")
+    (args.frames / "clear_ordering_table_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80099960", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": clear_table,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     interrupt_restore = period["frame_interrupt_restore_probe"]
     require((interrupt_restore["program"], interrupt_restore["address"], interrupt_restore["inclusive_end"],
              interrupt_restore["bytes"], interrupt_restore["instructions"]) ==

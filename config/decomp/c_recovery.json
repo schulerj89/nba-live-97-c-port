@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80099960",
+      "original_name": "PsyQ_ClearOTagR",
+      "symbol": "nba97_game_clear_ordering_table",
+      "source": "src/recovered/game_clear_ordering_table.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_clear_ordering_table_tests; nba97_game_clear_ordering_table_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8005F3BC",
       "original_name": "Game_ActorCollisionResponse",
       "symbol": "nba97_game_actor_collision_response",

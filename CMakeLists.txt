@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_clear_ordering_table_tests tests/game_clear_ordering_table_tests.cpp src/recovered/game_clear_ordering_table.c)
+    target_compile_features(nba97_game_clear_ordering_table_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_clear_ordering_table_tests PRIVATE src src/recovered)
+    add_test(NAME game_clear_ordering_table COMMAND nba97_game_clear_ordering_table_tests)
+    add_executable(nba97_game_clear_ordering_table_integration_tests tests/game_clear_ordering_table_integration_tests.cpp
+        src/recovered/game_clear_ordering_table.c src/game_clear_ordering_table_adapter.cpp src/recovered/game_match_frame.c)
+    target_compile_features(nba97_game_clear_ordering_table_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_clear_ordering_table_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_clear_ordering_table_integration COMMAND nba97_game_clear_ordering_table_integration_tests)
     add_executable(nba97_game_actor_collision_response_tests tests/game_actor_collision_response_tests.cpp src/recovered/game_actor_collision_response.c src/game_actor_collision_response_adapter.cpp src/recovered/game_controller_selection.c)
     target_compile_features(nba97_game_actor_collision_response_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_actor_collision_response_tests PRIVATE src src/recovered)
@@ -1866,3 +1875,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_disa
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_restore.c src/game_frame_interrupt_restore_adapter.cpp src/game_frame_interrupt_restore_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_collision_response.c src/game_actor_collision_response_adapter.cpp src/game_actor_collision_response_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_clear_ordering_table.c src/game_clear_ordering_table_adapter.cpp src/game_clear_ordering_table_capture.cpp)
