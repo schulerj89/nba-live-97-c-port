@@ -702,6 +702,23 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":acquisition,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    actor_input = period["actor_input_probe"]
+    require((actor_input["program"],actor_input["address"],actor_input["inclusive_end"],actor_input["bytes"],actor_input["instructions"]) ==
+            ("GAMEONLY","0x800686B8","0x80068BF7",1344,336), "actor input provenance drifted")
+    require(actor_input["completed"] and actor_input["classification"] == "no direct visual effect"
+            and "no live tick bridge" in actor_input["scope"]
+            and (actor_input["operations"],actor_input["reads"],actor_input["stores"],actor_input["callbacks"]) == (195,146,34,15)
+            and (actor_input["countdown_before"],actor_input["countdown_after"],actor_input["controller_flag"]) == (1,0,1)
+            and (actor_input["last_actor"],actor_input["last_team"],actor_input["action_target"]) ==
+                (0x80110900,0x8001EEB8,0x80068A7C)
+            and (actor_input["frame_stack_pointer"],actor_input["returned_sp"],actor_input["restored_ra"]) ==
+                (0x801FEFB8,0x801FF000,0x80068E94), "actor input native CPU fixture drifted")
+    (args.frames / "actor_input_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800686B8","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":actor_input,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==
