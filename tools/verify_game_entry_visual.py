@@ -615,6 +615,28 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": period,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    first_cases = period["zero_period_cases"]
+    require(len(first_cases) == 2, "first-period capture cases missing")
+    for case, flag in zip(first_cases, (0,255)):
+        first = case["first_period_startup"]
+        require((first["program"],first["address"],first["inclusive_end"],first["bytes"],first["instructions"]) ==
+                ("GAMEONLY","0x800673F0","0x80067467",120,30), "first-period provenance drifted")
+        expected_calls = [0x800673F8,0x80067400] + ([0x8006741C,0x80067424] if flag else []) + [0x80067434,0x80067448,0x80067450]
+        require(first["completed"] and first["classification"] == "no direct visual effect"
+                and "explicit synthetic" in first["scope"] and first["flag"] == flag
+                and (first["operations"],first["reads"],first["stores"]) == ((12,2,3) if flag else (9,2,2))
+                and first["call_pcs"] == expected_calls and first["marker"] == 0xFFFF
+                and first["presentation_halfword"] == (0 if flag else 0xBEEF)
+                and first["frame_stack_pointer"] == 0x801FFED0 and first["restored_ra"] == 0x8006749C
+                and case["signed_selector"] == 0 and case["call_pcs"][2] == 0x80067494
+                and (case["next_pc"],case["next_entry"],case["simulation_steps"],case["frame_pumps"]) ==
+                    (0x80068CEC,0x80067550,0,0), "first-period native CPU fixture drifted")
+    (args.frames / "first_period_startup_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800673F0","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     speech = initialize["speech_initialize"]
     require((speech["program"], speech["address"], speech["inclusive_end"], speech["bytes"], speech["instructions"]) ==
             ("GAMEONLY", "0x8007FD40", "0x800800F7", 952, 238), "speech initializer provenance drifted")
