@@ -22,15 +22,14 @@ struct Fixture {
     std::vector<U> calls;
     U stop=0,status=0x12345601;
     Fixture(){player.buffers=&buffer;player.buffer_count=1;player.addresses=&address;player.address_count=1;
-        owner.io=io;owner.user=this;put(0x8001ede8,0);put(0x800b729c,384);pose();}
+        owner.io=io;owner.user=this;owner.interrupt_status={status,15};put(0x8001ede8,0);put(0x800b729c,384);pose();}
     void put(U a,U v,unsigned n=4){for(unsigned i=0;i<n;++i){bytes[a-0x80000000+i]=std::uint8_t(v>>(8*i));known[a-0x80000000+i]=1;}}
     U get(U a,unsigned n=4)const{U v=0;for(unsigned i=0;i<n;++i)v|=U(bytes[a-0x80000000+i])<<(8*i);return v;}
     void pointer(U a,U target){put(a,0);cells[(a-0x80000000)/4]={{0,target-0x80000000,1},1};}
-    static int io(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriodValue* value){
+    static int io(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriodValue*){
         auto& f=*static_cast<Fixture*>(user);f.calls.push_back(q->entry);
         if(q->entry==f.stop)return NBA97_BODY_BOUNDS;
-        if(q->entry==0x80048ff4){*value={f.status,1};f.status&=~1u;}
-        if(q->entry==0x8004900c)f.status=q->args[0];
+        if(q->entry==0x80048ff4||q->entry==0x8004900c)return NBA97_BODY_ARGUMENT;
         // Required platform/pose/camera services are explicit test fixtures.
         // No native pass may escape into this callback as a successful no-op.
         if(q->entry==0x80099960){for(U i=0;i<q->args[1];++i)f.put(q->args[0]+4*i,0x00ffffff);}
@@ -75,13 +74,18 @@ struct Fixture {
 void controls(){
     Fixture missing;missing.owner.io=nullptr;
     check(missing.owner.run(10000,missing.progress)==NBA97_MATCH_FRAME_IO_REQUIRED,"missing platform callback refuses after native pose");
-    check(missing.owner.pose_progress.completed&&missing.progress.stores==3&&missing.progress.stopped_entry==0x80048ff4,"native pose completes before the first missing platform service");
+    check(missing.owner.pose_progress.completed&&missing.progress.stores==3&&missing.progress.stopped_entry==0x80099960,"native pose and interrupt disable precede missing table service");
+    check(missing.owner.interrupt_status.word==0x12345600&&missing.owner.interrupt_disable.completions==1,"native disable prefix survives table refusal");
+    Fixture unknown;unknown.owner.interrupt_status={0x12345601,14};
+    check(unknown.owner.run(10000,unknown.progress)==NBA97_BODY_UNKNOWN&&unknown.progress.stopped_entry==0x80048ff4,"unknown explicit CP0 stops at consumed old Status");
+    check(unknown.owner.interrupt_status.word==0x12345600&&unknown.owner.interrupt_status.known_mask==14,"partial CP0 effect remains visible");
     for(U h:{384u,0x8000u,0xffffffffu}){Fixture f;f.stop=0x80075d40;f.put(0x800b729c,h);
         check(f.owner.run(10000,f.progress)==NBA97_BODY_BOUNDS,"stop after actual geometry control writes");
         const auto low=h&65535u;check(f.player.geometry.root.distance.word==(low&0x8000u?low|0xffff0000u:low),"H sign extends register, preserving low16");
         check(f.player.geometry.root.offset_x.word==(256u<<16)&&f.player.geometry.root.offset_y.word==(120u<<16),"same player geometry receives source offsets");
         check(f.cells[0x102924/4].is_reference&&f.cells[0x102924/4].reference.offset==0xf5c50,"driver publishes normalized main table reference");
-        check(f.status==0x12345601,"explicit interrupt fixture restored before render");
+        check(f.owner.interrupt_status.word==0x12345601&&f.owner.interrupt_status.known_mask==15&&
+              f.owner.interrupt_disable.completions==1&&f.owner.interrupt_restore.completions==1,"actual native interrupt pair restored before render");
     }
     Fixture malformed;malformed.player.geometry.root.distance={1,0};
     check(malformed.owner.run(10000,malformed.progress)==NBA97_BODY_ARGUMENT,"malformed geometry metadata refuses at consumed control");

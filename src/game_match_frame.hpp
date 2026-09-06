@@ -6,10 +6,11 @@
 #include "recovered/game_player_label_frame.h"
 #include "recovered/game_pose_frame.h"
 #include "recovered/game_match_frame.h"
+#include "game_frame_interrupt_disable_adapter.h"
+#include "game_frame_interrupt_restore_adapter.h"
 namespace nba97 {
 // One shared retained memory/projection owner for the complete49018 sequencing.
-// Caller supplies the actual missing pose/camera/court/label/platform services;
-// there are no successful fallback calls or synthesized entry state.
+// Caller supplies missing camera/platform services and explicit CP0 entry state.
 class GameMatchFrame {
 public:
     explicit GameMatchFrame(GamePlayerFrame& frame):frame_(frame){}
@@ -20,6 +21,9 @@ public:
     std::size_t child_operation_budget{1000000};
     Nba97GamePeriodValue average_scale4{}; // Actual ZSF4, separate from ZSF3.
     Nba97GamePeriodValue leading_bits{}; // Independent retained GTE LZCR state.
+    Nba97GameFrameInterruptRestoreWord interrupt_status{};
+    Nba97GameFrameInterruptDisableBinding interrupt_disable{};
+    Nba97GameFrameInterruptRestoreBinding interrupt_restore{};
     Nba97PlayerFrameProgress pass_progress{};
     Nba97PlayerFrameProgress pose_progress{};
     Nba97PlayerFrameProgress label_progress{};

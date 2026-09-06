@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_frame_interrupt_restore_tests tests/game_frame_interrupt_restore_tests.cpp src/recovered/game_frame_interrupt_restore.c)
+    target_compile_features(nba97_game_frame_interrupt_restore_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_frame_interrupt_restore_tests PRIVATE src src/recovered)
+    add_test(NAME game_frame_interrupt_restore COMMAND nba97_game_frame_interrupt_restore_tests)
+    add_executable(nba97_game_frame_interrupt_restore_integration_tests tests/game_frame_interrupt_restore_integration_tests.cpp
+        src/recovered/game_frame_interrupt_restore.c src/game_frame_interrupt_restore_adapter.cpp src/recovered/game_match_frame.c src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp)
+    target_compile_features(nba97_game_frame_interrupt_restore_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_frame_interrupt_restore_integration_tests PRIVATE src)
+    add_test(NAME game_frame_interrupt_restore_integration COMMAND nba97_game_frame_interrupt_restore_integration_tests)
     add_executable(nba97_game_frame_interrupt_disable_tests tests/game_frame_interrupt_disable_tests.cpp src/recovered/game_frame_interrupt_disable.c)
     target_compile_features(nba97_game_frame_interrupt_disable_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_frame_interrupt_disable_tests PRIVATE src src/recovered)
@@ -642,6 +651,8 @@ if(BUILD_TESTING)
     add_test(NAME game_match_tick COMMAND nba97_game_match_tick_tests)
     add_executable(nba97_game_match_frame_backend_tests tests/game_match_frame_backend_tests.cpp
         src/recovered/game_match_frame.c src/game_match_frame.cpp
+        src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp
+        src/recovered/game_frame_interrupt_restore.c src/game_frame_interrupt_restore_adapter.cpp
         src/recovered/game_net.c src/game_net.cpp
         src/recovered/game_ball_attachment.c src/game_ball_attachment.cpp
         src/recovered/game_ball_frame.c src/game_ball_frame.cpp
@@ -1842,3 +1853,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_opponent_contact.c s
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_frame_transform.c src/game_camera_frame_transform_adapter.cpp src/game_camera_frame_transform_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp src/game_frame_interrupt_disable_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_restore.c src/game_frame_interrupt_restore_adapter.cpp src/game_frame_interrupt_restore_capture.cpp)

@@ -778,6 +778,25 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    interrupt_restore = period["frame_interrupt_restore_probe"]
+    require((interrupt_restore["program"], interrupt_restore["address"], interrupt_restore["inclusive_end"],
+             interrupt_restore["bytes"], interrupt_restore["instructions"]) ==
+            ("GAMEONLY", "0x8004900C", "0x80049017", 12, 3), "interrupt-restore provenance drifted")
+    require(interrupt_restore["completed"] and interrupt_restore["frame_completed"]
+            and interrupt_restore["classification"] == "no direct visual effect"
+            and "recovered disable and restore" in interrupt_restore["scope"]
+            and "typed rendering fixtures" in interrupt_restore["scope"]
+            and (interrupt_restore["status_disabled"], interrupt_restore["status_restored"]) == (0xABCDEF00, 0xABCDEF01)
+            and (interrupt_restore["disable_completions"], interrupt_restore["restore_completions"], interrupt_restore["operations_per_call"]) == (13, 13, 1)
+            and interrupt_restore["call_counts"] == [1, 10, 1, 1]
+            and interrupt_restore["call_pcs"] == [0x8004909C, 0x800491D8, 0x8004926C, 0x800492C0],
+            "interrupt-restore native CP0 state drifted")
+    (args.frames / "frame_interrupt_restore_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8004900C", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_restore,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     camera_end = period["camera_override_end_probe"]
     require((camera_end["program"], camera_end["address"], camera_end["inclusive_end"],
              camera_end["bytes"], camera_end["instructions"]) ==

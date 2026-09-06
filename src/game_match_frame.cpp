@@ -14,6 +14,22 @@ int GameMatchFrame::call(void* user,const Nba97MatchFrameCall* q,Nba97GamePeriod
     auto& owner=*static_cast<GameMatchFrame*>(user);auto& frame=owner.frame_;
     *value={};owner.last_native_entry=q->entry;
     switch(q->entry){
+    case 0x80048ff4:{
+        auto& binding=owner.interrupt_disable;
+        binding.cp0_status=owner.interrupt_status;
+        binding.operation_budget=owner.child_operation_budget;
+        const int result=nba97_game_frame_interrupt_disable_from_match_frame(&binding,q,value);
+        owner.interrupt_status=binding.cp0_status;
+        return result;
+    }
+    case 0x8004900c:{
+        auto& binding=owner.interrupt_restore;
+        binding.cp0_status=owner.interrupt_status;
+        binding.operation_budget=owner.child_operation_budget;
+        const int result=nba97_game_frame_interrupt_restore_from_match_frame(&binding,q,value);
+        owner.interrupt_status=binding.cp0_status;
+        return result;
+    }
     case 0x800530fc:
         return nba97_game_pose_frame(&owner.memory_,&owner.pose_progress);
     case 0x80035bec:
