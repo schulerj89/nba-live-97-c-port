@@ -1,3 +1,4 @@
+#include "game_draw_mode_command_capture.h"
 #include "game_draw_offset_command_capture.h"
 #include "game_gpu_packet_dma_capture.h"
 #include "game_graphics_submit_capture.h"
@@ -188,6 +189,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"draw_area_start_probe\":"<<captureGameDrawAreaStart()
             <<",\"graphics_submit_probe\":"<<captureGameGraphicsSubmit()
             <<",\"gpu_packet_dma_probe\":"<<captureGameGpuPacketDma()
+            <<",\"draw_mode_command_probe\":"<<captureGameDrawModeCommand()
             <<",\"draw_offset_command_probe\":"<<captureGameDrawOffsetCommand()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()

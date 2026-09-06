@@ -184,6 +184,7 @@ try {
         'nba97_game_graphics_submit_tests','nba97_game_graphics_submit_integration_tests',
         'nba97_game_gpu_packet_dma_tests','nba97_game_gpu_packet_dma_integration_tests',
         'nba97_game_draw_offset_command_tests','nba97_game_draw_offset_command_integration_tests',
+        'nba97_game_draw_mode_command_tests','nba97_game_draw_mode_command_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

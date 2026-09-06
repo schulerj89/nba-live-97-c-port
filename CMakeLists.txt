@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_draw_mode_command_tests tests/game_draw_mode_command_tests.cpp src/recovered/game_draw_mode_command.c)
+    target_compile_features(nba97_game_draw_mode_command_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_draw_mode_command_tests PRIVATE src src/recovered)
+    add_test(NAME game_draw_mode_command COMMAND nba97_game_draw_mode_command_tests)
+    add_executable(nba97_game_draw_mode_command_integration_tests tests/game_draw_mode_command_integration_tests.cpp
+        src/recovered/game_draw_mode_command.c src/game_draw_mode_command_adapter.cpp src/recovered/game_draw_packet.c src/recovered/game_draw_area_start.c src/game_draw_area_start_adapter.cpp src/recovered/game_draw_area_end.c src/game_draw_area_end_adapter.cpp src/recovered/game_draw_offset_command.c src/game_draw_offset_command_adapter.cpp)
+    target_compile_features(nba97_game_draw_mode_command_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_draw_mode_command_integration_tests PRIVATE src)
+    add_test(NAME game_draw_mode_command_integration COMMAND nba97_game_draw_mode_command_integration_tests)
     add_executable(nba97_game_draw_offset_command_tests tests/game_draw_offset_command_tests.cpp src/recovered/game_draw_offset_command.c)
     target_compile_features(nba97_game_draw_offset_command_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_draw_offset_command_tests PRIVATE src src/recovered)
@@ -2069,3 +2078,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_graphics_submit.c sr
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gpu_packet_dma.c src/game_gpu_packet_dma_adapter.cpp src/game_gpu_packet_dma_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_offset_command.c src/game_draw_offset_command_adapter.cpp src/game_draw_offset_command_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_mode_command.c src/game_draw_mode_command_adapter.cpp src/game_draw_mode_command_capture.cpp)
