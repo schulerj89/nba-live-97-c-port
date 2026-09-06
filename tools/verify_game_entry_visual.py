@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 122, "native click-through frame count drifted")
+    require(len(states) == 124, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1127,6 +1127,63 @@ def main():
         "program":"FEONLY","address":"0x800909A8","end":"0x80090CC7","driver_frame_count":len(states),
         "source_receipt":frontend_copy,"before_sha256":fc_hashes[0],"after_sha256":fc_hashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":"FEONLY 0x80028B68 dynamic GAMELOAD transfer and production filesystem/lifecycle remain unbound"},indent=2)+"\n",encoding="utf-8")
+
+    resource_load=read_json(args.frames/"frontend_resource_load_trace.json")
+    require(resource_load["program"] == "FEONLY" and int(resource_load["address"],16) == 0x8007b1d0
+            and int(resource_load["inclusive_end"],16) == 0x8007b2bb
+            and [resource_load[k] for k in ("bytes","instructions","result","completed","contract_failure")] == [236,59,1,1,0]
+            and resource_load["source_sha256"] == "16756cd9554b869085b0f84eb6b2f1b9fe0931e7bb07f40c9f08ce90a3677c26",
+            "Resource-load source receipt drifted")
+    rlp=resource_load["owner"]
+    require([rlp[k] for k in ("operations","accesses","reads","stores")] == [25,19,12,7]
+            and [int(pc,16) for pc in rlp["instruction_trace"]] == list(range(0x8007b1d0,0x8007b2bc,4)),
+            "Resource-load complete source path drifted")
+    rl_access=[(0x8007b1d4,0x801effec,0x51001111,1,2,15),
+        (0x8007b1dc,0x801efff4,0x51001313,2,2,15),(0x8007b1e4,0x801efff0,0x51001212,3,2,15),
+        (0x8007b1ec,0x801efff8,0x8007b16c,4,2,15),(0x8007b1f4,0x801effe8,0x51001010,5,2,15),
+        (0x8007b218,0x801effd0,1,7,2,15),(0x8007b21c,0x801effe0,4096,9,1,15),
+        (0x8007b244,0x801effd8,0x44,11,1,15),(0x8007b248,0x80170000,0x55667788,12,1,9),
+        (0x8007b24c,0x801effe0,4096,13,1,15),(0x8007b258,0x801effe0,4096,15,1,15),
+        (0x8007b260,0x800d9ae8,4096,16,2,15),(0x8007b264,0x801effd8,0x44,17,1,15),
+        (0x8007b274,0x800d9b50,0x80061000,19,1,15),(0x8007b29c,0x801efff8,0x8007b16c,21,1,15),
+        (0x8007b2a0,0x801efff4,0x51001313,22,1,15),(0x8007b2a4,0x801efff0,0x51001212,23,1,15),
+        (0x8007b2a8,0x801effec,0x51001111,24,1,15),(0x8007b2ac,0x801effe8,0x51001010,25,1,15)]
+    require(rlp["access_journal"] == [lp_access(pc,address,value,op,kind,mask) for pc,address,value,op,kind,mask in rl_access],
+            "Resource-load exact saved frame, fifth argument, descriptor and late global access drifted")
+    rl_gpr=[lp_word(0)]+[lp_word(0x51000000+i*0x101) for i in range(1,32)]
+    def rl_set(changes):
+        for reg,value in changes.items():rl_gpr[reg]=lp_word(value) if isinstance(value,int) else value
+    def rl_cpu():return {"gpr":[dict(w) for w in rl_gpr],"hi":lp_word(0x12345678,5),"lo":lp_word(0x9abcdef0,10)}
+    rl_set({4:0x80024854,5:0,6:1,29:0x801effc0,31:0x8007b1f8,17:0x80024854,18:1,19:0})
+    expected_rl_machines=[rl_cpu()]
+    rl_set({2:0x80160000,16:0,5:0x801effd8,6:0x801effdc,7:0x801effe0,31:0x8007b21c})
+    expected_rl_machines.append(rl_cpu())
+    rl_set({5:4096,6:0,7:1,31:0x8007b238});expected_rl_machines.append(rl_cpu())
+    rl_set({2:0x80170000,16:0x80170000,4:0x44,5:lp_word(0x55667788,9),6:4096,31:0x8007b258})
+    expected_rl_machines.append(rl_cpu())
+    rl_set({1:0x800e0000,2:4096,31:0x8007b270});expected_rl_machines.append(rl_cpu())
+    rl_set({2:0x80061000,4:0x80170000,5:0x80024854,6:0,7:1,31:0x8007b294});expected_rl_machines.append(rl_cpu())
+    rl_sites=[(0x8007b1f0,0x8008a2c8,1,6),(0x8007b214,0x8008a594,5,8),(0x8007b230,0x80077160,4,10),
+        (0x8007b250,0x8008a810,3,14),(0x8007b268,0x8008a7b0,1,18),(0x8007b28c,0x80061000,4,20)]
+    require(len(rlp["calls"]) == 6,"Resource-load callback journal truncated")
+    for call,(pc,target,argc,operation),machine in zip(rlp["calls"],rl_sites,expected_rl_machines):
+        require([int(call[k],16) for k in ("pc","delay","target")] == [pc,pc+4,target]
+                and call["argument_count"] == argc and call["operation"] == operation and call["invocation"] == 1
+                and call["program"] == 1 and call["machine"] == machine,"Resource-load exact callback full-machine boundary drifted")
+    rl_set({2:lp_word(0x89abcdef,6),16:0x51001010,17:0x51001111,18:0x51001212,19:0x51001313,
+            29:0x801f0000,31:0x8007b16c})
+    require(resource_load["final_machine"] == rl_cpu(),"Resource-load callback-live result and restore drifted")
+    rlframes=("frontend-resource-load-before","frontend-resource-load-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in rlframes),"Resource-load native frames missing")
+    rlhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in rlframes]
+    require(rlhashes[0] == rlhashes[1] == fc_hashes[1],"Resource-load CPU probe changed native pixels")
+    require(resource_load["gameplay_shown"] == "BLOCKED" and resource_load["classification"] == "no direct visual effect"
+            and "standalone" in resource_load["fixture_contract"] and "8008A2C8" in resource_load["next_unbound_boundary"],
+            "Resource-load standalone fixture and next service disclosure absent")
+    (args.frames/"frontend_resource_load_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x8007B1D0","end":"0x8007B2BB","driver_frame_count":len(states),
+        "source_receipt":resource_load,"before_sha256":rlhashes[0],"after_sha256":rlhashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":resource_load["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
