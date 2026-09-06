@@ -1,5 +1,6 @@
 #include "game_camera_phase_select_capture.h"
 #include "game_camera_phase_select_adapter.h"
+#include "game_camera_elapsed_dispatch_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -12,11 +13,13 @@ struct Fixture {
   Nba97GameCameraSelectContext parent{};
   Nba97GameCameraSelectProgress parent_progress{};
   Nba97GameCameraPhaseSelectBinding binding{};
+  GameCameraElapsedDispatchCapture elapsed;
   std::vector<std::uint32_t> camera_pcs,phase_pcs,phase_args;
   void put(std::uint32_t a,std::uint32_t v,unsigned width=4){for(unsigned i=0;i<width;++i)bytes.at(a-region.base+i)=std::uint8_t(v>>(8*i));}
   std::uint32_t get(std::uint32_t a,unsigned width=4)const{std::uint32_t v=0;for(unsigned i=0;i<width;++i)v|=std::uint32_t(bytes.at(a-region.base+i))<<(8*i);return v;}
-  static int camera(void*u,const Nba97GameTextMemory*,const Nba97GameCameraSelectEvent* e,Nba97GameCameraSelectRegisters* r){
+  static int camera(void*u,const Nba97GameTextMemory* memory,const Nba97GameCameraSelectEvent* e,Nba97GameCameraSelectRegisters* r){
     auto&f=*static_cast<Fixture*>(u);f.camera_pcs.push_back(e->pc);
+    if(e->entry==0x800798b4)return f.elapsed.dispatch(memory,e,r);
     // Explicit camera resource/service response, without drawing a frame.
     r->gpr[2]={0,15};return 1;
   }
@@ -37,6 +40,7 @@ std::string captureCase(unsigned busy){
   // Independent synthetic natural-caller contract: this is a mode-zero probe,
   // not the frontend's current mode-12 startup or a live frame-pump bridge.
   f.put(0x800fc99cu,busy);f.put(0x800fdb90u,0x81,2);f.put(0x800bc940u,1);f.put(0x800bc944u,1);
+  f.put(0x800bc1f8,10);f.put(0x800bc1fc,100);f.put(0x800bc200,1);f.put(0x800bc1f4,0xffffffff);
   nba97_game_camera_phase_select_binding_init(&f.binding,200,500);f.binding.io=Fixture::phase;f.binding.user=&f;
   const int result=nba97_game_camera_select_with_phase_select(&f.parent,&f.binding,&f.parent_progress);
   const auto&p=f.binding.progress;
@@ -45,7 +49,7 @@ std::string captureCase(unsigned busy){
   std::ostringstream o;o<<"{\"busy_before\":"<<busy<<",\"phase_before\":1,\"phase_after\":1,\"published_phase\":"<<f.get(0x800bc944u)<<",\"busy_after\":0,\"completed\":true,\"same_parent_memory\":true,\"call_pc\":"<<f.binding.event.pc<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"callbacks\":"<<p.callbacks_completed<<",\"phase_changed\":"<<unsigned(p.phase_changed)<<",\"nested_camera_calls\":"<<f.binding.camera_invocations<<",\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"hilo_known_masks\":[0,0],\"adjustment_pcs\":[";
   for(std::size_t i=0;i<f.phase_pcs.size();++i){if(i)o<<',';o<<f.phase_pcs[i];}o<<"],\"adjustment_args\":[";
   for(std::size_t i=0;i<f.phase_args.size();++i){if(i)o<<',';o<<f.phase_args[i];}o<<"],\"camera_child_pcs\":[";
-  for(std::size_t i=0;i<f.camera_pcs.size();++i){if(i)o<<',';o<<f.camera_pcs[i];}o<<"]}";return o.str();
+  for(std::size_t i=0;i<f.camera_pcs.size();++i){if(i)o<<',';o<<f.camera_pcs[i];}o<<"],\"elapsed_dispatch\":"<<(f.elapsed.receipt.empty()?"null":f.elapsed.receipt)<<"}";return o.str();
 }
 }
 std::string captureGameCameraPhaseSelect(){

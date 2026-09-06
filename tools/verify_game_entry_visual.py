@@ -1304,6 +1304,22 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":phase,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    elapsed_cases=[selection["elapsed_dispatch"],phase["cases"][1]["elapsed_dispatch"]]
+    require(phase["cases"][0]["elapsed_dispatch"] is None,"Unchanged phase unexpectedly dispatched elapsed owner")
+    for i,elapsed in enumerate(elapsed_cases):
+        require((elapsed["program"],elapsed["address"],elapsed["inclusive_end"],elapsed["bytes"],elapsed["instructions"]) == ("GAMEONLY","0x800798B4","0x800799CB",280,70),"Camera elapsed provenance drifted")
+        require(elapsed["classification"]=="no direct visual effect" and "actual camera-selector caller" in elapsed["scope"] and "no advancing match" in elapsed["scope"],"Camera elapsed scope drifted")
+        pc=[0x80079C8C,0x80079C2C][i]
+        require(elapsed["completed"] and (elapsed["call_pc"],elapsed["delay_pc"],elapsed["return_address"],elapsed["requested_delta"]) == (pc,pc+4,pc+8,0xFFFFFFFF)
+                and (elapsed["operations"],elapsed["reads"],elapsed["stores"],elapsed["callbacks"],elapsed["instruction_count"]) == (14,8,5,1,48)
+                and (elapsed["elapsed_after"],elapsed["cache_before"],elapsed["cache_after"],elapsed["publication_after"],elapsed["child_pc"]) == (0,0xFFFFFFFF,42,42,0x8007999C)
+                and elapsed["sp"] == [0x801FFE90,0x801FEF38][i] and elapsed["hilo_known_masks"]==[0,0],"Camera elapsed native state drifted")
+    (args.frames / "camera_elapsed_dispatch_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800798B4","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","cases":elapsed_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     camera_end = period["camera_override_end_probe"]
     require((camera_end["program"], camera_end["address"], camera_end["inclusive_end"],
              camera_end["bytes"], camera_end["instructions"]) ==
