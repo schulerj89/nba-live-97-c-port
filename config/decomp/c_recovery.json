@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8009B1F8",
+      "original_name": "Game_GpuPacketDma",
+      "symbol": "nba97_game_gpu_packet_dma",
+      "source": "src/recovered/game_gpu_packet_dma.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_gpu_packet_dma_tests; nba97_game_gpu_packet_dma_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009B298",
       "original_name": "Game_GraphicsSubmit",
       "symbol": "nba97_game_graphics_submit",

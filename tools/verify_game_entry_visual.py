@@ -778,6 +778,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    gpu_packet_dma = period["gpu_packet_dma_probe"]
+    require((gpu_packet_dma["program"],gpu_packet_dma["address"],gpu_packet_dma["inclusive_end"],gpu_packet_dma["bytes"],gpu_packet_dma["instructions"]) == ("GAMEONLY","0x8009B1F8","0x8009B243",76,19), "GPU packet DMA provenance drifted")
+    require(gpu_packet_dma["completed"] and gpu_packet_dma["parent_completed"] and gpu_packet_dma["classification"] == "no direct visual effect"
+            and "without GPU consumption" in gpu_packet_dma["scope"] and gpu_packet_dma["cache_matches_last_environment"]
+            and (gpu_packet_dma["dma_calls"],gpu_packet_dma["submit_calls"],gpu_packet_dma["copy_calls"]) == (2,2,4)
+            and gpu_packet_dma["port_addresses"] == [0x1F801814,0x1F8010A0,0x1F8010A4,0x1F8010A8], "GPU packet DMA native state drifted")
+    for item,packet,hi in zip(gpu_packet_dma["leaves"],[0x80021F64,0x80021F08],[0x80048F4C,0x80048FA0]):
+        require((item["operations"],item["reads"],item["stores"],item["return_v0"],item["return_address"],item["hi"]) == (8,4,4,0x1F8010A8,0x8009B3B0,hi)
+                and item["port_words"] == [0x04000002,packet,0,0x01000401], "GPU packet DMA machine drifted")
+    (args.frames / "gpu_packet_dma_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009B1F8","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gpu_packet_dma,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     graphics_submit = period["graphics_submit_probe"]
     require((graphics_submit["program"],graphics_submit["address"],graphics_submit["inclusive_end"],graphics_submit["bytes"],graphics_submit["instructions"]) == ("GAMEONLY","0x8009B298","0x8009B57B",740,185), "Graphics submission provenance drifted")
     require(graphics_submit["classification"] == "no direct visual effect" and "synthetic" in graphics_submit["scope"], "Graphics submission classification drifted")
