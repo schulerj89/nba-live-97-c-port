@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 124, "native click-through frame count drifted")
+    require(len(states) == 126, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1184,6 +1184,42 @@ def main():
         "program":"FEONLY","address":"0x8007B1D0","end":"0x8007B2BB","driver_frame_count":len(states),
         "source_receipt":resource_load,"before_sha256":rlhashes[0],"after_sha256":rlhashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":resource_load["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
+
+    ge = json.loads((args.frames/"gameload_entry_trace.json").read_text())
+    require(ge["program"] == "GAMELOAD" and ge["range"] == "801E1410-801E14B7" and ge["bytes"] == 168 and ge["instructions"] == 42
+            and ge["source_sha256"] == "86de52922bd45fe1e8c5dd5768bb04d31a1a1ba8d0c9bc429d8a53b1919ae560", "GAMELOAD entry source identity drifted")
+    require(ge["contract_failure"] == 0 and ge["result"] == -6 and ge["completed"] == 0 and ge["transferred"] == 0 and ge["trapped"] == 1
+            and ge["stopped_pc"] == 0x801e14b4 and ge["gameplay_shown"] == "BLOCKED", "GAMELOAD entry lost honest terminal BREAK")
+    require(ge["counts"] == dict(operations=2081, accesses=2079, reads=3, stores=2076, words_cleared=2073, callbacks=2, pc_events=10402), "GAMELOAD entry counts drifted")
+    ge_pcs=list(range(0x801e1410,0x801e1420,4))+list(range(0x801e1420,0x801e1434,4))*2073+list(range(0x801e1434,0x801e14b8,4))
+    require(ge["pc_hash_fnv1a64"] == int(fc_hash(b"".join(fc_le(pc) for pc in ge_pcs)),16), "GAMELOAD entry full PC journal drifted")
+    ge_access=[(0x801e1420,0x801e903c+4*i,0,i+1,2) for i in range(2073)]
+    ge_access += [(0x801e1438,0x801e8b70,0x800000,2074,1),(0x801e1460,0x801e8b6c,0x8000,2075,1),
+                  (0x801e1474,0x801e8b50,0x60cf58,2076,2),(0x801e1480,0x801e8b4c,0x801eb0a0,2077,2),
+                  (0x801e1488,0x801e903c,0x80028b70,2078,2),(0x801e14a4,0x801e903c,0x80028b70,2080,1)]
+    ge_bytes=b"".join(fc_le(pc)+fc_le(address)+fc_le(value)+fc_le(op,8)+bytes([4,15,kind]) for pc,address,value,op,kind in ge_access)
+    require(ge["access_hash_fnv1a64"] == int(fc_hash(ge_bytes),16), "GAMELOAD entry full access journal drifted")
+    ge_samples=[]
+    for i in (0,2072,2073,2078):
+        pc,address,value,op,kind=ge_access[i]
+        ge_samples.append(dict(index=i,pc=pc,address=address,value=value,operation=op,kind=kind,known_mask=15))
+    require(ge["access_samples"] == ge_samples, "GAMELOAD entry boundary samples drifted")
+    ge_words=[0x46000000+i*0x010203 for i in range(32)];ge_masks=[i%15+1 for i in range(32)]
+    for i,value in {0:0,1:0x801f0000,2:0x7ffff8,3:0x8000,4:0x801eb0a4,5:0x60cf58,8:0x80000000,28:0x801e903c,29:0x807ffff8,30:0x807ffff8,31:0x801e14a0}.items():
+        ge_words[i]=value;ge_masks[i]=15
+    def ge_machine():return dict(gpr_words=ge_words.copy(),gpr_known_masks=ge_masks.copy(),hi=dict(word=0x12345678,known_mask=5),lo=dict(word=0x90abcdef,known_mask=10))
+    ge_calls=[dict(pc=0x801e1498,target=0x801e1590,delay=0x801e149c,argument_count=2,invocation=1,operation=2079,outcome="RETURNED",machine=ge_machine())]
+    ge_words[31]=0x801e14b4
+    ge_calls.append(dict(pc=0x801e14ac,target=0x801e136c,delay=0x801e14b0,argument_count=0,invocation=1,operation=2081,outcome="RETURNED",machine=ge_machine()))
+    require(ge["call_sequence"] == ge_calls and ge["final_machine"] == ge_machine(), "GAMELOAD entry full CPU transport drifted")
+    require(ge["memory"] == dict(bss_first=0x80028b70,bss_last=0,heap_size=0x60cf58,heap_base=0x801eb0a0)
+            and "Synthetic standalone" in ge["fixture_contract"] and "preserving every register" in ge["fixture_contract"]
+            and "801E1498->801E1590" in ge["next_unbound_boundary"], "GAMELOAD entry memory/fixture contract drifted")
+    ge_frames=["gameload-entry-before","gameload-entry-after"]
+    require(all(n in by_id for n in ge_frames), "GAMELOAD entry native frames missing")
+    ge_hashes=[ppm_hash(args.frames/f"{n}.ppm") for n in ge_frames]
+    require(ge_hashes[0] == ge_hashes[1] == rlhashes[1], "GAMELOAD entry CPU probe changed native pixels")
+    (args.frames/"gameload_entry_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E1410",end="0x801E14B7",driver_frame_count=len(states),source_receipt=ge,before_sha256=ge_hashes[0],after_sha256=ge_hashes[1],gameplay_shown="BLOCKED"),indent=2))
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

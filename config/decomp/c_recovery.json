@@ -3,6 +3,16 @@
   "candidate_directory": ".local/build/ps1/functions",
   "functions": [
     {
+      "binary": "gameload",
+      "address": "0x801E1410",
+      "original_name": "Gameload_Entry",
+      "symbol": "nba97_gameload_entry",
+      "source": "src/recovered/gameload_entry.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_gameload_entry_tests; nba97_gameload_entry_integration_tests"
+    },
+    {
       "binary": "feonly",
       "address": "0x8007B1D0",
       "original_name": "Frontend_ResourceLoad",
