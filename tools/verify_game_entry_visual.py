@@ -656,6 +656,26 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    announcements = [case["first_period_startup"]["announcement"] for case in first_cases]
+    for announcement, mode in zip(announcements, (2,1)):
+        require((announcement["program"],announcement["address"],announcement["inclusive_end"],announcement["bytes"],announcement["instructions"]) ==
+                ("GAMEONLY","0x8007EF4C","0x8007F073",296,74), "announcement provenance drifted")
+        expected_calls = ([0x8007EF5C,0x8007EF70,0x8007EF8C,0x8007EF98,0x8007EFA4,0x8007EFAC,
+            0x8007EFBC,0x8007EFD0,0x8007EFDC,0x8007EFE8,0x8007EFFC,0x8007F050] if mode==2 else
+            [0x8007EF5C,0x8007EF70,0x8007F02C,0x8007F038,0x8007F048,0x8007F050])
+        require(announcement["completed"] and announcement["classification"] == "no direct visual effect"
+                and "synthetic speech service" in announcement["scope"] and announcement["call_pc"] == 0x80067450
+                and announcement["mode"] == mode and announcement["call_pcs"] == expected_calls
+                and (announcement["operations"],announcement["reads"],announcement["stores"]) == ((23,7,4) if mode==2 else (16,6,4))
+                and announcement["announcement_args"] == ([0x80180100,0x80180200,0x20,0x80190000] if mode==2 else [0x80180000,0x80180100,5])
+                and announcement["frame_stack_pointer"] == 0x801FFEB0 and announcement["restored_ra"] == 0x80067458,
+                "announcement native CPU fixture drifted")
+    (args.frames / "tipoff_announcement_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8007EF4C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":announcements,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     limit_cases = [period]+first_cases
     for case, signed_period in zip(limit_cases, (0xFFFF8000,0,0)):
         limits = case["late_period_limits"]

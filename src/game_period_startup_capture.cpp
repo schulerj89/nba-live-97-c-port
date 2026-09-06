@@ -2,6 +2,7 @@
 #include "game_period_startup_adapter.h"
 #include "game_first_period_startup_adapter.h"
 #include "game_late_period_limits_adapter.h"
+#include "game_tipoff_announcement_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +16,7 @@ struct Fixture {
     Nba97GamePeriodStartupProgress progress{};
     Nba97GamePeriodStartupAdapterProgress adapter{};
     Nba97GameFirstPeriodStartupBinding first{};
+    GameTipoffAnnouncementCapture announcement;
     Nba97GameLatePeriodLimitsContext limits_context{};
     Nba97GameLatePeriodLimitsTickBinding limits{};
     std::vector<std::uint32_t> first_pcs;
@@ -23,8 +25,9 @@ struct Fixture {
     std::uint32_t pre_pump_counter=0,post_pump_delta=0;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {for(unsigned i=0;i<width;++i)bytes.at(a-0x80000000u+i)=std::uint8_t(v>>(8*i));}
     std::uint32_t get(std::uint32_t a,unsigned width=4) const {std::uint32_t v=0;for(unsigned i=0;i<width;++i)v|=std::uint32_t(bytes.at(a-0x80000000u+i))<<(8*i);return v;}
-    static int firstChild(void* user,const Nba97GameTextMemory*,const Nba97GameFirstPeriodStartupEvent* e,Nba97GameFirstPeriodStartupRegisters* r) {
+    static int firstChild(void* user,const Nba97GameTextMemory* memory,const Nba97GameFirstPeriodStartupEvent* e,Nba97GameFirstPeriodStartupRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);f.first_pcs.push_back(e->pc);
+        if(e->pc==0x80067450u)return f.announcement.dispatch(memory,e,r,f.get(0x800eb680u,1)?1u:2u);
         if(e->pc==0x80067434u && r->gpr[4].word!=1)return 0;
         // Explicit full-GPR service fixtures: no frame renderer or tip-off child is claimed.
         r->gpr[2]={e->pc^0x24681357u,15};return 1;
@@ -111,7 +114,7 @@ static std::string capturePeriodFixture(int first_flag) {
           "\"completed\":true,\"flag\":"<<first_flag<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"call_pcs\":[";
         for(std::size_t i=0;i<f.first_pcs.size();++i){if(i)o<<',';o<<f.first_pcs[i];}
         o<<"],\"marker\":"<<f.get(0x800fdb94u,2)<<",\"presentation_halfword\":"<<f.get(0x800fdb4eu,2)
-         <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
+         <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<",\"announcement\":"<<f.announcement.receipt<<"}";
     } else o<<",\"zero_period_cases\":["<<capturePeriodFixture(0)<<','<<capturePeriodFixture(255)<<']';
     o<<"}";
     return o.str();

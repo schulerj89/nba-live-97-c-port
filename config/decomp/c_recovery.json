@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8007EF4C",
+      "original_name": "Game_TipoffAnnouncement",
+      "symbol": "nba97_game_tipoff_announcement",
+      "source": "src/recovered/game_tipoff_announcement.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_tipoff_announcement_tests; nba97_game_tipoff_announcement_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80067550",
       "original_name": "Game_LatePeriodLimits",
       "symbol": "nba97_game_late_period_limits",
