@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80055F18",
+      "original_name": "Game_GteRotationInstall",
+      "symbol": "nba97_game_gte_rotation_install",
+      "source": "src/recovered/game_gte_rotation_install.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_gte_rotation_install_tests; nba97_game_gte_rotation_install_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009A97C",
       "original_name": "Game_OrderingTableDma",
       "symbol": "nba97_game_ordering_table_dma",

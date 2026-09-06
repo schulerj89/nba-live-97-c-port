@@ -1,3 +1,4 @@
+#include "game_gte_rotation_install_capture.h"
 #include "game_ordering_table_dma_capture.h"
 #include "game_rotation_matrix_capture.h"
 #include "game_camera_overlay_packets_capture.h"
@@ -161,6 +162,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"clear_ordering_table_probe\":"<<captureGameClearOrderingTable()
             <<",\"camera_overlay_packets_probe\":"<<captureGameCameraOverlayPackets()
             <<",\"rotation_matrix_probe\":"<<captureGameRotationMatrix()
+            <<",\"gte_rotation_install_probe\":"<<captureGameGteRotationInstall()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()

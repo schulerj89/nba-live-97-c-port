@@ -778,6 +778,28 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    gte_rotation = period["gte_rotation_install_probe"]
+    require((gte_rotation["program"], gte_rotation["address"], gte_rotation["inclusive_end"],
+             gte_rotation["bytes"], gte_rotation["instructions"]) ==
+            ("GAMEONLY", "0x80055F18", "0x80055F43", 44, 11), "GTE rotation provenance drifted")
+    require(gte_rotation["completed"] and gte_rotation["parent_completed"] and gte_rotation["matrix_completed"]
+            and gte_rotation["classification"] == "no direct visual effect"
+            and "synthetic packed table" in gte_rotation["scope"]
+            and "typed translation/reference services" in gte_rotation["scope"]
+            and (gte_rotation["operations"], gte_rotation["reads"], gte_rotation["control_writes"]) == (10, 5, 5)
+            and gte_rotation["controls_before"] == [0]*5 and gte_rotation["controls_before_masks"] == [0]*5
+            and gte_rotation["controls_after"] == [0xE6671999, 0x20001999, 0xF0000000, 0x20000000, 0x1000]
+            and gte_rotation["controls_after_masks"] == [15]*5
+            and gte_rotation["raw_loads"] == [0xE6671999, 0x20001999, 0xF0000000, 0x20000000, 0xABCD1000]
+            and gte_rotation["untouched_controls_unknown"]
+            and (gte_rotation["returned_sp"], gte_rotation["return_address"]) == (0x801FEFD0, 0x8005120C),
+            "GTE rotation native state drifted")
+    (args.frames / "gte_rotation_install_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80055F18", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": gte_rotation,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     dma = period["ordering_table_dma_probe"]
     require((dma["program"], dma["address"], dma["inclusive_end"], dma["bytes"], dma["instructions"]) ==
             ("GAMEONLY", "0x8009A97C", "0x8009AA63", 232, 58), "ordering DMA provenance drifted")
