@@ -778,6 +778,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    display_environment = period["display_environment_probe"]
+    require((display_environment["program"],display_environment["address"],display_environment["inclusive_end"],display_environment["bytes"],display_environment["instructions"]) == ("GAMEONLY","0x80099CA4","0x8009A153",1200,300), "Display environment provenance drifted")
+    require(display_environment["completed"] and display_environment["parent_completed"] and display_environment["classification"] == "no direct visual effect"
+            and "synthetic GPU/video/BIOS services" in display_environment["scope"]
+            and (display_environment["display_calls"],display_environment["copy_calls"],display_environment["video_calls"]) == (2,2,2)
+            and display_environment["commands"] == [0x0500500A,0x0503C064,0x06CDA328,0x07048431,0x0800002E]
+            and display_environment["cache_matches_final_environment"] and (display_environment["copy_t1"],display_environment["copy_t2"]) == (0x2A,0xA0), "Display environment native state drifted")
+    for item,pc,env,changed in zip(display_environment["invocations"],[0x80048F20,0x80048F78],[0x80022070,0x8002205C],[0,1]):
+        require((item["call_pc"],item["return_v0"],item["return_address"],item["screen_changed"],item["mode_changed"]) == (pc,env,pc+8,changed,changed), "Display environment caller/cache branch drifted")
+    (args.frames / "display_environment_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80099CA4","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":display_environment,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     bios_copy = period["bios_memory_copy_probe"]
     require((bios_copy["program"],bios_copy["address"],bios_copy["inclusive_end"],bios_copy["bytes"],bios_copy["instructions"]) == ("GAMEONLY","0x8009CB0C","0x8009CB17",12,3), "BIOS copy provenance drifted")
     require(bios_copy["completed"] and bios_copy["parent_completed"] and bios_copy["classification"] == "no direct visual effect"

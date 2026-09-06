@@ -174,6 +174,7 @@ try {
         'nba97_game_gte_translation_install_tests','nba97_game_gte_translation_install_integration_tests',
         'nba97_game_gte_reference_transform_tests','nba97_game_gte_reference_transform_integration_tests',
         'nba97_game_bios_memory_copy_tests','nba97_game_bios_memory_copy_integration_tests',
+        'nba97_game_display_environment_tests','nba97_game_display_environment_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

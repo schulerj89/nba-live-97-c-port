@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80099CA4",
+      "original_name": "Game_DisplayEnvironment",
+      "symbol": "nba97_game_display_environment",
+      "source": "src/recovered/game_display_environment.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_display_environment_tests; nba97_game_display_environment_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009CB0C",
       "original_name": "Game_BiosMemoryCopy",
       "symbol": "nba97_game_bios_memory_copy",
