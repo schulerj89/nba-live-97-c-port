@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_stream_queue_count_tests tests/game_stream_queue_count_tests.cpp src/recovered/game_stream_queue_count.c)
+    target_compile_features(nba97_game_stream_queue_count_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_stream_queue_count_tests PRIVATE src src/recovered)
+    add_test(NAME game_stream_queue_count COMMAND nba97_game_stream_queue_count_tests)
+    add_executable(nba97_game_stream_queue_count_integration_tests tests/game_stream_queue_count_integration_tests.cpp
+        src/recovered/game_stream_queue_count.c src/game_stream_queue_count_adapter.cpp src/recovered/game_stream_readiness.c)
+    target_compile_features(nba97_game_stream_queue_count_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_stream_queue_count_integration_tests PRIVATE src)
+    add_test(NAME game_stream_queue_count_integration COMMAND nba97_game_stream_queue_count_integration_tests)
     add_executable(nba97_game_actor_resume_tests tests/game_actor_resume_tests.cpp src/recovered/game_actor_resume.c)
     target_compile_features(nba97_game_actor_resume_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_actor_resume_tests PRIVATE src src/recovered)
@@ -1709,3 +1718,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_stream_readiness.c s
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_rule_delay.c src/game_rule_delay_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_resume.c src/game_actor_resume_adapter.cpp src/game_actor_resume_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_stream_queue_count.c src/game_stream_queue_count_adapter.cpp)

@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80084448",
+      "original_name": "Game_StreamQueueCount",
+      "symbol": "nba97_game_stream_queue_count",
+      "source": "src/recovered/game_stream_queue_count.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_stream_queue_count_tests; nba97_game_stream_queue_count_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800582DC",
       "original_name": "Game_ActorResume",
       "symbol": "nba97_game_actor_resume",

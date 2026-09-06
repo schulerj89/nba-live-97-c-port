@@ -866,6 +866,23 @@ def main():
     require(audio_cases[0]["stream_readiness"] is None and audio_cases[1]["stream_readiness"] is None,
             "stream readiness executed outside mode3")
     readiness=audio_cases[2]["stream_readiness"]
+    queue=readiness["queue_count"]
+    require((queue["program"],queue["address"],queue["inclusive_end"],queue["bytes"],queue["instructions"]) ==
+            ("GAMEONLY","0x80084448","0x80084587",320,80),"stream queue count provenance drifted")
+    require(queue["completed"] and queue["classification"]=="no direct visual effect"
+            and "two synthetic nodes" in queue["scope"] and queue["call_pc"]==0x80088D30
+            and (queue["operations"],queue["reads"],queue["stores"])==(30,20,8)
+            and (queue["head"],queue["links"],queue["iterations"],queue["returned_value"])==(0x80173000,1,2,1)
+            and (queue["counter_before"],queue["counter_incremented"],queue["counter_after"])==(0xFFFFFFFF,0,0xFFFFFFFF)
+            and queue["call_pcs"]==[0x8008447C,0x8008455C]
+            and (queue["frame_stack_pointer"],queue["returned_sp"],queue["restored_ra"])==(0x801FFE90,0x801FFEB0,0x80088D38),
+            "stream queue count native CPU fixture drifted")
+    (args.frames / "stream_queue_count_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80084448","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":queue,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     require((readiness["program"],readiness["address"],readiness["inclusive_end"],readiness["span_bytes"],readiness["span_words"],readiness["body_bytes"],readiness["instructions"]) ==
             ("GAMEONLY","0x80088D0C","0x80088D7B",112,28,104,26),"stream readiness provenance drifted")
     require(readiness["completed"] and readiness["classification"]=="no direct visual effect"

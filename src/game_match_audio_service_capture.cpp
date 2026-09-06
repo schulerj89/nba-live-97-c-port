@@ -1,5 +1,6 @@
 #include "game_match_audio_service_capture.h"
 #include "game_stream_readiness_adapter.h"
+#include "game_stream_queue_count_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -10,6 +11,8 @@ struct Fixture {
     const Nba97GameTextMemory* memory;
     std::vector<std::uint32_t> pcs;
     Nba97GameStreamReadinessProgress readiness{};
+    Nba97GameStreamQueueCountProgress queue{};
+    std::vector<std::uint32_t> queue_pcs;
     unsigned readiness_calls=0,readiness_children=0;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
@@ -23,10 +26,19 @@ struct Fixture {
             std::uint32_t v=0;for(unsigned i=0;i<width;++i){if(r.known && r.known[a-r.base+i]!=1)throw std::runtime_error("match audio unknown fixture");v|=std::uint32_t(r.data[a-r.base+i])<<(8*i);}return v;}
         throw std::runtime_error("match audio fixture mapping missing");
     }
-    static int readinessChild(void* user,const Nba97GameTextMemory*,const Nba97GameStreamReadinessEvent* e,Nba97GameStreamReadinessMachine* m) {
+    static int queueChild(void* user,const Nba97GameTextMemory*,const Nba97GameStreamQueueCountEvent* e,Nba97GameStreamQueueCountMachine* m) {
+        auto& f=*static_cast<Fixture*>(user);
+        if(e->argument_count || !((e->pc==0x8008447cu && e->entry==0x80093d94u) ||
+            (e->pc==0x8008455cu && e->entry==0x80093dd4u)))return 0;
+        // Explicit critical-section backend fixture; no scheduler is claimed.
+        f.queue_pcs.push_back(e->pc);m->registers.gpr[2]={e->pc^0x13572468u,15};return 1;
+    }
+    static int readinessChild(void* user,const Nba97GameTextMemory* memory,const Nba97GameStreamReadinessEvent* e,Nba97GameStreamReadinessMachine* m) {
         auto& f=*static_cast<Fixture*>(user);
         if(e->pc!=0x80088d30u || e->entry!=0x80084448u || e->argument_count)return 0;
-        ++f.readiness_children;m->registers.gpr[2]={1,15};return 1;
+        ++f.readiness_children;
+        Nba97GameStreamQueueCountContext c{};c.operation_budget=30;c.io=queueChild;c.user=&f;
+        return nba97_game_stream_queue_count_from_stream_readiness(memory,e,m,&c,&f.queue)==NBA97_TEXT_COMPLETE;
     }
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameMatchAudioServiceEvent* e,Nba97GameMatchAudioServiceMachine* m) {
         auto& f=*static_cast<Fixture*>(user);
@@ -57,6 +69,8 @@ int GameMatchAudioServiceCapture::dispatch(const Nba97GameTextMemory* memory,
     f.put(0x8002149cu,1);f.put(0x80021ee0u,0x80172000u);f.put(0x80021ee8u,0xffff,2);
     f.put(0x800c43b0u,7,1);f.put(0x800c43b1u,0,1);
     f.put(0x800f0fdcu,1,2); // Explicit enabled-stream fixture for the readiness owner.
+    f.put(0x800c43a0u,0x80173000u);f.put(0x80173000u,0x80173020u);f.put(0x80173020u,0);
+    f.put(0x800c4410u,0xffffffffu); // Two synthetic nodes, one nonterminal link.
     Nba97GameMatchAudioServiceContext service{};service.operation_budget=100;service.io=Fixture::child;service.user=&f;
     Nba97GameClockReadContext clock{};clock.operation_budget=1;
     Nba97GameAudioStreamStatusContext status{};status.operation_budget=20;
@@ -83,11 +97,22 @@ int GameMatchAudioServiceCapture::dispatch(const Nba97GameTextMemory* memory,
         const auto& d=f.readiness;
         if(f.readiness_calls!=1 || !d.completed || f.readiness_children!=1)throw std::runtime_error("stream readiness native CPU fixture drifted");
         o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x80088D0C\",\"inclusive_end\":\"0x80088D7B\",\"span_bytes\":112,\"span_words\":28,\"body_bytes\":104,\"instructions\":26,"
-            "\"classification\":\"no direct visual effect\",\"scope\":\"actual match-audio event and owner; explicit enabled flag and 84448 child response\","
+            "\"classification\":\"no direct visual effect\",\"scope\":\"actual match-audio event and queue owner; explicit enabled flag, nodes and critical-section services\","
             "\"completed\":true,\"call_pc\":2147656428,\"operations\":"<<d.operations<<",\"reads\":"<<d.reads<<",\"stores\":"<<d.stores
          <<",\"flag\":"<<d.loaded_flag.word<<",\"child_calls\":"<<f.readiness_children<<",\"child_pc\":2148044080,\"child_value\":1"
          <<",\"returned_value\":"<<d.machine.registers.gpr[2].word<<",\"frame_stack_pointer\":"<<d.frame_stack_pointer
-         <<",\"returned_sp\":"<<d.machine.registers.gpr[29].word<<",\"restored_ra\":"<<d.restored_return_address.word<<"}";
+         <<",\"returned_sp\":"<<d.machine.registers.gpr[29].word<<",\"restored_ra\":"<<d.restored_return_address.word;
+        const auto& q=f.queue;
+        if(!q.completed || q.returned_count.word!=1 || f.queue_pcs.size()!=2 || f.get(0x800c4410u)!=0xffffffffu)
+            throw std::runtime_error("stream queue count native CPU fixture drifted");
+        o<<",\"queue_count\":{\"program\":\"GAMEONLY\",\"address\":\"0x80084448\",\"inclusive_end\":\"0x80084587\",\"bytes\":320,\"instructions\":80,"
+            "\"classification\":\"no direct visual effect\",\"scope\":\"actual readiness call; two synthetic nodes and explicit critical-section services\","
+            "\"completed\":true,\"call_pc\":2148044080,\"operations\":"<<q.operations<<",\"reads\":"<<q.reads<<",\"stores\":"<<q.stores
+         <<",\"head\":"<<q.initial_head.word<<",\"links\":"<<q.links_counted<<",\"iterations\":"<<q.loop_iterations
+         <<",\"counter_before\":4294967295,\"counter_incremented\":"<<q.counter_after_increment.word
+         <<",\"counter_after\":"<<f.get(0x800c4410u)<<",\"returned_value\":"<<q.returned_count.word
+         <<",\"call_pcs\":["<<f.queue_pcs[0]<<','<<f.queue_pcs[1]<<"],\"frame_stack_pointer\":"<<q.frame_stack_pointer
+         <<",\"returned_sp\":"<<q.machine.registers.gpr[29].word<<",\"restored_ra\":"<<q.restored_return_address.word<<"}}";
     }
     o<<",\"returned_v0\":"<<machine->registers.gpr[2].word<<",\"returned_v1\":"<<machine->registers.gpr[3].word
      <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
