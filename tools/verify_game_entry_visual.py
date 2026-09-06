@@ -782,13 +782,44 @@ def main():
                 and publication["child_pc"] == 0x8002DE5C
                 and (publication["status_before"],publication["status_after"],publication["phase_before"],publication["phase_after"]) ==
                     (0xBEEF,0xFFFF,0xDEADBEEF,phase)
-                and (publication["child_v0"],publication["child_v1"]) == (0x13572468,0x24681357)
+                and (publication["child_v0"],publication["child_v1"]) ==
+                    (publication["match_audio_service"]["returned_v0"],publication["match_audio_service"]["returned_v1"])
                 and publication["frame_stack_pointer"] == 0x801FFEE8 and publication["restored_ra"] == 0x80068D84,
                 "service publication native CPU fixture drifted")
     (args.frames / "match_service_publish_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x8002DE34","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":publication_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
+    audio_cases=[case["match_audio_service"] for case in publication_cases]
+    expected_audio=(
+        (1,1,98,15,8,6,1,98<<16,0x800FDA0E,[]),
+        (2,0,1,15,6,5,4,0x8002A444^0x13572468,1000,[0x8002A424,0x8002A43C,0x8002A444]),
+        (3,0,0xFFEB,20,9,6,5,0x82,0,[0x8002A2EC,0x8002A2FC,0x8002A30C]),
+    )
+    for service,expected,phase in zip(audio_cases,expected_audio,(0,0x81,0)):
+        mode,state,timer,ops,reads,stores,calls,v0,v1,pcs=expected
+        require((service["program"],service["address"],service["inclusive_end"],service["bytes"],service["instructions"]) ==
+                ("GAMEONLY","0x8002A264","0x8002A463",512,128),"match audio provenance drifted")
+        require(service["completed"] and service["classification"]=="no direct visual effect"
+                and "explicit mode" in service["scope"] and service["call_pc"]==0x8002DE5C
+                and (service["mode_before"],service["mode_after"],service["timer_before"],service["timer_after"],service["phase"]) ==
+                    (mode,state,480 if mode==1 else 1,timer,phase)
+                and (service["operations"],service["reads"],service["stores"],service["child_calls"]) == (ops,reads,stores,calls)
+                and (service["clock_before"],service["clock_after"],service["delta"]) == (1000,1022,22)
+                and (service["returned_v0"],service["returned_v1"]) == (v0,v1)
+                and service["unresolved_call_pcs"]==pcs and service["frame_stack_pointer"]==0x801FFEC8
+                and service["restored_ra"]==0x8002DE64 and service["status_calls"]==(1 if mode==3 else 0)
+                and service["status_value"]==(3 if mode==3 else 0),"match audio native CPU fixture drifted")
+        leaf=service["clock_read"]
+        require(leaf["completed"] and leaf["address"]=="0x800A5810" and leaf["call_pc"]==0x8002A270
+                and (leaf["reads"],leaf["value"],leaf["returned_sp"],leaf["returned_ra"])==(1,1022,0x801FFEC8,0x8002A278),
+                "match audio clock composition drifted")
+    (args.frames / "match_audio_service_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8002A264","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":audio_cases,
         "classification":"no direct visual effect"
     },indent=2)+chr(10),encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]

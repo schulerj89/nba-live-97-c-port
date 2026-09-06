@@ -1,4 +1,5 @@
 #include "game_match_service_publish_capture.h"
+#include "game_match_audio_service_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -8,6 +9,7 @@ struct Fixture {
     const Nba97GameTextMemory* memory;
     unsigned calls=0;
     std::uint32_t phase=0;
+    GameMatchAudioServiceCapture audio;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
             if(a<r.base || std::uint64_t(a-r.base)+width>r.size)continue;
@@ -25,8 +27,8 @@ struct Fixture {
         if(e->pc!=0x8002de5cu || e->entry!=0x8002a264u || e->argument_count ||
            f.get(0x80015028u,2)!=0xffffu || f.get(0x800170bcu)!=f.phase)return 0;
         ++f.calls;
-        // Explicit remaining audio-state service, not a recovered child claim.
-        m->registers.gpr[2]={0x13572468u,15};m->registers.gpr[3]={0x24681357u,15};return 1;
+        const unsigned mode=f.phase==0x81u?2u:(f.get(0x800fdba8u,2)==0?3u:1u);
+        return f.audio.dispatch(f.memory,e,m,mode);
     }
 };
 }
@@ -47,11 +49,12 @@ int GameMatchServicePublishCapture::dispatch(const Nba97GameTextMemory* memory,c
        p.restored_return_address.word!=0x80068d84u || f.get(0x80015028u,2)!=0xffffu || f.get(0x800170bcu)!=f.phase)
         throw std::runtime_error("match service publication native CPU fixture drifted");
     std::ostringstream o;o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x8002DE34\",\"inclusive_end\":\"0x8002DE73\",\"bytes\":64,\"instructions\":16,"
-      "\"classification\":\"no direct visual effect\",\"scope\":\"actual period-expiry output through branch/JAL/NOP; explicit status and audio-service fixtures\","
+      "\"classification\":\"no direct visual effect\",\"scope\":\"actual period-expiry output through branch/JAL/NOP and audio service; explicit status and audio mode fixtures\","
       "\"completed\":true,\"call_pc\":"<<call->pc<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores
      <<",\"child_calls\":"<<f.calls<<",\"child_pc\":2147671644,\"status_before\":48879,\"status_after\":"<<f.get(0x80015028u,2)
      <<",\"phase_before\":3735928559,\"phase_after\":"<<f.get(0x800170bcu)<<",\"child_v0\":"<<p.child_return_v0.word
-     <<",\"child_v1\":"<<p.child_return_v1.word<<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
+     <<",\"child_v1\":"<<p.child_return_v1.word<<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word
+     <<",\"match_audio_service\":"<<f.audio.receipt<<"}";
     progress=p;receipt=o.str();return result;
 }
 }
