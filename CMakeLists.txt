@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_actor_collision_response_tests tests/game_actor_collision_response_tests.cpp src/recovered/game_actor_collision_response.c src/game_actor_collision_response_adapter.cpp src/recovered/game_controller_selection.c)
+    target_compile_features(nba97_game_actor_collision_response_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_actor_collision_response_tests PRIVATE src src/recovered)
+    add_test(NAME game_actor_collision_response COMMAND nba97_game_actor_collision_response_tests)
+    add_executable(nba97_game_actor_collision_response_integration_tests tests/game_actor_collision_response_integration_tests.cpp
+        src/recovered/game_actor_collision_response.c src/game_actor_collision_response_adapter.cpp src/recovered/game_opponent_contact.c src/recovered/game_controller_selection.c)
+    target_compile_features(nba97_game_actor_collision_response_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_actor_collision_response_integration_tests PRIVATE src)
+    add_test(NAME game_actor_collision_response_integration COMMAND nba97_game_actor_collision_response_integration_tests)
     add_executable(nba97_game_frame_interrupt_restore_tests tests/game_frame_interrupt_restore_tests.cpp src/recovered/game_frame_interrupt_restore.c)
     target_compile_features(nba97_game_frame_interrupt_restore_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_frame_interrupt_restore_tests PRIVATE src src/recovered)
@@ -1855,3 +1864,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_frame_transfo
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp src/game_frame_interrupt_disable_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_restore.c src/game_frame_interrupt_restore_adapter.cpp src/game_frame_interrupt_restore_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_collision_response.c src/game_actor_collision_response_adapter.cpp src/game_actor_collision_response_capture.cpp)

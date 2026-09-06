@@ -797,6 +797,25 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_restore,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    collision = period["actor_collision_response_probe"]
+    require((collision["program"], collision["address"], collision["inclusive_end"], collision["bytes"], collision["instructions"]) ==
+            ("GAMEONLY", "0x8005F3BC", "0x8005F887", 1228, 307), "collision response provenance drifted")
+    require(collision["completed"] and collision["parent_completed"]
+            and collision["classification"] == "no direct visual effect"
+            and "independent CPU fixture" in collision["scope"] and "typed impulse service" in collision["scope"]
+            and collision["contact_before"] == [0, 0, 0] and collision["contact_after"] == [9, 120, 1]
+            and collision["normal"] == [256, 0] and collision["callbacks"] == 2
+            and (collision["operations"], collision["reads"], collision["stores"]) == (51, 30, 19)
+            and (collision["normal_velocity"], collision["tangent_velocity"], collision["parent_returned_value"]) == (64, 0, 1)
+            and (collision["resolver_pc"], collision["resolver_argument_count"]) == (0x8005F598, 8)
+            and (collision["frame_stack_pointer"], collision["returned_sp"], collision["restored_ra"], collision["parent_restored_ra"]) ==
+                (0x800FEF90, 0x800FEFE8, 0x8005F934, 0x81234568), "collision response native state drifted")
+    (args.frames / "actor_collision_response_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8005F3BC", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": collision,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     camera_end = period["camera_override_end_probe"]
     require((camera_end["program"], camera_end["address"], camera_end["inclusive_end"],
              camera_end["bytes"], camera_end["instructions"]) ==

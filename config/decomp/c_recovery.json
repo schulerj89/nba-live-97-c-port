@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8005F3BC",
+      "original_name": "Game_ActorCollisionResponse",
+      "symbol": "nba97_game_actor_collision_response",
+      "source": "src/recovered/game_actor_collision_response.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_actor_collision_response_tests; nba97_game_actor_collision_response_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8004900C",
       "original_name": "Game_FrameInterruptRestore",
       "symbol": "nba97_game_frame_interrupt_restore",
