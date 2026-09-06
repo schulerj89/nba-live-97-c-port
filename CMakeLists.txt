@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_stamina_handicap_tests tests/game_stamina_handicap_tests.cpp src/recovered/game_stamina_handicap.c src/game_stamina_handicap_adapter.cpp src/recovered/game_match_tick.c src/recovered/game_actor_timers.c src/game_actor_timers_adapter.cpp)
+    target_compile_features(nba97_game_stamina_handicap_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_stamina_handicap_tests PRIVATE src src/recovered)
+    add_test(NAME game_stamina_handicap COMMAND nba97_game_stamina_handicap_tests)
+    add_executable(nba97_game_stamina_handicap_integration_tests tests/game_stamina_handicap_integration_tests.cpp src/recovered/game_stamina_handicap.c src/game_stamina_handicap_adapter.cpp src/recovered/game_match_tick.c src/recovered/game_actor_timers.c src/game_actor_timers_adapter.cpp)
+    target_compile_features(nba97_game_stamina_handicap_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_stamina_handicap_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_stamina_handicap_integration COMMAND nba97_game_stamina_handicap_integration_tests)
     add_executable(nba97_game_image_record_upload_tests tests/game_image_record_upload_tests.cpp src/recovered/game_image_record_upload.c src/game_image_record_upload_adapter.cpp src/recovered/game_countdown_ui_update.c)
     target_compile_features(nba97_game_image_record_upload_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_image_record_upload_tests PRIVATE src src/recovered)
@@ -2342,3 +2350,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_state_lookup.
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_text_chain_clear.c src/game_text_chain_clear_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_image_record_upload.c src/game_image_record_upload_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_stamina_handicap.c src/game_stamina_handicap_adapter.cpp)

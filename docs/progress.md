@@ -7,9 +7,9 @@ The function-evidence catalogue is incomplete and has not caught up with newer r
 ## Current baseline
 
 - **3,701** functions and **1,044,056** code bytes discovered by headless Ghidra in the currently scoped original binaries.
-- **159** functions (4.30%) have registered recomp/Ghidra/source evidence records.
-- Evidence records touch **75,948** original code bytes (7.27%). Partial records do not mean the whole function is complete.
-- **99** registered records claim behavior-complete scope and **0** claim instruction matching. These are catalogue counts, not totals for all recovered code.
+- **160** functions (4.32%) have registered recomp/Ghidra/source evidence records.
+- Evidence records touch **76,384** original code bytes (7.32%). Partial records do not mean the whole function is complete.
+- **100** registered records claim behavior-complete scope and **0** claim instruction matching. These are catalogue counts, not totals for all recovered code.
 - Native port: **49 catalogued milestones** — 25 marked verified, 19 partial, 5 not started. Not an overall completion score.
 - Playable basketball remains unimplemented.
 - View Rosters end-to-end fidelity: **91.82%** from weighted behavioral and local-only visual-reference checks.
@@ -36,7 +36,7 @@ The function-evidence catalogue is incomplete and has not caught up with newer r
 | database | 3 | 1,216 | 3 |
 | font | 2 | 3,636 | 2 |
 | frontend | 4 | 1,308 | 4 |
-| gameplay | 52 | 24,104 | 52 |
+| gameplay | 53 | 24,540 | 53 |
 | graphics | 7 | 4,576 | 5 |
 | input | 3 | 3,728 | 3 |
 | menus | 5 | 6,256 | 3 |

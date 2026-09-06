@@ -1261,7 +1261,7 @@ def main():
     require((cross_half["program"],cross_half["address"],cross_half["inclusive_end"],cross_half["bytes"],cross_half["instructions"]) == ("GAMEONLY","0x8006817C","0x8006830B",400,100), "Crossing rule provenance drifted")
     require(cross_half["classification"]=="no direct visual effect" and "independent synthetic actual match-tick caller" in cross_half["scope"] and "no advancing match" in cross_half["scope"], "Crossing rule scope drifted")
     require(cross_half["completed"] and not cross_half["parent_completed"] and cross_half["same_parent_memory"]
-            and (cross_half["call_pc"],cross_half["operations"],cross_half["reads"],cross_half["stores"],cross_half["callbacks"],cross_half["prerequisite_events"],cross_half["duration_noop_calls"]) == (0x80068E30,23,14,4,5,15,1)
+            and (cross_half["call_pc"],cross_half["operations"],cross_half["reads"],cross_half["stores"],cross_half["callbacks"],cross_half["prerequisite_events"],cross_half["duration_noop_calls"]) == (0x80068E30,23,14,4,5,16,1)
             and (cross_half["timer_before"],cross_half["timer_after"],cross_half["blocker_before"],cross_half["blocker_after"],cross_half["rule_before"],cross_half["rule_after"]) == (12,13,1,0,0,8)
             and (cross_half["sp"],cross_half["ra"],cross_half["parent_stop_pc"],cross_half["parent_stop_entry"]) == (0x800FF000,0x80068E38,0x80068E78,0x80076B28)
             and cross_half["hilo_known_masks"] == [3,12] and cross_half["typed_child_pcs"] == [0x80068290,0x800682B4,0x800682D8,0x800682E0], "Crossing rule natural state drifted")
@@ -1272,6 +1272,21 @@ def main():
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     timers = cross_half["actor_timers"]
+    stamina = cross_half["stamina_handicap"]
+    require((stamina["program"], stamina["address"], stamina["inclusive_end"], stamina["bytes"], stamina["instructions"])
+            == ("GAMEONLY", "0x80068504", "0x800686B7", 436, 109), "Stamina provenance drifted")
+    require(stamina["classification"] == "no direct visual effect" and stamina["completed"]
+            and stamina["same_parent_memory"] and stamina["machine_from_actor_timers"]
+            and (stamina["call_pc"], stamina["score_updates"], stamina["stamina_updates"], stamina["handicap_after"], stamina["score_before"], stamina["score_after"], stamina["stamina_before"], stamina["stamina_after"], stamina["flag_before"], stamina["flag_after"], stamina["countdown_after_delay"], stamina["sp"], stamina["ra"])
+            == (0x80068E60, 24, 10, 5, 10, 11, 20, 16, 1, 0, 59, 0x800FF000, 0x80068E68)
+            and stamina["delta_address"] == "0x800FDB7E"
+            and stamina["operations"] == stamina["reads"] + stamina["stores"], "Stamina natural state drifted")
+    (args.frames / "stamina_handicap_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY", "address":"0x80068504", "driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes, "cpu_receipt":"loop_entry_trace.json", "state":stamina,
+        "classification":"no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     require((timers["program"], timers["address"], timers["inclusive_end"], timers["bytes"], timers["instructions"])
             == ("GAMEONLY", "0x8006830C", "0x80068503", 504, 126), "Actor timers provenance drifted")
     require(timers["classification"] == "no direct visual effect" and timers["completed"] and timers["same_parent_memory"] and timers["machine_from_crossing_rule"]

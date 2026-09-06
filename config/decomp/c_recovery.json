@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80068504",
+      "original_name": "Game_StaminaHandicap",
+      "symbol": "nba97_game_stamina_handicap",
+      "source": "src/recovered/game_stamina_handicap.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_stamina_handicap_tests; nba97_game_stamina_handicap_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80094540",
       "original_name": "Game_ImageRecordUpload",
       "symbol": "nba97_game_image_record_upload",
