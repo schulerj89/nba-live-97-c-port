@@ -1,3 +1,4 @@
+#include "game_video_mode_capture.h"
 #include "game_display_environment_capture.h"
 #include "game_bios_memory_copy_capture.h"
 #include "game_gte_reference_transform_capture.h"
@@ -171,6 +172,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"gte_reference_transform_probe\":"<<captureGameGteReferenceTransform()
             <<",\"bios_memory_copy_probe\":"<<captureGameBiosMemoryCopy()
             <<",\"display_environment_probe\":"<<captureGameDisplayEnvironment()
+            <<",\"video_mode_probe\":"<<captureGameVideoMode()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()

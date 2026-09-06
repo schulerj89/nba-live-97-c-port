@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_video_mode_tests tests/game_video_mode_tests.cpp src/recovered/game_video_mode.c)
+    target_compile_features(nba97_game_video_mode_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_video_mode_tests PRIVATE src src/recovered)
+    add_test(NAME game_video_mode COMMAND nba97_game_video_mode_tests)
+    add_executable(nba97_game_video_mode_integration_tests tests/game_video_mode_integration_tests.cpp
+        src/recovered/game_video_mode.c src/game_video_mode_adapter.cpp src/recovered/game_display_environment.c)
+    target_compile_features(nba97_game_video_mode_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_video_mode_integration_tests PRIVATE src)
+    add_test(NAME game_video_mode_integration COMMAND nba97_game_video_mode_integration_tests)
     add_executable(nba97_game_display_environment_tests tests/game_display_environment_tests.cpp src/recovered/game_display_environment.c)
     target_compile_features(nba97_game_display_environment_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_display_environment_tests PRIVATE src src/recovered)
@@ -1970,3 +1979,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gte_reference_transf
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_bios_memory_copy.c src/game_bios_memory_copy_adapter.cpp src/game_bios_memory_copy_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_display_environment.c src/game_display_environment_adapter.cpp src/game_display_environment_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_video_mode.c src/game_video_mode_adapter.cpp src/game_video_mode_capture.cpp)

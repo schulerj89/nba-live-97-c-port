@@ -778,6 +778,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    video_mode = period["video_mode_probe"]
+    require((video_mode["program"],video_mode["address"],video_mode["inclusive_end"],video_mode["bytes"],video_mode["instructions"]) == ("GAMEONLY","0x800985CC","0x800985DB",16,4), "Video query provenance drifted")
+    require(video_mode["completed"] and video_mode["parent_completed"] and video_mode["classification"] == "no direct visual effect"
+            and "synthetic GPU and BIOS services" in video_mode["scope"]
+            and (video_mode["scene_display_calls"],video_mode["copy_calls"],video_mode["query_calls"]) == (2,2,2)
+            and (video_mode["source_address"],video_mode["source_word_before"],video_mode["source_word_after"],video_mode["environment_video_byte"]) == (0x800C54AC,1,1,1)
+            and video_mode["commands"] == [0x0500500A,0x0503C064,0x06CDA328,0x07048431,0x0800002E], "Video query native state drifted")
+    for item,pc in zip(video_mode["queries"],[0x80099DE8,0x8009A034]):
+        require((item["call_pc"],item["operations"],item["reads"],item["return_v0"],item["return_mask"],item["return_address"]) == (pc,1,1,1,15,pc+8), "Video query caller/return drifted")
+    (args.frames / "video_mode_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800985CC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":video_mode,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     display_environment = period["display_environment_probe"]
     require((display_environment["program"],display_environment["address"],display_environment["inclusive_end"],display_environment["bytes"],display_environment["instructions"]) == ("GAMEONLY","0x80099CA4","0x8009A153",1200,300), "Display environment provenance drifted")
     require(display_environment["completed"] and display_environment["parent_completed"] and display_environment["classification"] == "no direct visual effect"

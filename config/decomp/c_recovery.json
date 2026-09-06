@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800985CC",
+      "original_name": "Game_VideoMode",
+      "symbol": "nba97_game_video_mode",
+      "source": "src/recovered/game_video_mode.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_video_mode_tests; nba97_game_video_mode_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80099CA4",
       "original_name": "Game_DisplayEnvironment",
       "symbol": "nba97_game_display_environment",
