@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8003066C",
+      "original_name": "Game_TextChainClear",
+      "symbol": "nba97_game_text_chain_clear",
+      "source": "src/recovered/game_text_chain_clear.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_text_chain_clear_tests; nba97_game_text_chain_clear_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8007A410",
       "original_name": "Game_CameraStateLookup",
       "symbol": "nba97_game_camera_state_lookup",

@@ -1300,7 +1300,20 @@ def main():
             and (countdown["call_pc"], countdown["cache_before"], countdown["cache_after"], countdown["generated_table_bytes"], countdown["callbacks"], countdown["sp"], countdown["ra"])
             == (0x80032B18, 7, 65535, 22, 1, 0x801FEFE8, 0x80032B20)
             and (countdown["instruction_count"], countdown["operations"], countdown["reads"], countdown["stores"]) == (52, 34, 17, 16)
-            and countdown["blocked_children"] == ["0x8003066C", "0x80030D18", "0x80094540"], "Countdown natural state drifted")
+            and countdown["blocked_children"] == ["0x80030D18", "0x80094540"], "Countdown natural state drifted")
+    text_clear = countdown["text_chain_clear"]
+    require((text_clear["program"],text_clear["address"],text_clear["inclusive_end"],text_clear["bytes"],text_clear["instructions"])
+            == ("GAMEONLY","0x8003066C","0x800306E7",124,31), "Text-chain provenance drifted")
+    require(text_clear["classification"] == "BLOCKED" and text_clear["completed"] and text_clear["same_parent_memory"]
+            and (text_clear["call_pc"],text_clear["instruction_count"],text_clear["operations"],text_clear["reads"],text_clear["stores"],text_clear["chain_iterations"],text_clear["slot"],text_clear["head_before"],text_clear["head_after"],text_clear["sp"],text_clear["ra"])
+            == (0x8003295C,39,11,8,3,2,201,3,65535,0x801FEFA8,0x80032964)
+            and text_clear["link_flags_before"] == [0x7777,0x8888] and text_clear["link_flags_after"] == [0,0], "Text-chain native state drifted")
+    (args.frames / "text_chain_clear_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8003066C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":text_clear,
+        "classification":"BLOCKED"
+    },indent=2)+"\n",encoding="utf-8")
     (args.frames / "countdown_ui_update_verified.json").write_text(json.dumps({
         "program":"GAMEONLY", "address":"0x8003287C", "driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},

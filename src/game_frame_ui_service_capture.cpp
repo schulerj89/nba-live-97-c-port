@@ -1,6 +1,7 @@
 #include "game_frame_ui_service_capture.h"
 #include "game_frame_ui_service_adapter.h"
 #include "game_countdown_ui_update_adapter.h"
+#include "game_text_chain_clear_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -59,6 +60,7 @@ struct Fixture {
   Nba97GameFrameUiServiceMachine caller{};
   Nba97GameFrameUiServiceBinding binding{};
   Nba97GameCountdownUiUpdateBinding countdown{};
+  Nba97GameTextChainClearBinding textClear{};
   Nba97MatchTickProgress parentProgress{};
   std::vector<Nba97MatchTickCall> services;
   std::vector<Trace> trace;
@@ -98,6 +100,15 @@ struct Fixture {
     countdown.operation_budget = 256;
     countdown.io = countdownChild;
     countdown.user = this;
+    textClear.operation_budget = 64;
+    put(0x800b2048u, 0x80110000u, 4);
+    put(0x80110010u, 0x80150000u, 4);
+    put(0x80110014u, 0x80120000u, 4);
+    put(0x80120192u, 3, 2);
+    put(0x801500d2u, 0x7777, 2);
+    put(0x801500d8u, 5, 2);
+    put(0x80150152u, 0x8888, 2);
+    put(0x80150158u, 0xffff, 2);
     binding.memory = {&region, 1};
     binding.explicit_caller_machine = &caller;
     binding.operation_budget = 32;
@@ -203,15 +214,16 @@ struct Fixture {
     return NBA97_BODY_OK;
   }
 
-  static int countdownChild(void *, const Nba97GameTextMemory *,
+  static int countdownChild(void *opaque, const Nba97GameTextMemory *memory,
                             const Nba97GameCountdownUiUpdateEvent *event,
                             Nba97GameCountdownUiUpdateMachine *machine) {
-    /* Explicit typed clear-text completion; no text renderer is claimed. */
+    auto &f = *static_cast<Fixture *>(opaque);
     check(event->pc == 0x8003295cu && event->delay_slot_pc == 0x80032960u &&
           event->entry == 0x8003066cu && event->argument_count == 1 &&
           machine->registers.gpr[4].word == 0xc9u &&
           machine->registers.gpr[31].word == 0x80032964u);
-    return 1;
+    return nba97_game_text_chain_clear_from_countdown_ui_update(
+        &f.textClear, memory, event, machine);
   }
 
   static int ui(void *opaque, const Nba97GameTextMemory *memory,
@@ -272,16 +284,25 @@ std::string captureGameFrameUiService() {
         p.machine.registers.gpr[31].word == 0x8002ddb4 &&
         p.machine.registers.gpr[2].word == 1);
   const auto &c = f.countdown.progress;
+  const auto &text = f.textClear.progress;
   check(c.completed && f.countdown.completions == 1 &&
         c.callbacks_completed == 1 && !c.active_gate && !c.record_uploaded &&
         f.bytes[f.at(0x800fea2eu, 2)] == 255 &&
         f.bytes[f.at(0x800fea2fu, 1)] == 255);
+  check(text.completed && text.chain_iterations == 2 &&
+        f.textClear.completions == 1 && text.operations == 11 &&
+        f.bytes[f.at(0x801500d2u, 2)] == 0 &&
+        f.bytes[f.at(0x801500d3u, 1)] == 0 &&
+        f.bytes[f.at(0x80150152u, 2)] == 0 &&
+        f.bytes[f.at(0x80150153u, 1)] == 0 &&
+        f.bytes[f.at(0x80120192u, 2)] == 255 &&
+        f.bytes[f.at(0x80120193u, 1)] == 255);
   std::ostringstream o;
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80032B10\",\"inclusive_end\":"
        "\"0x80032BB7\",\"bytes\":168,\"instructions\":42,\"classification\":"
        "\"BLOCKED\",\"scope\":\"independent synthetic actual match-tick "
        "caller; explicit full caller machine; whitelisted typed prerequisite "
-       "services; countdown owner composed; text clear and match-frame completion remain synthetic; no "
+       "services; countdown and text clear owners composed; match-frame completion remains synthetic; no "
        "rendered match "
        "frame\",\"completed\":true,\"parent_completed\":true,\"same_parent_"
        "memory\":true,\"call_pc\":"
@@ -312,7 +333,17 @@ std::string captureGameFrameUiService() {
     << ",\"cache_before\":7,\"cache_after\":65535,\"generated_table_bytes\":22"
     << ",\"sp\":" << c.machine.registers.gpr[29].word
     << ",\"ra\":" << c.machine.registers.gpr[31].word
-    << ",\"blocked_children\":[\"0x8003066C\",\"0x80030D18\",\"0x80094540\"]}"
+    << ",\"blocked_children\":[\"0x80030D18\",\"0x80094540\"],\"text_chain_clear\":{"
+       "\"program\":\"GAMEONLY\",\"address\":\"0x8003066C\",\"inclusive_end\":\"0x800306E7\","
+       "\"bytes\":124,\"instructions\":31,\"classification\":\"BLOCKED\",\"completed\":true,"
+       "\"same_parent_memory\":true,\"call_pc\":" << f.textClear.event.pc
+    << ",\"instruction_count\":" << text.instruction_count
+    << ",\"operations\":" << text.operations << ",\"reads\":" << text.reads
+    << ",\"stores\":" << text.stores << ",\"chain_iterations\":" << text.chain_iterations
+    << ",\"slot\":201,\"head_before\":3,\"head_after\":65535,"
+       "\"link_flags_before\":[30583,34952],\"link_flags_after\":[0,0]"
+    << ",\"sp\":" << text.machine.registers.gpr[29].word
+    << ",\"ra\":" << text.machine.registers.gpr[31].word << "}}"
     << ",\"blocked_children\":[\"0x80031C5C\",\"0x8003066C\","
        "\"0x80032774\"]}";
   return o.str();
