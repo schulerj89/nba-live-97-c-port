@@ -778,6 +778,24 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    overlay = period["camera_overlay_packets_probe"]
+    require((overlay["program"], overlay["address"], overlay["inclusive_end"], overlay["bytes"], overlay["instructions"]) ==
+            ("GAMEONLY", "0x80075D40", "0x80076273", 1332, 333), "camera overlay provenance drifted")
+    require(overlay["completed"] and not overlay["frame_completed"] and overlay["frame_stopped_pc"] == 0x800490E8
+            and overlay["classification"] == "no direct visual effect"
+            and "independent full machine" in overlay["scope"] and "recovered packet linker" in overlay["scope"]
+            and overlay["links"] == 2 and overlay["callbacks"] == 2
+            and (overlay["operations"], overlay["reads"], overlay["stores"]) == (22, 15, 5)
+            and overlay["table_address"] == 0x800F5C50 and overlay["table_before"] == 0 and overlay["packet_before"] == [0x654321, 0xABCDEF]
+            and overlay["table_after"] == 0xFA284 and overlay["packet_after"] == [0, 0xFA25C]
+            and overlay["returned_sp"] == 0x801FF000 and overlay["restored_ra"] == 0x800490D0,
+            "camera overlay native packet state drifted")
+    (args.frames / "camera_overlay_packets_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80075D40", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": overlay,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     clear_table = period["clear_ordering_table_probe"]
     require((clear_table["program"], clear_table["address"], clear_table["inclusive_end"], clear_table["bytes"], clear_table["instructions"]) ==
             ("GAMEONLY", "0x80099960", "0x800999F7", 152, 38), "clear-table provenance drifted")
