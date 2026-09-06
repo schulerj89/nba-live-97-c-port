@@ -3,6 +3,16 @@
   "candidate_directory": ".local/build/ps1/functions",
   "functions": [
     {
+      "binary": "feonly",
+      "address": "0x8003F7C8",
+      "original_name": "Frontend_DispatchState",
+      "symbol": "nba97_frontend_dispatch",
+      "source": "src/recovered/frontend_dispatch.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_dispatch_tests; nba97_frontend_dispatch_integration_tests"
+    },
+    {
       "binary": "gameonly",
       "address": "0x800747B0",
       "original_name": "Game_TeamTacticsUpdate",

@@ -45,10 +45,10 @@
       "scope": "shared_caller",
       "instructions_accounted": 0,
       "instructions_total": 1173,
-      "native_owner": "bounded Setup -> Team Select -> User Setup transitions and state5 Cancel branch at3FCF4..3FD18",
+      "native_owner": "nba97_frontend_dispatch complete C owner; existing native screen transitions remain bounded host adapters",
       "shared_dependencies": ["0x8003D930", "0x8004FCD8", "0x80037010", "0x8003B194", "0x80061674"],
-      "tests_evidence": ["tests/user_setup_session_test.cpp", "config/decomp/team_select_scenarios.json", "docs/frontend_input_workflow.md", "docs/match_snapshot_workflow.md"],
-      "remaining_uncertainty": "Only bounded exhibition transitions and Cancel barrier are implemented; the full1173-instruction dispatcher remains in the denominator. Other modes, complete return/cleanup stack, original runtime and gameplay launch are pending."
+      "tests_evidence": ["tests/user_setup_session_test.cpp", "config/decomp/team_select_scenarios.json", "docs/frontend_input_workflow.md", "docs/match_snapshot_workflow.md", "tests/frontend_dispatch_tests.cpp", "tests/frontend_dispatch_integration_tests.cpp", "docs/frontend_dispatch_workflow.md"],
+      "remaining_uncertainty": "Complete source dispatcher is separately registered in c_recovery.json; instruction credit in this historical frontend-input ledger remains zero. Full child CPU ABI, retained retail frontend lifecycle, GAMELOAD handoff and advancing gameplay remain pending."
     }
   ]
 }

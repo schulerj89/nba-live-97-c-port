@@ -60,9 +60,76 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 98, "native click-through frame count drifted")
+    require(len(states) == 100, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
+    frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
+    fd = frontend_dispatch
+    require(fd["program"] == "FEONLY" and int(fd["address"], 16) == 0x8003F7C8
+            and int(fd["end"], 16) == 0x80040A1B and fd["instructions"] == 1173
+            and fd["source_sha256"] ==
+            "a42d7d2d97ab00ad7ddb214677b743dfd5d98d05119f9e6894fd092a6ccf1b9f",
+            "frontend dispatcher provenance drifted")
+    require(fd["completed"] == fd["accepted"] == fd["result"] == 1
+            and fd["contract_failure"] == 0
+            and [fd[k] for k in ("operations", "reads", "stores", "callbacks",
+                                 "instruction_count")] == [177, 82, 53, 42, 903],
+            "frontend dispatcher did not complete the exact synthetic source path")
+    require([int(fd["entry_call"][k], 16) for k in ("pc", "delay", "ra")] ==
+            [0x800360F4, 0x800360F8, 0x800360FC],
+            "frontend dispatcher source entry boundary drifted")
+    require(fd["before"]["launch"] == fd["after"]["launch"] == 1
+            and fd["before"]["mode"] == 0 and fd["after"]["mode"] == 1
+            and int(fd["before"]["retained_buffer"], 16) == 0x80140000
+            and int(fd["after"]["retained_buffer"], 16) == 0,
+            "accepted frontend mode or cleanup pointer was not published")
+    require(all(fd["before"][k] == fd["after"][k] != 0 for k in
+                ("home_roster_checksum", "away_roster_checksum")),
+            "selected roster records did not reach their original output arrays")
+    require(fd["user_setup"]["accepted_result"] == 6 and
+            fd["user_setup"]["assignments"] == [1, 2, 0, 0, 0, 0, 0, 0],
+            "native input API did not produce User Setup's accepted result")
+    expected_fd_calls = [
+        (0x8003F8C8,0x8003F7B0,2), (0x8003F8DC,0x800770D4,3),
+        (0x8003F8F4,0x80030CDC,0), (0x8003F8FC,0x80030308,0),
+        (0x8003F92C,0x8003D2A4,0), (0x8003F97C,0x800459C8,0),
+        (0x8003FA08,0x80031A88,1), (0x8003FCF4,0x80037010,0),
+        (0x8003FD3C,0x80061674,1), (0x8003FD44,0x80046D24,0),
+        (0x8003FD4C,0x8003E7A8,0), (0x800407E8,0x80028B8C,0),
+        (0x800407F0,0x800804E8,1), (0x800407F8,0x80028B8C,0),
+        (0x80040850,0x8005851C,1), (0x80040868,0x8005851C,1)]
+    expected_fd_calls += [(0x80040900,0x800909A8,3),
+                          (0x80040964,0x800909A8,3)] * 12
+    expected_fd_calls += [(0x800409D8,0x80029DD0,0), (0x800409E0,0x8002FC30,0)]
+    require(len(fd["call_sequence"]) == len(expected_fd_calls),
+            "frontend exit callback count drifted")
+    fd_invocations = {}
+    for actual, (pc, target, argc) in zip(fd["call_sequence"], expected_fd_calls):
+        fd_invocations[pc] = fd_invocations.get(pc, 0) + 1
+        require([int(actual[k], 16) for k in ("pc", "target", "delay")] ==
+                [pc, target, pc + 4] and actual["argc"] == argc and
+                actual["invocation"] == fd_invocations[pc],
+                "frontend cleanup/roster call order or invocation drifted")
+    fd_frames = ["frontend-dispatch-before", "frontend-dispatch-after"]
+    require(all(name in by_id for name in fd_frames) and
+            all(by_id[name]["page"] == "User Setup" for name in fd_frames),
+            "frontend source probe is missing the native User Setup boundary")
+    fd_hashes = [ppm_hash(args.frames / f"{name}.ppm") for name in fd_frames]
+    require(fd_hashes[0] == fd_hashes[1],
+            "synthetic CPU dispatcher probe unexpectedly changed the native menu")
+    require(fd["visual_class"] == "UI/menu" and not fd["gameplay_shown"] and
+            "80028B68" in fd["next_unbound_boundary"] and
+            "GAMELOAD" in fd["next_unbound_boundary"],
+            "dispatcher receipt lost the exact unbound loader boundary")
+    fd_verified = {
+        "program":"FEONLY", "address":"0x8003F7C8", "end":"0x80040A1B",
+        "driver_frame_count":len(states), "source_receipt":frontend_dispatch,
+        "before_sha256":fd_hashes[0], "after_sha256":fd_hashes[1],
+        "visual_status":"Gameplay shown: BLOCKED",
+        "reason":"Native accepted User Setup remains pending; original frontend exit services and GAMELOAD transfer are unbound."}
+    (args.frames / "frontend_dispatch_verified.json").write_text(
+        json.dumps(fd_verified, indent=2) + "\n", encoding="utf-8")
+
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
     require([by_id[name]["page"] for name in required] ==
@@ -3039,7 +3106,7 @@ def main():
             "SetRCnt rejected index 3 while StartRCnt still unmasked VBlank before returning false" in trace and
             "both raw returns were ignored" in trace and
             "did not install a native OS interrupt or synthesize VBlank cadence" in trace and
-            "98 captured frontend frames were unchanged" in trace and
+            "100 captured frontend frames were unchanged" in trace and
             "0x800914D8 initialized the source game clock" in trace and
             "cold guard 0x800C4AA4 changed 0->1" in trace and
             "eight callback words at 0x800D6DEC were cleared" in trace and
@@ -3056,7 +3123,7 @@ def main():
             "ZSF3 0x0155, ZSF4 0x0100, H 1000, DQA -4194, DQB 0x01400000, OFX 0 and OFY 0" in trace and
             "matrices, FIFOs, FLAG and the other 25 control registers remain live exactly as in GAMEONLY" in trace and
             "establishes later court/player/net projection inputs" in trace and
-            "does not submit a GPU packet or change any of the 98 captured frontend frames" in trace and
+            "does not submit a GPU packet or change any of the 100 captured frontend frames" in trace and
             "0x800A584C refreshed the gameplay clock baseline" in trace and
             "captured gp+0x164 (0x800D7B2C) as 0" in trace and
             "0x800A5810 leaf to sample retained clock 0" in trace and
@@ -3082,7 +3149,7 @@ def main():
             "all four o32 fifth arguments executed as mapped JAL delay-slot stores" in trace and
             "dtd/isbg are changed in two adjacent DRAWENV records never passed to SetDefDrawEnv" in trace and
             "RGB is cleared only in the two initialized records" in trace and
-            "does not draw, so none of the 98 natively captured frontend frames changed" in trace and
+            "does not draw, so none of the 100 natively captured frontend frames changed" in trace and
             "0x800997E4 executed PsyQ MoveImage twice" in trace and
             "call PCs 0x80029A94 and 0x80029AA4" in trace and
             "RECT(512,0,512,256) submitted copies" in trace and

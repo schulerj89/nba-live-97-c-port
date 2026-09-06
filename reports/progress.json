@@ -46,7 +46,7 @@
     "evidence_tracked_bytes": 84132,
     "evidence_coverage_percent": 4.46,
     "evidence_byte_coverage_percent": 8.06,
-    "complete_functions": 105,
+    "complete_functions": 106,
     "matching_functions": 0,
     "status_counts": {
       "behavior_verified": 151,
@@ -54,9 +54,9 @@
       "researched": 11
     },
     "scope_counts": {
-      "complete": 105,
+      "complete": 106,
       "full": 1,
-      "partial": 59
+      "partial": 58
     },
     "subsystems": {
       "assets": {
