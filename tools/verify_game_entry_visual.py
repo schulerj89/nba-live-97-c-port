@@ -1257,6 +1257,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": collision,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    frame_ui = period["frame_ui_service_probe"]
+    require((frame_ui["program"],frame_ui["address"],frame_ui["inclusive_end"],frame_ui["bytes"],frame_ui["instructions"]) == ("GAMEONLY","0x80032B10","0x80032BB7",168,42), "Frame UI provenance drifted")
+    require(frame_ui["classification"] == "BLOCKED" and "independent synthetic actual match-tick caller" in frame_ui["scope"] and "no rendered match frame" in frame_ui["scope"], "Frame UI scope drifted")
+    require(frame_ui["completed"] and frame_ui["parent_completed"] and frame_ui["same_parent_memory"]
+            and (frame_ui["call_pc"],frame_ui["instruction_count"],frame_ui["reads"],frame_ui["stores"],frame_ui["callbacks"],frame_ui["prerequisite_calls"],frame_ui["synthetic_frame_completions"],frame_ui["v0"],frame_ui["sp"],frame_ui["ra"]) == (0x8002DDAC,18,3,1,1,31,1,1,0x801FF000,0x8002DDB4)
+            and frame_ui["hilo_known_masks"] == [7,11]
+            and frame_ui["blocked_children"] == ["0x8003287C","0x80031C5C","0x8003066C","0x80032774"], "Frame UI natural state drifted")
+    order=frame_ui["ordered_checkpoint_indices"]
+    require(len(order)==6 and all(a<b for a,b in zip(order,order[1:])), "Frame UI source order drifted")
+    (args.frames / "frame_ui_service_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80032B10","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":frame_ui,
+        "classification":"BLOCKED"
+    },indent=2)+"\n",encoding="utf-8")
     phase = period["camera_phase_select_probe"]
     require((phase["program"],phase["address"],phase["inclusive_end"],phase["bytes"],phase["instructions"]) == ("GAMEONLY","0x8007E26C","0x8007E463",504,126), "Camera phase provenance drifted")
     require(phase["classification"] == "no direct visual effect" and "independent synthetic" in phase["scope"], "Camera phase scope drifted")
