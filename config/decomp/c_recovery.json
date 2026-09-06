@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80046C2C",
+      "original_name": "Game_PregameSelectionScreen",
+      "symbol": "nba97_game_pregame_selection_screen",
+      "source": "src/recovered/game_pregame_selection_screen.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_pregame_selection_screen_tests; nba97_game_pregame_selection_screen_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80044550",
       "original_name": "Game_PregameMatchCard",
       "symbol": "nba97_game_pregame_match_card",

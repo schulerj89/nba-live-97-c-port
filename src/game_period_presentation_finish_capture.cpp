@@ -1,5 +1,6 @@
 #include "game_period_presentation_finish_capture.h"
 #include "game_pregame_match_card_capture.h"
+#include "game_pregame_selection_screen_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -18,12 +19,12 @@ std::uint32_t word(const Nba97GameTextMemory& m,std::uint32_t a,unsigned width,b
 struct Children {
   std::vector<std::uint32_t> pcs;
   GamePregameMatchCardCapture card;
+  GamePregameSelectionScreenCapture selection;
   static int call(void*u,const Nba97GameTextMemory* memory,const Nba97GamePeriodPresentationFinishEvent* e,Nba97GamePeriodPresentationFinishMachine* m){
     auto&self=*static_cast<Children*>(u);self.pcs.push_back(e->pc);
     if(word(*memory,0x800eb680u,1)!=0 || word(*memory,0x80109afcu,4)!=1 || word(*memory,0x80109ae4u,4)!=0x80170000u)return 0;
     if(e->entry==0x80044550u)return self.card.dispatch(memory,e,m);
-    // Explicit selection-screen response; it does not draw a screen.
-    m->registers.gpr[2]={e->entry,15};return 1;
+    return self.selection.dispatch(memory,e,m);
   }
 };
 }
@@ -36,7 +37,7 @@ bool GamePeriodPresentationFinishCapture::dispatch(const Nba97GameTextMemory* me
   if(nba97_game_period_presentation_finish_from_first_period_startup(&b,memory,event,registers)!=1)return false;
   const auto&p=b.progress;
   if(!p.completed||children.pcs!=std::vector<std::uint32_t>{0x8002ddf8,0x8002de14}||word(*memory,0x800eb680u,1)!=0||word(*memory,0x80109afcu,4)!=0||word(*memory,0x80109ae4u,4)!=0x80170000u)throw std::runtime_error("presentation capture state drifted");
-  std::ostringstream o;o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x8002DDCC\",\"inclusive_end\":\"0x8002DE33\",\"bytes\":104,\"instructions\":26,\"classification\":\"no direct visual effect\",\"scope\":\"actual first-period caller on same synthetic retained memory; typed presentation children, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"call_pc\":"<<event->pc<<",\"flag_before\":"<<flag<<",\"flag_after\":0,\"active_after\":0,\"published_word\":"<<word(*memory,0x80109ae4u,4)<<",\"gate\":"<<p.gate_flag.word<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"callbacks\":"<<p.callbacks_completed<<",\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"returned_value\":"<<p.returned_value.word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"],\"call_pcs\":["<<children.pcs[0]<<','<<children.pcs[1]<<"]}";
-  auto text=o.str();text.pop_back();receipt=text+",\"pregame_match_card\":"+children.card.receipt+"}";return true;
+  std::ostringstream o;o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x8002DDCC\",\"inclusive_end\":\"0x8002DE33\",\"bytes\":104,\"instructions\":26,\"classification\":\"no direct visual effect\",\"scope\":\"actual first-period caller on same synthetic retained memory; recovered pregame owners with typed visual dependencies, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"call_pc\":"<<event->pc<<",\"flag_before\":"<<flag<<",\"flag_after\":0,\"active_after\":0,\"published_word\":"<<word(*memory,0x80109ae4u,4)<<",\"gate\":"<<p.gate_flag.word<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"callbacks\":"<<p.callbacks_completed<<",\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"returned_value\":"<<p.returned_value.word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"],\"call_pcs\":["<<children.pcs[0]<<','<<children.pcs[1]<<"]}";
+  auto text=o.str();text.pop_back();receipt=text+",\"pregame_match_card\":"+children.card.receipt+",\"pregame_selection_screen\":"+children.selection.receipt+"}";return true;
 }
 }

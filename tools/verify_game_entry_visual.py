@@ -1406,7 +1406,7 @@ def main():
     for i, noop in enumerate(audio_noops):
         require((noop["program"],noop["address"],noop["inclusive_end"],noop["bytes"],noop["instructions"]) == ("GAMEONLY","0x8002A254","0x8002A25B",8,2), "Audio no-op provenance drifted")
         require(noop["completed"] and noop["same_parent_memory"] and noop["memory_and_registers_unchanged"] and noop["classification"] == "no direct visual effect"
-                and (noop["call_pc"],noop["operations"],noop["accesses"],noop["a0"],noop["v0"],noop["return_address"],noop["sp"]) == (0x80067434,0,0,1,[0,0x80046C2C][i],0x8006743C,0x801FFED0)
+                and (noop["call_pc"],noop["operations"],noop["accesses"],noop["a0"],noop["v0"],noop["return_address"],noop["sp"]) == (0x80067434,0,0,1,[0,0x8008048C][i],0x8006743C,0x801FFED0)
                 and noop["hilo_known_masks"] == [0,0], "Audio no-op state drifted")
     (args.frames / "period_audio_noop_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x8002A254","driver_frame_count":len(states),
@@ -1445,7 +1445,7 @@ def main():
     finish = finish_cases[1]
     require((finish["program"],finish["address"],finish["inclusive_end"],finish["bytes"],finish["instructions"]) == ("GAMEONLY","0x8002DDCC","0x8002DE33",104,26), "Presentation finish provenance drifted")
     require(finish["completed"] and finish["same_parent_memory"] and finish["classification"] == "no direct visual effect"
-            and (finish["call_pc"],finish["flag_before"],finish["flag_after"],finish["active_after"],finish["published_word"],finish["gate"],finish["operations"],finish["reads"],finish["stores"],finish["callbacks"],finish["return_address"],finish["sp"],finish["returned_value"]) == (0x80067424,255,0,0,0x80170000,0,10,3,5,2,0x8006742C,0x801FFED0,0x80046C2C)
+            and (finish["call_pc"],finish["flag_before"],finish["flag_after"],finish["active_after"],finish["published_word"],finish["gate"],finish["operations"],finish["reads"],finish["stores"],finish["callbacks"],finish["return_address"],finish["sp"],finish["returned_value"]) == (0x80067424,255,0,0,0x80170000,0,10,3,5,2,0x8006742C,0x801FFED0,0x8008048C)
             and finish["hilo_known_masks"] == [0,0] and finish["call_pcs"] == [0x8002DDF8,0x8002DE14], "Presentation finish state drifted")
     (args.frames / "period_presentation_finish_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x8002DDCC","driver_frame_count":len(states),
@@ -1464,6 +1464,19 @@ def main():
         "program":"GAMEONLY","address":"0x80044550","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":card,
+        "classification":"BLOCKED","visible_screen":"User Setup; pregame renderer unresolved"
+    },indent=2)+"\n",encoding="utf-8")
+    selection = finish["pregame_selection_screen"]
+    require((selection["program"],selection["address"],selection["inclusive_end"],selection["bytes"],selection["instructions"]) == ("GAMEONLY","0x80046C2C","0x80046F67",828,207), "Pregame selection provenance drifted")
+    require(selection["completed"] and selection["same_parent_memory"] and selection["classification"] == "BLOCKED"
+            and (selection["call_pc"],selection["polls"],selection["redraws"],selection["clock_reads"],selection["stream_pumps"],selection["menu_calls"],selection["clock"],selection["controller_after"],selection["skip_after"],selection["return_address"],selection["sp"],selection["returned_value"]) == (0x8002DE14,3,2,2,3,1,100,0x1234,0,0x8002DE1C,0x801FFEB8,0x8008048C)
+            and selection["hilo_known_masks"] == [0,0] and selection["input_fixture"] == [4,32,128] and selection["selection_pairs"] == [0,12,1,13]
+            and (selection["operations"],selection["reads"],selection["stores"],selection["callbacks"]) == (60,22,12,26)
+            and selection["call_pcs"] == [0x80046C54,0x80046C70,0x80046C7C,0x80046CA8,0x80046CB0,0x80046CB8,0x80046CCC,0x80046CD8,0x80046E0C,0x80046C7C,0x80046CA8,0x80046CB0,0x80046CB8,0x80046CCC,0x80046CD8,0x80046D68,0x80046D84,0x80046ED8,0x80046CCC,0x80046CD8,0x80046ED8,0x80046F08,0x80046F14,0x80046F1C,0x80046F24,0x80046F2C], "Pregame selection composed CPU state drifted")
+    (args.frames / "pregame_selection_screen_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80046C2C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":selection,
         "classification":"BLOCKED","visible_screen":"User Setup; pregame renderer unresolved"
     },indent=2)+"\n",encoding="utf-8")
     announcements = [case["first_period_startup"]["announcement"] for case in first_cases]
