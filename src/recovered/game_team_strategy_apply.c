@@ -645,6 +645,10 @@ int nba97_game_team_strategy_apply(
     stop(run, UINT32_C(0x800659e8), 0u, 0u);
     return NBA97_TEXT_UNKNOWN;
   }
+  if ((R(NBA97_MATCH_INITIALIZE_RA).word & 3u) != 0u) {
+    stop(run, UINT32_C(0x800659e8), R(NBA97_MATCH_INITIALIZE_RA).word, 0u);
+    return NBA97_TEXT_ALIGNMENT_TRAP;
+  }
   progress->completed = 1u;
   stop(run, 0u, 0u, 0u);
   return NBA97_TEXT_COMPLETE;

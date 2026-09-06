@@ -1,3 +1,4 @@
+#include "game_substitution_candidate_select_capture.h"
 #include "game_team_strategy_apply_capture.h"
 #include "game_team_strategy_apply_adapter.h"
 #include <array>
@@ -17,11 +18,13 @@ std::uint32_t memoryWord(const Nba97GameTextMemory& memory,std::uint32_t address
 }
 namespace {
 struct Child {
+ GameSubstitutionCandidateSelectCapture candidate;
  Nba97GameTeamStrategyApplyEvent event{}; std::array<std::uint32_t,4> args{}; unsigned calls=0;
- static int service(void* opaque,const Nba97GameTextMemory*,const Nba97GameTeamStrategyApplyEvent* event,Nba97GameTeamStrategyApplyMachine* machine){
+ static int service(void* opaque,const Nba97GameTextMemory* memory,const Nba97GameTeamStrategyApplyEvent* event,Nba97GameTeamStrategyApplyMachine* machine){
   auto&self=*static_cast<Child*>(opaque);self.event=*event;++self.calls;
   for(unsigned i=0;i<4;++i)self.args[i]=machine->registers.gpr[4+i].word;
-  // Explicit diagnostic child result, not a recovered binding/substitution service.
+  if(event->entry==0x80064dbcu)return self.candidate.dispatch(memory,event,machine);
+  // Explicit diagnostic result for the remaining binding service.
   machine->registers.gpr[2]={event->entry,15}; return 1;
  }
 };
@@ -49,9 +52,9 @@ bool GameTeamStrategyApplyCapture::dispatch(const Nba97GameTextMemory* memory,co
  if(!index&&(child.args[0]!=team||child.args[1]!=0||child.args[2]!=0x8001f7ecu||child.args[3]!=0))throw std::runtime_error("strategy capture direct child args");
  if(index&&(child.args[0]!=lineup5||child.args[1]!=lineup11))throw std::runtime_error("strategy capture scan child args");
  std::ostringstream o;o<<"{\"call_pc\":"<<event->pc<<",\"team\":"<<team<<",\"side\":"<<side<<",\"injury\":"<<(index?5:0)<<",\"count_before\":"<<before<<",\"count_after\":"<<after
- <<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"fields_verified\":true,\"lineup_verified\":true,\"child_pc\":"<<child.event.pc<<",\"child_entry\":"<<child.event.entry<<",\"child_args\":["<<child.args[0]<<','<<child.args[1]<<','<<child.args[2]<<','<<child.args[3]<<"],\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"]}";
+ <<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"fields_verified\":true,\"lineup_verified\":true,\"child_pc\":"<<child.event.pc<<",\"child_entry\":"<<child.event.entry<<",\"child_args\":["<<child.args[0]<<','<<child.args[1]<<','<<child.args[2]<<','<<child.args[3]<<"],\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"],\"candidate_select\":"<<(child.candidate.receipt.empty()?"null":child.candidate.receipt)<<"}";
  calls.push_back(o.str());
- if(calls.size()==2)receipt="{\"program\":\"GAMEONLY\",\"address\":\"0x80065820\",\"inclusive_end\":\"0x800659EF\",\"bytes\":464,\"instructions\":116,\"classification\":\"no direct visual effect\",\"scope\":\"actual initializer/reset/roster/team-header/strategy owners on same retained memory; runtime-generated strategy/injury inputs, typed binding/substitution services, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"calls\":["+calls[0]+","+calls[1]+"]}";
+ if(calls.size()==2)receipt="{\"program\":\"GAMEONLY\",\"address\":\"0x80065820\",\"inclusive_end\":\"0x800659EF\",\"bytes\":464,\"instructions\":116,\"classification\":\"no direct visual effect\",\"scope\":\"actual initializer/reset/roster/team-header/strategy owners on same retained memory; runtime-generated strategy/injury inputs, real candidate selection, typed binding service, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"calls\":["+calls[0]+","+calls[1]+"]}";
  return true;
 }
 }

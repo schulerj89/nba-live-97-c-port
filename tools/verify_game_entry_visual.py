@@ -430,6 +430,18 @@ def main():
         "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":rewind,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    candidate = strategy["calls"][0]["candidate_select"]
+    require((candidate["program"],candidate["address"],candidate["inclusive_end"],candidate["bytes"],candidate["instructions"]) == ("GAMEONLY","0x80064DBC","0x8006506F",692,173), "Substitution-candidate provenance drifted")
+    require(candidate["completed"] and candidate["same_parent_memory"] and candidate["classification"] == "no direct visual effect"
+            and (candidate["call_pc"],candidate["team"],candidate["count"],candidate["injury_status"],candidate["callbacks"],candidate["return_value"],candidate["return_address"],candidate["sp"]) == (0x800659C4,0x8001EDF4,3,65534,0,0,0x800659CC,0x807FFF58)
+            and (candidate["operations"],candidate["reads"],candidate["stores"]) == (27,26,1) and candidate["hilo_known_masks"] == [0,0]
+            and strategy["calls"][1]["candidate_select"] is None, "Substitution-candidate source state drifted")
+    (args.frames / "substitution_candidate_select_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80064DBC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":candidate,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     audio = initialize["audio_initialize"]
     require((audio["program"], audio["address"], audio["inclusive_end"],
              audio["bytes"], audio["instructions"], audio["call_pc"]) ==

@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80064DBC",
+      "original_name": "Game_SubstitutionCandidateSelect",
+      "symbol": "nba97_game_substitution_candidate_select",
+      "source": "src/recovered/game_substitution_candidate_select.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_substitution_candidate_select_tests; nba97_game_substitution_candidate_select_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80076AD0",
       "original_name": "Game_MatchBufferRewind",
       "symbol": "nba97_game_match_buffer_rewind",
