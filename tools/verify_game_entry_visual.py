@@ -1318,13 +1318,26 @@ def main():
             == (0x80032AE4, 25, 11, 13, 1, 1, 0x801FEFC0, 0x80032AEC)
             and (upload["header_before"], upload["header_after"], upload["cache_before"], upload["cache_after"])
             == (0x23, 0x2B, 65535, 2) and upload["rectangle"] == [0x340, 0xF0, 0x10, 1]
-            and upload["blocked_children"] == ["0x800944F4", "0x800A3BF8"], "Image upload natural state drifted")
+            and upload["blocked_children"] == ["0x800A3BF8"], "Image upload natural state drifted")
     (args.frames / "image_record_upload_verified.json").write_text(json.dumps({
         "program":"GAMEONLY", "address":"0x80094540", "driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes, "cpu_receipt":"loop_entry_trace.json", "state":upload,
         "classification":"BLOCKED"
     }, indent=2)+"\n", encoding="utf-8")
+    submit = upload["rectangle_upload_submit"]
+    require((submit["program"],submit["address"],submit["inclusive_end"],submit["bytes"],submit["instructions"])
+            == ("GAMEONLY","0x800944F4","0x8009453F",76,19), "Rectangle submit provenance drifted")
+    require(submit["classification"] == "BLOCKED" and submit["completed"] and submit["same_parent_memory"]
+            and (submit["call_pc"],submit["instruction_count"],submit["operations"],submit["reads"],submit["stores"],submit["callbacks"],submit["sp"],submit["ra"],submit["pending_before"],submit["pending_after"])
+            == (0x8009464C,19,9,3,4,2,0x801FEF90,0x80094654,0,1)
+            and submit["blocked_children"] == ["0x80094440","0x8009971C"], "Rectangle submit state drifted")
+    (args.frames / "rectangle_upload_submit_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800944F4","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":submit,
+        "classification":"BLOCKED"
+    },indent=2)+"\n",encoding="utf-8")
     require((countdown["program"], countdown["address"], countdown["inclusive_end"], countdown["bytes"], countdown["instructions"])
             == ("GAMEONLY", "0x8003287C", "0x80032B0F", 660, 165), "Countdown provenance drifted")
     require(countdown["classification"] == "BLOCKED" and countdown["completed"] and countdown["same_parent_memory"]

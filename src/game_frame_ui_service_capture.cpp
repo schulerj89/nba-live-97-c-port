@@ -3,6 +3,7 @@
 #include "game_countdown_ui_update_adapter.h"
 #include "game_text_chain_clear_adapter.h"
 #include "game_image_record_upload_adapter.h"
+#include "game_rectangle_upload_submit_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -268,6 +269,8 @@ std::size_t traceIndex(const Fixture &f, unsigned kind, U pc) {
 
 struct UploadFixture : Fixture {
   Nba97GameImageRecordUploadBinding upload{};
+  Nba97GameRectangleUploadSubmitBinding submit{};
+  std::vector<U> submitCalls;
   Nba97GameCountdownUiUpdateProgress active{};
   std::array<std::uint16_t, 4> rectangle{};
   unsigned textCalls = 0;
@@ -280,6 +283,10 @@ struct UploadFixture : Fixture {
     put(0x80021d92, 1, 1);
     put(0x800fea2e, 0xffff, 2);
     put(0x800249e8, 0x1555, 2);
+    submit.operation_budget = 32;
+    submit.io = submitChild;
+    submit.user = this;
+    put(0x800d7b14, 0, 4);
     upload.operation_budget = 128;
     upload.io = uploadChild;
     upload.user = this;
@@ -301,7 +308,7 @@ struct UploadFixture : Fixture {
     machine->registers.gpr[2] = {0, 15};
     return 1;
   }
-  static int uploadChild(void *opaque, const Nba97GameTextMemory *,
+  static int uploadChild(void *opaque, const Nba97GameTextMemory *memory,
                          const Nba97GameImageRecordUploadEvent *event,
                          Nba97GameImageRecordUploadMachine *machine) {
     auto &f = *static_cast<UploadFixture *>(opaque);
@@ -310,7 +317,26 @@ struct UploadFixture : Fixture {
     ++f.uploadCalls;
     for (unsigned i = 0; i < 4; ++i)
       f.rectangle[i] = std::uint16_t(f.get(machine->registers.gpr[4].word + 2 * i, 2));
-    // Observe the original descriptor; the unresolved upload stays typed.
+    return nba97_game_rectangle_upload_submit_from_image_record_upload(
+        &f.submit, memory, event, machine);
+  }
+  static int submitChild(void *opaque, const Nba97GameTextMemory *,
+                         const Nba97GameRectangleUploadSubmitEvent *event,
+                         Nba97GameRectangleUploadSubmitMachine *machine) {
+    auto &f = *static_cast<UploadFixture *>(opaque);
+    const bool first = f.submitCalls.empty();
+    check(event->pc == (first ? 0x80094508u : 0x80094514u) &&
+          event->delay_slot_pc == event->pc + 4 &&
+          event->entry == (first ? 0x80094440u : 0x8009971cu) &&
+          event->argument_count == (first ? 1 : 2) &&
+          machine->registers.gpr[31].word == event->pc + 8 &&
+          f.get(0x800d7b14, 4) == 0);
+    for (unsigned i = 0; i < 4; ++i)
+      check(f.get(machine->registers.gpr[4].word + 2 * i, 2) == f.rectangle[i]);
+    if (!first)
+      check(machine->registers.gpr[5].word == 0x800fb5d0u);
+    f.submitCalls.push_back(event->entry);
+    // Explicit typed prerequisites; no GPU upload or rendered-frame claim.
     return 1;
   }
 };
@@ -330,11 +356,18 @@ std::string captureImageRecordUpload() {
         f.upload.completions == 1 && f.textCalls == 1 && f.uploadCalls == 1 &&
         f.get(0x800fb5c0, 1) == 0x2b && f.get(0x800fea2e, 2) == 2 &&
         f.rectangle == (std::array<std::uint16_t, 4>{0x340, 0xf0, 0x10, 1}));
+  const auto &q = f.submit.progress;
+  check(q.completed && f.submit.completions == 1 && q.instruction_count == 19 &&
+        q.operations == 9 && q.reads == 3 && q.stores == 4 &&
+        q.callbacks_completed == 2 && f.get(0x800d7b14, 4) == 1 &&
+        q.machine.registers.gpr[29].word == 0x801fef90 &&
+        q.machine.registers.gpr[31].word == 0x80094654 &&
+        f.submitCalls == (std::vector<U>{0x80094440, 0x8009971c}));
   std::ostringstream o;
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80094540\","
        "\"inclusive_end\":\"0x800946A3\",\"bytes\":356,\"instructions\":89,"
        "\"classification\":\"BLOCKED\",\"scope\":\"independent synthetic active countdown caller; "
-       "explicit full entry machine; typed text and upload services; no rendered match frame\","
+       "explicit full entry machine; rectangle submit owner composed; typed text and GPU services; no rendered match frame\","
        "\"completed\":true,\"parent_completed\":true,\"same_parent_memory\":true,"
        "\"call_pc\":" << f.upload.event.pc << ",\"instruction_count\":" << p.instruction_count
     << ",\"operations\":" << p.operations << ",\"reads\":" << p.reads
@@ -342,7 +375,15 @@ std::string captureImageRecordUpload() {
     << ",\"records\":" << p.records_visited << ",\"sp\":" << p.machine.registers.gpr[29].word
     << ",\"ra\":" << p.machine.registers.gpr[31].word
     << ",\"header_before\":35,\"header_after\":43,\"cache_before\":65535,\"cache_after\":2,"
-       "\"rectangle\":[832,240,16,1],\"blocked_children\":[\"0x800944F4\",\"0x800A3BF8\"]}";
+       "\"rectangle\":[832,240,16,1],\"blocked_children\":[\"0x800A3BF8\"],"
+       "\"rectangle_upload_submit\":{\"program\":\"GAMEONLY\",\"address\":\"0x800944F4\","
+       "\"inclusive_end\":\"0x8009453F\",\"bytes\":76,\"instructions\":19,\"classification\":\"BLOCKED\","
+       "\"completed\":true,\"same_parent_memory\":true,\"call_pc\":" << f.submit.event.pc
+    << ",\"instruction_count\":" << q.instruction_count << ",\"operations\":" << q.operations
+    << ",\"reads\":" << q.reads << ",\"stores\":" << q.stores
+    << ",\"callbacks\":" << q.callbacks_completed << ",\"sp\":" << q.machine.registers.gpr[29].word
+    << ",\"ra\":" << q.machine.registers.gpr[31].word
+    << ",\"pending_before\":0,\"pending_after\":1,\"blocked_children\":[\"0x80094440\",\"0x8009971C\"]}}";
   return o.str();
 }
 

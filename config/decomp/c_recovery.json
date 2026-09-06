@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800944F4",
+      "original_name": "Game_RectangleUploadSubmit",
+      "symbol": "nba97_game_rectangle_upload_submit",
+      "source": "src/recovered/game_rectangle_upload_submit.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_rectangle_upload_submit_tests; nba97_game_rectangle_upload_submit_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8007A468",
       "original_name": "Game_CameraRemainderGate",
       "symbol": "nba97_game_camera_remainder_gate",
