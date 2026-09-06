@@ -44,25 +44,6 @@ struct Fixture {
 int main(){
     Nba97GameTipoffReceipt r{};
     {
-        Fixture f;f.context.call=nullptr;
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0x12345678,0,&r)==NBA97_TIPOFF_PENDING);
-        check(r.stopped_pc==0x8005bca4&&!r.completed&&r.stores==15);
-        check(f.get(0x800fdb90,2)==0x81&&f.get(0x800fdbd0,2)==0);
-        check(f.stores[4].address==E+5*244+0xb4&&f.stores[6].address==f.stores[4].address);
-        check(f.get(E+4*244+0x1a,1)==7); // seed4 ->8 ->side0+3+1.
-    }
-    for(uint32_t slot: {T,T+20}){
-        Fixture f;for(unsigned i=0;i<4;++i)f.known[slot-0x80000000+i]=0;
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0,1,&r)==NBA97_TIPOFF_UNKNOWN);
-        check(r.stopped_pc==(slot==T?0x8006095cu:0x80060958u));
-        check(r.stores==(slot==T?5u:4u)&&f.get(0x800fe880,2)==1&&f.get(0x800fdb72,2)==1);
-    }
-    {
-        Fixture f;f.known[0xfdbd2]=f.known[0xfdbd3]=0;
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0,0,&r)==NBA97_TIPOFF_UNKNOWN);
-        check(r.stores==1&&r.stopped_pc==0x800608bc&&f.get(0x800fdb88,2)==1);
-    }
-    {
         Fixture f;for(unsigned i=0;i<4;++i)f.known[T+16-0x80000000+i]=0;
         check(nba97_game_tipoff_release(&f.context,E,&r)==NBA97_TIPOFF_UNKNOWN);
         check(r.stopped_pc==0x8005bc94&&r.stores==4&&f.get(0x800fdc00,2)==2&&f.get(0x800fdc02,2)==65535);
@@ -77,35 +58,9 @@ int main(){
         uint32_t rng=seed?seed:0xa5a5;rng=((rng<<1)^((rng&0x4000)?0x1d87:0))&65535;
         const uint32_t index=side+3+((rng&8)?1:0);
         f.put(T+index*4,E+2*244,4);
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0x12345678,side,&r)==1);
-        check(r.completed&&r.tip_transition&&f.get(0x800fdb90,2)==0x82&&f.get(0x800fe884,2)==3);
+        check(nba97_game_tipoff_release(&f.context,E,&r)==1);
         check(f.calls[0].owner==0x80058610&&f.calls[0].argument[1]==E+2*244);
-        check(f.calls[1].argument[0]==(side?10u:12u));
-        check(f.get(0x800fdc40,4)==0x8001eeb8&&f.get(0x8001edee,2)==rng);
-        check(f.stores.back().pc==0x80060cbc);
-    }
-    {
-        Fixture f;f.put(E+0x46,0x27,2);f.redirect=E+244;f.put(E+244+0x46,0x27,2);
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0,0,&r)==1);
-        check(f.calls.size()==4&&f.calls[2].argument[0]==E&&f.calls[3].argument[0]==E+244);
-    }
-    {
-        Fixture f;f.poison=E+0x46;
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0,0,&r)==NBA97_TIPOFF_ARGUMENT);
-        check(r.stopped_pc==0x8006099c&&f.get(0x800fdb90,2)==0x81&&f.calls.size()==2);
-    }
-    {
-        Fixture f;f.known[E+4-0x80000000]=f.known[E+5-0x80000000]=0;
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0,0,&r)==1);
-        check(f.known[0xfdbd0]==0&&f.known[0xfdbd1]==0);
-    }
-    for(uint32_t target: {65535u,0u})for(uint32_t phase: {0u,0x81u,0x82u})for(uint32_t mode: {0u,3u}){
-        if(target==65535&&phase==0x81)continue;
-        Fixture f;f.put(0x800fdbd2,target,2);f.put(0x800fdb90,phase,2);f.put(0x800fe884,mode,2);f.put(B+0x18,765,2);
-        check(nba97_game_tipoff_after_acquire(&f.context,E,B,0x12345678,0,&r)==1);
-        check(!r.tip_transition&&f.calls.size()==1&&f.calls[0].owner==0x80058260);
-        check(f.get(0x800fdc40,4)==0x12345678&&f.get(B+0x18,2)==0);
-        check(f.get(0x800fdb90,2)==((target==65535&&phase==0x82&&!mode)?0x82u:0u));
+        check(f.get(0x8001edee,2)==rng);
     }
     {
         Fixture f;f.put(E+0x9a,1,2);f.put(E+0x10,0x7fffffff,4);

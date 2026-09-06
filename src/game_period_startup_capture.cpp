@@ -1,5 +1,6 @@
 #include "game_period_startup_capture.h"
 #include "game_actor_resume_capture.h"
+#include "game_ball_actor_contact_capture.h"
 #include "game_period_startup_adapter.h"
 #include "game_first_period_startup_adapter.h"
 #include "game_late_period_limits_adapter.h"
@@ -139,7 +140,8 @@ static std::string capturePeriodFixture(int first_flag) {
         o<<"],\"marker\":"<<f.get(0x800fdb94u,2)<<",\"presentation_halfword\":"<<f.get(0x800fdb4eu,2)
          <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<",\"announcement\":"<<f.announcement.receipt<<"}";
     } else o<<",\"zero_period_cases\":["<<capturePeriodFixture(0)<<','<<capturePeriodFixture(255)<<']'
-            <<",\"actor_resume_period_probe\":"<<captureGameActorResumePeriod();
+            <<",\"actor_resume_period_probe\":"<<captureGameActorResumePeriod()
+            <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact();
     o<<"}";
     return o.str();
 }

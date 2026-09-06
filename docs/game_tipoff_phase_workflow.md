@@ -46,11 +46,12 @@ path and must not be turned into a successful catch.
 | `nba97_game_tipoff_body_contact` | Complete `60008`; signed16 argument narrowing, ground override, classification and reached `5FC88` call. |
 | `nba97_game_tipoff_contact` | Complete `601B8/60240`; publishes FDC30 before reading hand geometry, then calls the owned geometry helpers. |
 | `nba97_game_tipoff_release` | Complete `5BC34` and `2AB70`; publishes receiver/actor/RNG effects, then requires actual `58610`. |
-| `nba97_game_tipoff_after_acquire` | **Only `602CC:608A4` through return**, with actual post-`5D140` registers supplied by the caller. Includes phase81 and the ordinary continuation branches. |
+| `nba97_game_ball_actor_contact` | Complete `0x800602CC..0x80060E8B`; supersedes and removes the old `608A4` continuation API. See [full contact owner](game_ball_actor_contact_workflow.md). |
 
-The continuation requires captured S1 (entity), S4 (ball), S3 (previous current
-team), and the actual full v0 returned by `5D140`. It cannot be used as a
-replacement for the earlier collision checks or possession acquisition.
+The complete contact owner now retains its entry machine and executes the
+earlier collision checks before the typed `5D140` acquisition boundary.
+The former standalone continuation and its fragment-only tests were retired;
+focused tests of the complete owner cover those phase and prefix behaviors.
 `5D140` publishes FDBCC and FDC34, team bookkeeping, player state and further
 effects before returning; none of that is silently supplied by this API.
 
@@ -116,13 +117,13 @@ It includes fresh read-only Ghidra exports, direct raw GAMEONLY instruction
 words, strict Debug/Release builds, public boundary tests, and native/original
 comparisons. The comparisons execute actual source instructions for the owned
 slices; external callees are explicitly synthetic mutable/refusal boundaries.
-A separate set obtains the continuation inputs by running actual `602CC`
+The historical fragment comparison obtained its continuation inputs by running actual `602CC`
 acceptance and `5D140` before comparing the native continuation. These are
 explicit source-harness fixtures, not original-device captures or a proven
 natural period-to-possession chain. No emulator runs in production.
 
 The C sources and standalone tests are registered in CMake. Live integration
-still needs the native state adapter, actual post-`5D140` caller boundary, and
+still needs the native state adapter, complete `5D140` composition, and
 listed real callees. The `58610` requirement now has a complete native owner;
 see [ball release and its composed verification](game_ball_release_workflow.md).
 It uses actual B8198/B81B0/B81C8

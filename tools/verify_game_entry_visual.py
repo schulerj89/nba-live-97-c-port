@@ -616,6 +616,23 @@ def main():
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     period = loop["period_startup"]
+    contact = period["ball_actor_contact_probe"]
+    require((contact["program"], contact["address"], contact["inclusive_end"],
+             contact["bytes"], contact["instructions"]) ==
+            ("GAMEONLY", "0x800602CC", "0x80060E8B", 3008, 752), "ball contact provenance drifted")
+    require(contact["completed"] and contact["classification"] == "no direct visual effect"
+            and "typed geometry, acquisition and release services" in contact["scope"]
+            and (contact["phase_before"],contact["phase_after"],contact["phase_delay"]) == (129,130,3)
+            and (contact["operations"],contact["reads"],contact["stores"],contact["callbacks"],contact["actor_resets"]) == (69,38,22,9,2)
+            and (contact["frame_stack_pointer"],contact["returned_sp"],contact["restored_ra"]) == (0x801FEFC0,0x801FF000,0x80060EDC)
+            and contact["typed_call_pcs"] == [0x8006036C,0x800605B0,0x80060710,0x80060894,0x8006089C,0x80060974,0x80060988],
+            "ball contact CPU phase transition drifted")
+    (args.frames / "ball_actor_contact_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800602CC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":contact,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

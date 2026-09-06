@@ -88,7 +88,7 @@ reachable owner instructions are exercised; the four excluded BREAK sites are
 documented separately. Another 331 cases compare each refused access's entire
 write prefix with original execution stopped at that same dynamic source PC.
 
-The native tipoff continuation, `5BC34`, and this owner are composed in 96 cases
+The historical native tipoff continuation, `5BC34`, and this owner were composed in 96 cases
 per build. Their inputs are obtained by executing actual `602CC` acceptance and
 `5D140`, then the full native continuation/release is compared with original
 execution. All 2,946 ordered events match. Sound29590 remains an explicit external
@@ -107,3 +107,8 @@ physics `6CFE0` and does not replace the loop or caller state producers.
 The C source and standalone C++ test target are registered in CMake. Only
 the shared tipoff header is required; no audio, renderer, platform SDK, emulator
 or new resource allocator is linked by this owner.
+
+The old standalone `608A4` continuation has been retired in favor of the
+complete [ball/actor contact owner](game_ball_actor_contact_workflow.md).
+The historical comparison above remains evidence; the complete machine
+interface requires a proven bridge to this narrower release API.

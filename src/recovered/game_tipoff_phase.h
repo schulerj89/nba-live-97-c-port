@@ -66,17 +66,6 @@ int nba97_game_tipoff_contact(Nba97GameTipoffContext*,uint32_t ball,uint32_t ent
  * argument1 is the ACTUAL selected receiver pointer, not an inferred teammate. */
 int nba97_game_tipoff_release(Nba97GameTipoffContext*,uint32_t entity,
                              Nba97GameTipoffReceipt*);
-/* ONLY602CC continuation starting608A4, after actual5D140 returned. Caller must
- * supply that real v0, capturedS1 entity, S4 ball and S3 previousFDC40. This is
- * NOT full602CC, collision acceptance, possession acquisition or a period tick.
- * Includes original5BC34/2AB70 on phase81; required58610/29590/582DC/58260
- * boundaries. Source phase81 path refreshes S3 before the final FDC40 store;
- * other paths restore incomingS3. Complete is not retained ball possession.
- * Receipts retain the prefix on refusal, are NOT resumable and must not alias
- * context/state. Clone all owned state/context externally for atomic publish. */
-int nba97_game_tipoff_after_acquire(Nba97GameTipoffContext*,uint32_t entity,uint32_t ball,
-                                   uint32_t previous_team,uint32_t acquired_v0,
-                                   Nba97GameTipoffReceipt*);
 #ifdef __cplusplus
 }
 #endif
