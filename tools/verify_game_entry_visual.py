@@ -649,6 +649,23 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gate,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    dispatch = period["contact_dispatch_probe"]
+    require((dispatch["program"],dispatch["address"],dispatch["inclusive_end"],dispatch["bytes"],dispatch["instructions"]) ==
+            ("GAMEONLY","0x80060FBC","0x800610FB",320,80), "contact dispatch provenance drifted")
+    require(dispatch["completed"] and dispatch["contact_completed"]
+            and dispatch["classification"] == "no direct visual effect"
+            and "actual coordinate gate and contact owners" in dispatch["scope"]
+            and (dispatch["operations"],dispatch["reads"],dispatch["stores"],dispatch["callbacks"]) == (62,47,4,11)
+            and (dispatch["coordinate_gates"],dispatch["actor_pairs"]) == (2,9)
+            and (dispatch["phase_before"],dispatch["phase_after"],dispatch["phase_delay"]) == (129,130,3)
+            and (dispatch["frame_stack_pointer"],dispatch["returned_sp"],dispatch["restored_ra"]) ==
+                (0x801FF018,0x801FF038,0x80068E10), "contact dispatch actual composition drifted")
+    (args.frames / "contact_dispatch_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80060FBC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":dispatch,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

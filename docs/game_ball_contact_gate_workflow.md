@@ -37,8 +37,8 @@ binding. The composition test drives the identifier-10 swap from actor/ball to
 ball/actor, executes the actual contact owner, observes its recovered rule
 delay child, restores both nested frames, and proves that this wrapper replaces
 the completed contact return with one. It also covers gate skip, nested child
-refusal, and child-budget failure. The known natural callers at `0x80061070`
-and `0x800610C4` remain unowned.
+refusal, and child-budget failure. The natural callers at `0x80061070` and `0x800610C4` are now composed by the
+[complete pair dispatcher](game_contact_dispatch_workflow.md).
 
 This routine has no direct visual effect. A return value of one proves only
 that the child dispatch completed; visible contact behavior belongs to the

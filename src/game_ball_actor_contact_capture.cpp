@@ -1,6 +1,7 @@
 #include "game_ball_actor_contact_capture.h"
 #include "game_ball_actor_contact_adapter.h"
 #include "game_ball_contact_gate_adapter.h"
+#include "game_contact_dispatch_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -155,6 +156,53 @@ std::string captureGameBallActorContact() {
     << binding.entry_machine.registers.gpr[5].word << ',' << binding.entry_machine.registers.gpr[6].word
     << "],\"frame_stack_pointer\":" << g.frame_stack_pointer << ",\"returned_sp\":" << g.machine.registers.gpr[29].word
     << ",\"restored_ra\":" << g.restored_return_address.word << "}}";
+  return o.str();
+}
+
+std::string captureGameContactDispatch() {
+  Fixture f;
+  f.put32(Fixture::ball,10);
+  f.put32(0x800fdc48,Fixture::ball);
+  f.put16(0x800fdb90,0x81);
+  f.put16(0x800fdbd2,0xffff);
+  f.put32(0x80020bec,Fixture::actor);
+  f.put32(0x80020c00,Fixture::actor);
+  f.put16(Fixture::actor+0x46,0x27);
+  for(unsigned i=1;i<=11;++i) {
+    const uint32_t actor = i==1 ? Fixture::ball : (i==2 ? Fixture::actor : 0x80004000u+i*0x100u);
+    f.put32(0x800fdcbc+i*4,actor);
+    if(i>2) { f.put32(actor,i);f.put32(actor+8,100u*256u); }
+  }
+  Nba97GameBallContactGateBinding contact{};
+  contact.child_operation_budget=1000;
+  contact.io=Fixture::unresolved;contact.user=&f;contact.contact_binding=f.binding;
+  Nba97GameContactDispatchChildren children{};
+  children.ball_gate_operation_budget=32;
+  children.contact_binding=&contact;
+  children.child_8005FAA8=[](void*,const Nba97GameTextMemory*,const Nba97GameContactDispatchEvent*,Nba97GameContactDispatchMachine* m) {
+    // Explicit actor-pair boundary: no contact, sorted row may stop.
+    m->registers.gpr[2]={0,15};return 1;
+  };
+  Nba97GameContactDispatchContext c{};
+  c.memory=f.context.memory;c.machine=f.context.machine;
+  c.machine.registers.gpr[29]={0x801ff038,15};
+  c.machine.registers.gpr[31]={0x80068e10,15};
+  c.operation_budget=1000;c.io=nba97_game_contact_dispatch_compose_children;c.user=&children;
+  Nba97GameContactDispatchProgress p{};
+  const int rc=nba97_game_contact_dispatch(&c,&p);
+  if(rc!=NBA97_TEXT_COMPLETE || !p.completed || f.get16(0x800fdb90)!=0x82 ||
+     f.get16(0x800fe884)!=3 || !contact.contact_progress.completed)
+    throw std::runtime_error("contact dispatch native CPU composition failed");
+  std::ostringstream o;
+  o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80060FBC\",\"inclusive_end\":\"0x800610FB\","
+       "\"bytes\":320,\"instructions\":80,\"classification\":\"no direct visual effect\","
+       "\"scope\":\"independent full-machine CPU fixture; actual coordinate gate and contact owners; typed actor-pair and contact dependencies\","
+       "\"completed\":true,\"operations\":" << p.operations << ",\"reads\":" << p.reads << ",\"stores\":" << p.stores
+    << ",\"callbacks\":" << p.callbacks_completed << ",\"coordinate_gates\":" << children.ball_gate_invocations
+    << ",\"actor_pairs\":" << children.child_8005FAA8_invocations << ",\"phase_before\":129,\"phase_after\":" << f.get16(0x800fdb90)
+    << ",\"phase_delay\":" << f.get16(0x800fe884) << ",\"contact_completed\":" << (contact.contact_progress.completed?"true":"false")
+    << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
+    << ",\"restored_ra\":" << p.restored_return_address.word << "}";
   return o.str();
 }
 }

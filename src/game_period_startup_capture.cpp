@@ -141,7 +141,8 @@ static std::string capturePeriodFixture(int first_flag) {
          <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<",\"announcement\":"<<f.announcement.receipt<<"}";
     } else o<<",\"zero_period_cases\":["<<capturePeriodFixture(0)<<','<<capturePeriodFixture(255)<<']'
             <<",\"actor_resume_period_probe\":"<<captureGameActorResumePeriod()
-            <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact();
+            <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact()
+            <<",\"contact_dispatch_probe\":"<<captureGameContactDispatch();
     o<<"}";
     return o.str();
 }
