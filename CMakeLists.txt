@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_graphics_submit_tests tests/game_graphics_submit_tests.cpp src/recovered/game_graphics_submit.c)
+    target_compile_features(nba97_game_graphics_submit_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_graphics_submit_tests PRIVATE src src/recovered)
+    add_test(NAME game_graphics_submit COMMAND nba97_game_graphics_submit_tests)
+    add_executable(nba97_game_graphics_submit_integration_tests tests/game_graphics_submit_integration_tests.cpp
+        src/recovered/game_graphics_submit.c src/game_graphics_submit_adapter.cpp src/recovered/game_draw_environment.c src/recovered/game_bios_memory_copy.c)
+    target_compile_features(nba97_game_graphics_submit_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_graphics_submit_integration_tests PRIVATE src)
+    add_test(NAME game_graphics_submit_integration COMMAND nba97_game_graphics_submit_integration_tests)
     add_executable(nba97_game_draw_area_end_tests tests/game_draw_area_end_tests.cpp src/recovered/game_draw_area_end.c)
     target_compile_features(nba97_game_draw_area_end_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_draw_area_end_tests PRIVATE src src/recovered)
@@ -2036,3 +2045,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_packet.c src/ga
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_area_start.c src/game_draw_area_start_adapter.cpp src/game_draw_area_start_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_area_end.c src/game_draw_area_end_adapter.cpp src/game_draw_area_end_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_graphics_submit.c src/game_graphics_submit_adapter.cpp src/game_graphics_submit_capture.cpp)

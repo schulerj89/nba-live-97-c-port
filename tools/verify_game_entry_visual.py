@@ -778,6 +778,20 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    graphics_submit = period["graphics_submit_probe"]
+    require((graphics_submit["program"],graphics_submit["address"],graphics_submit["inclusive_end"],graphics_submit["bytes"],graphics_submit["instructions"]) == ("GAMEONLY","0x8009B298","0x8009B57B",740,185), "Graphics submission provenance drifted")
+    require(graphics_submit["classification"] == "no direct visual effect" and "synthetic" in graphics_submit["scope"], "Graphics submission classification drifted")
+    for scenario,queued in zip(graphics_submit["scenarios"],[False,True]):
+        require(scenario["completed"] and scenario["parent_completed"] and scenario["queued"] == queued and scenario["cache_matches_last_environment"]
+                and (scenario["submit_calls"],scenario["copy_calls"],scenario["service_calls"],scenario["head_after"],scenario["tail_after"]) == (2,4,10 if queued else 8,3 if queued else 1,0), "Graphics submission state drifted")
+        for item,value,hi in zip(scenario["submissions"],[2,3] if queued else [0,0],[0x80048F4C,0x80048FA0]):
+            require((item["callbacks"],item["copied_words"],item["return_v0"],item["return_address"],item["hi"]) == (5 if queued else 4,16 if queued else 0,value,0x80099B60,hi), "Graphics submission machine drifted")
+    (args.frames / "graphics_submit_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009B298","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":graphics_submit,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     draw_area_start = period["draw_area_start_probe"]
     require((draw_area_start["program"],draw_area_start["address"],draw_area_start["inclusive_end"],draw_area_start["bytes"],draw_area_start["instructions"]) == ("GAMEONLY","0x8009A644","0x8009A70F",204,51), "Draw-area start provenance drifted")
     require(draw_area_start["completed"] and draw_area_start["parent_completed"] and draw_area_start["classification"] == "no direct visual effect"

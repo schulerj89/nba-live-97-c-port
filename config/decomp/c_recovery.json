@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8009B298",
+      "original_name": "Game_GraphicsSubmit",
+      "symbol": "nba97_game_graphics_submit",
+      "source": "src/recovered/game_graphics_submit.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_graphics_submit_tests; nba97_game_graphics_submit_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009A710",
       "original_name": "Game_DrawAreaEnd",
       "symbol": "nba97_game_draw_area_end",

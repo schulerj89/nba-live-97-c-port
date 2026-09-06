@@ -1,3 +1,4 @@
+#include "game_graphics_submit_capture.h"
 #include "game_draw_area_end_capture.h"
 #include "game_draw_area_start_capture.h"
 #include "game_draw_packet_capture.h"
@@ -183,6 +184,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"draw_packet_probe\":"<<captureGameDrawPacket()
             <<",\"draw_area_end_probe\":"<<captureGameDrawAreaEnd()
             <<",\"draw_area_start_probe\":"<<captureGameDrawAreaStart()
+            <<",\"graphics_submit_probe\":"<<captureGameGraphicsSubmit()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
