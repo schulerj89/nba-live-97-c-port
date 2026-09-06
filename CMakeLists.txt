@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_ball_acquire_tests tests/game_ball_acquire_tests.cpp src/recovered/game_ball_acquire.c)
+    target_compile_features(nba97_game_ball_acquire_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_ball_acquire_tests PRIVATE src src/recovered)
+    add_test(NAME game_ball_acquire COMMAND nba97_game_ball_acquire_tests)
+    add_executable(nba97_game_ball_acquire_integration_tests tests/game_ball_acquire_integration_tests.cpp
+        src/recovered/game_ball_acquire.c src/game_ball_acquire_adapter.cpp src/recovered/game_ball_actor_contact.c src/game_ball_actor_contact_adapter.cpp src/recovered/game_actor_resume.c src/recovered/game_rule_delay.c)
+    target_compile_features(nba97_game_ball_acquire_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_ball_acquire_integration_tests PRIVATE src)
+    add_test(NAME game_ball_acquire_integration COMMAND nba97_game_ball_acquire_integration_tests)
     add_executable(nba97_game_actor_contact_gate_tests tests/game_actor_contact_gate_tests.cpp src/recovered/game_actor_contact_gate.c)
     target_compile_features(nba97_game_actor_contact_gate_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_actor_contact_gate_tests PRIVATE src src/recovered)
@@ -1764,3 +1773,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_ball_contact_gate.c 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_contact_dispatch.c src/game_contact_dispatch_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_contact_gate.c src/game_actor_contact_gate_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_ball_acquire.c src/game_ball_acquire_adapter.cpp)

@@ -3,6 +3,7 @@
 #include "game_ball_contact_gate_adapter.h"
 #include "game_contact_dispatch_adapter.h"
 #include "game_actor_contact_gate_adapter.h"
+#include "game_ball_acquire_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -244,6 +245,43 @@ std::string captureGameActorContactGate() {
     << ",\"difference\":" << p.coordinate_difference.word << ",\"shifted_difference\":" << p.shifted_difference.word
     << ",\"returned_value\":" << p.returned_value.word << ",\"frame_stack_pointer\":" << p.frame_stack_pointer
     << ",\"returned_sp\":" << p.machine.registers.gpr[29].word << ",\"restored_ra\":" << p.restored_return_address.word << "}";
+  return o.str();
+}
+
+std::string captureGameBallAcquire() {
+  Fixture f;
+  f.put16(0x800fdb90,0x81);f.put16(0x800fdbd2,0xffff);
+  f.put32(0x80020bec,Fixture::actor);f.put32(0x80020c00,Fixture::actor);
+  f.put16(Fixture::actor+0x46,0x27);
+  f.put16(Fixture::actor+0xa0,385);
+  f.put32(Fixture::actor+0x1c,0x80006000);
+  f.put32(0x800fa034,0xffffffff);
+  f.put32(0x8001edf8,0x8001eeb8);f.put32(0x8001eebc,0x8001edf4);
+  Nba97GameBallAcquireNaturalProgress natural{};
+  natural.acquisition_operation_budget=1000;
+  natural.acquisition_io=[](void*,const Nba97GameTextMemory*,const Nba97GameBallAcquireEvent* e,Nba97GameBallAcquireMachine* m) {
+    // Explicit acquisition dependencies; the real rule-delay leaf is composed.
+    if(e->entry==0x8002ab70)m->registers.gpr[2]={0,15};
+    return 1;
+  };
+  const auto owner_before=f.get16(0x800fdbcc);
+  const int rc=nba97_game_ball_actor_contact_with_ball_acquire(&f.context,&f.progress,&f.binding,&natural);
+  const auto& p=natural.acquisition;
+  if(rc!=NBA97_TEXT_COMPLETE || !f.progress.completed || !p.completed || natural.acquisition_count!=1 ||
+     f.get32(0x800fdc34)!=Fixture::actor || f.get32(0x800fdc38)!=0x8001edf4 || f.get16(0x800fdb90)!=0x82)
+    throw std::runtime_error("ball acquisition native CPU composition failed");
+  std::ostringstream o;
+  o << "{\"program\":\"GAMEONLY\",\"address\":\"0x8005D140\",\"inclusive_end\":\"0x8005D9EF\","
+       "\"bytes\":2224,\"instructions\":556,\"classification\":\"no direct visual effect\","
+       "\"scope\":\"actual complete ball contact caller and acquisition owner; independent phase81 fixture; typed geometry, release and acquisition dependencies\","
+       "\"completed\":true,\"parent_completed\":true,\"invocations\":" << natural.acquisition_count
+    << ",\"call_pc\":" << natural.acquisition_event.pc << ",\"operations\":" << p.operations
+    << ",\"reads\":" << p.reads << ",\"stores\":" << p.stores << ",\"callbacks\":" << p.callbacks_completed
+    << ",\"owner_before\":" << owner_before << ",\"owner_after\":" << f.get16(0x800fdbcc)
+    << ",\"published_actor\":" << f.get32(0x800fdc34) << ",\"published_team\":" << f.get32(0x800fdc38)
+    << ",\"phase_before\":129,\"phase_after\":" << f.get16(0x800fdb90) << ",\"phase_delay\":" << f.get16(0x800fe884)
+    << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
+    << ",\"restored_ra\":" << p.restored_return_address.word << "}";
   return o.str();
 }
 }

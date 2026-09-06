@@ -143,7 +143,8 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"actor_resume_period_probe\":"<<captureGameActorResumePeriod()
             <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact()
             <<",\"contact_dispatch_probe\":"<<captureGameContactDispatch()
-            <<",\"actor_contact_gate_probe\":"<<captureGameActorContactGate();
+            <<",\"actor_contact_gate_probe\":"<<captureGameActorContactGate()
+            <<",\"ball_acquire_probe\":"<<captureGameBallAcquire();
     o<<"}";
     return o.str();
 }

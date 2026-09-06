@@ -683,6 +683,25 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":actor_gate,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    acquisition = period["ball_acquire_probe"]
+    require((acquisition["program"],acquisition["address"],acquisition["inclusive_end"],acquisition["bytes"],acquisition["instructions"]) ==
+            ("GAMEONLY","0x8005D140","0x8005D9EF",2224,556), "acquisition provenance drifted")
+    require(acquisition["completed"] and acquisition["parent_completed"]
+            and acquisition["classification"] == "no direct visual effect"
+            and "actual complete ball contact caller and acquisition owner" in acquisition["scope"]
+            and (acquisition["invocations"],acquisition["call_pc"]) == (1,0x8006089C)
+            and (acquisition["operations"],acquisition["reads"],acquisition["stores"],acquisition["callbacks"]) == (66,24,42,0)
+            and (acquisition["owner_before"],acquisition["owner_after"],acquisition["published_actor"],acquisition["published_team"]) ==
+                (65535,0,0x80002000,0x8001EDF4)
+            and (acquisition["phase_before"],acquisition["phase_after"],acquisition["phase_delay"]) == (129,130,3)
+            and (acquisition["frame_stack_pointer"],acquisition["returned_sp"],acquisition["restored_ra"]) ==
+                (0x801FEF90,0x801FEFC0,0x800608A4), "acquisition actual caller CPU fixture drifted")
+    (args.frames / "ball_acquire_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8005D140","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":acquisition,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==
