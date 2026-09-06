@@ -145,6 +145,7 @@ try {
         'nba97_game_audio_stream_status_tests','nba97_game_audio_stream_status_integration_tests',
         'nba97_game_clock_violations_tests','nba97_game_clock_violations_integration_tests',
         'nba97_game_audio_stream_service_tests','nba97_game_audio_stream_service_integration_tests',
+        'nba97_game_period_expiry_tests','nba97_game_period_expiry_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

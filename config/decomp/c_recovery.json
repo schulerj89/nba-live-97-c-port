@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80067664",
+      "original_name": "Game_PeriodExpiry",
+      "symbol": "nba97_game_period_expiry",
+      "source": "src/recovered/game_period_expiry.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_period_expiry_tests; nba97_game_period_expiry_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80086190",
       "original_name": "Game_AudioStreamService",
       "symbol": "nba97_game_audio_stream_service",

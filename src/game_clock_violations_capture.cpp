@@ -53,6 +53,6 @@ int GameClockViolationsCapture::dispatch(const Nba97GameTextMemory* memory,const
     o<<"],\"timer_before\":[1,1],\"timer_after\":["<<f.get(0x800fdba8u,2)<<','<<f.get(0x800fdbaau,2)<<"],\"violation_state\":"<<f.get(0x800fe882u,2)
      <<",\"triggers\":["<<unsigned(p.first_violation_triggered)<<','<<unsigned(p.phase_82_violation_triggered)<<','<<unsigned(p.final_violation_triggered)
      <<"],\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
-    receipt=o.str();return result;
+    progress=p;receipt=o.str();return result;
 }
 }
