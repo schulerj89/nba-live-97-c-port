@@ -1337,6 +1337,20 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": period,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    record_cases = [case["match_buffer_record"] for case in [period]+period["zero_period_cases"]]
+    for record in record_cases:
+        require((record["program"],record["address"],record["inclusive_end"],record["bytes"],record["instructions"]) == ("GAMEONLY","0x80076B3C","0x80076FC7",1164,291), "Match-buffer record provenance drifted")
+        require(record["completed"] and record["same_parent_memory"] and record["classification"] == "no direct visual effect" and len(record["calls"]) == 2, "Match-buffer record composition drifted")
+        for i, (item,pc) in enumerate(zip(record["calls"],(0x800674F8,0x80067508))):
+            require(item["fields_verified"] and (item["call_pc"],item["entity_iterations"],item["snapshot"],item["pending_before"],item["pending_after"],item["cursor"],item["rewind_calls"],item["zero_stores"],item["return_address"],item["sp"]) == (pc,11,0x800F1814,1,0,0x800CCC00+64*(i+1),1-i,2*(1-i),pc+8,0x801FFEE8)
+                    and item["compression_args"] == [0x800F1814,0x800F1918,0x800CCC00+64*i,130] and item["hilo_known_masks"] == [0,0]
+                    and (item["operations"],item["reads"],item["stores"],item["callbacks"]) == (405-i,209,194,2-i), "Match-buffer record state drifted")
+    (args.frames / "match_buffer_record_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80076B3C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":record_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     pending_cases = [case["match_buffer_pending"] for case in [period]+period["zero_period_cases"]]
     for pending in pending_cases:
         require((pending["program"],pending["address"],pending["inclusive_end"],pending["bytes"],pending["instructions"]) == ("GAMEONLY","0x80076B28","0x80076B3B",20,5), "Match-buffer pending provenance drifted")
