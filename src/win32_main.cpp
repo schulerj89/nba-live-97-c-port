@@ -1,3 +1,4 @@
+#include "frontend_overlay_load_capture.h"
 #include "frontend_io_complete_capture.h"
 #include "frontend_io_drain_capture.h"
 #include "frontend_clock_read_capture.h"
@@ -1200,6 +1201,9 @@ private:
         frame("frontend-io-complete-before");
         std::ofstream(output/"frontend_io_complete_trace.json")<<nba97::captureFrontendIoComplete();
         frame("frontend-io-complete-after");
+        frame("frontend-overlay-load-before");
+        std::ofstream(output/"frontend_overlay_load_trace.json")<<nba97::captureFrontendOverlayLoad();
+        frame("frontend-overlay-load-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");

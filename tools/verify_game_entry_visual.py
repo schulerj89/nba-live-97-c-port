@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 116, "native click-through frame count drifted")
+    require(len(states) == 118, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -967,6 +967,47 @@ def main():
         "program":"FEONLY","address":"0x800392A0","end":"0x800392F7","driver_frame_count":len(states),
         "source_receipt":io_complete,"before_sha256":ic_hashes[0],"after_sha256":ic_hashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":io_complete["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
+
+    overlay_load=read_json(args.frames/"frontend_overlay_load_trace.json")
+    require(overlay_load["program"] == "FEONLY" and int(overlay_load["address"],16) == 0x8007b11c
+            and int(overlay_load["inclusive_end"],16) == 0x8007b13b
+            and [overlay_load[k] for k in ("bytes","instructions","accepted","result","completed","contract_failure")]
+            == [32,8,1,1,1,0] and overlay_load["source_sha256"] ==
+            "97d8f0e4eb51bd581d1431e5995abb4ea56b67408568f334d91a8b93e61029e2", "Overlay-load source receipt drifted")
+    require(overlay_load["parent_call"] == {"pc":"0x80028acc","delay":"0x80028ad0","entry":"0x8007b11c",
+            "argument_count":2,"program":1,"a0":{"word":"0x80024854","known_mask":15},
+            "a1":{"word":"0x00000000","known_mask":15}}, "Overlay-load natural boundary drifted")
+    olp=overlay_load["owner"]
+    require([olp[k] for k in ("operations","accesses","reads","stores","callbacks","instruction_count")]
+            == [3,2,1,1,1,8] and main_word(olp["delay_a2"],1)
+            and main_word(olp["child_return"],0x80170000)
+            and [int(pc,16) for pc in olp["instruction_trace"]] == list(range(0x8007b11c,0x8007b13c,4)),
+            "Overlay-load full instruction/delay prefix drifted")
+    require(len(olp["access_journal"]) == 2, "Overlay-load stack access receipt truncated")
+    for actual,(pc,operation,kind) in zip(olp["access_journal"],[(0x8007b120,1,2),(0x8007b12c,3,1)]):
+        require([int(actual[k],16) for k in ("pc","address","value")] == [pc,0x801efff8,0x80028ad4]
+                and [actual[k] for k in ("operation","width","known_mask","kind")]
+                == [operation,4,15,kind], "Overlay-load exact frame access drifted")
+    olg=[0]+[0x61000000+i*0x101 for i in range(1,32)]
+    olg[4]=0x80024854;olg[5]=0;olg[6]=1;olg[29]=0x801effe8;olg[31]=0x8007b12c
+    require(len(olp["call_sequence"]) == 1, "Overlay-load child count drifted")
+    olc=olp["call_sequence"][0]
+    require([int(olc[k],16) for k in ("pc","delay","target")] == [0x8007b124,0x8007b128,0x8007b15c]
+            and olc["argument_count"] == 3 and olc["invocation"] == 1 and iod_machine(olc["machine"],olg),
+            "Overlay-load child full CPU and transitive argument contract drifted")
+    olg[2]=0x80170000;olg[29]=0x801f0000;olg[31]=0x80028ad4
+    require(iod_machine(overlay_load["final_machine"],olg), "Overlay-load callback-live epilogue drifted")
+    olframes=("frontend-overlay-load-before","frontend-overlay-load-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in olframes), "Overlay-load native frames missing")
+    olhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in olframes]
+    require(olhashes[0] == olhashes[1] == ic_hashes[1], "CPU-only overlay-load changed pixels")
+    require(overlay_load["gameplay_shown"] == "BLOCKED" and overlay_load["classification"] == "no direct visual effect"
+            and "synthetic standalone" in overlay_load["fixture_contract"]
+            and "8007B15C" in overlay_load["next_unbound_boundary"]["loader_child"], "Overlay-load fixture/dependency contract absent")
+    (args.frames/"frontend_overlay_load_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x8007B11C","end":"0x8007B13B","driver_frame_count":len(states),
+        "source_receipt":overlay_load,"before_sha256":olhashes[0],"after_sha256":olhashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":overlay_load["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
