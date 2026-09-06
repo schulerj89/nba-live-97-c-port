@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 114, "native click-through frame count drifted")
+    require(len(states) == 116, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -892,6 +892,81 @@ def main():
         "driver_frame_count":len(states),"source_receipt":io_drain,
         "before_sha256":iod_hashes[0],"after_sha256":iod_hashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":io_drain["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
+
+    io_complete = read_json(args.frames/"frontend_io_complete_trace.json")
+    require(io_complete["program"] == "FEONLY" and int(io_complete["address"],16) == 0x800392a0
+            and int(io_complete["inclusive_end"],16) == 0x800392f7
+            and [io_complete[k] for k in ("bytes","instructions","completed","result","contract_failure")]
+            == [88,22,1,1,0] and io_complete["source_sha256"] ==
+            "dca1d4f4bf2b7847a1175abe703ab434c4ed51efccb2af341b536de466f98d7a", "I/O completion source receipt drifted")
+    icd=io_complete["drain"]
+    require([icd[k] for k in ("operations","accesses","callbacks","poll_invocations","instruction_count")]
+            == [15,7,8,2,44] and [int(pc,16) for pc in icd["instruction_trace"]] == expected_drain_trace,
+            "I/O completion natural parent path drifted")
+    require(io_complete["status_memory"] == {"active_before":"0x00000001","active_after":"0x00000000",
+            "busy_before":"0xabcdef01","busy_after":"0x00000000","slot0_before":"0x80000000",
+            "slot0_after":"0x00000000","final_slots":["0x00000000"]*8}, "I/O completion retained state drifted")
+    require(len(icd["access_journal"]) == 7, "I/O completion parent access extent drifted")
+    for actual,(pc,address,value,operation,kind) in zip(icd["access_journal"],expected_drain_accesses):
+        require([int(actual[k],16) for k in ("pc","address","value")] == [pc,address,value]
+                and [actual[k] for k in ("operation","kind","width","known_mask")]
+                == [operation,kind,4,15], "I/O completion parent access order drifted")
+    ic_gpr=[0]+[0x73000000+i*0x101 for i in range(1,32)]
+    ic_gpr[29]=0x801effe8
+    require(len(icd["call_sequence"]) == 8, "I/O completion parent call extent drifted")
+    for index,(actual,(pc,target,argc,invocation)) in enumerate(zip(icd["call_sequence"],expected_drain_calls)):
+        ic_gpr[31]=pc+8
+        if index < 2: ic_gpr[2]=1
+        if index in (2,3): ic_gpr[1]=0x800f0000; ic_gpr[2]=0; ic_gpr[3]=0; ic_gpr[4]=1
+        if index >= 4:
+            ic_gpr[1]=0x80100000;ic_gpr[2]=0x80145678;ic_gpr[3]=288;ic_gpr[4]=0;ic_gpr[5]=0
+        if index >= 6: ic_gpr[4]=0x80145678
+        require([int(actual[k],16) for k in ("pc","delay","target")] == [pc,pc+4,target]
+                and actual["argument_count"] == argc and actual["invocation"] == invocation
+                and actual["operation"] == [3,4,5,6,10,11,13,14][index]
+                and iod_machine(actual["machine"],ic_gpr), "I/O completion parent full machine drifted")
+    records=io_complete["io_complete"]["records"]
+    require(io_complete["io_complete"]["invocations"] == len(records) == 2, "Actual poll records missing")
+    for index,record in enumerate(records):
+        parent_machine=icd["call_sequence"][1 if index == 0 else 3]["machine"]
+        trace=list(range(0x800392a0,0x800392b4,4))+[0x800392c4]
+        if index == 0:
+            trace+=list(range(0x800392c8,0x800392e0,4))+[0x800392bc,0x800392c0,0x800392f0,0x800392f4]
+        else:
+            trace+=list(range(0x800392c8,0x800392ec,4))*8+[0x800392ec,0x800392f0,0x800392f4]
+        count=2 if index == 0 else 9
+        require(record["parent_pc"] == "0x800394f0" and record["invocation"] == index+1
+                and record["result"] == 1 and record["operations"] == record["accesses"] == count
+                and record["status_reads"] == count-1 and record["instruction_count"] == len(trace)
+                and record["parent_machine"] == parent_machine
+                and [int(pc,16) for pc in record["instruction_trace"]] == trace
+                and main_word(record["active_word"],1)
+                and main_word(record["last_status"],0x80000000 if index == 0 else 0),
+                "Actual poll control flow or input machine drifted")
+        expected_accesses=[(0x800392a4,0x800f84c4,1)]+[(0x800392d0,0x800ef840+i*36,
+                            0x80000000 if index == 0 else 0) for i in range(count-1)]
+        require(len(record["access_journal"]) == count, "Poll access receipt truncated")
+        for op,(actual,(pc,address,value)) in enumerate(zip(record["access_journal"],expected_accesses),1):
+            require([int(actual[k],16) for k in ("pc","address","value")] == [pc,address,value]
+                    and [actual[k] for k in ("operation","kind","width","known_mask")]
+                    == [op,1,4,15], "Actual completion poll memory read drifted")
+        returned=[int(w["word"],16) for w in parent_machine["gpr"]]
+        returned[1]=0x800f0000 if index == 0 else 0x800f00fc
+        returned[2]=index;returned[3]=0 if index == 0 else 288;returned[4]=1 if index == 0 else 8
+        require(iod_machine(record["final_machine"],returned), "Actual completion poll live return drifted")
+    ic_gpr[29]=0x801f0000;ic_gpr[31]=0x8002f09c
+    require(iod_machine(io_complete["final_machine"],ic_gpr), "Completion composition epilogue drifted")
+    ic_frames=("frontend-io-complete-before","frontend-io-complete-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in ic_frames), "Completion frames missing")
+    ic_hashes=[ppm_hash(args.frames/f"{n}.ppm") for n in ic_frames]
+    require(ic_hashes[0] == ic_hashes[1] == iod_hashes[1], "Completion CPU-only composition changed pixels")
+    require(io_complete["gameplay_shown"] == "BLOCKED" and io_complete["classification"] == "no direct visual effect"
+            and "Synthetic standalone" in io_complete["fixture_contract"]
+            and "80038E84" in io_complete["next_unbound_boundary"]["after_poll"], "Completion receipt conceals fixture dependencies")
+    (args.frames/"frontend_io_complete_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x800392A0","end":"0x800392F7","driver_frame_count":len(states),
+        "source_receipt":io_complete,"before_sha256":ic_hashes[0],"after_sha256":ic_hashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":io_complete["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
