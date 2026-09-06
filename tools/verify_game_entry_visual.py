@@ -778,6 +778,22 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    bios_copy = period["bios_memory_copy_probe"]
+    require((bios_copy["program"],bios_copy["address"],bios_copy["inclusive_end"],bios_copy["bytes"],bios_copy["instructions"]) == ("GAMEONLY","0x8009CB0C","0x8009CB17",12,3), "BIOS copy provenance drifted")
+    require(bios_copy["completed"] and bios_copy["parent_completed"] and bios_copy["classification"] == "no direct visual effect"
+            and "synthetic resource and BIOS services" in bios_copy["scope"] and (bios_copy["operations"],bios_copy["callbacks"]) == (1,1)
+            and (bios_copy["call_pc"],bios_copy["delay_pc"],bios_copy["bios_vector"],bios_copy["service"]) == (0x8009CB10,0x8009CB14,0xA0,0x2A)
+            and (bios_copy["destination_before"],bios_copy["destination_after"]) == (0,0xEFBEADDE)
+            and (bios_copy["returned_t1"],bios_copy["returned_t2"]) == (0x2A,0xA0)
+            and (bios_copy["returned_v0"],bios_copy["returned_v0_mask"]) == (0xCAFEBABE,7)
+            and (bios_copy["returned_hi"],bios_copy["returned_lo"],bios_copy["hi_mask"],bios_copy["lo_mask"]) == (0xAABBCCDD,0x12345678,3,12)
+            and (bios_copy["return_address"],bios_copy["parent_v0"]) == (0x80080094,0x1234ABCD), "BIOS copy native state drifted")
+    (args.frames / "bios_memory_copy_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009CB0C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":bios_copy,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     gte_reference = period["gte_reference_transform_probe"]
     require((gte_reference["program"],gte_reference["address"],gte_reference["inclusive_end"],gte_reference["bytes"],gte_reference["instructions"]) == ("GAMEONLY","0x80056650","0x80056677",40,10), "GTE reference provenance drifted")
     require(gte_reference["completed"] and gte_reference["parent_completed"] and gte_reference["classification"] == "no direct visual effect"

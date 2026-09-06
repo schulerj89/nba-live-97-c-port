@@ -1,3 +1,4 @@
+#include "game_bios_memory_copy_capture.h"
 #include "game_gte_reference_transform_capture.h"
 #include "game_gte_translation_install_capture.h"
 #include "game_gte_rotation_install_capture.h"
@@ -167,6 +168,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"gte_rotation_install_probe\":"<<captureGameGteRotationInstall()
             <<",\"gte_translation_install_probe\":"<<captureGameGteTranslationInstall()
             <<",\"gte_reference_transform_probe\":"<<captureGameGteReferenceTransform()
+            <<",\"bios_memory_copy_probe\":"<<captureGameBiosMemoryCopy()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
