@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 100, "native click-through frame count drifted")
+    require(len(states) == 102, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -129,6 +129,96 @@ def main():
         "reason":"Native accepted User Setup remains pending; original frontend exit services and GAMELOAD transfer are unbound."}
     (args.frames / "frontend_dispatch_verified.json").write_text(
         json.dumps(fd_verified, indent=2) + "\n", encoding="utf-8")
+
+    # CPU-only wrapper proof uses an explicitly synthetic frontend-main boundary.
+    fe = read_json(args.frames / "frontend_dispatch_entry_trace.json")
+    require(fe["program"] == "FEONLY" and int(fe["address"], 16) == 0x800360D4
+            and int(fe["inclusive_end"], 16) == 0x8003610B
+            and fe["bytes"] == 56 and fe["instructions"] == 14
+            and fe["source_sha256"] ==
+            "6af71d91fded3e2b5260c84bb86fd101539e86fca86ffef2b9e06b93e32dbce0",
+            "initialized frontend wrapper provenance drifted")
+    require(fe["completed"] == fe["accepted"] == fe["result"] == 1
+            and fe["contract_failure"] == 0,
+            "initialized frontend wrapper failed its composed source path")
+    require([int(fe["parent_call"][key], 16) for key in
+             ("pc", "delay", "entry", "ra", "s0")] ==
+            [0x80028AA0, 0x80028AA4, 0x800360D4, 0x80028AA8, 0],
+            "synthetic parent boundary lost the original S0 delay effect")
+    require([int(fe["child_call"][key], 16) for key in
+             ("pc", "delay", "entry", "ra")] ==
+            [0x800360F4, 0x800360F8, 0x8003F7C8, 0x800360FC]
+            and fe["child_call"]["operation"] == 4,
+            "wrapper did not compose its natural dispatcher child")
+    fw = fe["wrapper"]
+    require([fw[key] for key in ("operations", "accesses", "reads", "stores",
+                                 "callbacks", "instruction_count")] ==
+            [5, 4, 1, 3, 1, 14] and int(fw["frame_sp"], 16) == 0x801EFFE8,
+            "wrapper exact instruction or access prefix drifted")
+    expected_accesses = [
+        (0x800360E0, 0x80021EE4, 1, 1, 2),
+        (0x800360E8, 0x801EFFF8, 0x80028AA8, 2, 2),
+        (0x800360F0, 0x800C6E68, 32, 3, 2),
+        (0x800360FC, 0x801EFFF8, 0x80028AA8, 5, 1)]
+    require(len(fw["access_journal"]) == 4, "wrapper access journal missing")
+    for actual, (pc, address, value, operation, kind) in zip(
+            fw["access_journal"], expected_accesses):
+        require([int(actual[key], 16) for key in ("pc", "address", "value")] ==
+                [pc, address, value] and actual["operation"] == operation
+                and actual["kind"] == kind and actual["width"] == 4
+                and actual["known_mask"] == 15,
+                "wrapper ordered global/stack accesses drifted")
+    require(fe["globals"]["before"] ==
+            {"initialized": 0, "scalar": 0, "saved_ra_slot": 0}
+            and fe["globals"]["after"] ==
+            {"initialized": 1, "scalar": 32, "saved_ra_slot": 0x80028AA8},
+            "wrapper global and saved return stores missing")
+    require(all(int(fw[key]["word"], 16) == 0x80028AA8 and
+                fw[key]["known_mask"] == 15 for key in ("saved_ra", "restored_ra")),
+            "wrapper did not restore its parent return word")
+    nested = fe["dispatcher"]
+    require(nested["result"] == nested["completed"] == 1 and
+            [nested[key] for key in ("operations", "reads", "stores", "callbacks",
+                                     "instruction_count")] == [177, 82, 53, 42, 903]
+            and fe["user_setup"]["accepted"] == 1
+            and fe["user_setup"]["result"] == 6,
+            "nested recovered dispatcher/User Setup acceptance failed")
+    normalized_calls = [{**call, "argc": call["argument_count"]}
+                        for call in nested["call_sequence"]]
+    for call in normalized_calls:
+        del call["argument_count"]
+    require(normalized_calls == fd["call_sequence"],
+            "wrapper composition changed the verified 42-call prerequisite sequence")
+    machine = fe["final_machine"]
+    require(len(machine["gpr"]) == 32 and
+            all(word["known_mask"] == 15 for word in machine["gpr"]),
+            "composed wrapper full GPR knownness drifted")
+    for index, value in [(0, 0), (16, 0), (29, 0x801F0000), (31, 0x80028AA8)]:
+        require(int(machine["gpr"][index]["word"], 16) == value,
+                "composed wrapper live return state drifted")
+    require(machine["hi"] == {"word": "0x10203040", "known_mask": 5}
+            and machine["lo"] == {"word": "0x50607080", "known_mask": 10},
+            "wrapper composition changed preserved HI/LO")
+    fe_frames = ["frontend-dispatch-entry-before", "frontend-dispatch-entry-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in fe_frames), "wrapper probe missing accepted User Setup frames")
+    fe_hashes = [ppm_hash(args.frames / f"{name}.ppm") for name in fe_frames]
+    require(fe_hashes[0] == fe_hashes[1] == fd_hashes[1],
+            "CPU-only wrapper probe changed native pixels")
+    require(fe["classification"] == "UI/menu" and fe["gameplay_shown"] == "BLOCKED"
+            and "80028AA8" in fe["next_unbound_boundary"]
+            and "80028B68" in fe["next_unbound_boundary"]
+            and "GAMELOAD" in fe["next_unbound_boundary"]
+            and "synthetic" in fe["fixture_contract"].lower(),
+            "wrapper receipt obscures synthetic prerequisites or the live loader boundary")
+    (args.frames / "frontend_dispatch_entry_verified.json").write_text(
+        json.dumps({"program": "FEONLY", "address": "0x800360D4",
+                    "end": "0x8003610B", "driver_frame_count": len(states),
+                    "source_receipt": fe, "before_sha256": fe_hashes[0],
+                    "after_sha256": fe_hashes[1],
+                    "visual_status": "Gameplay shown: BLOCKED",
+                    "reason": fe["next_unbound_boundary"]}, indent=2) + "\n",
+        encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
@@ -3106,7 +3196,7 @@ def main():
             "SetRCnt rejected index 3 while StartRCnt still unmasked VBlank before returning false" in trace and
             "both raw returns were ignored" in trace and
             "did not install a native OS interrupt or synthesize VBlank cadence" in trace and
-            "100 captured frontend frames were unchanged" in trace and
+            "captured frontend frames were unchanged" in trace and
             "0x800914D8 initialized the source game clock" in trace and
             "cold guard 0x800C4AA4 changed 0->1" in trace and
             "eight callback words at 0x800D6DEC were cleared" in trace and
@@ -3123,7 +3213,7 @@ def main():
             "ZSF3 0x0155, ZSF4 0x0100, H 1000, DQA -4194, DQB 0x01400000, OFX 0 and OFY 0" in trace and
             "matrices, FIFOs, FLAG and the other 25 control registers remain live exactly as in GAMEONLY" in trace and
             "establishes later court/player/net projection inputs" in trace and
-            "does not submit a GPU packet or change any of the 100 captured frontend frames" in trace and
+            "does not submit a GPU packet or change any of the captured frontend frames" in trace and
             "0x800A584C refreshed the gameplay clock baseline" in trace and
             "captured gp+0x164 (0x800D7B2C) as 0" in trace and
             "0x800A5810 leaf to sample retained clock 0" in trace and

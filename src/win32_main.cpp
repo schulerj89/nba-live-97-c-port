@@ -1,3 +1,4 @@
+#include "frontend_dispatch_entry_capture.h"
 #include "frontend_dispatch_capture.h"
 #include "game_gpu_control_command_adapter.h"
 #define WIN32_LEAN_AND_MEAN
@@ -1168,6 +1169,9 @@ private:
         frame("frontend-dispatch-before");
         std::ofstream(output/"frontend_dispatch_trace.json")<<nba97::captureFrontendDispatch();
         frame("frontend-dispatch-after");
+        frame("frontend-dispatch-entry-before");
+        std::ofstream(output/"frontend_dispatch_entry_trace.json")<<nba97::captureFrontendDispatchEntry();
+        frame("frontend-dispatch-entry-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
@@ -10847,7 +10851,7 @@ private:
             "0x800D7AFC and 0x800D7B00; original counter-3 mismatch remains: SetRCnt "
             "rejected index 3 while StartRCnt still unmasked VBlank before returning false, "
             "and both raw returns were ignored; this did not install a native OS interrupt "
-            "or synthesize VBlank cadence, so the 100 captured frontend frames were unchanged; "
+            "or synthesize VBlank cadence, so the captured frontend frames were unchanged; "
             "64 remaining acknowledged outer test boundaries");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered startup callee 0x800914D8 initialized the source game clock: "
@@ -10869,7 +10873,7 @@ private:
             "0x01400000, OFX 0 and OFY 0; matrices, FIFOs, FLAG and the other 25 control "
             "registers remain live exactly as in GAMEONLY, while v0 retains the updated "
             "Status word; this establishes later court/player/net projection inputs but "
-            "does not submit a GPU packet or change any of the 100 captured frontend "
+            "does not submit a GPU packet or change any of the captured frontend "
             "frames; 62 remaining acknowledged outer test boundaries");
         trace_.log("GAME-ENTRY-DIAG",
             "next recovered startup callee 0x800A584C refreshed the gameplay clock "

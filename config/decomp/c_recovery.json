@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x800360D4",
+      "original_name": "Frontend_DispatchEntry",
+      "symbol": "nba97_frontend_dispatch_entry",
+      "source": "src/recovered/frontend_dispatch_entry.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_dispatch_entry_tests; nba97_frontend_dispatch_entry_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x8003F7C8",
       "original_name": "Frontend_DispatchState",
       "symbol": "nba97_frontend_dispatch",
