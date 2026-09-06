@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80094540",
+      "original_name": "Game_ImageRecordUpload",
+      "symbol": "nba97_game_image_record_upload",
+      "source": "src/recovered/game_image_record_upload.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_image_record_upload_tests; nba97_game_image_record_upload_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8003066C",
       "original_name": "Game_TextChainClear",
       "symbol": "nba97_game_text_chain_clear",

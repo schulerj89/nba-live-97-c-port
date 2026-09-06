@@ -1294,6 +1294,22 @@ def main():
             and frame_ui["hilo_known_masks"] == [7,11]
             and frame_ui["blocked_children"] == ["0x80031C5C","0x8003066C","0x80032774"], "Frame UI natural state drifted")
     countdown = frame_ui["countdown_update"]
+    upload = frame_ui["image_record_upload"]
+    require((upload["program"], upload["address"], upload["inclusive_end"], upload["bytes"], upload["instructions"])
+            == ("GAMEONLY", "0x80094540", "0x800946A3", 356, 89), "Image upload provenance drifted")
+    require(upload["classification"] == "BLOCKED" and "independent synthetic active countdown caller" in upload["scope"]
+            and upload["completed"] and upload["parent_completed"] and upload["same_parent_memory"]
+            and (upload["call_pc"], upload["operations"], upload["reads"], upload["stores"], upload["callbacks"], upload["records"], upload["sp"], upload["ra"])
+            == (0x80032AE4, 25, 11, 13, 1, 1, 0x801FEFC0, 0x80032AEC)
+            and (upload["header_before"], upload["header_after"], upload["cache_before"], upload["cache_after"])
+            == (0x23, 0x2B, 65535, 2) and upload["rectangle"] == [0x340, 0xF0, 0x10, 1]
+            and upload["blocked_children"] == ["0x800944F4", "0x800A3BF8"], "Image upload natural state drifted")
+    (args.frames / "image_record_upload_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY", "address":"0x80094540", "driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes, "cpu_receipt":"loop_entry_trace.json", "state":upload,
+        "classification":"BLOCKED"
+    }, indent=2)+"\n", encoding="utf-8")
     require((countdown["program"], countdown["address"], countdown["inclusive_end"], countdown["bytes"], countdown["instructions"])
             == ("GAMEONLY", "0x8003287C", "0x80032B0F", 660, 165), "Countdown provenance drifted")
     require(countdown["classification"] == "BLOCKED" and countdown["completed"] and countdown["same_parent_memory"]

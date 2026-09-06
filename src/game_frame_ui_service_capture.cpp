@@ -2,6 +2,7 @@
 #include "game_frame_ui_service_adapter.h"
 #include "game_countdown_ui_update_adapter.h"
 #include "game_text_chain_clear_adapter.h"
+#include "game_image_record_upload_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -265,6 +266,86 @@ std::size_t traceIndex(const Fixture &f, unsigned kind, U pc) {
   throw std::runtime_error("missing natural trace entry");
 }
 
+struct UploadFixture : Fixture {
+  Nba97GameImageRecordUploadBinding upload{};
+  Nba97GameCountdownUiUpdateProgress active{};
+  std::array<std::uint16_t, 4> rectangle{};
+  unsigned textCalls = 0;
+  unsigned uploadCalls = 0;
+
+  UploadFixture() {
+    put(0x800fdba4, 120, 4);
+    put(0x800fe8cc, 0, 2);
+    put(0x800fdb58, 120, 4);
+    put(0x80021d92, 1, 1);
+    put(0x800fea2e, 0xffff, 2);
+    put(0x800249e8, 0x1555, 2);
+    upload.operation_budget = 128;
+    upload.io = uploadChild;
+    upload.user = this;
+  }
+  U get(U address, unsigned width) const {
+    U value = 0;
+    for (unsigned i = 0; i < width; ++i)
+      value |= U(bytes[at(address + i, 1)]) << (i * 8u);
+    return value;
+  }
+  static int textChild(void *opaque, const Nba97GameTextMemory *,
+                       const Nba97GameCountdownUiUpdateEvent *event,
+                       Nba97GameCountdownUiUpdateMachine *machine) {
+    auto &f = *static_cast<UploadFixture *>(opaque);
+    check(event->pc == 0x800329e8 && event->entry == 0x80030d18 &&
+          event->delay_slot_pc == 0x800329ec && event->argument_count == 5);
+    ++f.textCalls;
+    // Explicit synthetic prerequisite; no glyph allocation or rendering claim.
+    machine->registers.gpr[2] = {0, 15};
+    return 1;
+  }
+  static int uploadChild(void *opaque, const Nba97GameTextMemory *,
+                         const Nba97GameImageRecordUploadEvent *event,
+                         Nba97GameImageRecordUploadMachine *machine) {
+    auto &f = *static_cast<UploadFixture *>(opaque);
+    check(event->pc == 0x8009464c && event->entry == 0x800944f4 &&
+          event->delay_slot_pc == 0x80094650 && event->argument_count == 2);
+    ++f.uploadCalls;
+    for (unsigned i = 0; i < 4; ++i)
+      f.rectangle[i] = std::uint16_t(f.get(machine->registers.gpr[4].word + 2 * i, 2));
+    // Observe the original descriptor; the unresolved upload stays typed.
+    return 1;
+  }
+};
+
+std::string captureImageRecordUpload() {
+  UploadFixture f;
+  Nba97GameCountdownUiUpdateContext context{};
+  context.memory = {&f.region, 1};
+  context.operation_budget = 512;
+  context.machine = f.caller;
+  context.io = UploadFixture::textChild;
+  context.user = &f;
+  check(nba97_game_countdown_ui_update_with_image_record_upload(
+            &context, &f.upload, &f.active) == NBA97_TEXT_COMPLETE);
+  const auto &p = f.upload.progress;
+  check(p.completed && f.active.completed && f.active.record_uploaded &&
+        f.upload.completions == 1 && f.textCalls == 1 && f.uploadCalls == 1 &&
+        f.get(0x800fb5c0, 1) == 0x2b && f.get(0x800fea2e, 2) == 2 &&
+        f.rectangle == (std::array<std::uint16_t, 4>{0x340, 0xf0, 0x10, 1}));
+  std::ostringstream o;
+  o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80094540\","
+       "\"inclusive_end\":\"0x800946A3\",\"bytes\":356,\"instructions\":89,"
+       "\"classification\":\"BLOCKED\",\"scope\":\"independent synthetic active countdown caller; "
+       "explicit full entry machine; typed text and upload services; no rendered match frame\","
+       "\"completed\":true,\"parent_completed\":true,\"same_parent_memory\":true,"
+       "\"call_pc\":" << f.upload.event.pc << ",\"instruction_count\":" << p.instruction_count
+    << ",\"operations\":" << p.operations << ",\"reads\":" << p.reads
+    << ",\"stores\":" << p.stores << ",\"callbacks\":" << p.callbacks_completed
+    << ",\"records\":" << p.records_visited << ",\"sp\":" << p.machine.registers.gpr[29].word
+    << ",\"ra\":" << p.machine.registers.gpr[31].word
+    << ",\"header_before\":35,\"header_after\":43,\"cache_before\":65535,\"cache_after\":2,"
+       "\"rectangle\":[832,240,16,1],\"blocked_children\":[\"0x800944F4\",\"0x800A3BF8\"]}";
+  return o.str();
+}
+
 } // namespace
 std::string captureGameFrameUiService() {
   Fixture f;
@@ -346,6 +427,8 @@ std::string captureGameFrameUiService() {
     << ",\"ra\":" << text.machine.registers.gpr[31].word << "}}"
     << ",\"blocked_children\":[\"0x80031C5C\",\"0x8003066C\","
        "\"0x80032774\"]}";
-  return o.str();
+  auto result = o.str();
+  result.pop_back();
+  return result + ",\"image_record_upload\":" + captureImageRecordUpload() + "}";
 }
 } // namespace nba97
