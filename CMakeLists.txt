@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_period_audio_flag_clear_tests tests/game_period_audio_flag_clear_tests.cpp src/recovered/game_period_audio_flag_clear.c src/game_period_audio_flag_clear_adapter.cpp src/recovered/game_first_period_startup.c)
+    target_compile_features(nba97_game_period_audio_flag_clear_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_audio_flag_clear_tests PRIVATE src src/recovered)
+    add_test(NAME game_period_audio_flag_clear COMMAND nba97_game_period_audio_flag_clear_tests)
+    add_executable(nba97_game_period_audio_flag_clear_integration_tests tests/game_period_audio_flag_clear_integration_tests.cpp src/recovered/game_period_audio_flag_clear.c src/game_period_audio_flag_clear_adapter.cpp src/recovered/game_first_period_startup.c)
+    target_compile_features(nba97_game_period_audio_flag_clear_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_period_audio_flag_clear_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_period_audio_flag_clear_integration COMMAND nba97_game_period_audio_flag_clear_integration_tests)
     add_executable(nba97_game_period_presentation_finish_tests tests/game_period_presentation_finish_tests.cpp src/recovered/game_period_presentation_finish.c src/game_period_presentation_finish_adapter.cpp src/recovered/game_first_period_startup.c)
     target_compile_features(nba97_game_period_presentation_finish_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_period_presentation_finish_tests PRIVATE src src/recovered)
@@ -2212,3 +2220,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_compres
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_music_start.c src/game_period_music_start_adapter.cpp src/game_period_music_start_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_presentation_finish.c src/game_period_presentation_finish_adapter.cpp src/game_period_presentation_finish_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_audio_flag_clear.c src/game_period_audio_flag_clear_adapter.cpp src/game_period_audio_flag_clear_capture.cpp)

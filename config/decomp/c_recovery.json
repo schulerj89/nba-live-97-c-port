@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8002A244",
+      "original_name": "Game_PeriodAudioFlagClear",
+      "symbol": "nba97_game_period_audio_flag_clear",
+      "source": "src/recovered/game_period_audio_flag_clear.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_period_audio_flag_clear_tests; nba97_game_period_audio_flag_clear_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8002DDCC",
       "original_name": "Game_PeriodPresentationFinish",
       "symbol": "nba97_game_period_presentation_finish",
