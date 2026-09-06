@@ -1,6 +1,7 @@
 #include "game_period_startup_capture.h"
 #include "game_period_startup_adapter.h"
 #include "game_first_period_startup_adapter.h"
+#include "game_late_period_limits_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -14,6 +15,8 @@ struct Fixture {
     Nba97GamePeriodStartupProgress progress{};
     Nba97GamePeriodStartupAdapterProgress adapter{};
     Nba97GameFirstPeriodStartupBinding first{};
+    Nba97GameLatePeriodLimitsContext limits_context{};
+    Nba97GameLatePeriodLimitsTickBinding limits{};
     std::vector<std::uint32_t> first_pcs;
     std::vector<std::uint32_t> pcs;
     unsigned previous_fixtures=0;
@@ -41,6 +44,7 @@ struct Fixture {
     }
     static int service(void* user,const Nba97MatchTickCall* call,Nba97GamePeriodValue*) {
         auto& f=*static_cast<Fixture*>(user);
+        if(call->pc==0x80068cecu)return nba97_game_late_period_limits_from_match_tick(&f.limits,call,nullptr);
         // Explicit preceding-service fixtures; they do not establish live GPRs.
         if(call->pc==0x80068c24u || call->pc==0x80068c2cu){++f.previous_fixtures;return NBA97_BODY_OK;}
         if(call->pc!=0x80068c4cu)return NBA97_MATCH_TICK_SERVICE_REQUIRED;
@@ -60,17 +64,26 @@ struct Fixture {
 static std::string capturePeriodFixture(int first_flag) {
     Fixture f;f.context.memory={&f.region,1};f.context.operation_budget=100;f.context.io=Fixture::child;f.context.user=&f;
     f.first.operation_budget=30;f.first.io=Fixture::firstChild;f.first.user=&f;
+    f.limits_context.memory=f.context.memory;f.limits_context.operation_budget=12;
+    // Independent full-GPR entry fixture: the legacy tick does not expose its
+    // actual intermediate register file. Memory is shared with period startup.
+    for(unsigned i=0;i<32;++i)f.limits_context.registers.gpr[i]={i?0x33000000u+i:0u,15};
+    f.limits_context.registers.gpr[29]={0x801fff00u,15};f.limits_context.registers.gpr[31]={0x80068cf4u,15};
+    f.limits.limits=&f.limits_context;f.limits.entry_context_source_proven=1;
     for(unsigned i=0;i<32;++i)f.context.registers.gpr[i]={i?0x11000000u+i:0u,15};
     f.context.registers.gpr[29]={0x801fff00u,15};f.context.registers.gpr[31]={0x80068c54u,15};
     f.put(0x800fdb68u,first_flag<0?0x8000:0,2);f.put(0x80020c14u,0x80123400u);f.put(0x8001edecu,0,2);
     f.put(0x800eb680u,first_flag<0?0:unsigned(first_flag),1);f.put(0x800fdb4eu,0xbeef,2);
+    f.put(0x8010606cu,0xbeef,2);
     Nba97MatchTickContext tick{};tick.access=Fixture::access;tick.service=Fixture::service;tick.user=&f;tick.operation_budget=100;
     Nba97MatchTickProgress tp{};const auto result=nba97_game_match_tick(&tick,&tp);
     if(result!=NBA97_MATCH_TICK_SERVICE_REQUIRED || !f.progress.completed || f.progress.operations!=23 ||
        f.pcs.size()!=13 || f.previous_fixtures!=2 || f.get(0x800fdc48u)!=0x80123400u ||
        f.pre_pump_counter!=0x4321u || f.post_pump_delta!=0x8765u ||
        f.progress.period_selector.word!=(first_flag<0?0xffff8000u:0u) || f.progress.restored_return_address.word!=0x80068c54u ||
-       tp.stopped_pc!=0x80068cecu || tp.stopped_entry!=0x80067550u)
+       tp.stopped_pc!=0x80068cf4u || tp.stopped_entry!=0x800675e4u ||
+       f.limits.invocations!=1 || !f.limits.progress.completed || f.limits.progress.operations!=3 ||
+       f.get(0x8010606cu,2)!=0)
         throw std::runtime_error("period-startup CPU fixture drifted");
     if(first_flag>=0 && (f.first.invocations!=1 || !f.first.progress.completed ||
        f.first.progress.operations!=(first_flag?12u:9u) || f.first_pcs.size()!=(first_flag?7u:5u) ||
@@ -86,6 +99,11 @@ static std::string capturePeriodFixture(int first_flag) {
        ",\"pre_pump_counter\":"<<f.pre_pump_counter<<",\"post_pump_delta\":"<<f.post_pump_delta<<",\"restored_ra\":"<<f.progress.restored_return_address.word<<
        ",\"frame_stack_pointer\":"<<f.progress.frame_stack_pointer<<",\"next_pc\":"<<tp.stopped_pc<<",\"next_entry\":"<<tp.stopped_entry<<
        ",\"simulation_steps\":"<<tp.simulation_steps<<",\"frame_pumps\":"<<tp.frame_pumps;
+    o<<",\"late_period_limits\":{\"program\":\"GAMEONLY\",\"address\":\"0x80067550\",\"inclusive_end\":\"0x800675E3\",\"bytes\":148,\"instructions\":37,"
+      "\"classification\":\"no direct visual effect\",\"scope\":\"actual tick service adapter with independent synthetic full-GPR entry and shared period fixture memory\","
+      "\"completed\":true,\"call_pc\":2147912940,\"operations\":"<<f.limits.progress.operations<<",\"reads\":"<<f.limits.progress.reads<<",\"stores\":"<<f.limits.progress.stores
+     <<",\"clock\":"<<f.limits.progress.clock.word<<",\"period\":"<<f.limits.progress.period.word<<",\"limit_before\":48879,\"limit_after\":"<<f.get(0x8010606cu,2)
+     <<",\"returned_ra\":"<<f.limits.progress.registers.gpr[31].word<<"}";
     if(first_flag>=0) {
         const auto& p=f.first.progress;
         o<<",\"first_period_startup\":{\"program\":\"GAMEONLY\",\"address\":\"0x800673F0\",\"inclusive_end\":\"0x80067467\",\"bytes\":120,\"instructions\":30,"

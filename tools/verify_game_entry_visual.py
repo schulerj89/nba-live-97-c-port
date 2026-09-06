@@ -627,7 +627,7 @@ def main():
                 (0xFFFF8000, 0x80123400, 0x4321, 0x8765)
             and period["frame_stack_pointer"] == 0x801FFEE8 and period["restored_ra"] == 0x80068C54
             and (period["next_pc"], period["next_entry"], period["simulation_steps"], period["frame_pumps"]) ==
-                (0x80068CEC, 0x80067550, 0, 0), "period startup native CPU fixture drifted")
+                (0x80068CF4, 0x800675E4, 0, 0), "period startup native CPU fixture drifted")
     (args.frames / "period_startup_verified.json").write_text(json.dumps({
         "program": "GAMEONLY", "address": "0x80067468", "driver_frame_count": len(states),
         "input_transition_frames": {name: states.index(by_id[name]) for name in required},
@@ -649,11 +649,28 @@ def main():
                 and first["frame_stack_pointer"] == 0x801FFED0 and first["restored_ra"] == 0x8006749C
                 and case["signed_selector"] == 0 and case["call_pcs"][2] == 0x80067494
                 and (case["next_pc"],case["next_entry"],case["simulation_steps"],case["frame_pumps"]) ==
-                    (0x80068CEC,0x80067550,0,0), "first-period native CPU fixture drifted")
+                    (0x80068CF4,0x800675E4,0,0), "first-period native CPU fixture drifted")
     (args.frames / "first_period_startup_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800673F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":first_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
+    limit_cases = [period]+first_cases
+    for case, signed_period in zip(limit_cases, (0xFFFF8000,0,0)):
+        limits = case["late_period_limits"]
+        require((limits["program"],limits["address"],limits["inclusive_end"],limits["bytes"],limits["instructions"]) ==
+                ("GAMEONLY","0x80067550","0x800675E3",148,37), "late-period limits provenance drifted")
+        require(limits["completed"] and limits["classification"] == "no direct visual effect"
+                and "independent synthetic full-GPR" in limits["scope"] and limits["call_pc"] == 0x80068CEC
+                and (limits["operations"],limits["reads"],limits["stores"]) == (3,2,1)
+                and (limits["clock"],limits["period"],limits["limit_before"],limits["limit_after"],limits["returned_ra"]) ==
+                    (0,signed_period,0xBEEF,0,0x80068CF4), "late-period limits native CPU fixture drifted")
+    (args.frames / "late_period_limits_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80067550","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json",
+        "state":[case["late_period_limits"] for case in limit_cases],
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]

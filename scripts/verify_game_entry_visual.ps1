@@ -137,6 +137,7 @@ try {
         'nba97_game_first_period_startup_tests','nba97_game_first_period_startup_integration_tests',
         'nba97_game_speech_startup_tests','nba97_game_speech_startup_integration_tests',
         'nba97_game_camera_select_tests','nba97_game_camera_select_integration_tests',
+        'nba97_game_late_period_limits_tests','nba97_game_late_period_limits_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',
