@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80067D38",
+      "original_name": "Game_ClockViolations",
+      "symbol": "nba97_game_clock_violations",
+      "source": "src/recovered/game_clock_violations.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_clock_violations_tests; nba97_game_clock_violations_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8008472C",
       "original_name": "Game_AudioStreamStatus",
       "symbol": "nba97_game_audio_stream_status",

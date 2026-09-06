@@ -40,6 +40,8 @@ int GameMatchClocksCapture::dispatch(const Nba97GameTextMemory* memory,const Nba
     // This independently supplied fixture checks its real argument and JAL RA.
     for(unsigned i=0;i<32;++i)b.entry_machine.registers.gpr[i]={i?0x44000000u+i:0u,15};
     b.entry_machine.registers.gpr[4]={call->args[0],15};b.entry_machine.registers.gpr[29]={0x801fff00u,15};
+    // 68D54 sign-extends s0; the 68D58 JAL delay copies that s0 to a0.
+    b.entry_machine.registers.gpr[16]={call->args[0],15};
     b.entry_machine.registers.gpr[31]={call->pc+8u,15};
     b.entry_machine.hi={0,0};b.entry_machine.lo={0,0};
     const int result=nba97_game_match_clocks_from_match_tick(&b,call,nullptr);const auto& p=b.progress;
@@ -56,6 +58,6 @@ int GameMatchClocksCapture::dispatch(const Nba97GameTextMemory* memory,const Nba
     o<<"],\"main_before\":7200,\"main_after\":"<<f.get(0x800fdb58u)<<",\"shot_before\":180,\"shot_after\":"<<f.get(0x800fdba4u)
      <<",\"team_timers\":["<<f.get(0x8001eeb4u,2)<<','<<f.get(0x8001ef78u,2)<<"],\"team_states\":["<<f.get(0x8001eeb6u,2)<<','<<f.get(0x8001ef7au,2)
      <<"],\"signal\":"<<f.get(0x800fdb86u,2)<<",\"multiply_count\":"<<p.multiply_count<<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
-    receipt=o.str();return result;
+    progress=p;receipt=o.str();return result;
 }
 }

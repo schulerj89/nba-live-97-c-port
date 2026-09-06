@@ -5,6 +5,7 @@
 namespace nba97 {
 struct GameMatchClocksCapture {
     std::string receipt;
+    Nba97GameMatchClocksProgress progress{};
     int dispatch(const Nba97GameTextMemory*,const Nba97MatchTickCall*,unsigned phase);
 };
 }
