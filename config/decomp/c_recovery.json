@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8009A97C",
+      "original_name": "Game_OrderingTableDma",
+      "symbol": "nba97_game_ordering_table_dma",
+      "source": "src/recovered/game_ordering_table_dma.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_ordering_table_dma_tests; nba97_game_ordering_table_dma_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80056080",
       "original_name": "Game_RotationMatrix",
       "symbol": "nba97_game_rotation_matrix",

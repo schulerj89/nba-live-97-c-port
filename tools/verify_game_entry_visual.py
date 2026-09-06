@@ -778,6 +778,31 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    dma = period["ordering_table_dma_probe"]
+    require((dma["program"], dma["address"], dma["inclusive_end"], dma["bytes"], dma["instructions"]) ==
+            ("GAMEONLY", "0x8009A97C", "0x8009AA63", 232, 58), "ordering DMA provenance drifted")
+    require(dma["classification"] == "no direct visual effect" and "mapped MMIO fixture" in dma["scope"]
+            and "typed DMA start/wait services" in dma["scope"] and len(dma["runs"]) == 2, "ordering DMA scope drifted")
+    for error, run in enumerate(dma["runs"]):
+        count = 32 if error else 4096
+        require(run["completed"] and run["parent_completed"]
+                and (run["operations"], run["reads"], run["stores"], run["callbacks"], run["waits"]) ==
+                    ((21, 11, 8, 2, 1) if error else (23, 13, 8, 2, 1))
+                and run["dma_address"] == 0x800F5C50 + count * 4 - 4 and run["dma_count"] == count
+                and (run["master_before"], run["master_after"]) == (0x12345678, 0x1A345678)
+                and (run["control_before"], run["control_started"], run["control_after"]) ==
+                    (0x55667788, 0x11000002, 0x11000002 if error else 0x10000002)
+                and (run["head_before"], run["head_after"]) == (0, 0xC567C)
+                and run["backend_return"] == (0xFFFFFFFF if error else count)
+                and run["parent_return"] == 0x800F5C50
+                and (run["returned_sp"], run["restored_ra"]) == (0x801000E0, 0x800999C4),
+                "ordering DMA native state drifted")
+    (args.frames / "ordering_table_dma_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8009A97C", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": dma,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     rotation = period["rotation_matrix_probe"]
     require((rotation["program"], rotation["address"], rotation["inclusive_end"], rotation["bytes"], rotation["instructions"]) ==
             ("GAMEONLY", "0x80056080", "0x800562CB", 588, 147), "rotation matrix provenance drifted")
