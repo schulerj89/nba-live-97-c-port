@@ -1,5 +1,6 @@
 #include "game_cross_half_rule_capture.h"
 #include "game_cross_half_rule_adapter.h"
+#include "game_actor_timers_adapter.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -42,6 +43,7 @@ struct NaturalFixture {
   Nba97MatchTickContext tick{};
   Nba97MatchTickProgress tick_progress{};
   Nba97GameCrossHalfRuleBinding binding{};
+  Nba97GameActorTimersBinding timers{};
   std::vector<Nba97MatchTickCall> services;
   std::vector<Nba97GameCrossHalfRuleEvent> children;
   std::vector<Nba97GameCrossHalfRuleMachine> child_machines;
@@ -51,7 +53,7 @@ struct NaturalFixture {
   bool unexpected{};
   bool refuse_gate{};
 
-  static constexpr std::array<ExpectedService, 14> Expected{{
+  static constexpr std::array<ExpectedService, 15> Expected{{
       {0x80068c24u, 0x80066f88u, 0u, 0u},
       {0x80068c2cu, 0x80079664u, 0u, 1u},
       {0x80068c4cu, 0x80067468u, 0u, 0u},
@@ -66,6 +68,7 @@ struct NaturalFixture {
       {0x80068e28u, 0x800747b0u, 0u, 0u},
       {0x80068e30u, 0x8006817cu, 0u, 0u},
       {0x80068e38u, 0x8006830cu, 0u, 0u},
+      {0x80068e78u, 0x80076b28u, 0u, 0u},
   }};
 
   NaturalFixture() {
@@ -110,6 +113,25 @@ struct NaturalFixture {
     put(0x800fdbacu, 12u, 2u);
     put(0x800fdb94u, 0u, 2u);
     put(0x800fe882u, 0u, 2u);
+    timers.memory = {&region, 1};
+    timers.operation_budget = 1000;
+    put(0x800fdbaeu, 1, 2);
+    put(0x800fdb58u, 3600, 4);
+    put(0x800fdb74u, 59, 2);
+    for (unsigned i = 0; i < 11; ++i) {
+      const auto actor = 0x80030000u + i * 0x200u;
+      put(0x80020becu + i * 4u, actor, 4);
+      put(actor + 0xe6u, 5, 2);
+      put(actor + 0xe4u, 1, 2);
+      put(actor + 0xb4u, 2, 2);
+      put(actor + 4u, 0, 2);
+      put(actor + 0xd8u, 0xa5, 1);
+      put(actor + 0xf2u, 0xbeef, 2);
+    }
+    for (unsigned i = 0; i < 10; ++i)
+      put(0x800fdc70u + i * 4u, 0x80040000u + i * 0x40u, 4);
+    put(0x800fdc50u, 0x80050000u, 4);
+    put(0x8005001eu, 5, 2);
   }
 
   static Nba97GameCrossHalfRuleMachine entry_machine() {
@@ -212,7 +234,20 @@ struct NaturalFixture {
       return nba97_game_cross_half_rule_from_match_tick(&fixture.binding, call,
                                                         result);
     }
-    if (call->pc == 0x80068e38u)
+    if (call->pc == 0x80068e38u) {
+      /* CG returns directly to the next JAL at 68E38. Its NOP delay changes
+       * no state, so only the JAL-produced RA is projected into the full
+       * machine returned by that actual owner on this retained memory. */
+      if (!fixture.binding.progress.completed || result != nullptr)
+        return NBA97_BODY_ARGUMENT;
+      fixture.timers.entry_machine = fixture.binding.progress.machine;
+      fixture.timers.entry_machine.registers.gpr[31] = {0x80068e40u, 15};
+      fixture.timers.entry_machine_ready = 1;
+      return nba97_game_actor_timers_from_match_tick(&fixture.timers, call,
+                                                    result)
+                 ? NBA97_BODY_OK : NBA97_BODY_ARGUMENT;
+    }
+    if (call->pc == 0x80068e78u)
       return NBA97_BODY_ARGUMENT;
     if (result != nullptr) {
       fixture.unexpected = true;
@@ -288,14 +323,21 @@ std::string captureGameCrossHalfRule() {
   check(nba97_game_match_tick(&f.tick, &f.tick_progress) ==
         NBA97_BODY_ARGUMENT);
   const auto &p = f.binding.progress;
-  check(!f.unexpected && f.expected_index == 14 && f.player_calls == 1 &&
+  check(!f.unexpected && f.expected_index == 15 && f.player_calls == 1 &&
         f.ball_calls == 1 && p.completed && f.binding.completions == 1 &&
         f.binding.rule_delay_invocations == 1 &&
         f.binding.rule_delay_progress.completed);
-  check(f.tick_progress.stopped_pc == 0x80068e38 &&
-        f.tick_progress.stopped_entry == 0x8006830c &&
+  check(f.tick_progress.stopped_pc == 0x80068e78 &&
+        f.tick_progress.stopped_entry == 0x80076b28 &&
         f.get(0x800fdbac, 2) == 13 && f.get(0x800fe8e0, 2) == 0 &&
         f.get(0x800fe882, 2) == 8 && f.children.size() == 4);
+  const auto &t = f.timers.progress;
+  check(t.completed && f.timers.completions == 1 &&
+        t.entity_iterations == 11 && t.team_counter_updates == 10 &&
+        t.participation_updates == 1 && f.get(0x800300e6u, 2) == 4 &&
+        f.get(0x800300e4u, 2) == 0 && f.get(0x800300b4u, 2) == 1 &&
+        f.get(0x800300ddu, 1) == 1 && f.get(0x800fdb74u, 2) == 60 &&
+        f.get(0x8005001eu, 2) == 6);
   const std::uint32_t pcs[] = {0x80068290, 0x800682b4, 0x800682d8, 0x800682e0};
   for (unsigned i = 0; i < 4; ++i)
     check(f.children[i].pc == pcs[i] &&
@@ -306,8 +348,8 @@ std::string captureGameCrossHalfRule() {
        "\"0x8006830B\",\"bytes\":400,\"instructions\":100,\"classification\":"
        "\"no direct visual effect\",\"scope\":\"independent synthetic actual "
        "match-tick caller with explicit full-machine snapshot; whitelisted "
-       "typed prerequisites; actual duration no-op; stops at next unresolved "
-       "actor-timer service; no advancing "
+       "typed prerequisites; actual duration no-op and actor timers; stops at next typed "
+       "recorder service; no advancing "
        "match\",\"completed\":true,\"parent_completed\":false,\"same_parent_"
        "memory\":true,\"call_pc\":"
     << f.binding.event.pc << ",\"operations\":" << p.operations
@@ -330,7 +372,20 @@ std::string captureGameCrossHalfRule() {
       o << ',';
     o << f.children[i].pc;
   }
-  o << "]}";
+  o << "],\"actor_timers\":{\"program\":\"GAMEONLY\",\"address\":\"0x8006830C\","
+       "\"inclusive_end\":\"0x80068503\",\"bytes\":504,\"instructions\":126,"
+       "\"classification\":\"no direct visual effect\",\"completed\":true,"
+       "\"same_parent_memory\":true,\"machine_from_crossing_rule\":true,"
+       "\"call_pc\":" << f.timers.event.pc << ",\"operations\":" << t.operations
+    << ",\"reads\":" << t.reads << ",\"stores\":" << t.stores
+    << ",\"actor_count\":" << t.entity_iterations
+    << ",\"team_updates\":" << t.team_counter_updates
+    << ",\"participation_updates\":" << t.participation_updates
+    << ",\"multiply_count\":" << t.multiply_count
+    << ",\"timers_before\":[5,1,2],\"timers_after\":[4,0,1],"
+       "\"cache_before\":59,\"cache_after\":60,\"participation_before\":5,\"participation_after\":6"
+    << ",\"sp\":" << t.machine.registers.gpr[29].word
+    << ",\"ra\":" << t.machine.registers.gpr[31].word << "}}";
   return o.str();
 }
 } // namespace nba97

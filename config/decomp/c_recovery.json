@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8006830C",
+      "original_name": "Game_ActorTimers",
+      "symbol": "nba97_game_actor_timers",
+      "source": "src/recovered/game_actor_timers.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_actor_timers_tests; nba97_game_actor_timers_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8003287C",
       "original_name": "Game_CountdownUiUpdate",
       "symbol": "nba97_game_countdown_ui_update",
