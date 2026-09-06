@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8007A410",
+      "original_name": "Game_CameraStateLookup",
+      "symbol": "nba97_game_camera_state_lookup",
+      "source": "src/recovered/game_camera_state_lookup.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_camera_state_lookup_tests; nba97_game_camera_state_lookup_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8006830C",
       "original_name": "Game_ActorTimers",
       "symbol": "nba97_game_actor_timers",

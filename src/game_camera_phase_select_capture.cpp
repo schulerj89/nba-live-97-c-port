@@ -20,6 +20,9 @@ struct Fixture {
   static int camera(void*u,const Nba97GameTextMemory* memory,const Nba97GameCameraSelectEvent* e,Nba97GameCameraSelectRegisters* r){
     auto&f=*static_cast<Fixture*>(u);f.camera_pcs.push_back(e->pc);
     if(e->entry==0x800798b4)return f.elapsed.dispatch(memory,e,r);
+    // Explicit coordinate output of the typed adjustment prerequisite. The
+    // selector saves this live value before the elapsed call and restores it.
+    if(e->pc==0x80079b7c && e->entry==0x80079f78)f.put(0x800fc9ac,0xffffff00);
     // Explicit camera resource/service response, without drawing a frame.
     r->gpr[2]={0,15};return 1;
   }
@@ -41,6 +44,8 @@ std::string captureCase(unsigned busy){
   // not the frontend's current mode-12 startup or a live frame-pump bridge.
   f.put(0x800fc99cu,busy);f.put(0x800fdb90u,0x81,2);f.put(0x800bc940u,1);f.put(0x800bc944u,1);
   f.put(0x800bc1f8,10);f.put(0x800bc1fc,100);f.put(0x800bc200,1);f.put(0x800bc1f4,0xffffffff);
+  // Runtime-generated signed lookup table; no retail table is embedded.
+  for(unsigned i=0;i<16;++i)f.put(0x800bc204+4*i,27+i);
   nba97_game_camera_phase_select_binding_init(&f.binding,200,500);f.binding.io=Fixture::phase;f.binding.user=&f;
   const int result=nba97_game_camera_select_with_phase_select(&f.parent,&f.binding,&f.parent_progress);
   const auto&p=f.binding.progress;

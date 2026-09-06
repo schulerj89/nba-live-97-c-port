@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_camera_state_lookup_tests tests/game_camera_state_lookup_tests.cpp src/recovered/game_camera_state_lookup.c src/game_camera_state_lookup_adapter.cpp src/recovered/game_camera_elapsed_dispatch.c)
+    target_compile_features(nba97_game_camera_state_lookup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_state_lookup_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_state_lookup COMMAND nba97_game_camera_state_lookup_tests)
+    add_executable(nba97_game_camera_state_lookup_integration_tests tests/game_camera_state_lookup_integration_tests.cpp src/recovered/game_camera_state_lookup.c src/game_camera_state_lookup_adapter.cpp src/recovered/game_camera_elapsed_dispatch.c)
+    target_compile_features(nba97_game_camera_state_lookup_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_state_lookup_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_state_lookup_integration COMMAND nba97_game_camera_state_lookup_integration_tests)
     add_executable(nba97_game_actor_timers_tests tests/game_actor_timers_tests.cpp src/recovered/game_actor_timers.c src/game_actor_timers_adapter.cpp src/recovered/game_match_tick.c)
     target_compile_features(nba97_game_actor_timers_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_actor_timers_tests PRIVATE src src/recovered)
@@ -2312,3 +2320,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_elapsed_dispa
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_countdown_ui_update.c src/game_countdown_ui_update_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_timers.c src/game_actor_timers_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_state_lookup.c src/game_camera_state_lookup_adapter.cpp)

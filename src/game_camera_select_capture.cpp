@@ -39,6 +39,8 @@ int GameCameraSelectCapture::dispatch(const Nba97GameTextMemory* memory,
     for(unsigned i=0;i<6;++i)f.put(0x80109aa8u+4*i,i==5?256u:0x70000000u+i*16u);
     // Explicit threshold/cache contract for the newly composed timing owner.
     f.put(0x800bc1f8,10);f.put(0x800bc1fc,100);f.put(0x800bc200,1);f.put(0x800bc1f4,0xffffffff);
+    // Explicit generated lookup table and incoming camera coordinate.
+    f.put(0x800fc9ac,0);for(unsigned i=0;i<16;++i)f.put(0x800bc204+4*i,42+i);
     Nba97GameCameraSelectStartupBinding binding{};binding.operation_budget=100;binding.io=Fixture::child;binding.user=&f;
     const int result=nba97_game_camera_select_from_camera_startup(&binding,memory,e,r);
     const auto& p=binding.progress;

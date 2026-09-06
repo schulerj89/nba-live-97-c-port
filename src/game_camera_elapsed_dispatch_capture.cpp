@@ -1,4 +1,5 @@
 #include "game_camera_elapsed_dispatch_capture.h"
+#include "game_camera_state_lookup_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -22,7 +23,9 @@ std::uint32_t read(const Nba97GameTextMemory &m, std::uint32_t address) {
 }
 struct Fixture {
   unsigned calls = 0;
-  static int child(void *u, const Nba97GameTextMemory *,
+  Nba97GameCameraStateLookupBinding lookup{};
+  Fixture() { nba97_game_camera_state_lookup_binding_init(&lookup, 4); }
+  static int child(void *u, const Nba97GameTextMemory *memory,
                    const Nba97GameCameraElapsedDispatchEvent *e,
                    Nba97GameCameraElapsedDispatchMachine *m) {
     auto &f = *static_cast<Fixture *>(u);
@@ -32,10 +35,8 @@ struct Fixture {
         m->registers.gpr[31].word != 0x800799a4 ||
         m->registers.gpr[31].known_mask != 15)
       return 0;
-    // Explicit synthetic refresh contract; camera interpolation remains
-    // unresolved.
-    m->registers.gpr[2] = {42, 15};
-    return 1;
+    return nba97_game_camera_state_lookup_from_elapsed_dispatch(
+        &f.lookup, memory, e, m);
   }
 };
 } // namespace
@@ -55,18 +56,26 @@ int GameCameraElapsedDispatchCapture::dispatch(
   const int result = nba97_game_camera_elapsed_dispatch_from_camera_select(
       &binding, memory, event, registers);
   const auto &p = binding.progress;
+  const auto &k = f.lookup.progress;
   if (result != 1 || !p.completed || binding.invocations != 1 || f.calls != 1 ||
       p.operations != 14 || p.reads != 8 || p.stores != 5 ||
       p.instruction_count != 48 || read(*memory, 0x80106074) != 0 ||
       read(*memory, 0x800bc1f4) != 42 || read(*memory, 0x800d8eec) != 42 ||
-      p.machine.hi.known_mask || p.machine.lo.known_mask)
-    throw std::runtime_error("camera elapsed native composition drifted");
+      p.machine.hi.known_mask || p.machine.lo.known_mask || !k.completed ||
+      f.lookup.completions != 1 || k.operations != 2 || k.reads != 2 ||
+      k.returned_value.word != 42 || k.returned_value.known_mask != 15)
+    throw std::runtime_error("camera elapsed native composition drifted: caller=" +
+        std::to_string(event->pc) + " result=" + std::to_string(result) +
+        " lookup_result=" + std::to_string(f.lookup.result) +
+        " source=" + std::to_string(k.source_value.word) +
+        " address=" + std::to_string(k.lookup_address.word) +
+        " raw_return=" + std::to_string(k.returned_value.word));
   std::ostringstream o;
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x800798B4\",\"inclusive_end\":"
        "\"0x800799CB\",\"bytes\":280,\"instructions\":70,\"classification\":"
        "\"no direct visual effect\",\"scope\":\"actual camera-selector caller "
-       "and elapsed owner on same retained memory; explicit synthetic "
-       "thresholds and refresh return; no advancing "
+       "and elapsed and lookup owners on same retained memory; explicit generated "
+       "thresholds and signed tables; no advancing "
        "match\",\"completed\":true,\"call_pc\":"
     << event->pc << ",\"delay_pc\":" << event->delay_slot_pc
     << ",\"requested_delta\":" << p.requested_delta.word
@@ -79,7 +88,19 @@ int GameCameraElapsedDispatchCapture::dispatch(
     << ",\"instruction_count\":" << p.instruction_count
     << ",\"return_address\":" << p.restored_return_address.word
     << ",\"sp\":" << p.machine.registers.gpr[29].word
-    << ",\"hilo_known_masks\":[0,0],\"child_pc\":2147981724}";
+    << ",\"hilo_known_masks\":[0,0],\"child_pc\":2147981724,\"state_lookup\":{"
+       "\"program\":\"GAMEONLY\",\"address\":\"0x8007A410\",\"inclusive_end\":\"0x8007A467\","
+       "\"bytes\":88,\"instructions\":22,\"classification\":\"no direct visual effect\","
+       "\"completed\":true,\"same_parent_memory\":true,\"call_pc\":" << f.lookup.event.pc
+    << ",\"source\":" << k.source_value.word
+    << ",\"signed_index\":" << k.signed_index.word
+    << ",\"negative_table\":" << unsigned(k.negative_table)
+    << ",\"lookup_address\":" << k.lookup_address.word
+    << ",\"raw_return\":" << k.returned_value.word
+    << ",\"instruction_count\":" << k.instruction_count
+    << ",\"operations\":" << k.operations << ",\"reads\":" << k.reads
+    << ",\"sp\":" << k.machine.registers.gpr[29].word
+    << ",\"ra\":" << k.machine.registers.gpr[31].word << "}}";
   receipt = o.str();
   return result;
 }

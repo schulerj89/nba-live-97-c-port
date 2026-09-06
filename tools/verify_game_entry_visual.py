@@ -1343,6 +1343,21 @@ def main():
                 and (elapsed["operations"],elapsed["reads"],elapsed["stores"],elapsed["callbacks"],elapsed["instruction_count"]) == (14,8,5,1,48)
                 and (elapsed["elapsed_after"],elapsed["cache_before"],elapsed["cache_after"],elapsed["publication_after"],elapsed["child_pc"]) == (0,0xFFFFFFFF,42,42,0x8007999C)
                 and elapsed["sp"] == [0x801FFE90,0x801FEF38][i] and elapsed["hilo_known_masks"]==[0,0],"Camera elapsed native state drifted")
+        lookup = elapsed["state_lookup"]
+        require((lookup["program"],lookup["address"],lookup["inclusive_end"],lookup["bytes"],lookup["instructions"])
+                == ("GAMEONLY","0x8007A410","0x8007A467",88,22), "Camera lookup provenance drifted")
+        require(lookup["classification"] == "no direct visual effect" and lookup["completed"] and lookup["same_parent_memory"]
+                and (lookup["call_pc"],lookup["operations"],lookup["reads"],lookup["raw_return"],lookup["ra"])
+                == (0x8007999C,2,2,42,0x800799A4)
+                and (lookup["source"],lookup["signed_index"],lookup["negative_table"],lookup["lookup_address"],lookup["instruction_count"])
+                == [(0,0,0,0x800BC204,16),(0xFFFFFF00,7,1,0x800BC240,15)][i]
+                and lookup["sp"] == [0x801FFE78,0x801FEF20][i], "Camera lookup signed path drifted")
+    (args.frames / "camera_state_lookup_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8007A410","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json",
+        "cases":[case["state_lookup"] for case in elapsed_cases], "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     (args.frames / "camera_elapsed_dispatch_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800798B4","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},

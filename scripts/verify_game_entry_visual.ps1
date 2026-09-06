@@ -208,6 +208,7 @@ try {
         'nba97_game_camera_elapsed_dispatch_tests','nba97_game_camera_elapsed_dispatch_integration_tests',
         'nba97_game_countdown_ui_update_tests','nba97_game_countdown_ui_update_integration_tests',
         'nba97_game_actor_timers_tests','nba97_game_actor_timers_integration_tests',
+        'nba97_game_camera_state_lookup_tests','nba97_game_camera_state_lookup_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',
