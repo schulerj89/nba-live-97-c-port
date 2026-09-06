@@ -2,6 +2,7 @@
 #include "game_actor_resume_capture.h"
 #include "game_ball_actor_contact_capture.h"
 #include "game_actor_input_capture.h"
+#include "game_camera_override_end_capture.h"
 #include "game_period_startup_adapter.h"
 #include "game_first_period_startup_adapter.h"
 #include "game_late_period_limits_adapter.h"
@@ -145,6 +146,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact()
             <<",\"contact_dispatch_probe\":"<<captureGameContactDispatch()
             <<",\"actor_contact_gate_probe\":"<<captureGameActorContactGate()
+            <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"actor_contact_eligibility_probe\":"<<captureGameActorContactEligibility()
             <<",\"ball_acquire_probe\":"<<captureGameBallAcquire()
             <<",\"actor_input_probe\":"<<captureGameActorInput();

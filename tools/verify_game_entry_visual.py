@@ -739,6 +739,24 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": eligibility,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    camera_end = period["camera_override_end_probe"]
+    require((camera_end["program"], camera_end["address"], camera_end["inclusive_end"],
+             camera_end["bytes"], camera_end["instructions"]) ==
+            ("GAMEONLY", "0x8007A36C", "0x8007A39F", 52, 13), "camera teardown provenance drifted")
+    require(camera_end["completed"] and camera_end["classification"] == "no direct visual effect"
+            and "independent full machine" in camera_end["scope"] and "typed camera restore" in camera_end["scope"]
+            and (camera_end["flag_before"], camera_end["flag_after"], camera_end["tail_before"], camera_end["tail_after"]) == (1, 0, 2, 1)
+            and (camera_end["selection_writes"], camera_end["selected"], camera_end["claim"]) == (1, 4, 0)
+            and (camera_end["operations"], camera_end["reads"], camera_end["stores"], camera_end["callbacks"]) == (5, 2, 2, 1)
+            and camera_end["returned_value"] == 0xCAFEBABE
+            and (camera_end["frame_stack_pointer"], camera_end["returned_sp"], camera_end["restored_ra"]) ==
+                (0x801FEFE8, 0x801FF000, 0x80065578), "camera teardown ordered CPU state drifted")
+    (args.frames / "camera_override_end_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8007A36C", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": camera_end,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

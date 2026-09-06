@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8007A36C",
+      "original_name": "Game_CameraOverrideEnd",
+      "symbol": "nba97_game_camera_override_end",
+      "source": "src/recovered/game_camera_override_end.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_camera_override_end_tests; nba97_game_camera_override_end_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8005F948",
       "original_name": "Game_ActorContactEligibility",
       "symbol": "nba97_game_actor_contact_eligibility",

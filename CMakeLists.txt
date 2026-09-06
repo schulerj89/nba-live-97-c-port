@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_camera_override_end_tests tests/game_camera_override_end_tests.cpp src/recovered/game_camera_override_end.c)
+    target_compile_features(nba97_game_camera_override_end_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_override_end_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_override_end COMMAND nba97_game_camera_override_end_tests)
+    add_executable(nba97_game_camera_override_end_integration_tests tests/game_camera_override_end_integration_tests.cpp
+        src/recovered/game_camera_override_end.c src/game_camera_override_end_adapter.cpp src/recovered/game_controller_selection.c)
+    target_compile_features(nba97_game_camera_override_end_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_override_end_integration_tests PRIVATE src)
+    add_test(NAME game_camera_override_end_integration COMMAND nba97_game_camera_override_end_integration_tests)
     add_executable(nba97_game_actor_contact_eligibility_tests tests/game_actor_contact_eligibility_tests.cpp src/recovered/game_actor_contact_eligibility.c)
     target_compile_features(nba97_game_actor_contact_eligibility_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_actor_contact_eligibility_tests PRIVATE src src/recovered)
@@ -1797,3 +1806,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_ball_acquire.c src/g
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_input.c src/game_actor_input_adapter.cpp src/game_actor_input_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_contact_eligibility.c src/game_actor_contact_eligibility_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_override_end.c src/game_camera_override_end_adapter.cpp src/game_camera_override_end_capture.cpp)
