@@ -616,6 +616,30 @@ def main():
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     period = loop["period_startup"]
+    actor_resume = period["actor_resume_period_probe"]
+    require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
+             actor_resume["bytes"], actor_resume["instructions"]) ==
+            ("GAMEONLY", "0x800582DC", "0x800583FB", 288, 72), "actor resume provenance drifted")
+    require(actor_resume["completed"] and actor_resume["parent_completed"]
+            and actor_resume["classification"] == "no direct visual effect"
+            and "independent zero-clock actor fixture" in actor_resume["scope"]
+            and actor_resume["call_pc"] == 0x800676CC
+            and (actor_resume["operations"], actor_resume["reads"], actor_resume["stores"]) == (22,12,7)
+            and actor_resume["actor"] == 0x80160000
+            and (actor_resume["state_before"], actor_resume["state_after"], actor_resume["animation_before"]) == (27,1,[37,36])
+            and (actor_resume["cleared_4e"], actor_resume["flags_9a"], actor_resume["field_b8"], actor_resume["copied_a6"]) == (0,3,47,0x1234)
+            and actor_resume["call_pcs"] == [0x80058374,0x8005837C,0x800583E0]
+            and (actor_resume["frame_stack_pointer"], actor_resume["returned_sp"], actor_resume["restored_ra"]) ==
+                (0x801FFEC8,0x801FFEE0,0x800676D4)
+            and (actor_resume["parent_returned_value"], actor_resume["parent_restored_ra"], actor_resume["parent_phase"],
+                 actor_resume["parent_owner"], actor_resume["parent_actor"], actor_resume["parent_actor_timer"]) ==
+                (0,0x80068D74,0,0xFFFF,0x80161000,30), "actor resume native CPU fixture drifted")
+    (args.frames / "actor_resume_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800582DC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":actor_resume,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     require((period["program"], period["address"], period["inclusive_end"], period["bytes"], period["instructions"]) ==
             ("GAMEONLY", "0x80067468", "0x8006754F", 232, 58), "period startup provenance drifted")
     require(period["completed"] and "explicit synthetic" in period["scope"]

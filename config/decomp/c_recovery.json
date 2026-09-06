@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800582DC",
+      "original_name": "Game_ActorResume",
+      "symbol": "nba97_game_actor_resume",
+      "source": "src/recovered/game_actor_resume.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_actor_resume_tests; nba97_game_actor_resume_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800295C8",
       "original_name": "Game_RuleDelay",
       "symbol": "nba97_game_rule_delay",
