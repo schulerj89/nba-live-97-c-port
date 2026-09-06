@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8009A7DC",
+      "original_name": "Game_DrawOffsetCommand",
+      "symbol": "nba97_game_draw_offset_command",
+      "source": "src/recovered/game_draw_offset_command.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_draw_offset_command_tests; nba97_game_draw_offset_command_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009B1F8",
       "original_name": "Game_GpuPacketDma",
       "symbol": "nba97_game_gpu_packet_dma",

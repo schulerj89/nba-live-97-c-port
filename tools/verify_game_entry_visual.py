@@ -778,6 +778,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    draw_offset_command = period["draw_offset_command_probe"]
+    require((draw_offset_command["program"],draw_offset_command["address"],draw_offset_command["inclusive_end"],draw_offset_command["bytes"],draw_offset_command["instructions"]) == ("GAMEONLY","0x8009A7DC","0x8009A823",72,18), "Draw-offset provenance drifted")
+    require(draw_offset_command["completed"] and draw_offset_command["parent_completed"] and draw_offset_command["classification"] == "no direct visual effect"
+            and "two synthetic packet helpers" in draw_offset_command["scope"]
+            and (draw_offset_command["offset_calls"],draw_offset_command["packet_calls"],draw_offset_command["dma_calls"],draw_offset_command["submit_calls"],draw_offset_command["copy_calls"]) == (2,2,2,2,4)
+            and draw_offset_command["cache_matches_last_environment"]
+            and draw_offset_command["commands"] == [0xE5001802,0xE5001802], "Draw-offset native state drifted")
+    for item,hi in zip(draw_offset_command["offsets"],[0x80048F4C,0x80048FA0]):
+        require((item["operations"],item["reads"],item["return_v0"],item["return_address"],item["hi"]) == (1,1,0xE5001802,0x8009A3B8,hi), "Draw-offset machine drifted")
+    (args.frames / "draw_offset_command_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009A7DC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_offset_command,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     gpu_packet_dma = period["gpu_packet_dma_probe"]
     require((gpu_packet_dma["program"],gpu_packet_dma["address"],gpu_packet_dma["inclusive_end"],gpu_packet_dma["bytes"],gpu_packet_dma["instructions"]) == ("GAMEONLY","0x8009B1F8","0x8009B243",76,19), "GPU packet DMA provenance drifted")
     require(gpu_packet_dma["completed"] and gpu_packet_dma["parent_completed"] and gpu_packet_dma["classification"] == "no direct visual effect"
