@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800767FC",
+      "original_name": "Game_MatchBufferCompress",
+      "symbol": "nba97_game_match_buffer_compress",
+      "source": "src/recovered/game_match_buffer_compress.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_match_buffer_compress_tests; nba97_game_match_buffer_compress_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80076B3C",
       "original_name": "Game_MatchBufferRecord",
       "symbol": "nba97_game_match_buffer_record",

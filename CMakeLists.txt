@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_buffer_compress_tests tests/game_match_buffer_compress_tests.cpp src/recovered/game_match_buffer_compress.c src/game_match_buffer_compress_adapter.cpp src/recovered/game_match_buffer_record.c)
+    target_compile_features(nba97_game_match_buffer_compress_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_buffer_compress_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_buffer_compress COMMAND nba97_game_match_buffer_compress_tests)
+    add_executable(nba97_game_match_buffer_compress_integration_tests tests/game_match_buffer_compress_integration_tests.cpp src/recovered/game_match_buffer_compress.c src/game_match_buffer_compress_adapter.cpp src/recovered/game_match_buffer_record.c)
+    target_compile_features(nba97_game_match_buffer_compress_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_buffer_compress_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_buffer_compress_integration COMMAND nba97_game_match_buffer_compress_integration_tests)
     add_executable(nba97_game_match_buffer_record_tests tests/game_match_buffer_record_tests.cpp src/recovered/game_match_buffer_record.c src/game_match_buffer_record_adapter.cpp src/recovered/game_period_startup.c src/recovered/game_match_buffer_rewind.c src/game_match_buffer_rewind_adapter.cpp src/recovered/game_memory_zero.c src/recovered/game_match_state_reset.c src/recovered/game_match_buffer_initialize.c)
     target_compile_features(nba97_game_match_buffer_record_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_match_buffer_record_tests PRIVATE src src/recovered)
@@ -2182,3 +2190,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_substitution_candida
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_pending.c src/game_match_buffer_pending_adapter.cpp src/game_match_buffer_pending_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_record.c src/game_match_buffer_record_adapter.cpp src/game_match_buffer_record_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_compress.c src/game_match_buffer_compress_adapter.cpp src/game_match_buffer_compress_capture.cpp)
