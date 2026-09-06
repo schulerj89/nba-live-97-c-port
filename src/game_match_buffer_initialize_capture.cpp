@@ -1,3 +1,4 @@
+#include "game_match_buffer_rewind_capture.h"
 #include "game_match_buffer_initialize_capture.h"
 #include "game_match_buffer_initialize_adapter.h"
 #include <sstream>
@@ -16,12 +17,12 @@ std::uint32_t memoryWord(const Nba97GameTextMemory& memory,std::uint32_t address
 }
 namespace {
 struct Child {
+ GameMatchBufferRewindCapture rewind;
  unsigned calls=0; std::uint32_t pc=0,entry=0;
  static int service(void* opaque,const Nba97GameTextMemory* memory,const Nba97GameMatchBufferInitializeEvent* event,Nba97GameMatchBufferInitializeMachine* machine){
   auto&self=*static_cast<Child*>(opaque);++self.calls;self.pc=event->pc;self.entry=event->entry;
   if(memoryWord(*memory,0x800fa000u,2)!=0x76||memoryWord(*memory,0x800fa004u,4)!=0x800ccc00u||memoryWord(*memory,0x800fa008u,4)!=0x800d5734u)return 0;
-  // Explicit diagnostic response until the cursor-reset owner is composed.
-  machine->registers.gpr[2]={event->entry,15};return 1;
+  return self.rewind.dispatchBuffer(memory,event,machine);
  }
 };
 }
@@ -35,11 +36,12 @@ bool GameMatchBufferInitializeCapture::dispatch(const Nba97GameTextMemory* memor
   if(i==4)expected=0x76;
   if(i>=8&&i<12)expected=(0x800ccc00u>>(8*(i-8)))&255u;
   if(i>=12&&i<16)expected=(0x800d5734u>>(8*(i-12)))&255u;
+  if(i>=16&&i<24)expected=(0x800ccc00u>>(8*((i-16)%4)))&255u;
   bytes=bytes&&memoryWord(*memory,0x800f9ffcu+i,1)==expected;}
  if(!bytes)throw std::runtime_error("match buffer capture clear/header mismatch");
  const auto&p=binding.progress;std::ostringstream o;
- o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x8006432C\",\"inclusive_end\":\"0x80064387\",\"bytes\":92,\"instructions\":23,\"classification\":\"no direct visual effect\",\"scope\":\"actual initializer/reset/match-buffer/zero owners on same retained memory; runtime-generated clear sentinel, typed 80076AD0 service, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"buffer_verified\":true,\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"callbacks\":"<<p.callbacks_completed
- <<",\"zero_stores\":"<<binding.zero_progress.stores<<",\"zero_completed\":"<<unsigned(binding.zero_progress.completed)<<",\"child_pc\":"<<child.pc<<",\"child_entry\":"<<child.entry<<",\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"]}";
+ o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x8006432C\",\"inclusive_end\":\"0x80064387\",\"bytes\":92,\"instructions\":23,\"classification\":\"no direct visual effect\",\"scope\":\"actual initializer/reset/match-buffer/zero owners on same retained memory; runtime-generated clear sentinel, real 80076AD0 rewind and zero owners, no advancing match\",\"completed\":true,\"same_parent_memory\":true,\"buffer_verified\":true,\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"callbacks\":"<<p.callbacks_completed
+ <<",\"zero_stores\":"<<binding.zero_progress.stores<<",\"zero_completed\":"<<unsigned(binding.zero_progress.completed)<<",\"child_pc\":"<<child.pc<<",\"child_entry\":"<<child.entry<<",\"return_address\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"],\"match_buffer_rewind\":"<<child.rewind.receipt<<"}";
  receipt=o.str();return true;
 }
 }

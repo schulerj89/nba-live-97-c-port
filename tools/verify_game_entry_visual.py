@@ -351,7 +351,7 @@ def main():
             and reset["mode_98"] == int(reset["mode"] == 98)
             and initialize["zero_after_checkpoint"] == "immediately after parent zero before first child", "Match-state reset state drifted")
     require([(z["address"],z["length"],z["stores"],z["completed"]) for z in reset["zero_ranges"]] == [(0x8001F33C,0x4B0,301,1),(0x8001F7EC,0x1320,1225,1),(0x8001EDF4,0xC4,50,1),(0x8001EEB8,0xC4,50,1)], "Match-state reset zero ranges drifted")
-    require([c["pc"] for c in reset["typed_children"]] == [0x80065A9C,0x80065AA4,0x80065ACC]+([0x80065AE8] if reset["mode"] == 98 else []), "Match-state reset child order drifted")
+    require([c["pc"] for c in reset["typed_children"]] == [0x80065A9C,0x80065AA4,0x80065ACC], "Match-state reset child order drifted")
     (args.frames / "match_state_reset_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800659F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
@@ -417,6 +417,19 @@ def main():
         },indent=2)+"\n",encoding="utf-8")
     else:
         require(buffer is None, "Mode-98 unexpectedly entered match-buffer initializer")
+    rewind = reset["mode98_buffer_rewind"] if reset["mode"] == 98 else buffer["match_buffer_rewind"]
+    require((rewind["program"],rewind["address"],rewind["inclusive_end"],rewind["bytes"],rewind["instructions"]) == ("GAMEONLY","0x80076AD0","0x80076B27",88,22), "Buffer-rewind provenance drifted")
+    require(rewind["completed"] and rewind["same_parent_memory"] and rewind["pointers_verified"] and rewind["flags_verified"] and rewind["classification"] == "no direct visual effect"
+            and (rewind["operations"],rewind["reads"],rewind["stores"],rewind["callbacks"],rewind["zero_stores"],rewind["zero_bytes_stored"]) == (9,2,6,1,2,8)
+            and rewind["call_pc"] == (0x80065AE8 if reset["mode"] == 98 else 0x80064370)
+            and rewind["return_address"] == rewind["call_pc"]+8 and rewind["sp"] == (0x807FFF70 if reset["mode"] == 98 else 0x807FFF50)
+            and rewind["return_value"] == rewind["pointer"] and rewind["hilo_known_masks"] == [0,0], "Buffer-rewind source state drifted")
+    (args.frames / "match_buffer_rewind_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80076AD0","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":rewind,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     audio = initialize["audio_initialize"]
     require((audio["program"], audio["address"], audio["inclusive_end"],
              audio["bytes"], audio["instructions"], audio["call_pc"]) ==

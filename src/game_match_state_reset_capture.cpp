@@ -1,3 +1,4 @@
+#include "game_match_buffer_rewind_capture.h"
 #include "game_match_buffer_initialize_capture.h"
 #include "game_team_strategy_apply_capture.h"
 #include "game_team_header_initialize_capture.h"
@@ -20,6 +21,7 @@ std::uint32_t read(const Nba97GameTextMemory& memory,std::uint32_t address,unsig
  throw std::runtime_error("reset capture unmapped read");
 }
 struct Fixture {
+ GameMatchBufferRewindCapture rewind;
  GameMatchBufferInitializeCapture buffer;
  GameTeamStrategyApplyCapture strategy;
  GameTeamHeaderInitializeCapture teams;
@@ -31,6 +33,7 @@ struct Fixture {
   if(event->entry==0x800655b0u)return self.teams.dispatch(memory,event,machine);
   if(event->entry==0x80065820u)return self.strategy.dispatch(memory,event,machine);
   if(event->entry==0x8006432cu)return self.buffer.dispatch(memory,event,machine);
+  if(event->entry==0x80076ad0u)return self.rewind.dispatchReset(memory,event,machine);
   self.calls.push_back(*event);
   // Explicit synthetic full-machine response. Later input/team/period owners
   // must replace these services before this path can initialize a retail match.
@@ -45,7 +48,7 @@ bool GameMatchStateResetCapture::dispatch(const Nba97GameTextMemory* memory,cons
  binding.operation_budget=64;for(auto& n:binding.zero_operation_budget)n=2048;binding.roster_operation_budget=512;
  binding.io=Fixture::service;binding.user=&fixture;
  // The caller exposes GPRs only: omitted HI/LO remain explicitly unknown.
- if(nba97_game_match_state_reset_from_match_initialize(&binding,memory,event,registers)!=1||binding.result!=NBA97_TEXT_COMPLETE||!binding.progress.completed||binding.zero_invocations!=4||binding.roster_invocations!=1||fixture.calls.size()!=(mode==98?4u:3u)||(mode!=98&&fixture.buffer.receipt.empty())||fixture.strategy.receipt.empty()||fixture.profile.receipt.empty()||fixture.teams.receipt.empty())
+ if(nba97_game_match_state_reset_from_match_initialize(&binding,memory,event,registers)!=1||binding.result!=NBA97_TEXT_COMPLETE||!binding.progress.completed||binding.zero_invocations!=4||binding.roster_invocations!=1||fixture.calls.size()!=3||(mode==98&&fixture.rewind.receipt.empty())||(mode!=98&&fixture.buffer.receipt.empty())||fixture.strategy.receipt.empty()||fixture.profile.receipt.empty()||fixture.teams.receipt.empty())
   return false;
  const auto& p=binding.progress;
  if(read(*memory,0x8001edf2u,2)!=0||read(*memory,0x800fdb9cu,2)!=65535||read(*memory,0x8001eeccu,2)!=5||read(*memory,0x800fdb54u,2)!=0||p.spin_iterations!=24)
@@ -56,6 +59,6 @@ bool GameMatchStateResetCapture::dispatch(const Nba97GameTextMemory* memory,cons
  <<",\"zero_calls\":"<<binding.zero_invocations<<",\"roster_calls\":"<<binding.roster_invocations<<",\"hilo_known_masks\":["<<unsigned(p.machine.hi.known_mask)<<','<<unsigned(p.machine.lo.known_mask)<<"],\"restored_ra\":"<<p.machine.registers.gpr[31].word<<",\"sp\":"<<p.machine.registers.gpr[29].word<<",\"final_halfwords\":["<<read(*memory,0x8001edf2u,2)<<','<<read(*memory,0x800fdb9cu,2)<<','<<read(*memory,0x8001eeccu,2)<<','<<read(*memory,0x800fdb54u,2)<<"],\"zero_ranges\":[";
  for(unsigned i=0;i<4;++i){if(i)o<<',';const auto&z=binding.zero_progress[i];o<<"{\"address\":"<<z.destination<<",\"length\":"<<z.requested_length<<",\"stores\":"<<z.stores<<",\"completed\":"<<unsigned(z.completed)<<"}";}
  o<<"],\"typed_children\":[";for(std::size_t i=0;i<fixture.calls.size();++i){if(i)o<<',';const auto&e=fixture.calls[i];o<<"{\"pc\":"<<e.pc<<",\"entry\":"<<e.entry<<"}";}
- o<<"],\"controller_profile_reset\":"<<fixture.profile.receipt<<",\"team_header_initialize\":"<<fixture.teams.receipt<<",\"team_strategy_apply\":"<<fixture.strategy.receipt<<",\"match_buffer_initialize\":"<<(fixture.buffer.receipt.empty()?"null":fixture.buffer.receipt)<<"}";receipt=o.str();return true;
+ o<<"],\"controller_profile_reset\":"<<fixture.profile.receipt<<",\"team_header_initialize\":"<<fixture.teams.receipt<<",\"team_strategy_apply\":"<<fixture.strategy.receipt<<",\"match_buffer_initialize\":"<<(fixture.buffer.receipt.empty()?"null":fixture.buffer.receipt)<<",\"mode98_buffer_rewind\":"<<(fixture.rewind.receipt.empty()?"null":fixture.rewind.receipt)<<"}";receipt=o.str();return true;
 }
 }

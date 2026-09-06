@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80076AD0",
+      "original_name": "Game_MatchBufferRewind",
+      "symbol": "nba97_game_match_buffer_rewind",
+      "source": "src/recovered/game_match_buffer_rewind.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_match_buffer_rewind_tests; nba97_game_match_buffer_rewind_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8006432C",
       "original_name": "Game_MatchBufferInitialize",
       "symbol": "nba97_game_match_buffer_initialize",
