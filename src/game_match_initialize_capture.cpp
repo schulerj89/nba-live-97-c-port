@@ -1,3 +1,4 @@
+#include "game_match_state_reset_capture.h"
 #include "game_match_initialize_capture.h"
 #include "game_match_initialize_adapter.h"
 #include "recovered/game_roster_bindings.h"
@@ -32,6 +33,8 @@ struct ChildLog {
     std::vector<Nba97GameMatchInitializeEvent> events;
     std::vector<std::uint32_t> a0;
     bool clear_seen=false;
+    bool clear_after_zero=false;
+    GameMatchStateResetCapture reset;
     Nba97GameRosterBindingsProgress roster{};
     GameAudioInitializeCapture audio;
     GameSpeechInitializeCapture speech;
@@ -40,6 +43,10 @@ int child(void* user,const Nba97GameTextMemory* memory,
           const Nba97GameMatchInitializeEvent* event,
           Nba97GameMatchInitializeRegisters* registers) {
     auto& log=*static_cast<ChildLog*>(user);
+    if(log.events.empty()) {
+        const auto* bytes=locate(*memory,0x800fdb4cu,0xe7cu);
+        log.clear_after_zero=std::all_of(bytes,bytes+0xe7cu,[](std::uint8_t b){return b==0;});
+    }
     log.events.push_back(*event);
     log.a0.push_back(registers->gpr[NBA97_MATCH_INITIALIZE_A0].word);
     if(event->entry==0x80063d58u) {
@@ -50,6 +57,7 @@ int child(void* user,const Nba97GameTextMemory* memory,
         *registers=log.roster.registers;
         return result==NBA97_TEXT_COMPLETE && log.roster.completed;
     }
+    if(event->entry==0x800659f0u)return log.reset.dispatch(memory,event,registers);
     if(event->entry==0x80029114u)return log.audio.dispatch(memory,event,registers);
     if(event->entry==0x8007fd40u)return log.speech.dispatch(memory,event,registers);
     if(event->entry==0x800763f4u)log.clear_seen=get(*memory,0x80020c18u)==0;
@@ -81,10 +89,9 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
     Nba97GameMatchInitializeProgress progress{};
     Nba97GameMatchInitializeAdapterProgress adapter{};
     const auto result=nba97_game_match_initialize_with_zero(&context,1100,&progress,&adapter);
-    const auto* state=locate(*memory,0x800fdb4cu,0xe7cu);
-    bool cleared=true;for(unsigned i=0;i<0xe7cu;++i)cleared=cleared && state[i]==0;
+    const bool cleared=log.clear_after_zero;
     if(result!=NBA97_TEXT_COMPLETE || !progress.completed || !cleared ||
-       !adapter.memory_zero.completed || adapter.memory_zero_invocations!=1 ||
+       !adapter.memory_zero.completed || adapter.memory_zero_invocations!=1 || log.reset.receipt.empty() ||
        log.events.size()!=11 || !log.clear_seen || !log.roster.completed ||
        get(*memory,0x80022084u)!=teams[0] || get(*memory,0x80022adcu)!=teams[1])return false;
     const auto& live=progress.registers.gpr;
@@ -95,12 +102,12 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
         "\"inclusive_end\": \"0x8002DC37\", \"bytes\": 168, \"instructions\": 42,\n"
         "  \"instruction_sha256\": \"c1569d2ae6b58be97cd7511f5dd2bee7be70684d9e1fc9ba9abd3ad9f83ce6f3\",\n"
         "  \"call_pc\": \"0x8002DA7C\", \"classification\": \"no direct visual effect\",\n"
-        "  \"scope\": \"recovered zero, roster, audio and speech owners; synthetic dependent services, no advancing match loop\",\n"
+        "  \"scope\": \"recovered reset, zero, roster, audio and speech owners; synthetic dependent services, no advancing match loop\",\n"
         "  \"driver\": \"native recovered-input handlers: Game Setup, Team Select, User Setup\",\n"
         "  \"operations\": "<<progress.operations<<", \"reads\": "<<progress.reads<<
         ", \"stores\": "<<progress.stores<<", \"calls_completed\": "<<progress.callbacks_completed<<",\n"
         "  \"team_snapshots\": ["<<teams[0]<<','<<teams[1]<<"], "
-        "\"zero_bytes\": 3708, \"zero_before_byte\": 90, \"zero_after\": true, "
+        "\"zero_bytes\": 3708, \"zero_before_byte\": 90, \"zero_after\": true, \"zero_after_checkpoint\": \"immediately after parent zero before first child\", "
         "\"zero_stores\": "<<adapter.memory_zero.stores<<",\n"
         "  \"final_flag_before\": 2779096485, \"final_flag_after\": "<<get(*memory,0x80020c18u)<<
         ", \"final_child_saw_clear\": true, \"return_v0\": "<<value->word<<
@@ -134,6 +141,7 @@ bool GameMatchInitializeCapture::dispatch(const Nba97GameTextMemory* memory,
     for(unsigned i=0;i<12;++i) {if(i)out<<',';out<<get(*memory,0x80015064u+i*4);}
     out<<"]},\n  \"audio_initialize\": "<<log.audio.receipt<<
         ",\n  \"speech_initialize\": "<<log.speech.receipt<<
+        ",\n  \"match_state_reset\": "<<log.reset.receipt<<
         ",\n  \"routine_capture_frame_numbers\": [0, 1],\n"
         "  \"captures\": [\"match-initialize-before.ppm\", \"match-initialize-after.ppm\"]\n}\n";
     receipt=out.str();return true;

@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_state_reset_tests tests/game_match_state_reset_tests.cpp src/recovered/game_match_state_reset.c)
+    target_compile_features(nba97_game_match_state_reset_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_state_reset_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_state_reset COMMAND nba97_game_match_state_reset_tests)
+    add_executable(nba97_game_match_state_reset_integration_tests tests/game_match_state_reset_integration_tests.cpp
+        src/recovered/game_match_state_reset.c src/game_match_state_reset_adapter.cpp src/recovered/game_match_initialize.c src/recovered/game_memory_zero.c src/recovered/game_roster_bindings.c)
+    target_compile_features(nba97_game_match_state_reset_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_state_reset_integration_tests PRIVATE src)
+    add_test(NAME game_match_state_reset_integration COMMAND nba97_game_match_state_reset_integration_tests)
     add_executable(nba97_game_draw_mode_command_tests tests/game_draw_mode_command_tests.cpp src/recovered/game_draw_mode_command.c)
     target_compile_features(nba97_game_draw_mode_command_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_draw_mode_command_tests PRIVATE src src/recovered)
@@ -2080,3 +2089,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gpu_packet_dma.c src
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_offset_command.c src/game_draw_offset_command_adapter.cpp src/game_draw_offset_command_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_mode_command.c src/game_draw_mode_command_adapter.cpp src/game_draw_mode_command_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_state_reset.c src/game_match_state_reset_adapter.cpp src/game_match_state_reset_capture.cpp)

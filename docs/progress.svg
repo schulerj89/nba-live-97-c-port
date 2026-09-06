@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="178" viewBox="0 0 760 178" role="img" aria-labelledby="title desc">
 <title id="title">NBA Live 97 decompilation progress</title>
-<desc id="desc">3.59 percent of discovered original functions have registered evidence records in an incomplete catalogue. Native port: 49 catalogued milestones, 25 marked verified, 19 partial, 5 not started. Not an overall completion score. Playable basketball remains unimplemented.</desc>
+<desc id="desc">3.62 percent of discovered original functions have registered evidence records in an incomplete catalogue. Native port: 49 catalogued milestones, 25 marked verified, 19 partial, 5 not started. Not an overall completion score. Playable basketball remains unimplemented.</desc>
 <defs>
   <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121735"/><stop offset="1" stop-color="#080b1d"/></linearGradient>
   <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#ffe44a"/><stop offset="1" stop-color="#f6a800"/></linearGradient>
@@ -12,10 +12,10 @@
   <text x="718" y="37" fill="#8994ca" font-size="12" text-anchor="end">SLUS-00267</text>
 
   <text x="42" y="70" fill="#eef1ff" font-size="14" font-weight="600">REGISTERED FUNCTION EVIDENCE</text>
-  <text x="372" y="70" fill="#ffd72d" font-size="15" font-weight="700" text-anchor="end">3.59%</text>
+  <text x="372" y="70" fill="#ffd72d" font-size="15" font-weight="700" text-anchor="end">3.62%</text>
   <rect x="42" y="79" width="330" height="12" rx="6" fill="#282e54"/>
-  <rect x="42" y="79" width="11.85" height="12" rx="6" fill="url(#gold)"/>
-  <text x="42" y="108" fill="#aeb7e4" font-size="12">133 / 3,701 registered · incomplete catalogue</text>
+  <rect x="42" y="79" width="11.95" height="12" rx="6" fill="url(#gold)"/>
+  <text x="42" y="108" fill="#aeb7e4" font-size="12">134 / 3,701 registered · incomplete catalogue</text>
 
   <text x="408" y="70" fill="#eef1ff" font-size="14" font-weight="600">49 CATALOGUED MILESTONES</text>
   <text x="408" y="89" fill="#60e6a8" font-size="11">25 marked verified, 19 partial, 5 not started</text>

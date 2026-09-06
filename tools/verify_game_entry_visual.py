@@ -341,6 +341,23 @@ def main():
         "frame_sha256": initialize_hashes,
         "cpu_receipt": "match_initialize_trace.json",
         "classification": "no direct visual effect"}, indent=2) + "\n", encoding="utf-8")
+    reset = initialize["match_state_reset"]
+    require((reset["program"],reset["address"],reset["inclusive_end"],reset["bytes"],reset["instructions"],reset["call_pc"]) == ("GAMEONLY","0x800659F0","0x80065B17",296,74,"0x8002DBF8"), "Match-state reset provenance drifted")
+    require(reset["completed"] and reset["same_parent_memory"] and reset["classification"] == "no direct visual effect"
+            and "nine typed" in reset["scope"] and "no advancing" in reset["scope"]
+            and (reset["operations"],reset["reads"],reset["stores"],reset["calls_completed"],reset["spin_iterations"]) == (26,4,8,14,24)
+            and (reset["zero_calls"],reset["roster_calls"],reset["restored_ra"],reset["sp"]) == (4,1,0x8002DC00,0x807FFF90)
+            and reset["hilo_known_masks"] == [0,0] and reset["final_halfwords"] == [0,65535,5,0]
+            and reset["mode_98"] == int(reset["mode"] == 98)
+            and initialize["zero_after_checkpoint"] == "immediately after parent zero before first child", "Match-state reset state drifted")
+    require([(z["address"],z["length"],z["stores"],z["completed"]) for z in reset["zero_ranges"]] == [(0x8001F33C,0x4B0,301,1),(0x8001F7EC,0x1320,1225,1),(0x8001EDF4,0xC4,50,1),(0x8001EEB8,0xC4,50,1)], "Match-state reset zero ranges drifted")
+    require([c["pc"] for c in reset["typed_children"]] == [0x80065A38,0x80065A88,0x80065A94,0x80065A9C,0x80065AA4,0x80065ABC,0x80065AC4,0x80065ACC,0x80065AE8 if reset["mode"] == 98 else 0x80065AF8], "Match-state reset child order drifted")
+    (args.frames / "match_state_reset_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800659F0","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":reset,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     audio = initialize["audio_initialize"]
     require((audio["program"], audio["address"], audio["inclusive_end"],
              audio["bytes"], audio["instructions"], audio["call_pc"]) ==
