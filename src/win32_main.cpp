@@ -1,3 +1,4 @@
+#include "frontend_main_capture.h"
 #include "frontend_dispatch_entry_capture.h"
 #include "frontend_dispatch_capture.h"
 #include "game_gpu_control_command_adapter.h"
@@ -1172,6 +1173,9 @@ private:
         frame("frontend-dispatch-entry-before");
         std::ofstream(output/"frontend_dispatch_entry_trace.json")<<nba97::captureFrontendDispatchEntry();
         frame("frontend-dispatch-entry-after");
+        frame("frontend-main-before");
+        std::ofstream(output/"frontend_main_trace.json")<<nba97::captureFrontendMain();
+        frame("frontend-main-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");

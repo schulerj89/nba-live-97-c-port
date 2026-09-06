@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 102, "native click-through frame count drifted")
+    require(len(states) == 104, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -219,6 +219,202 @@ def main():
                     "visual_status": "Gameplay shown: BLOCKED",
                     "reason": fe["next_unbound_boundary"]}, indent=2) + "\n",
         encoding="utf-8")
+
+    fm = read_json(args.frames / "frontend_main_trace.json")
+    require([fm[key] for key in ("program", "address", "inclusive_end", "bytes",
+                                 "instructions", "source_sha256")] ==
+            ["FEONLY", "0x80028800", "0x80028b8b", 908, 227,
+             "a9325ac1de6cf8da7bd5a43d95da2f2e61bfc586cd3f265824d3e519cb42b208"],
+            "frontend main provenance drifted")
+    require(fm["completed"] == fm["accepted"] == fm["result"] == 1
+            and fm["contract_failure"] == 0,
+            "frontend main did not complete its synthetic service path")
+    require([int(fm["parent_call"][key], 16) for key in
+             ("pc", "delay", "entry", "ra")] ==
+            [0x8007B838, 0x8007B83C, 0x80028800, 0x8007B840],
+            "frontend main unowned overlay-entry boundary drifted")
+    def main_word(actual, value):
+        return int(actual["word"], 16) == value and actual["known_mask"] == 15
+    branch = fm["branch_state"]
+    require(all(main_word(branch[key], value) for key, value in
+                (("initial_frontend_flag", 1), ("menu_frontend_flag", 1),
+                 ("intro_flag", 0), ("context_selector", 0)))
+            and branch["intro_iterations"] == 0 and branch["wait_iterations"] == 20,
+            "frontend main independently loaded branch state drifted")
+    main_receipt = fm["main"]
+    require([main_receipt[key] for key in ("operations", "accesses", "reads",
+             "stores", "callbacks", "instruction_count", "intro_iterations",
+             "wait_iterations")] == [98, 33, 9, 24, 65, 299, 0, 20],
+            "frontend main exact instruction/access/callback counts drifted")
+    # Source ranges include branch delays and all twenty callback-live waits.
+    expected_main_pcs = list(range(0x80028800, 0x80028850, 4))
+    expected_main_pcs += list(range(0x80028864, 0x800289B4, 4))
+    expected_main_pcs += list(range(0x800289C8, 0x80028A40, 4))
+    expected_main_pcs += list(range(0x80028A50, 0x80028A7C, 4))
+    expected_main_pcs += list(range(0x80028AA0, 0x80028B08, 4))
+    expected_main_pcs += list(range(0x80028B08, 0x80028B1C, 4)) * 20
+    expected_main_pcs += list(range(0x80028B1C, 0x80028B8C, 4))
+    require([int(pc, 16) for pc in main_receipt["instruction_trace"]] ==
+            expected_main_pcs, "frontend main ordered source instruction path drifted")
+    expected_main_calls = [
+        (0x80028810,0x8007B844,0), (0x80028818,0x8008B368,0),
+        (0x80028834,0x800769E0,3), (0x80028880,0x8008BFB0,2),
+        (0x80028898,0x80078B7C,0), (0x800288A8,0x8008A4F8,1),
+        (0x800288B8,0x80079BF0,2), (0x800288C0,0x8007F5A8,1),
+        (0x800288C8,0x8007F5D0,0), (0x800288D0,0x80076148,1),
+        (0x800288D8,0x8008004C,1), (0x800288EC,0x8007844C,1),
+        (0x800288F4,0x8008B104,0), (0x800288FC,0x800802B8,1),
+        (0x80028904,0x80028B8C,0), (0x8002890C,0x80028ED0,1),
+        (0x80028934,0x800807D8,3), (0x8002893C,0x800804E8,1),
+        (0x8002894C,0x800807D8,3), (0x80028954,0x800804E8,1),
+        (0x8002895C,0x8008044C,1), (0x80028974,0x8008BFB0,2),
+        (0x800289F4,0x80035D80,0), (0x800289FC,0x800517BC,0),
+        (0x80028A04,0x800673A0,0), (0x80028A0C,0x8008DA98,0),
+        (0x80028A14,0x8008ACB0,0), (0x80028A50,0x80035984,0),
+        (0x80028A58,0x8008E5A0,0), (0x80028A60,0x80064C90,0),
+        (0x80028AA0,0x800360D4,0), (0x80028AA8,0x8002F084,0),
+        (0x80028AB0,0x80028E08,0), (0x80028ACC,0x8007B11C,2),
+        (0x80028AD8,0x80077CD4,1), (0x80028AF0,0x80084C44,2),
+        (0x80028AF8,0x80084C84,1), (0x80028B00,0x80084C9C,1)]
+    expected_main_calls += [(0x80028B08,0x80028B8C,0)] * 20
+    expected_main_calls += [
+        (0x80028B1C,0x8008B1F0,0), (0x80028B24,0x800785F0,0),
+        (0x80028B2C,0x80076110,0), (0x80028B34,0x80051B44,0),
+        (0x80028B44,0x8008A944,2), (0x80028B54,0x800909A8,3),
+        (0x80028B68,0x801E1410,0)]
+    require(len(main_receipt["call_sequence"]) == len(expected_main_calls) == 65,
+            "frontend main call journal lost the naturally composed wrapper")
+    main_invocations = {}
+    for actual, (pc, target, argc) in zip(main_receipt["call_sequence"],
+                                         expected_main_calls):
+        main_invocations[pc] = main_invocations.get(pc, 0) + 1
+        require([int(actual[key], 16) for key in ("pc", "delay", "target")] ==
+                [pc, pc + 4, target] and actual["argument_count"] == argc
+                and actual["invocation"] == main_invocations[pc]
+                and actual["program"] == (2 if pc == 0x80028B68 else 1),
+                "frontend main call order or source/target overlay drifted")
+        require(main_word(actual["ra"], pc + 8)
+                and main_word(actual["sp"], 0x801EFFD8),
+                "frontend main callback machine lost live source frame/return state")
+    main_calls_by_pc = {int(call["pc"], 16): call
+                        for call in main_receipt["call_sequence"]}
+    for pc, values in [(0x80028834, (0xDC, 0x800FF5C8, 0xFE238)),
+                       (0x80028ACC, (0x80024854, 0)),
+                       (0x80028AD8, (0x80170000,)),
+                       (0x80028AF0, (0, 0)),
+                       (0x80028B54, (0x80170000, 0x801E0000, 0x1000))]:
+        require(all(main_word(main_calls_by_pc[pc][f"a{i}"], value)
+                    for i, value in enumerate(values)),
+                "frontend main delayed argument or retained load-size forwarding drifted")
+    expected_main_accesses = [
+        (0x80028804,0x801EFFFC,0x8007B840,4,2),
+        (0x80028808,0x801EFFF8,0x33001212,4,2),
+        (0x8002880C,0x801EFFF4,0x33001111,4,2),
+        (0x80028814,0x801EFFF0,0x33001010,4,2),
+        (0x80028840,0x80021EE4,1,4,1),
+        (0x8002887C,0x800170C4,0x80013800,4,2),
+        (0x8002888C,0x80015094,0x80140000,4,2),
+        (0x80028894,0x800D9B4C,0,4,2),
+        (0x800288E8,0x800D9ADC,120,4,2),
+        (0x80028924,0x801EFFE8,512,2,2),
+        (0x80028928,0x801EFFEC,512,2,2),
+        (0x80028930,0x801EFFEA,0,2,2),
+        (0x80028938,0x801EFFEE,256,2,2),
+        (0x80028970,0x800170C4,0x80013800,4,2),
+        (0x80028980,0x80021568,0,2,1),
+        (0x80028988,0x80015094,0x80140000,4,2),
+        (0x800289A0,0x800170C0,0x800214F0,4,2),
+        (0x800289A8,0x80021504,0x8001726C,4,2),
+        (0x800289D0,0x8002199C,0x8002156C,4,2),
+        (0x800289E0,0x80021520,0x80022AE0,4,2),
+        (0x800289F0,0x80015030,0x800BC424,4,2),
+        (0x800289F8,0x80021C20,0,1,2),
+        (0x80028A20,0x8001EDEC,0,2,1),
+        (0x80028A2C,0x800D9B3C,0,4,2),
+        (0x80028A34,0x800D9B40,1,4,2),
+        (0x80028A6C,0x80021EE4,1,4,1),
+        (0x80028AC8,0x800D9B40,1,4,2),
+        (0x80028AEC,0x800D9B40,0,4,2),
+        (0x80028B60,0x801E0000,0x801E1410,4,1),
+        (0x80028B70,0x801EFFFC,0x8007B840,4,1),
+        (0x80028B74,0x801EFFF8,0x33001212,4,1),
+        (0x80028B78,0x801EFFF4,0x33001111,4,1),
+        (0x80028B7C,0x801EFFF0,0x33001010,4,1)]
+    require(len(main_receipt["access_journal"]) == len(expected_main_accesses),
+            "frontend main memory journal extent drifted")
+    access_pcs = {item[0] for item in expected_main_accesses}
+    call_pcs = {item[0] for item in expected_main_calls}
+    expected_access_operations = {}
+    operation = 0
+    for pc in expected_main_pcs:
+        if pc in access_pcs:
+            operation += 1
+            expected_access_operations[pc] = operation
+        # A JAL's memory-writing delay spends its access before the call.
+        if pc - 4 in call_pcs:
+            operation += 1
+    require(operation == 98, "frontend main source operation expectation drifted")
+    for actual, (pc, address, value, width, kind) in zip(
+            main_receipt["access_journal"], expected_main_accesses):
+        require([int(actual[key], 16) for key in ("pc", "address", "value")] ==
+                [pc, address, value] and actual["width"] == width
+                and actual["kind"] == kind and actual["known_mask"] == (1 << width)-1,
+                "frontend main ordered memory effect drifted")
+        require(actual["operation"] == expected_access_operations[pc],
+                "frontend main delay-slot access/call ordering drifted")
+    loader = fm["loader_state"]
+    require(main_word(loader["handle"], 0x80170000)
+            and main_word(loader["size"], 0x1000)
+            and main_word(loader["dynamic_entry"], 0x801E1410)
+            and loader["copy_size"] == 4096
+            and int(loader["copy_source"], 16) == 0x80170000
+            and int(loader["copy_destination"], 16) == 0x801E0000
+            and int(loader["source_checksum"], 16) != 0
+            and loader["source_checksum"] == loader["destination_checksum"]
+            and loader["dynamic_program"] == "GAMELOAD"
+            and loader["dynamic_outcome"] == "RETURNED",
+            "frontend main synthetic GAMELOAD boundary lost payload identity")
+    require(fm["memory"]["before"]["gameload_entry"] == 0
+            and fm["memory"]["after"] == {"frontend_flag": 1, "frontend_busy": 0,
+                  "frontend_scalar": 32, "gameload_entry": 0x801E1410},
+            "frontend main generated copy or wrapper state was not published")
+    require(fm["wrapper"]["result"] == fm["wrapper"]["completed"] == 1
+            and [fm["wrapper"][key] for key in ("operations", "accesses", "reads",
+                 "stores", "callbacks", "instruction_count")] == [5,4,1,3,1,14]
+            and fm["dispatcher"]["result"] == fm["dispatcher"]["completed"] == 1
+            and [fm["dispatcher"][key] for key in ("operations", "reads", "stores",
+                 "callbacks", "instruction_count")] == [177,82,53,42,903]
+            and fm["dispatcher"]["call_sequence"] == fe["dispatcher"]["call_sequence"]
+            and fm["user_setup"] == {"accepted": 1, "result": 6},
+            "frontend main recovered wrapper/dispatcher/User Setup composition failed")
+    for i, value in [(0,0), (16,0x33001010), (17,0x33001111), (18,0x33001212),
+                     (29,0x801F0000), (31,0x8007B840)]:
+        require(main_word(fm["final_machine"]["gpr"][i], value),
+                "frontend main did not restore source callee-saved state")
+    require(fm["final_machine"]["hi"] == fe["final_machine"]["hi"]
+            and fm["final_machine"]["lo"] == fe["final_machine"]["lo"],
+            "frontend main synthetic callbacks changed preserved HI/LO")
+    fm_frames = ["frontend-main-before", "frontend-main-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in fm_frames), "frontend main native boundary frames missing")
+    fm_hashes = [ppm_hash(args.frames / f"{name}.ppm") for name in fm_frames]
+    require(fm_hashes[0] == fm_hashes[1] == fe_hashes[1],
+            "CPU-only frontend main probe changed native menu pixels")
+    boundary = fm["next_unbound_boundary"]
+    require(fm["classification"] == "UI/menu" and fm["gameplay_shown"] == "BLOCKED"
+            and "synthetic" in fm["fixture_contract"].lower()
+            and all(pc in boundary["earliest_production"] for pc in
+                    ("8007B838", "80028810", "8007B844"))
+            and all(pc in boundary["post_acceptance"] for pc in
+                    ("80028AA8", "8002F084", "80028ACC", "80028B68", "GAMELOAD")),
+            "frontend main receipt hides unbound production services")
+    (args.frames / "frontend_main_verified.json").write_text(
+        json.dumps({"program": "FEONLY", "address": "0x80028800",
+                    "end": "0x80028B8B", "driver_frame_count": len(states),
+                    "source_receipt": fm, "before_sha256": fm_hashes[0],
+                    "after_sha256": fm_hashes[1],
+                    "visual_status": "Gameplay shown: BLOCKED",
+                    "reason": boundary}, indent=2) + "\n", encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
