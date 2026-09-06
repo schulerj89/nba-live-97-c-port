@@ -1,3 +1,4 @@
+#include "game_period_presentation_finish_capture.h"
 #include "game_period_music_start_capture.h"
 #include "game_match_buffer_record_capture.h"
 #include "game_match_buffer_pending_capture.h"
@@ -53,6 +54,7 @@ struct Fixture {
     Nba97GamePeriodStartupAdapterProgress adapter{};
     Nba97GameFirstPeriodStartupBinding first{};
     GamePeriodMusicStartCapture music;
+    GamePeriodPresentationFinishCapture presentation_finish;
     GameTipoffAnnouncementCapture announcement;
     GameControllerFrameResetCapture reset;
     GameMatchClocksCapture clocks;
@@ -73,6 +75,7 @@ struct Fixture {
     static int firstChild(void* user,const Nba97GameTextMemory* memory,const Nba97GameFirstPeriodStartupEvent* e,Nba97GameFirstPeriodStartupRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);f.first_pcs.push_back(e->pc);
         if(e->entry==0x800295d0u)return f.music.dispatch(memory,e,r,f.get(0x800eb680u,1));
+        if(e->entry==0x8002ddccu)return f.presentation_finish.dispatch(memory,e,r);
         if(e->pc==0x80067450u)return f.announcement.dispatch(memory,e,r,f.get(0x800eb680u,1)?1u:2u);
         if(e->pc==0x80067434u && r->gpr[4].word!=1)return 0;
         // Explicit full-GPR service fixtures: no frame renderer or tip-off child is claimed.
@@ -175,7 +178,7 @@ static std::string capturePeriodFixture(int first_flag) {
           "\"completed\":true,\"flag\":"<<first_flag<<",\"operations\":"<<p.operations<<",\"reads\":"<<p.reads<<",\"stores\":"<<p.stores<<",\"call_pcs\":[";
         for(std::size_t i=0;i<f.first_pcs.size();++i){if(i)o<<',';o<<f.first_pcs[i];}
         o<<"],\"marker\":"<<f.get(0x800fdb94u,2)<<",\"presentation_halfword\":"<<f.get(0x800fdb4eu,2)
-         <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<",\"music_start\":"<<f.music.receipt<<",\"announcement\":"<<f.announcement.receipt<<"}";
+         <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<",\"presentation_finish\":"<<f.presentation_finish.receipt<<",\"music_start\":"<<f.music.receipt<<",\"announcement\":"<<f.announcement.receipt<<"}";
     } else o<<",\"zero_period_cases\":["<<capturePeriodFixture(0)<<','<<capturePeriodFixture(255)<<']'
             <<",\"actor_resume_period_probe\":"<<captureGameActorResumePeriod()
             <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact()

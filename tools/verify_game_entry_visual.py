@@ -1416,8 +1416,21 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":music_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    finish_cases = [case["first_period_startup"]["presentation_finish"] for case in first_cases]
+    require(finish_cases[0] is None, "Skipped presentation unexpectedly ran")
+    finish = finish_cases[1]
+    require((finish["program"],finish["address"],finish["inclusive_end"],finish["bytes"],finish["instructions"]) == ("GAMEONLY","0x8002DDCC","0x8002DE33",104,26), "Presentation finish provenance drifted")
+    require(finish["completed"] and finish["same_parent_memory"] and finish["classification"] == "no direct visual effect"
+            and (finish["call_pc"],finish["flag_before"],finish["flag_after"],finish["active_after"],finish["published_word"],finish["gate"],finish["operations"],finish["reads"],finish["stores"],finish["callbacks"],finish["return_address"],finish["sp"],finish["returned_value"]) == (0x80067424,255,0,0,0x80170000,0,10,3,5,2,0x8006742C,0x801FFED0,0x80046C2C)
+            and finish["hilo_known_masks"] == [0,0] and finish["call_pcs"] == [0x8002DDF8,0x8002DE14], "Presentation finish state drifted")
+    (args.frames / "period_presentation_finish_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8002DDCC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":finish,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     announcements = [case["first_period_startup"]["announcement"] for case in first_cases]
-    for announcement, mode in zip(announcements, (2,1)):
+    for announcement, mode in zip(announcements, (2,2)):
         require((announcement["program"],announcement["address"],announcement["inclusive_end"],announcement["bytes"],announcement["instructions"]) ==
                 ("GAMEONLY","0x8007EF4C","0x8007F073",296,74), "announcement provenance drifted")
         expected_calls = ([0x8007EF5C,0x8007EF70,0x8007EF8C,0x8007EF98,0x8007EFA4,0x8007EFAC,
