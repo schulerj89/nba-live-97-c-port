@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8005FAA8",
+      "original_name": "Game_ActorContactGate",
+      "symbol": "nba97_game_actor_contact_gate",
+      "source": "src/recovered/game_actor_contact_gate.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_actor_contact_gate_tests; nba97_game_actor_contact_gate_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80060FBC",
       "original_name": "Game_ContactDispatch",
       "symbol": "nba97_game_contact_dispatch",

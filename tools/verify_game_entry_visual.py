@@ -666,6 +666,23 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":dispatch,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    actor_gate = period["actor_contact_gate_probe"]
+    require((actor_gate["program"],actor_gate["address"],actor_gate["inclusive_end"],actor_gate["bytes"],actor_gate["instructions"]) ==
+            ("GAMEONLY","0x8005FAA8","0x8005FAE7",64,16), "actor gate provenance drifted")
+    require(actor_gate["completed"] and actor_gate["parent_completed"]
+            and actor_gate["classification"] == "no direct visual effect"
+            and "typed eligibility child returns zero" in actor_gate["scope"]
+            and (actor_gate["invocations"],actor_gate["call_pc"]) == (45,0x8006104C)
+            and (actor_gate["operations"],actor_gate["reads"],actor_gate["stores"],actor_gate["callbacks"]) == (5,3,1,1)
+            and (actor_gate["difference"],actor_gate["shifted_difference"],actor_gate["returned_value"]) == (256,1,1)
+            and (actor_gate["frame_stack_pointer"],actor_gate["returned_sp"],actor_gate["restored_ra"]) ==
+                (0x801FF000,0x801FF018,0x80061054), "actor gate natural caller CPU fixture drifted")
+    (args.frames / "actor_contact_gate_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8005FAA8","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":actor_gate,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

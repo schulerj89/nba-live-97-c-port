@@ -2,6 +2,7 @@
 #include "game_ball_actor_contact_adapter.h"
 #include "game_ball_contact_gate_adapter.h"
 #include "game_contact_dispatch_adapter.h"
+#include "game_actor_contact_gate_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -203,6 +204,46 @@ std::string captureGameContactDispatch() {
     << ",\"phase_delay\":" << f.get16(0x800fe884) << ",\"contact_completed\":" << (contact.contact_progress.completed?"true":"false")
     << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
     << ",\"restored_ra\":" << p.restored_return_address.word << "}";
+  return o.str();
+}
+
+std::string captureGameActorContactGate() {
+  Fixture f;
+  f.put32(0x800fdc48,Fixture::ball);
+  f.put16(Fixture::ball+0xb4,1);
+  for(unsigned i=1;i<=11;++i) {
+    const uint32_t actor=0x80004000u+i*0x100u;
+    f.put32(0x800fdcbc+i*4,i==11?Fixture::ball:actor);
+    f.put32(actor+8,i*0x100u);
+  }
+  Nba97GameActorContactGateBinding binding{};
+  binding.operation_budget=16;
+  binding.io=[](void*,const Nba97GameTextMemory*,const Nba97GameActorContactGateEvent*,Nba97GameActorContactGateMachine* m) {
+    // Explicit eligibility dependency. The source gate overwrites this zero.
+    m->registers.gpr[2]={0,15};return 1;
+  };
+  Nba97GameContactDispatchContext c{};
+  c.memory=f.context.memory;c.machine=f.context.machine;
+  c.machine.registers.gpr[29]={0x801ff038,15};
+  c.machine.registers.gpr[31]={0x80068e10,15};
+  c.operation_budget=2000;
+  c.io=nba97_game_actor_contact_gate_from_contact_dispatch;c.user=&binding;
+  Nba97GameContactDispatchProgress parent{};
+  const int rc=nba97_game_contact_dispatch(&c,&parent);
+  const auto& p=binding.progress;
+  if(rc!=NBA97_TEXT_COMPLETE || !parent.completed || !p.completed ||
+     binding.invocations!=45 || p.returned_value.word!=1)
+    throw std::runtime_error("actor contact gate native CPU composition failed");
+  std::ostringstream o;
+  o << "{\"program\":\"GAMEONLY\",\"address\":\"0x8005FAA8\",\"inclusive_end\":\"0x8005FAE7\","
+       "\"bytes\":64,\"instructions\":16,\"classification\":\"no direct visual effect\","
+       "\"scope\":\"actual sorted dispatcher; independent CPU fixture; typed eligibility child returns zero\","
+       "\"completed\":true,\"parent_completed\":true,\"invocations\":" << binding.invocations
+    << ",\"call_pc\":" << binding.event.pc << ",\"operations\":" << p.operations
+    << ",\"reads\":" << p.reads << ",\"stores\":" << p.stores << ",\"callbacks\":" << p.callbacks_completed
+    << ",\"difference\":" << p.coordinate_difference.word << ",\"shifted_difference\":" << p.shifted_difference.word
+    << ",\"returned_value\":" << p.returned_value.word << ",\"frame_stack_pointer\":" << p.frame_stack_pointer
+    << ",\"returned_sp\":" << p.machine.registers.gpr[29].word << ",\"restored_ra\":" << p.restored_return_address.word << "}";
   return o.str();
 }
 }
