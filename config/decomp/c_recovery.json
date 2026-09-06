@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x8007B15C",
+      "original_name": "Frontend_LoadPayload",
+      "symbol": "nba97_frontend_load_payload",
+      "source": "src/recovered/frontend_load_payload.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_load_payload_tests; nba97_frontend_load_payload_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x8007B11C",
       "original_name": "Frontend_OverlayLoad",
       "symbol": "nba97_frontend_overlay_load",

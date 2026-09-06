@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 118, "native click-through frame count drifted")
+    require(len(states) == 120, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1008,6 +1008,65 @@ def main():
         "program":"FEONLY","address":"0x8007B11C","end":"0x8007B13B","driver_frame_count":len(states),
         "source_receipt":overlay_load,"before_sha256":olhashes[0],"after_sha256":olhashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":overlay_load["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
+
+    load_payload=read_json(args.frames/"frontend_load_payload_trace.json")
+    require(load_payload["program"] == "FEONLY" and int(load_payload["address"],16) == 0x8007b15c
+            and int(load_payload["inclusive_end"],16) == 0x8007b18f
+            and [load_payload[k] for k in ("bytes","instructions","completed","contract_failure")] == [52,13,1,0]
+            and load_payload["source_sha256"] == "aaf6935467d7d6bad48e084fafaf71528d7b8e6ebb23deca4bef4e2f2f9b3ebf",
+            "Loaded-payload source receipt drifted")
+    def lp_word(value,mask=15):
+        return {"word":f"0x{value:08x}","known_mask":mask}
+    def lp_machine(sp,ra,v0=None):
+        words=[0]+[0x75000000+i*0x101 for i in range(1,32)]
+        words[4]=0x80024854;words[5]=0;words[6]=1;words[29]=sp;words[31]=ra
+        result={"gpr":[lp_word(w) for w in words],"hi":lp_word(0x10203040,6),"lo":lp_word(0x50607080,9)}
+        if v0 is not None:result["gpr"][2]=v0
+        return result
+    def lp_access(pc,address,value,operation,kind,mask=15):
+        return {"pc":f"0x{pc:08x}","address":f"0x{address:08x}","value":f"0x{value:08x}",
+                "operation":operation,"width":4,"known_mask":mask,"kind":kind}
+    require(len(load_payload["paths"]) == 2,"Loaded-payload paths missing")
+    for nonnull,path in enumerate(load_payload["paths"]):
+        child=lp_word(0x80170000 if nonnull else 0)
+        returned=lp_word(0x801e1410,7) if nonnull else lp_word(0)
+        require(path["kind"] == ("nonnull" if nonnull else "null") and path["result"] == 1
+                and path["descriptor"] == {"address":"0x80170000","word":"0x801e1410","known_mask":7}
+                and path["parent_call"] == {"pc":"0x8007b124","delay":"0x8007b128","target":"0x8007b15c",
+                    "argument_count":3,"machine":lp_machine(0x801effe8,0x8007b12c)}, "Payload natural boundary drifted")
+        parent=path["overlay_load"];owner=path["load_payload"]
+        require([parent[k] for k in ("operations","accesses","callbacks","instruction_count")] == [3,2,1,8]
+                and parent["child_return"] == returned
+                and parent["instruction_trace"] == [f"0x{pc:08x}" for pc in range(0x8007b11c,0x8007b13c,4)]
+                and parent["access_journal"] == [lp_access(0x8007b120,0x801efff8,0x80028ad4,1,2),
+                    lp_access(0x8007b12c,0x801efff8,0x80028ad4,3,1)], "Payload actual parent receipt drifted")
+        expected_trace=list(range(0x8007b15c,0x8007b174,4))+([0x8007b17c] if nonnull else [0x8007b174,0x8007b178])+list(range(0x8007b180,0x8007b190,4))
+        expected_access=[lp_access(0x8007b160,0x801effe0,0x8007b12c,1,2)]
+        if nonnull:expected_access.append(lp_access(0x8007b17c,0x80170000,0x801e1410,3,1,7))
+        expected_access.append(lp_access(0x8007b180,0x801effe0,0x8007b12c,4 if nonnull else 3,1))
+        require([owner[k] for k in ("operations","accesses","reads","stores","callbacks","instruction_count")]
+                == ([4,3,2,1,1,11] if nonnull else [3,2,1,1,1,12])
+                and owner["forwarded_a0"] == lp_word(0x80024854) and owner["forwarded_a1"] == lp_word(0)
+                and owner["forwarded_a2"] == lp_word(1) and owner["child_return"] == child
+                and owner["payload_result"] == returned
+                and [int(pc,16) for pc in owner["instruction_trace"]] == expected_trace
+                and owner["access_journal"] == expected_access,"Payload full source path or memory order drifted")
+        require(owner["call_sequence"] == [{"pc":"0x8007b164","delay":"0x8007b168","target":"0x8007b1d0",
+                    "argument_count":3,"invocation":1,"machine":lp_machine(0x801effd0,0x8007b16c)}]
+                and owner["final_machine"] == lp_machine(0x801effe8,0x8007b12c,returned)
+                and path["final_machine"] == lp_machine(0x801f0000,0x80028ad4,returned),
+                "Payload full callback-live machine drifted")
+    lpframes=("frontend-load-payload-before","frontend-load-payload-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in lpframes),"Payload native frames missing")
+    lphashes=[ppm_hash(args.frames/f"{n}.ppm") for n in lpframes]
+    require(lphashes[0] == lphashes[1] == olhashes[1],"Payload CPU composition changed pixels")
+    require(load_payload["gameplay_shown"] == "BLOCKED" and load_payload["classification"] == "no direct visual effect"
+            and "synthetic standalone" in load_payload["fixture_contract"]
+            and "8007B1D0" in load_payload["next_unbound_boundary"]["loader_child"],"Payload dependency disclosure absent")
+    (args.frames/"frontend_load_payload_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x8007B15C","end":"0x8007B18F","driver_frame_count":len(states),
+        "source_receipt":load_payload,"before_sha256":lphashes[0],"after_sha256":lphashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":load_payload["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

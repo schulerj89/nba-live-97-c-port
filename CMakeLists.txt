@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_load_payload_tests tests/frontend_load_payload_tests.cpp src/recovered/frontend_load_payload.c)
+    target_compile_features(nba97_frontend_load_payload_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_load_payload_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_load_payload COMMAND nba97_frontend_load_payload_tests)
+    add_executable(nba97_frontend_load_payload_integration_tests tests/frontend_load_payload_integration_tests.cpp src/frontend_load_payload_capture.cpp src/recovered/frontend_load_payload.c src/frontend_load_payload_adapter.cpp src/recovered/frontend_overlay_load.c)
+    target_compile_features(nba97_frontend_load_payload_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_load_payload_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_load_payload_integration COMMAND nba97_frontend_load_payload_integration_tests)
     add_executable(nba97_frontend_overlay_load_tests tests/frontend_overlay_load_tests.cpp src/recovered/frontend_overlay_load.c)
     target_compile_features(nba97_frontend_overlay_load_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_overlay_load_tests PRIVATE src src/recovered)
@@ -2502,3 +2510,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_io_drain.c src/f
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_io_complete.c src/frontend_io_complete_adapter.cpp src/frontend_io_complete_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_overlay_load.c src/frontend_overlay_load_adapter.cpp src/frontend_overlay_load_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_load_payload.c src/frontend_load_payload_adapter.cpp src/frontend_load_payload_capture.cpp)
