@@ -187,6 +187,7 @@ try {
         'nba97_game_draw_mode_command_tests','nba97_game_draw_mode_command_integration_tests',
         'nba97_game_match_state_reset_tests','nba97_game_match_state_reset_integration_tests',
         'nba97_game_texture_window_command_tests','nba97_game_texture_window_command_integration_tests',
+        'nba97_game_controller_profile_reset_tests','nba97_game_controller_profile_reset_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

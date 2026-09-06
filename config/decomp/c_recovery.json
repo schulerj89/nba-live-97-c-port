@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80083490",
+      "original_name": "Game_ControllerProfileReset",
+      "symbol": "nba97_game_controller_profile_reset",
+      "source": "src/recovered/game_controller_profile_reset.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_controller_profile_reset_tests; nba97_game_controller_profile_reset_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009A824",
       "original_name": "Game_TextureWindowCommand",
       "symbol": "nba97_game_texture_window_command",
