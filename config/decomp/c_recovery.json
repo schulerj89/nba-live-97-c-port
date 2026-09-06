@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80099ACC",
+      "original_name": "Game_DrawEnvironment",
+      "symbol": "nba97_game_draw_environment",
+      "source": "src/recovered/game_draw_environment.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_draw_environment_tests; nba97_game_draw_environment_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8009B16C",
       "original_name": "Game_GpuControlCommand",
       "symbol": "nba97_game_gpu_control_command",

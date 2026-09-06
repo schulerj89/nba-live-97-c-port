@@ -778,6 +778,22 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    draw_environment = period["draw_environment_probe"]
+    require((draw_environment["program"],draw_environment["address"],draw_environment["inclusive_end"],draw_environment["bytes"],draw_environment["instructions"]) == ("GAMEONLY","0x80099ACC","0x80099B8F",196,49), "Draw environment provenance drifted")
+    require(draw_environment["completed"] and draw_environment["parent_completed"] and draw_environment["classification"] == "no direct visual effect"
+            and "synthetic packet, submission, MMIO and BIOS services" in draw_environment["scope"]
+            and (draw_environment["draw_calls"],draw_environment["packet_calls"],draw_environment["submit_calls"],draw_environment["draw_copy_calls"],draw_environment["all_copy_calls"]) == (2,2,2,2,4)
+            and draw_environment["cache_matches_last_environment"]
+            and draw_environment["tags_before"] == [0x12000000,0x34000000]
+            and draw_environment["tags_after"] == [0x12FFFFFF,0x34FFFFFF], "Draw environment native state drifted")
+    for item,pc,env in zip(draw_environment["draws"],[0x80048F4C,0x80048FA0],[0x80021F48,0x80021EEC]):
+        require((item["call_pc"],item["operations"],item["reads"],item["stores"],item["callbacks"],item["return_v0"],item["return_address"],item["hi"],item["copy_t1"],item["copy_t2"]) == (pc,17,9,5,3,env,pc+8,pc,0x2A,0xA0), "Draw environment machine drifted")
+    (args.frames / "draw_environment_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80099ACC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_environment,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     gpu_command = period["gpu_control_command_probe"]
     require((gpu_command["program"],gpu_command["address"],gpu_command["inclusive_end"],gpu_command["bytes"],gpu_command["instructions"]) == ("GAMEONLY","0x8009B16C","0x8009B193",40,10), "GPU command provenance drifted")
     require(gpu_command["completed"] and gpu_command["parent_completed"] and gpu_command["classification"] == "no direct visual effect"
