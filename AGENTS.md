@@ -37,6 +37,46 @@ The commit that first adds this `AGENTS.md` is the user-requested bootstrap
 exception to the one-subroutine rule. After that bootstrap commit, documentation
 or infrastructure-only commits require an explicit user request.
 
+## Worker coordination and manager ownership
+
+When delegating recovery work, the manager must enforce these rules:
+
+- Use GPT-5.6 Sol with High reasoning for every sub-agent. Each worker must
+  read this repository-root `AGENTS.md` completely before inspecting or
+  changing any other repository file.
+- Maintain an assignment ledger before spawning workers. Assign each worker
+  exactly one previously unowned complete PS1 subroutine, with its program or
+  overlay, exact start and inclusive end, byte and instruction counts, known
+  callers and callees, expected behavior and side effects, evidence sources,
+  exclusively owned files, forbidden files, required focused tests, and
+  expected visual classification. The worker must verify that no complete
+  owner already exists before implementing it.
+- Use one isolated worktree per implementation worker when supported. No two
+  active workers may edit the same source, header, test, documentation, build,
+  manifest, visual-test, or integration file, even in separate worktrees.
+  Assign independent subsystems when likely files overlap; queue or serialize
+  conflicting work. Without worktrees, concurrent implementation is allowed
+  only for disjoint files. Read-only research may run in parallel.
+- The manager exclusively owns shared integration files unless the ledger
+  explicitly grants one worker exclusive access. These include
+  `CMakeLists.txt`, `src/win32_main.cpp`, repository-wide progress manifests
+  and reports, shared workflow documentation, existing visual-verification
+  scripts, and any test or adapter used by more than one assignment. Record
+  ownership transfers before editing; the previous owner must stop edits.
+- Workers must stay within their assigned routine and files, leave unresolved
+  callees behind typed callbacks, and never add, modify, stage, commit, or
+  encode assets. Workers must not stage, commit, or push independently; an
+  isolated worktree commit requires explicit manager authorization.
+- Each worker must return its evidence summary, files changed, tests run,
+  visual classification, and unresolved dependencies, then freeze its files
+  for manager review. The manager reviews the complete implementation against
+  original evidence and this file, rejecting scope creep, duplicate owners,
+  unproven behavior, missing edge cases, assets, or main-loop expansion.
+- Integrate, validate, commit, and push routines sequentially. Stage explicit
+  paths and inspect the staged diff to exclude other assignments. Keep current
+  recovery addresses and queued work in the ledger or workflow documentation,
+  rather than embedding a changing recovery cursor in this file.
+
 ## Selecting and proving one source boundary
 
 1. Start from the next reachable unresolved jump/call boundary on the current
@@ -116,6 +156,15 @@ than being the only meaning carried by the identifier.
 - Do not claim that a synthetic fixture is a retail payload, that a rendered
   diagnostic pose is gameplay, or that semantic equivalence is instruction-
   identical recompilation.
+- Document synthetic callback contracts explicitly, including supplied return
+  values, preserved or changed registers, and memory effects. Fixture outputs
+  do not establish the original callee's full CPU ABI. Do not manufacture a
+  complete machine state around a partially recovered callee and present it
+  as proven native integration.
+- Distinguish an adapter tested at an unowned caller boundary from composition
+  with a recovered natural caller. A synthetic continuation or diagnostic
+  probe does not prove that the live frontend exit, overlay loader, or match
+  handoff works; report the exact unbound boundary separately.
 
 ## Required tests for every recovered subroutine
 
@@ -146,6 +195,14 @@ suite, `python tools/report_progress.py --check`, and any metadata freshness
 check affected by the change. A routine is not complete while required tests
 are failing.
 
+For every recovery commit, rebuild the final sources with MSVC in Debug
+configuration, run the focused and applicable integration executables directly,
+and run the complete asset-free CTest suite in that configuration. Keep Debug
+runtime and container checks enabled; a standalone or optimized compiler run
+does not replace this gate. Synthetic fixtures and callbacks must obey their
+own buffer bounds and optional knownness-plane contracts, including when a
+plane is absent. Fix test-fixture failures rather than disabling checks.
+
 ## Self-driving visual, menu, and gameplay evidence
 
 If the routine is reachable from the native frontend or match path, update the
@@ -169,8 +226,10 @@ The visual run must capture deterministic logs and frames natively:
   menu transition "gameplay." Gameplay requires an advancing native match loop
   and a rendered court/player state produced by that path.
 
-Write logs and frame captures only beneath an ignored build directory or
-`.local/evidence/<program>-<address>/`. Screenshot proof is local run evidence:
+Write logs and frame captures only beneath an ignored build directory,
+`.local/evidence/<program>-<address>/`, or the existing native verifier's
+`.local/verification/` directory. Verify that the output paths are ignored.
+Screenshot proof is local run evidence:
 show the resulting absolute-path images in the final handoff whenever the run
 shows UI/menu or gameplay, but never stage or commit those images. Commit the
 test code and asset-free textual expectations, not its captured media.
