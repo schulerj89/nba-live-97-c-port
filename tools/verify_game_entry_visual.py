@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 120, "native click-through frame count drifted")
+    require(len(states) == 122, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1067,6 +1067,66 @@ def main():
         "program":"FEONLY","address":"0x8007B15C","end":"0x8007B18F","driver_frame_count":len(states),
         "source_receipt":load_payload,"before_sha256":lphashes[0],"after_sha256":lphashes[1],
         "visual_status":"Gameplay shown: BLOCKED","reason":load_payload["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
+
+    frontend_copy=read_json(args.frames/"frontend_memory_copy_trace.json")
+    require(frontend_copy["program"] == "FEONLY" and frontend_copy["address"] == "0x800909A8"
+            and frontend_copy["range"] == "0x800909A8..0x80090CC7"
+            and frontend_copy["evidence_sha256"] == "589207dc7895ba0151f714f53c02c357959170daed411e652ca281ac7216ef4b"
+            and [frontend_copy[k] for k in ("bytes","instructions","length","operations","access_events","reads","stores","instruction_events","contract_failure")]
+            == [800,200,4096,2048,2048,1024,1024,2329,0],"Frontend copy source/count receipt drifted")
+    require([frontend_copy[k] for k in ("main_result","main_stopped_pc","main_stopped_target","copy_result","copy_completed")]
+            == [-5,0x80028b68,0x801e1410,1,1] and frontend_copy["source"] == "0x80140000"
+            and frontend_copy["destination"] == "0x801E0000","Copy did not reach explicitly refused GAMELOAD boundary")
+    def fc_hash(data):
+        value=0xcbf29ce484222325
+        for byte in data:value=((value^byte)*1099511628211)&0xffffffffffffffff
+        return f"{value:016x}"
+    def fc_le(value,width=4):return value.to_bytes(width,"little")
+    require(frontend_copy["hash_algorithm"] == "FNV-1a-64" and frontend_copy["hash_seed"] == "0xcbf29ce484222325"
+            and frontend_copy["access_hash_layout"] == "per event: le32 pc,address,logical_address,value; le64 operation; u8 width,known_mask,transfer_mask,kind"
+            and frontend_copy["pc_hash_layout"] == "executed order: le32 pc per event"
+            and frontend_copy["machine_hash_layout"] == "170 bytes: gpr0..gpr31,hi,lo; each le32 word then u8 known_mask",
+            "Copy receipt canonical layouts drifted")
+    fc_payload=bytearray((i*37+(i>>5)+11)&255 for i in range(4096));fc_payload[:4]=fc_le(0x801e1410)
+    require(frontend_copy["source_hash"] == frontend_copy["destination_after_hash"] == fc_hash(fc_payload)
+            and frontend_copy["destination_before_hash"] == fc_hash(bytes([0xa5])*4096),"Copy retained payload fingerprints drifted")
+    fc_access=bytearray();fc_op=0
+    for block in range(64):
+        for half in range(2):
+            for kind in (1,2):
+                for index in range(8):
+                    offset=block*64+half*32+index*4
+                    pc=(0x800909cc if kind == 1 else 0x800909ec)+half*64+index*4
+                    address=(0x80140000 if kind == 1 else 0x801e0000)+offset
+                    value=int.from_bytes(fc_payload[offset:offset+4],"little");fc_op+=1
+                    fc_access+=fc_le(pc)+fc_le(address)+fc_le(address)+fc_le(value)+fc_le(fc_op,8)+bytes([4,15,15,kind])
+    fc_pcs=[0x800909a8,0x800909ac,0x800909b0,0x80090b9c,0x80090ba0,0x80090ba4,0x80090ba8]+list(range(0x800909b0,0x800909cc,4))
+    fc_pcs+=list(range(0x800909cc,0x80090a5c,4))*64
+    fc_pcs += [0x80090a5c,0x80090a60,0x80090a64,0x80090a98,0x80090a9c,0x80090aa0,0x80090abc,0x80090ac0,0x80090ac4,0x80090ae0,0x80090ae4]
+    require(len(fc_pcs) == 2329 and frontend_copy["pc_hash"] == fc_hash(b"".join(fc_le(pc) for pc in fc_pcs))
+            and frontend_copy["access_hash"] == fc_hash(fc_access),"Copy exact canonical PC/access journals drifted")
+    fc_input=frontend_copy["copy_machine_input"];fc_output=frontend_copy["copy_machine_output"]
+    for state,field,expected in [(fc_input,"input_cpu_hash","3549d5ad34747f25"),(fc_output,"output_cpu_hash","683dbb60493dd505")]:
+        require(len(state["gpr"]) == 32 and all(w["known_mask"] == 15 for w in state["gpr"])
+                and state["hi"] == {"word":0x12345678,"known_mask":5}
+                and state["lo"] == {"word":0x9abcdef0,"known_mask":10},"Copy full machine or masks absent")
+        encoded=b"".join(fc_le(w["word"])+bytes([w["known_mask"]]) for w in state["gpr"]+[state["hi"],state["lo"]])
+        require(len(encoded) == 170 and fc_hash(encoded) == frontend_copy[field] == expected,"Copy canonical full CPU fingerprint drifted")
+    require([fc_input["gpr"][i]["word"] for i in (0,4,5,6,31)] == [0,0x80140000,0x801e0000,4096,0x80028b5c],"Copy natural argument/RA boundary drifted")
+    expected_words=[w["word"] for w in fc_input["gpr"]]
+    for i,value in [(1,0),(2,0),(4,0x80141000),(5,0x801e1000),(6,0xffffffff),(7,0x80141000)]:expected_words[i]=value
+    for i in range(8):expected_words[8+i]=int.from_bytes(fc_payload[4064+i*4:4068+i*4],"little")
+    require([w["word"] for w in fc_output["gpr"]] == expected_words,"Copy path-dependent live registers drifted")
+    fc_frames=("frontend-memory-copy-before","frontend-memory-copy-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in fc_frames),"Frontend copy native frames missing")
+    fc_hashes=[ppm_hash(args.frames/f"{n}.ppm") for n in fc_frames]
+    require(fc_hashes[0] == fc_hashes[1] == lphashes[1],"CPU-only frontend copy changed actual native pixels")
+    require(frontend_copy["gameplay_shown"] == "BLOCKED" and "synthetic standalone" in frontend_copy["fixture_contract"]
+            and "unbound GAMELOAD" in frontend_copy["fixture_contract"],"Frontend copy conceals fixture dependencies")
+    (args.frames/"frontend_memory_copy_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x800909A8","end":"0x80090CC7","driver_frame_count":len(states),
+        "source_receipt":frontend_copy,"before_sha256":fc_hashes[0],"after_sha256":fc_hashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":"FEONLY 0x80028B68 dynamic GAMELOAD transfer and production filesystem/lifecycle remain unbound"},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

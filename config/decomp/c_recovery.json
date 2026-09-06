@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x800909A8",
+      "original_name": "Frontend_MemoryCopy",
+      "symbol": "nba97_frontend_memory_copy",
+      "source": "src/recovered/frontend_memory_copy.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_memory_copy_tests; nba97_frontend_memory_copy_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x8007B15C",
       "original_name": "Frontend_LoadPayload",
       "symbol": "nba97_frontend_load_payload",

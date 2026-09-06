@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_memory_copy_tests tests/frontend_memory_copy_tests.cpp src/recovered/frontend_memory_copy.c)
+    target_compile_features(nba97_frontend_memory_copy_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_memory_copy_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_memory_copy COMMAND nba97_frontend_memory_copy_tests)
+    add_executable(nba97_frontend_memory_copy_integration_tests tests/frontend_memory_copy_integration_tests.cpp src/frontend_memory_copy_capture.cpp src/recovered/frontend_memory_copy.c src/frontend_memory_copy_adapter.cpp src/recovered/frontend_main.c)
+    target_compile_features(nba97_frontend_memory_copy_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_memory_copy_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_memory_copy_integration COMMAND nba97_frontend_memory_copy_integration_tests)
     add_executable(nba97_frontend_load_payload_tests tests/frontend_load_payload_tests.cpp src/recovered/frontend_load_payload.c)
     target_compile_features(nba97_frontend_load_payload_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_load_payload_tests PRIVATE src src/recovered)
@@ -2512,3 +2520,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_io_complete.c sr
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_overlay_load.c src/frontend_overlay_load_adapter.cpp src/frontend_overlay_load_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_load_payload.c src/frontend_load_payload_adapter.cpp src/frontend_load_payload_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_memory_copy.c src/frontend_memory_copy_adapter.cpp src/frontend_memory_copy_capture.cpp)
