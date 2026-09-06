@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_team_strategy_apply_tests tests/game_team_strategy_apply_tests.cpp src/recovered/game_team_strategy_apply.c src/game_team_strategy_apply_adapter.cpp src/recovered/game_match_state_reset.c)
+    target_compile_features(nba97_game_team_strategy_apply_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_team_strategy_apply_tests PRIVATE src src/recovered)
+    add_test(NAME game_team_strategy_apply COMMAND nba97_game_team_strategy_apply_tests)
+    add_executable(nba97_game_team_strategy_apply_integration_tests tests/game_team_strategy_apply_integration_tests.cpp src/recovered/game_team_strategy_apply.c src/game_team_strategy_apply_adapter.cpp src/recovered/game_match_state_reset.c)
+    target_compile_features(nba97_game_team_strategy_apply_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_team_strategy_apply_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_team_strategy_apply_integration COMMAND nba97_game_team_strategy_apply_integration_tests)
     add_executable(nba97_game_team_header_initialize_tests tests/game_team_header_initialize_tests.cpp src/recovered/game_team_header_initialize.c src/game_team_header_initialize_adapter.cpp src/recovered/game_match_state_reset.c src/recovered/game_memory_zero.c)
     target_compile_features(nba97_game_team_header_initialize_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_team_header_initialize_tests PRIVATE src src/recovered)
@@ -2122,3 +2130,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_texture_window_comma
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_controller_profile_reset.c src/game_controller_profile_reset_adapter.cpp src/game_controller_profile_reset_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_team_header_initialize.c src/game_team_header_initialize_adapter.cpp src/game_team_header_initialize_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_team_strategy_apply.c src/game_team_strategy_apply_adapter.cpp src/game_team_strategy_apply_capture.cpp)

@@ -344,14 +344,14 @@ def main():
     reset = initialize["match_state_reset"]
     require((reset["program"],reset["address"],reset["inclusive_end"],reset["bytes"],reset["instructions"],reset["call_pc"]) == ("GAMEONLY","0x800659F0","0x80065B17",296,74,"0x8002DBF8"), "Match-state reset provenance drifted")
     require(reset["completed"] and reset["same_parent_memory"] and reset["classification"] == "no direct visual effect"
-            and "six typed" in reset["scope"] and "no advancing" in reset["scope"]
+            and "four typed" in reset["scope"] and "no advancing" in reset["scope"]
             and (reset["operations"],reset["reads"],reset["stores"],reset["calls_completed"],reset["spin_iterations"]) == (26,4,8,14,24)
             and (reset["zero_calls"],reset["roster_calls"],reset["restored_ra"],reset["sp"]) == (4,1,0x8002DC00,0x807FFF90)
             and reset["hilo_known_masks"] == [0,0] and reset["final_halfwords"] == [0,65535,5,0]
             and reset["mode_98"] == int(reset["mode"] == 98)
             and initialize["zero_after_checkpoint"] == "immediately after parent zero before first child", "Match-state reset state drifted")
     require([(z["address"],z["length"],z["stores"],z["completed"]) for z in reset["zero_ranges"]] == [(0x8001F33C,0x4B0,301,1),(0x8001F7EC,0x1320,1225,1),(0x8001EDF4,0xC4,50,1),(0x8001EEB8,0xC4,50,1)], "Match-state reset zero ranges drifted")
-    require([c["pc"] for c in reset["typed_children"]] == [0x80065A9C,0x80065AA4,0x80065ABC,0x80065AC4,0x80065ACC,0x80065AE8 if reset["mode"] == 98 else 0x80065AF8], "Match-state reset child order drifted")
+    require([c["pc"] for c in reset["typed_children"]] == [0x80065A9C,0x80065AA4,0x80065ACC,0x80065AE8 if reset["mode"] == 98 else 0x80065AF8], "Match-state reset child order drifted")
     (args.frames / "match_state_reset_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800659F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
@@ -386,6 +386,20 @@ def main():
         "program":"GAMEONLY","address":"0x800655B0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":headers,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
+    strategy = reset["team_strategy_apply"]
+    require((strategy["program"],strategy["address"],strategy["inclusive_end"],strategy["bytes"],strategy["instructions"]) == ("GAMEONLY","0x80065820","0x800659EF",464,116), "Team-strategy provenance drifted")
+    require(strategy["completed"] and strategy["same_parent_memory"] and strategy["classification"] == "no direct visual effect" and "runtime-generated" in strategy["scope"] and len(strategy["calls"]) == 2, "Team-strategy composition drifted")
+    for index,item in enumerate(strategy["calls"]):
+        require(item["fields_verified"] and item["lineup_verified"] and item["count_after"] == (item["count_before"]-1)&65535
+                and (item["call_pc"],item["team"],item["side"],item["injury"],item["child_pc"],item["child_entry"],item["return_address"],item["sp"]) ==
+                ([0x80065ABC,0x80065AC4][index],[0x8001EDF4,0x8001EEB8][index],[0,5][index],[0,5][index],[0x800659C4,0x80065998][index],[0x80064DBC,0x800646A8][index],[0x80065AC4,0x80065ACC][index],0x807FFF70)
+                and (item["operations"],item["reads"],item["stores"]) == [(26,15,10),(19,11,7)][index] and item["hilo_known_masks"] == [0,0], "Team-strategy state drifted")
+    (args.frames / "team_strategy_apply_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80065820","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":strategy,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     audio = initialize["audio_initialize"]
