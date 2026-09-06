@@ -778,6 +778,22 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    draw_packet = period["draw_packet_probe"]
+    require((draw_packet["program"],draw_packet["address"],draw_packet["inclusive_end"],draw_packet["bytes"],draw_packet["instructions"]) == ("GAMEONLY","0x8009A344","0x8009A5E7",676,169), "Draw packet provenance drifted")
+    require(draw_packet["completed"] and draw_packet["parent_completed"] and draw_packet["classification"] == "no direct visual effect"
+            and "five synthetic packet-word helpers" in draw_packet["scope"]
+            and (draw_packet["packet_calls"],draw_packet["submit_calls"],draw_packet["copy_calls"]) == (2,2,4)
+            and draw_packet["cache_matches_last_environment"]
+            and draw_packet["tags_after"] == [0x09FFFFFF,0x06FFFFFF]
+            and draw_packet["last_packet"] == [0x09FFFFFF,0x90000001,0x90000002,0x90000003,0x90000004,0x90000005,0xE6000000,0x02332211,0x00200040,0x00400040], "Draw packet native state drifted")
+    for item,value,hi in zip(draw_packet["packets"],[6,9],[0x80048F4C,0x80048FA0]):
+        require((item["callbacks"],item["return_v0"],item["return_address"],item["hi"]) == (5,value,0x80099B28,hi), "Draw packet machine drifted")
+    (args.frames / "draw_packet_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009A344","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_packet,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     draw_environment = period["draw_environment_probe"]
     require((draw_environment["program"],draw_environment["address"],draw_environment["inclusive_end"],draw_environment["bytes"],draw_environment["instructions"]) == ("GAMEONLY","0x80099ACC","0x80099B8F",196,49), "Draw environment provenance drifted")
     require(draw_environment["completed"] and draw_environment["parent_completed"] and draw_environment["classification"] == "no direct visual effect"

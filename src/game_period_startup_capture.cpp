@@ -1,3 +1,4 @@
+#include "game_draw_packet_capture.h"
 #include "game_draw_environment_capture.h"
 #include "game_gpu_control_command_capture.h"
 #include "game_video_mode_capture.h"
@@ -177,6 +178,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"video_mode_probe\":"<<captureGameVideoMode()
             <<",\"gpu_control_command_probe\":"<<captureGameGpuControlCommand()
             <<",\"draw_environment_probe\":"<<captureGameDrawEnvironment()
+            <<",\"draw_packet_probe\":"<<captureGameDrawPacket()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
