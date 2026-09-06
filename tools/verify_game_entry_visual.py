@@ -1453,6 +1453,19 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":finish,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    card = finish["pregame_match_card"]
+    require((card["program"],card["address"],card["inclusive_end"],card["bytes"],card["instructions"]) == ("GAMEONLY","0x80044550","0x80044997",1096,274), "Pregame card provenance drifted")
+    require(card["completed"] and card["same_parent_memory"] and card["classification"] == "BLOCKED"
+            and (card["call_pc"],card["polls"],card["layouts"],card["texts"],card["clock_reads"],card["stream_pumps"],card["readiness_checks"],card["clock"],card["input_fixture"],card["font_mode_after"],card["skip_after"],card["return_address"],card["sp"]) == (0x8002DDF8,1,7,8,2,1,1,100,0x180,0,0,0x8002DE00,0x801FFEB8)
+            and card["hilo_known_masks"] == [0,0]
+            and (card["operations"],card["reads"],card["stores"],card["callbacks"]) == (108,23,52,33)
+            and card["call_pcs"] == [0x80044568,0x80044570,0x800445A8,0x800445D4,0x80044600,0x80044624,0x80044648,0x8004466C,0x80044694,0x800446BC,0x800446DC,0x800446F8,0x80044714,0x8004472C,0x80044754,0x8004476C,0x80044788,0x800447A0,0x800447C8,0x800447E0,0x80044834,0x8004484C,0x80044874,0x80044884,0x80044898,0x800448A4,0x800448AC,0x800448B8,0x80044904,0x80044920,0x80044954,0x8004495C,0x8004496C], "Pregame card composed CPU prefix drifted")
+    (args.frames / "pregame_match_card_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80044550","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":card,
+        "classification":"BLOCKED","visible_screen":"User Setup; pregame renderer unresolved"
+    },indent=2)+"\n",encoding="utf-8")
     announcements = [case["first_period_startup"]["announcement"] for case in first_cases]
     for announcement, mode in zip(announcements, (2,2)):
         require((announcement["program"],announcement["address"],announcement["inclusive_end"],announcement["bytes"],announcement["instructions"]) ==

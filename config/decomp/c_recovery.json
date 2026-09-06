@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80044550",
+      "original_name": "Game_PregameMatchCard",
+      "symbol": "nba97_game_pregame_match_card",
+      "source": "src/recovered/game_pregame_match_card.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_pregame_match_card_tests; nba97_game_pregame_match_card_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8002A254",
       "original_name": "Game_PeriodAudioNoop",
       "symbol": "nba97_game_period_audio_noop",
