@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_audio_stream_service_tests tests/game_audio_stream_service_tests.cpp src/recovered/game_audio_stream_service.c)
+    target_compile_features(nba97_game_audio_stream_service_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_audio_stream_service_tests PRIVATE src src/recovered)
+    add_test(NAME game_audio_stream_service COMMAND nba97_game_audio_stream_service_tests)
+    add_executable(nba97_game_audio_stream_service_integration_tests tests/game_audio_stream_service_integration_tests.cpp
+        src/recovered/game_audio_stream_service.c src/game_audio_stream_service_adapter.cpp src/recovered/game_audio_stream_pump.c src/recovered/game_audio_stream_status.c src/game_audio_stream_status_adapter.cpp)
+    target_compile_features(nba97_game_audio_stream_service_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_audio_stream_service_integration_tests PRIVATE src)
+    add_test(NAME game_audio_stream_service_integration COMMAND nba97_game_audio_stream_service_integration_tests)
     add_executable(nba97_game_clock_violations_tests tests/game_clock_violations_tests.cpp src/recovered/game_clock_violations.c)
     target_compile_features(nba97_game_clock_violations_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_clock_violations_tests PRIVATE src src/recovered)
@@ -1615,3 +1624,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_audio_stream_status.
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_clock_violations.c src/game_clock_violations_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/game_clock_violations_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_audio_stream_service.c src/game_audio_stream_service_adapter.cpp)

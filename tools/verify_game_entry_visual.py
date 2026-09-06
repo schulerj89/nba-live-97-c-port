@@ -760,6 +760,27 @@ def main():
     playback = scene["random_warmup"]["speech_startup"]
     pumps = playback["audio_stream_pumps"] + [case["audio_stream_pump"] for case in reset_cases]
     require(len(pumps)==5, "stream pump native parent coverage missing")
+    stream_services = [service for pump in pumps for service in pump["stream_services"]]
+    require(len(stream_services)==10,"stream service native coverage missing")
+    for pump in pumps:
+        for i,service in enumerate(pump["stream_services"]):
+            pc=0x80083F78 if pump["mode"]==5 else 0x80084034
+            require((service["program"],service["address"],service["inclusive_end"],service["bytes"],service["instructions"]) ==
+                    ("GAMEONLY","0x80086190","0x800861E3",84,21),"stream service provenance drifted")
+            require(service["completed"] and service["classification"]=="no direct visual effect"
+                    and "explicit synthetic header" in service["scope"] and service["call_pc"]==pc
+                    and (service["header"],service["header_state"])==(0x80171000,i)
+                    and (service["operations"],service["reads"],service["stores"])==((6,4,2) if i else (7,4,2))
+                    and service["child_calls"]==(0 if i else 1) and service["child_pc"]==(0 if i else 0x800861C4)
+                    and service["returned_value"]==(1 if i else 0x13572468)
+                    and service["frame_stack_pointer"]==pump["frame_stack_pointer"]-0x18 and service["restored_ra"]==pc+8,
+                    "stream service native CPU fixture drifted")
+    (args.frames / "audio_stream_service_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80086190","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":stream_services,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
     for pump, caller, mode in zip(pumps,(0x800801E4,0x8008021C,0x8006764C,0x8006764C,0x8006764C),(5,6,5,5,5)):
         require((pump["program"],pump["address"],pump["inclusive_end"],pump["bytes"],pump["instructions"]) ==
                 ("GAMEONLY","0x80083EEC","0x800840EF",516,129), "stream pump provenance drifted")
