@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_clocks_tests tests/game_match_clocks_tests.cpp src/recovered/game_match_clocks.c)
+    target_compile_features(nba97_game_match_clocks_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_clocks_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_clocks COMMAND nba97_game_match_clocks_tests)
+    add_executable(nba97_game_match_clocks_integration_tests tests/game_match_clocks_integration_tests.cpp
+        src/recovered/game_match_clocks.c src/game_match_clocks_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_match_clocks_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_clocks_integration_tests PRIVATE src)
+    add_test(NAME game_match_clocks_integration COMMAND nba97_game_match_clocks_integration_tests)
     add_executable(nba97_game_audio_stream_pump_tests tests/game_audio_stream_pump_tests.cpp src/recovered/game_audio_stream_pump.c)
     target_compile_features(nba97_game_audio_stream_pump_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_audio_stream_pump_tests PRIVATE src src/recovered)
@@ -1578,3 +1587,7 @@ target_sources(nba97_boot_decomp PRIVATE src/game_controller_frame_reset_capture
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_audio_stream_pump.c src/game_audio_stream_pump_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/game_audio_stream_pump_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_clocks.c src/game_match_clocks_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/game_match_clocks_capture.cpp)

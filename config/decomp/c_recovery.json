@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80067A60",
+      "original_name": "Game_MatchClocks",
+      "symbol": "nba97_game_match_clocks",
+      "source": "src/recovered/game_match_clocks.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_match_clocks_tests; nba97_game_match_clocks_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80083EEC",
       "original_name": "Game_AudioStreamPump",
       "symbol": "nba97_game_audio_stream_pump",

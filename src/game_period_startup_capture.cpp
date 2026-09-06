@@ -4,6 +4,7 @@
 #include "game_late_period_limits_adapter.h"
 #include "game_tipoff_announcement_capture.h"
 #include "game_controller_frame_reset_capture.h"
+#include "game_match_clocks_capture.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -19,6 +20,8 @@ struct Fixture {
     Nba97GameFirstPeriodStartupBinding first{};
     GameTipoffAnnouncementCapture announcement;
     GameControllerFrameResetCapture reset;
+    GameMatchClocksCapture clocks;
+    unsigned clock_phase=0;
     Nba97GameLatePeriodLimitsContext limits_context{};
     Nba97GameLatePeriodLimitsTickBinding limits{};
     std::vector<std::uint32_t> first_pcs;
@@ -51,6 +54,7 @@ struct Fixture {
         auto& f=*static_cast<Fixture*>(user);
         if(call->pc==0x80068cecu)return nba97_game_late_period_limits_from_match_tick(&f.limits,call,nullptr);
         if(call->pc==0x80068cf4u)return f.reset.dispatch(&f.context.memory,call,&f.limits.progress);
+        if(call->pc==0x80068d58u)return f.clocks.dispatch(&f.context.memory,call,f.clock_phase);
         // Explicit preceding-service fixtures; they do not establish live GPRs.
         if(call->pc==0x80068c24u || call->pc==0x80068c2cu){++f.previous_fixtures;return NBA97_BODY_OK;}
         if(call->pc!=0x80068c4cu)return NBA97_MATCH_TICK_SERVICE_REQUIRED;
@@ -68,7 +72,7 @@ struct Fixture {
 };
 }
 static std::string capturePeriodFixture(int first_flag) {
-    Fixture f;f.context.memory={&f.region,1};f.context.operation_budget=100;f.context.io=Fixture::child;f.context.user=&f;
+    Fixture f;f.clock_phase=first_flag<0?0u:(first_flag?0x82u:0x81u);f.context.memory={&f.region,1};f.context.operation_budget=100;f.context.io=Fixture::child;f.context.user=&f;
     f.first.operation_budget=30;f.first.io=Fixture::firstChild;f.first.user=&f;
     f.limits_context.memory=f.context.memory;f.limits_context.operation_budget=12;
     // Independent full-GPR entry fixture: the legacy tick does not expose its
@@ -88,7 +92,7 @@ static std::string capturePeriodFixture(int first_flag) {
        f.pcs.size()!=13 || f.previous_fixtures!=2 || f.get(0x800fdc48u)!=0x80123400u ||
        f.pre_pump_counter!=0x4321u || f.post_pump_delta!=0x8765u ||
        f.progress.period_selector.word!=(first_flag<0?0xffff8000u:0u) || f.progress.restored_return_address.word!=0x80068c54u ||
-       tp.stopped_pc!=0x80068d58u || tp.stopped_entry!=0x80067a60u ||
+       tp.stopped_pc!=0x80068d64u || tp.stopped_entry!=0x80067d38u ||
        f.limits.invocations!=1 || !f.limits.progress.completed || f.limits.progress.operations!=3 ||
        f.get(0x8010606cu,2)!=0)
         throw std::runtime_error("period-startup CPU fixture drifted");
@@ -112,6 +116,7 @@ static std::string capturePeriodFixture(int first_flag) {
      <<",\"clock\":"<<f.limits.progress.clock.word<<",\"period\":"<<f.limits.progress.period.word<<",\"limit_before\":48879,\"limit_after\":"<<f.get(0x8010606cu,2)
      <<",\"returned_ra\":"<<f.limits.progress.registers.gpr[31].word<<"}";
     o<<",\"controller_frame_reset\":"<<f.reset.receipt;
+    o<<",\"match_clocks\":"<<f.clocks.receipt;
     if(first_flag>=0) {
         const auto& p=f.first.progress;
         o<<",\"first_period_startup\":{\"program\":\"GAMEONLY\",\"address\":\"0x800673F0\",\"inclusive_end\":\"0x80067467\",\"bytes\":120,\"instructions\":30,"
