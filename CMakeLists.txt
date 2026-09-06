@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_clock_read_tests tests/frontend_clock_read_tests.cpp src/recovered/frontend_clock_read.c)
+    target_compile_features(nba97_frontend_clock_read_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_clock_read_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_clock_read COMMAND nba97_frontend_clock_read_tests)
+    add_executable(nba97_frontend_clock_read_integration_tests tests/frontend_clock_read_integration_tests.cpp src/frontend_clock_read_capture.cpp src/recovered/frontend_clock_read.c src/frontend_clock_read_adapter.cpp src/recovered/frontend_exit_wait.c)
+    target_compile_features(nba97_frontend_clock_read_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_clock_read_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_clock_read_integration COMMAND nba97_frontend_clock_read_integration_tests)
     add_executable(nba97_frontend_exit_drain_tests tests/frontend_exit_drain_tests.cpp src/recovered/frontend_exit_drain.c)
     target_compile_features(nba97_frontend_exit_drain_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_exit_drain_tests PRIVATE src src/recovered)
@@ -2462,3 +2470,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_cleanup.c s
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_wait.c src/frontend_exit_wait_adapter.cpp src/frontend_exit_wait_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_drain.c src/frontend_exit_drain_adapter.cpp src/frontend_exit_drain_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_clock_read.c src/frontend_clock_read_adapter.cpp src/frontend_clock_read_capture.cpp)

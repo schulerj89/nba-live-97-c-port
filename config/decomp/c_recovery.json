@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x8008DA5C",
+      "original_name": "Frontend_ClockRead",
+      "symbol": "nba97_frontend_clock_read",
+      "source": "src/recovered/frontend_clock_read.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_clock_read_tests; nba97_frontend_clock_read_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x800394D4",
       "original_name": "Frontend_ExitDrain",
       "symbol": "nba97_frontend_exit_drain",

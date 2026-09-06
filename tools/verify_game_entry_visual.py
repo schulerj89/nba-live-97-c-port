@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 110, "native click-through frame count drifted")
+    require(len(states) == 112, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -706,6 +706,104 @@ def main():
                     "driver_frame_count":len(states),"source_receipt":drain,
                     "before_sha256":drain_hashes[0],"after_sha256":drain_hashes[1],
                     "visual_status":"Gameplay shown: BLOCKED","reason":db},indent=2)+"\n",
+        encoding="utf-8")
+
+    clock_read = read_json(args.frames / "frontend_clock_read_trace.json")
+    require([clock_read[key] for key in ("program", "address", "inclusive_end",
+             "bytes", "instructions", "source_sha256")] ==
+            ["FEONLY", "0x8008da5c", "0x8008da6b", 16, 4,
+             "9bf283cf0c65c4bd13e3e94df28927dc756088764e78bf2e59298f9faeef85c0"],
+            "frontend clock reader provenance drifted")
+    require(clock_read["completed"] == clock_read["result"] == 1
+            and clock_read["contract_failure"] == 0,
+            "composed frontend wait/clock reader probe failed")
+    require({key:int(value,16) for key,value in clock_read["clock_memory"].items()} ==
+            {"address":0x800D9AB8,"before":1000,"after_fixture_update":1361},
+            "composed clock reader did not observe the live fixture update")
+    cr_wait, cr = clock_read["wait"], clock_read["clock"]
+    require([cr_wait[key] for key in ("operations", "accesses", "callbacks",
+                                     "clock_callbacks", "instruction_count")] ==
+            [19,9,10,2,50]
+            and [int(pc,16) for pc in cr_wait["instruction_trace"]] ==
+            list(range(0x8002EFBC,0x8002F084,4))
+            and [int(pc,16) for pc in cr["reader_instruction_trace"]] ==
+            list(range(0x8008DA5C,0x8008DA6C,4)),
+            "wait or clock source instruction trace drifted")
+    require(len(cr_wait["access_journal"]) == 9,
+            "composed wait access extent drifted")
+    for actual,(pc,address,value,operation,kind) in zip(
+            cr_wait["access_journal"],expected_wait_accesses):
+        mask = 5 if pc in (0x8002EFD4,0x8002F074) else 15
+        require([int(actual[key],16) for key in ("pc","address","value")] ==
+                [pc,address,value] and actual["operation"] == operation
+                and actual["width"] == 4 and actual["known_mask"] == mask
+                and actual["kind"] == kind,
+                "clock composition changed wait memory order or saved knownness")
+    def clock_machine_matches(machine, gpr, s0_mask):
+        return (len(machine["gpr"]) == 32 and
+                all(word == {"word":f"0x{value:08x}",
+                             "known_mask":s0_mask if index == 16 else 15}
+                    for index,(word,value) in enumerate(zip(machine["gpr"],gpr)))
+                and machine["hi"] == {"word":"0x10203040","known_mask":6}
+                and machine["lo"] == {"word":"0x50607080","known_mask":9})
+    require(len(cr_wait["call_sequence"]) == 10,
+            "composed wait call extent drifted")
+    expected = [0] + [0x63000000+i*0x101 for i in range(1,32)]
+    expected[4],expected[5],expected[6] = 0x80145678,100,0xFFFFFFFF
+    expected[16],expected[29] = 0x11223344,0x801EFFE8
+    for index,(actual,(pc,target,argc)) in enumerate(zip(
+            cr_wait["call_sequence"],expected_wait_calls)):
+        expected[31] = pc+8
+        expected[2] = 1000 if index == 2 else (1 if index == 6 else 0xFFFFFFFF)
+        if index >= 2:
+            expected[16] = 1360
+        if index >= 7:
+            expected[1] = 0x80010000
+        if index == 9:
+            expected[4] = 0x80123458
+        mask = 5 if index < 2 else 15
+        require([int(actual[key],16) for key in ("pc","delay","target")] ==
+                [pc,pc+4,target] and actual["argument_count"] == argc
+                and actual["invocation"] == 1
+                and clock_machine_matches(actual["machine"],expected,mask),
+                "composed wait callback machine or arguments drifted")
+        if index in (1,5):
+            reader = cr["initial" if index == 1 else "loop"]
+            value = 1000 if index == 1 else 1361
+            returned = expected.copy()
+            returned[2] = value
+            require(int(reader["parent_pc"],16) == pc
+                    and reader["result"] == reader["operations"] == 1
+                    and reader["instruction_count"] == 4
+                    and main_word(reader["loaded_clock"],value)
+                    and clock_machine_matches(reader["final_machine"],returned,mask)
+                    and reader["access"] ==
+                    {"pc":"0x8008da60","address":"0x800d9ab8",
+                     "value":f"0x{value:08x}","operation":1,"width":4,
+                     "known_mask":15,"kind":1},
+                    "reader did not replace only V0 with its actual retained read")
+    expected[1],expected[16],expected[29],expected[31] = (
+        0x80020000,0x11223344,0x801F0000,0x8002F094)
+    require(clock_machine_matches(clock_read["final_machine"],expected,5),
+            "composed clock reader lost wait return state")
+    clock_frames = ["frontend-clock-read-before","frontend-clock-read-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in clock_frames), "clock reader boundary frames missing")
+    clock_hashes = [ppm_hash(args.frames/f"{name}.ppm") for name in clock_frames]
+    require(clock_hashes[0] == clock_hashes[1] == drain_hashes[1],
+            "CPU-only clock reader composition changed native pixels")
+    crb = clock_read["next_unbound_boundary"]
+    require(clock_read["classification"] == "no direct visual effect"
+            and clock_read["gameplay_shown"] == "BLOCKED"
+            and "synthetic" in clock_read["fixture_contract"].lower()
+            and "8007B844" in crb["earliest_production"]
+            and "8007B2BC" in crb["next_wait_child"],
+            "clock receipt conceals synthetic entry state or production dependencies")
+    (args.frames/"frontend_clock_read_verified.json").write_text(
+        json.dumps({"program":"FEONLY","address":"0x8008DA5C","end":"0x8008DA6B",
+                    "driver_frame_count":len(states),"source_receipt":clock_read,
+                    "before_sha256":clock_hashes[0],"after_sha256":clock_hashes[1],
+                    "visual_status":"Gameplay shown: BLOCKED","reason":crb},indent=2)+"\n",
         encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
