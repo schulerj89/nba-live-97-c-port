@@ -757,6 +757,26 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": camera_end,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    opponent = period["opponent_contact_probe"]
+    require((opponent["program"], opponent["address"], opponent["inclusive_end"],
+             opponent["bytes"], opponent["instructions"]) ==
+            ("GAMEONLY", "0x8005F888", "0x8005F947", 192, 48), "opponent contact provenance drifted")
+    require(opponent["completed"] and opponent["parent_completed"]
+            and opponent["classification"] == "no direct visual effect"
+            and "independent CPU fixture" in opponent["scope"] and "typed collision response" in opponent["scope"]
+            and (opponent["geometry_calls"], opponent["action_calls"]) == (1, 1)
+            and (opponent["operations"], opponent["reads"], opponent["stores"], opponent["callbacks"]) == (9, 7, 1, 1)
+            and opponent["input_pair"] == [0x80010000, 0x80010200]
+            and opponent["dispatched_pair"] == [0x80010200, 0x80010000]
+            and (opponent["owner"], opponent["first_id"], opponent["returned_value"], opponent["parent_returned_value"]) == (7, 100, 0xCD, 0xCD)
+            and (opponent["frame_stack_pointer"], opponent["returned_sp"], opponent["restored_ra"]) ==
+                (0x801FEFC8, 0x801FEFE0, 0x8005FA34), "opponent contact ordered CPU state drifted")
+    (args.frames / "opponent_contact_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8005F888", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": opponent,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==
