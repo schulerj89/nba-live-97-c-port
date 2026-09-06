@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_gameload_main_tests tests/gameload_main_tests.cpp src/recovered/gameload_main.c src/gameload_main_adapter.cpp src/recovered/gameload_entry.c)
+    target_compile_features(nba97_gameload_main_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_gameload_main_tests PRIVATE src src/recovered)
+    add_test(NAME gameload_main COMMAND nba97_gameload_main_tests)
+    add_executable(nba97_gameload_main_integration_tests tests/gameload_main_integration_tests.cpp src/recovered/gameload_main.c src/gameload_main_adapter.cpp src/recovered/gameload_entry.c src/gameload_main_capture.cpp)
+    target_compile_features(nba97_gameload_main_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_gameload_main_integration_tests PRIVATE src src/recovered)
+    add_test(NAME gameload_main_integration COMMAND nba97_gameload_main_integration_tests)
     add_executable(nba97_frontend_resource_lookup_tests tests/frontend_resource_lookup_tests.cpp src/recovered/frontend_resource_lookup.c src/frontend_resource_lookup_adapter.cpp src/recovered/frontend_resource_load.c src/recovered/frontend_memory_copy.c)
     target_compile_features(nba97_frontend_resource_lookup_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_resource_lookup_tests PRIVATE src src/recovered)
@@ -2552,3 +2560,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_load.c 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/gameload_entry.c src/gameload_entry_adapter.cpp src/gameload_entry_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_lookup.c src/frontend_resource_lookup_adapter.cpp src/frontend_resource_lookup_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/gameload_main.c src/gameload_main_adapter.cpp src/gameload_main_capture.cpp)

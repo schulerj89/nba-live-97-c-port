@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 128, "native click-through frame count drifted")
+    require(len(states) == 130, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1258,6 +1258,50 @@ def main():
     lkhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in lkframes]
     require(lkhashes[0] == lkhashes[1] == ge_hashes[1], "Resource lookup CPU probe changed native pixels")
     (args.frames/"frontend_resource_lookup_verified.json").write_text(json.dumps(dict(program="FEONLY",address="0x8008A2C8",end="0x8008A407",driver_frame_count=len(states),source_receipt=lookup,before_sha256=lkhashes[0],after_sha256=lkhashes[1],gameplay_shown="BLOCKED"),indent=2))
+
+    gm=json.loads((args.frames/"gameload_main_trace.json").read_text())
+    require(gm["routine"] == "GAMELOAD:801E136C-801E140F" and gm["source_bytes"] == 164 and gm["source_instructions"] == 41
+            and gm["source_sha256"] == "a2d2a4b742c47b1c72d89e7c8b2ddbada0fee604cef947e11914515653e82398", "GAMELOAD main source identity drifted")
+    gm_expected=dict(result=-5,completed=0,transferred=0,stopped_pc=0x801e13f4,stopped_target=0x80020000,operations=13,accesses=4,callbacks_completed=8,call_attempts=9,call_completions=8,instruction_count=36,instruction_events=36,access_events=4,copies=2,call_overflow=0,contract_failure=0,gameplay_shown="BLOCKED")
+    require(all(gm[k] == v for k,v in gm_expected.items()), "GAMELOAD main refused transfer/counts drifted")
+    gm_regs=[[0x33000000+i*0x101,i&15] for i in range(32)]
+    for i,v in {0:0,29:0x801ff000,31:0x801e14b4}.items():gm_regs[i]=[v,15]
+    def gm_machine():return dict(gpr=[w.copy() for w in gm_regs],hi=[0x12345678,5],lo=[0x9abcdef0,10])
+    def gm_machine_bytes(m):return b"".join(fc_le(w)+bytes([k]) for w,k in m["gpr"]+[m["hi"],m["lo"]])
+    gm_input=gm_machine();gm_regs[29]=[0x801fefe8,15]
+    gm_pcs=[0x801e1374,0x801e137c,0x801e1384,0x801e1394,0x801e13b0,0x801e13c4,0x801e13cc,0x801e13e0,0x801e13f4]
+    gm_targets=[0x801e14b8,0x801e000c,0x801e059c,0x801e0938,0x801e1344,0x801e1300,0x801e1670,0x801e1344,0x80020000]
+    gm_ops=[3,4,5,6,8,9,10,11,13];gm_argc=[0,0,0,2,3,2,0,3,0];gm_calls=[]
+    for i,pc in enumerate(gm_pcs):
+        changes={}
+        if i==3:changes={4:0x8001000c,5:707}
+        elif i==4:changes={16:4096,4:0x801b0000,5:0x80015008,6:4096}
+        elif i==5:changes={4:0x801e0060,5:0x80015000}
+        elif i==7:changes={4:0x80015008,5:0x801b0000,6:4096}
+        elif i==8:changes={2:0x80020000}
+        changes[31]=pc+8
+        for reg,value in changes.items():gm_regs[reg]=[value,15]
+        gm_calls.append(dict(pc=pc,delay=pc+4,target=gm_targets[i],operation=gm_ops[i],invocation=1,site=i+1,argc=gm_argc[i],program=2 if i==8 else 1,machine=gm_machine()))
+    require(gm["input_machine"] == gm_input and gm["output_machine"] == gm_machine() and gm["call_sequence"] == gm_calls, "GAMELOAD main full CPU/9-child transport drifted")
+    gm_access=[(0x801e1370,0x801feffc,0x801e14b4,1,15,2),(0x801e1378,0x801feff8,0x33001010,2,0,2),(0x801e13a0,0x80015004,4096,7,15,1),(0x801e13ec,0x80015000,0x80020000,12,15,1)]
+    gm_access_bytes=b"".join(fc_le(pc)+fc_le(addr)+fc_le(value)+fc_le(op,8)+bytes([4,mask,kind]) for pc,addr,value,op,mask,kind in gm_access)
+    gm_call_bytes=b"".join(fc_le(c["pc"])+fc_le(c["delay"])+fc_le(c["target"])+fc_le(c["operation"],8)+fc_le(c["invocation"],8)+bytes([c["site"],c["argc"],c["program"]])+gm_machine_bytes(c["machine"]) for c in gm_calls)
+    gm_fingerprints=dict(input_machine=fc_hash(gm_machine_bytes(gm_input)),output_machine=fc_hash(gm_machine_bytes(gm_machine())),accesses=fc_hash(gm_access_bytes),pcs=fc_hash(b"".join(fc_le(pc) for pc in range(0x801e136c,0x801e13fc,4))),calls=fc_hash(gm_call_bytes))
+    require(all(gm["canonical_fingerprint"][k] == v for k,v in gm_fingerprints.items()), "GAMELOAD main canonical full journals drifted")
+    require(gm["canonical_fingerprint"]["algorithm"] == "FNV-1a-64" and gm["canonical_fingerprint"]["seed"] == "cbf29ce484222325" and gm["canonical_fingerprint"]["call_layout"] == "u32 pc,delay,target;u64 operation,invocation;u8 site,argc,program;170-byte machine", "GAMELOAD main hash contract drifted")
+    def gm_checksum(data):
+        value=2166136261
+        for byte in data:value=((value^byte)*16777619)&0xffffffff
+        return value
+    gm_staged=bytearray((i*37+11)&255 for i in range(4096));gm_staged[0x90:0x94]=fc_le(1)
+    gm_loaded=bytearray((i*19+3)&255 for i in range(4096));gm_loaded[:4]=fc_le(0x80020000);gm_loaded[4:8]=fc_le(4096)
+    require(gm["staged_checksum"] == gm["restored_checksum"] == gm_checksum(gm_staged) and gm["loaded_checksum"] == gm_checksum(gm_loaded), "GAMELOAD main synthetic fixture payload checksums drifted")
+    require(gm["fixture_contract"]["gameonly_service"] == "refused/unbound" and gm["next_unbound_boundary"]["first_production"] == "801E1374->801E14B8 startup", "GAMELOAD main missing service boundary drifted")
+    gmframes=["gameload-main-before","gameload-main-after"]
+    require(all(n in by_id for n in gmframes), "GAMELOAD main native frames missing")
+    gmhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in gmframes]
+    require(gmhashes[0] == gmhashes[1] == lkhashes[1], "GAMELOAD main CPU probe changed native pixels")
+    (args.frames/"gameload_main_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E136C",end="0x801E140F",driver_frame_count=len(states),source_receipt=gm,before_sha256=gmhashes[0],after_sha256=gmhashes[1],gameplay_shown="BLOCKED"),indent=2))
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
