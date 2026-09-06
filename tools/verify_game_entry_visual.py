@@ -739,6 +739,26 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": eligibility,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    camera_transform = period["camera_frame_transform_probe"]
+    require((camera_transform["program"], camera_transform["address"], camera_transform["inclusive_end"],
+             camera_transform["bytes"], camera_transform["instructions"]) ==
+            ("GAMEONLY", "0x80051098", "0x80051293", 508, 127), "camera transform provenance drifted")
+    require(camera_transform["completed"] and camera_transform["classification"] == "no direct visual effect"
+            and "independent full machine" in camera_transform["scope"]
+            and "typed camera and GTE fixtures" in camera_transform["scope"]
+            and camera_transform["translation_before"] == [0, 0, 0]
+            and camera_transform["translation_after"] == [104, 205, 306]
+            and (camera_transform["callbacks"], camera_transform["multiply_count"]) == (4, 3)
+            and (camera_transform["operations"], camera_transform["reads"], camera_transform["stores"]) == (47, 22, 21)
+            and (camera_transform["frame_stack_pointer"], camera_transform["returned_sp"], camera_transform["restored_ra"],
+                 camera_transform["next_pc"]) == (0x801FEFD0, 0x801FF000, 0x800490BC, 0x800490C0),
+            "camera transform native CPU state drifted")
+    (args.frames / "camera_frame_transform_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80051098", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": camera_transform,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     camera_end = period["camera_override_end_probe"]
     require((camera_end["program"], camera_end["address"], camera_end["inclusive_end"],
              camera_end["bytes"], camera_end["instructions"]) ==

@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_camera_frame_transform_tests tests/game_camera_frame_transform_tests.cpp src/recovered/game_camera_frame_transform.c)
+    target_compile_features(nba97_game_camera_frame_transform_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_frame_transform_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_frame_transform COMMAND nba97_game_camera_frame_transform_tests)
+    add_executable(nba97_game_camera_frame_transform_integration_tests tests/game_camera_frame_transform_integration_tests.cpp
+        src/recovered/game_camera_frame_transform.c src/game_camera_frame_transform_adapter.cpp src/recovered/game_match_frame.c)
+    target_compile_features(nba97_game_camera_frame_transform_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_frame_transform_integration_tests PRIVATE src)
+    add_test(NAME game_camera_frame_transform_integration COMMAND nba97_game_camera_frame_transform_integration_tests)
     add_executable(nba97_game_opponent_contact_tests tests/game_opponent_contact_tests.cpp src/recovered/game_opponent_contact.c)
     target_compile_features(nba97_game_opponent_contact_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_opponent_contact_tests PRIVATE src src/recovered)
@@ -1820,3 +1829,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_actor_contact_eligib
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_override_end.c src/game_camera_override_end_adapter.cpp src/game_camera_override_end_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_opponent_contact.c src/game_opponent_contact_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_frame_transform.c src/game_camera_frame_transform_adapter.cpp src/game_camera_frame_transform_capture.cpp)

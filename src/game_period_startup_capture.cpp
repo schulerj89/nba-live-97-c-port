@@ -1,3 +1,4 @@
+#include "game_camera_frame_transform_capture.h"
 #include "game_period_startup_capture.h"
 #include "game_actor_resume_capture.h"
 #include "game_ball_actor_contact_capture.h"
@@ -146,6 +147,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"ball_actor_contact_probe\":"<<captureGameBallActorContact()
             <<",\"contact_dispatch_probe\":"<<captureGameContactDispatch()
             <<",\"actor_contact_gate_probe\":"<<captureGameActorContactGate()
+            <<",\"camera_frame_transform_probe\":"<<captureGameCameraFrameTransform()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
             <<",\"actor_contact_eligibility_probe\":"<<captureGameActorContactEligibility()
