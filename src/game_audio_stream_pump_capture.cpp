@@ -1,4 +1,5 @@
 #include "game_audio_stream_pump_capture.h"
+#include "game_audio_stream_status_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -7,6 +8,8 @@ namespace {
 struct Fixture {
     const Nba97GameTextMemory* memory;
     unsigned mode,queries=0,handlers=0;
+    unsigned busy=0;
+    Nba97GameAudioStreamStatusAdapterProgress status{};
     std::vector<std::uint32_t> pcs;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
@@ -17,7 +20,10 @@ struct Fixture {
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameAudioStreamPumpEvent* e,Nba97GameAudioStreamPumpRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);f.pcs.push_back(e->pc);
         // Explicit synthetic stream-service results; no audible playback.
-        if(e->entry==0x8008472cu)r->gpr[2]={0,15};
+        if(e->entry==0x8008472cu){
+            Nba97GameAudioStreamStatusContext c{};c.operation_budget=12;
+            return nba97_game_audio_stream_status_from_stream_pump(f.memory,e,r,&c,&f.status)==NBA97_TEXT_COMPLETE;
+        }
         else if(e->entry==0x80086190u)r->gpr[2]={0x13572468u,15};
         else if(e->entry==0x80088018u){
             if(r->gpr[4].word!=0x80170000u)return 0;
@@ -28,7 +34,7 @@ struct Fixture {
         }else return 0;
         return 1;
     }
-    void initialize(){put(0x800c43b0u,mode,1);put(0x800c438cu,0x80170000u);}
+    void initialize(){put(0x800c43b0u,mode==5?7u:6u,1);put(0x800c43b1u,busy,1);put(0x800c438cu,0x80170000u);}
     std::string receipt(const Nba97GameAudioStreamPumpProgress& p,std::uint32_t caller,std::uint32_t sp,std::uint32_t s8) const {
         if(!p.completed || p.returned_value.word!=0 || p.restored_return_address.word!=caller+8u ||
            p.registers.gpr[29].word!=sp || p.restored_s8.word!=s8 || queries!=2 || handlers!=(mode==5?1u:0u))
@@ -39,13 +45,24 @@ struct Fixture {
         for(std::size_t i=0;i<pcs.size();++i){if(i)o<<',';o<<pcs[i];}
         o<<"],\"status_queries\":"<<queries<<",\"handler_calls\":"<<handlers<<",\"handler_value\":"<<(mode==5?0x12345678u:0u)
          <<",\"returned_value\":"<<p.returned_value.word<<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
+        const auto& gate=status.status;
+        const unsigned expected=busy?4u:(mode==5?3u:1u);
+        if(status.status_invocations!=1 || !gate.completed || gate.returned_value.word!=expected ||
+           gate.registers.gpr[31].word!=0x80083f08u || gate.registers.gpr[29].word!=p.frame_stack_pointer)
+            throw std::runtime_error("stream status native CPU fixture drifted");
+        auto prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"stream_status\":{"
+          "\"program\":\"GAMEONLY\",\"address\":\"0x8008472C\",\"inclusive_end\":\"0x8008480F\",\"body_bytes\":196,\"body_instructions\":49,\"span_bytes\":228,\"span_instructions\":57,"
+          "\"classification\":\"no direct visual effect\",\"scope\":\"actual stream-pump event and full-GPR leaf adapter; explicit raw flag fixture\","
+          "\"completed\":true,\"call_pc\":2148024064,\"flags\":"<<(mode==5?7u:6u)<<",\"busy\":"<<busy
+         <<",\"operations\":"<<gate.operations<<",\"reads\":"<<gate.reads<<",\"stores\":"<<gate.stores
+         <<",\"returned_value\":"<<gate.returned_value.word<<",\"frame_stack_pointer\":"<<gate.frame_stack_pointer<<",\"returned_ra\":"<<gate.registers.gpr[31].word<<"}}";
         return o.str();
     }
 };
 }
 int GameAudioStreamPumpCapture::fromSpeech(const Nba97GameTextMemory* memory,const Nba97GameSpeechStartupEvent* e,Nba97GameSpeechStartupRegisters* r) {
     if(!memory || !e || !r)return 0;
-    Fixture f{memory,e->pc==0x800801e4u?5u:6u};f.initialize();
+    Fixture f{memory,e->pc==0x800801e4u?5u:6u};f.busy=e->pc==0x800801e4u?255u:0u;f.initialize();
     const auto sp=r->gpr[29].word,s8=r->gpr[30].word;
     Nba97GameAudioStreamPumpContext c{};c.operation_budget=100;c.io=Fixture::child;c.user=&f;
     Nba97GameAudioStreamPumpAdapterProgress p{};

@@ -757,6 +757,24 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":pumps,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    gates=[pump["stream_status"] for pump in pumps]
+    for gate,flags,busy in zip(gates,(7,6,7,7,7),(255,0,0,0,0)):
+        require((gate["program"],gate["address"],gate["inclusive_end"],gate["body_bytes"],gate["body_instructions"],gate["span_bytes"],gate["span_instructions"]) ==
+                ("GAMEONLY","0x8008472C","0x8008480F",196,49,228,57), "stream status body/span provenance drifted")
+        operations=4 if busy else (6 if flags==7 else 5)
+        require(gate["completed"] and gate["classification"] == "no direct visual effect"
+                and "actual stream-pump event" in gate["scope"] and gate["call_pc"] == 0x80083F00
+                and gate["flags"] == flags and gate["busy"] == busy
+                and (gate["operations"],gate["reads"],gate["stores"]) == (operations,operations-1,1)
+                and gate["returned_value"] == (4 if busy else (3 if flags==7 else 1)) and gate["returned_ra"] == 0x80083F08,
+                "stream status native CPU fixture drifted")
+    require([gate["frame_stack_pointer"] for gate in gates] == [0x807FFF30]*2+[0x801FFEB8]*3, "stream status nested stack drifted")
+    (args.frames / "audio_stream_status_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8008472C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gates,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     require((playback["program"],playback["address"],playback["inclusive_end"],playback["bytes"],playback["instructions"]) ==
             ("GAMEONLY","0x800800F8","0x80080247",336,84), "speech startup provenance drifted")
     require(playback["completed"] and playback["classification"] == "no direct visual effect"
