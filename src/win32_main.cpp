@@ -1,3 +1,4 @@
+#include "frontend_io_drain_capture.h"
 #include "frontend_clock_read_capture.h"
 #include "frontend_exit_drain_capture.h"
 #include "frontend_exit_wait_capture.h"
@@ -1192,6 +1193,9 @@ private:
         frame("frontend-clock-read-before");
         std::ofstream(output/"frontend_clock_read_trace.json")<<nba97::captureFrontendClockRead();
         frame("frontend-clock-read-after");
+        frame("frontend-io-drain-before");
+        std::ofstream(output/"frontend_io_drain_trace.json")<<nba97::captureFrontendIoDrain();
+        frame("frontend-io-drain-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");

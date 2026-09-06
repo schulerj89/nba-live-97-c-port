@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 112, "native click-through frame count drifted")
+    require(len(states) == 114, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -805,6 +805,93 @@ def main():
                     "before_sha256":clock_hashes[0],"after_sha256":clock_hashes[1],
                     "visual_status":"Gameplay shown: BLOCKED","reason":crb},indent=2)+"\n",
         encoding="utf-8")
+
+    io_drain = read_json(args.frames / "frontend_io_drain_trace.json")
+    require(io_drain["program"] == "FEONLY" and int(io_drain["address"],16) == 0x800393f0
+            and int(io_drain["inclusive_end"],16) == 0x800394d3
+            and io_drain["bytes"] == 228 and io_drain["instructions"] == 57
+            and io_drain["source_sha256"] == "ddd6a228f2ddfecfebe23641b1c36c549e82172f38dfe659484b2d9e521ea50c"
+            and io_drain["completed"] == io_drain["accepted"] == io_drain["result"] == 1
+            and not io_drain["contract_failure"], "I/O drain source/completion receipt drifted")
+    require(io_drain["parent_call"] == {"pc":"0x800394e8","delay":"0x800394ec",
+            "entry":"0x800393f0","argument_count":0,"program":1,"ra":"0x800394f0"}
+            and io_drain["status_fixture"] == [3,1,4,5,-1,0,2,6], "I/O drain fixture boundary drifted")
+    iod = io_drain["drain"]
+    require([iod[k] for k in ("operations","accesses","reads","stores","callbacks",
+            "slot_iterations","poll_attempts","zero_poll_results","instruction_count")]
+            == [24,20,12,8,4,8,2,1,164], "I/O drain execution counts drifted")
+    iod_trace = list(range(0x800393f0,0x80039408,4))
+    for status in (3,1,4,5,-1,0,2,6):
+        iod_trace += list(range(0x80039408,0x80039420,4))
+        if status == 3:
+            iod_trace += list(range(0x8003944c,0x80039480,4))
+        else:
+            iod_trace += [0x80039420,0x80039424]
+            if status < 4:
+                iod_trace += [0x80039428,0x8003942c]
+                iod_trace += (list(range(0x8003946c,0x80039480,4)) if status == 1
+                              else [0x80039430,0x80039434])
+            else:
+                iod_trace += [0x80039438,0x8003943c,0x80039440]
+                if status < 6:
+                    iod_trace += [0x80039444,0x80039448,0x80039480,0x80039484,0x80039488]
+                iod_trace += [0x8003948c]
+        iod_trace += [0x80039490,0x80039494,0x80039498]
+    iod_trace += list(range(0x8003949c,0x800394bc,4))
+    iod_trace += list(range(0x8003949c,0x800394ac,4)) + list(range(0x800394bc,0x800394d4,4))
+    require([int(pc,16) for pc in iod["instruction_trace"]] == iod_trace
+            and len(set(iod_trace)) == 57, "I/O drain complete source PC path drifted")
+    # Source-ordered frame, slot and restore accesses for the generated status fixture.
+    iod_accesses = [
+        (0x800393f4,0x801efff4,0x63001111,1,2),(0x800393fc,0x801efff0,0x63001010,2,2),
+        (0x80039404,0x801efff8,0x800394f0,3,2),(0x80039410,0x800ef840,3,4,1),
+        (0x80039454,0x800ef844,0x80145678,5,1),(0x80039468,0x800ef844,0,7,2),
+        (0x80039474,0x800ef840,0,8,2),(0x80039410,0x800ef864,1,9,1),
+        (0x80039474,0x800ef864,0,10,2),(0x80039410,0x800ef888,4,11,1),
+        (0x80039488,0x800ef878,0,12,2),(0x80039410,0x800ef8ac,5,13,1),
+        (0x80039488,0x800ef89c,0,14,2),(0x80039410,0x800ef8d0,0xffffffff,15,1),
+        (0x80039410,0x800ef8f4,0,16,1),(0x80039410,0x800ef918,2,17,1),
+        (0x80039410,0x800ef93c,6,18,1),(0x800394bc,0x801efff8,0x800394f0,22,1),
+        (0x800394c0,0x801efff4,0x63001111,23,1),(0x800394c4,0x801efff0,0x63001010,24,1)]
+    require(len(iod["access_journal"]) == len(iod_accesses), "I/O drain access length drifted")
+    for actual, (pc,address,value,operation,kind) in zip(iod["access_journal"],iod_accesses):
+        require([int(actual[k],16) for k in ("pc","address","value")] == [pc,address,value]
+                and [actual[k] for k in ("operation","kind","width","known_mask")]
+                == [operation,kind,4,15], "I/O drain ordered access drifted")
+    def iod_machine(machine, expected):
+        return (len(machine["gpr"]) == 32 and all(int(w["word"],16) == v and w["known_mask"] == 15
+                for w,v in zip(machine["gpr"],expected))
+                and machine["hi"] == {"word":"0x10203040","known_mask":5}
+                and machine["lo"] == {"word":"0x50607080","known_mask":10})
+    iod_gpr = [0x63000000+i*0x101 for i in range(32)]
+    iod_gpr[0]=0; iod_gpr[1]=0x800f0000; iod_gpr[2]=1; iod_gpr[3]=3
+    iod_gpr[4]=0x80145678; iod_gpr[16]=0; iod_gpr[17]=0; iod_gpr[29]=0x801effe0
+    iod_calls = [(0x80039458,0x80077638,1,1),(0x8003949c,0x800392a0,0,1),
+                 (0x800394ac,0x80038e84,0,1),(0x8003949c,0x800392a0,0,2)]
+    require(len(iod["call_sequence"]) == 4, "I/O drain callback count drifted")
+    for index,(actual,(pc,target,argc,invocation)) in enumerate(zip(iod["call_sequence"],iod_calls)):
+        if index:
+            iod_gpr[1]=0x800f00fc; iod_gpr[2]=0; iod_gpr[3]=6; iod_gpr[16]=288; iod_gpr[17]=8
+        iod_gpr[31]=pc+8
+        require([int(actual[k],16) for k in ("pc","delay","target")] == [pc,pc+4,target]
+                and actual["argument_count"] == argc and actual["invocation"] == invocation
+                and iod_machine(actual["machine"],iod_gpr), "I/O drain exact callback machine drifted")
+    iod_gpr[2]=1; iod_gpr[16]=0x63001010; iod_gpr[17]=0x63001111
+    iod_gpr[29]=0x801f0000; iod_gpr[31]=0x800394f0
+    require(iod_machine(io_drain["final_machine"],iod_gpr), "I/O drain live epilogue drifted")
+    iod_frames = ("frontend-io-drain-before","frontend-io-drain-after")
+    require(all(n in by_id and by_id[n]["page"] == "User Setup" for n in iod_frames), "I/O drain native frames absent")
+    iod_hashes = [ppm_hash(args.frames/f"{n}.ppm") for n in iod_frames]
+    require(iod_hashes[0] == iod_hashes[1] == clock_hashes[1], "CPU I/O drain changed pixels")
+    require(io_drain["gameplay_shown"] == "BLOCKED" and io_drain["classification"] == "no direct visual effect"
+            and "Synthetic standalone" in io_drain["fixture_contract"]
+            and "80077638" in io_drain["next_unbound_boundary"]["io_children"],
+            "I/O drain conceals standalone fixtures or remaining dependencies")
+    (args.frames/"frontend_io_drain_verified.json").write_text(json.dumps({
+        "program":"FEONLY","address":"0x800393F0","end":"0x800394D3",
+        "driver_frame_count":len(states),"source_receipt":io_drain,
+        "before_sha256":iod_hashes[0],"after_sha256":iod_hashes[1],
+        "visual_status":"Gameplay shown: BLOCKED","reason":io_drain["next_unbound_boundary"]},indent=2)+"\n",encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
