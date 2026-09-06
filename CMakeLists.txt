@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_exit_wait_tests tests/frontend_exit_wait_tests.cpp src/recovered/frontend_exit_wait.c)
+    target_compile_features(nba97_frontend_exit_wait_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_exit_wait_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_exit_wait COMMAND nba97_frontend_exit_wait_tests)
+    add_executable(nba97_frontend_exit_wait_integration_tests tests/frontend_exit_wait_integration_tests.cpp src/frontend_exit_wait_capture.cpp src/recovered/frontend_exit_wait.c src/frontend_exit_wait_adapter.cpp src/recovered/frontend_exit_cleanup.c src/frontend_exit_cleanup_adapter.cpp)
+    target_compile_features(nba97_frontend_exit_wait_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_exit_wait_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_exit_wait_integration COMMAND nba97_frontend_exit_wait_integration_tests)
     add_executable(nba97_frontend_exit_cleanup_tests tests/frontend_exit_cleanup_tests.cpp src/recovered/frontend_exit_cleanup.c)
     target_compile_features(nba97_frontend_exit_cleanup_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_exit_cleanup_tests PRIVATE src src/recovered)
@@ -2442,3 +2450,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_dispatch_entry.c
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_main.c src/frontend_main_adapter.cpp src/frontend_main_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_cleanup.c src/frontend_exit_cleanup_adapter.cpp src/frontend_exit_cleanup_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_wait.c src/frontend_exit_wait_adapter.cpp src/frontend_exit_wait_capture.cpp)

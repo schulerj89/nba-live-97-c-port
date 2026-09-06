@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 106, "native click-through frame count drifted")
+    require(len(states) == 108, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -514,6 +514,108 @@ def main():
                     "driver_frame_count":len(states),"source_receipt":cleanup,
                     "before_sha256":cleanup_hashes[0],"after_sha256":cleanup_hashes[1],
                     "visual_status":"Gameplay shown: BLOCKED","reason":cb},indent=2)+"\n",
+        encoding="utf-8")
+
+    wait = read_json(args.frames / "frontend_exit_wait_trace.json")
+    require([wait[key] for key in ("program", "address", "inclusive_end",
+             "bytes", "instructions", "source_sha256")] ==
+            ["FEONLY", "0x8002efbc", "0x8002f083", 200, 50,
+             "45eed4157e3ece4487b1c0c8ea03ed780461937168a8d38e05853200ebf6ad53"],
+            "frontend exit wait provenance drifted")
+    require(wait["completed"] == wait["accepted"] == wait["result"] == 1
+            and wait["contract_failure"] == 0,
+            "frontend exit wait source-boundary probe failed")
+    parent = wait["parent_call"]
+    require([int(parent[key],16) for key in ("pc", "delay", "entry", "ra")] ==
+            [0x8002F08C,0x8002F090,0x8002EFBC,0x8002F094]
+            and parent["argument_count"] == 0 and parent["program"] == 1,
+            "wait natural-caller boundary contract drifted")
+    wp = wait["wait"]
+    require([wp[key] for key in ("operations", "accesses", "reads", "stores",
+                                "callbacks", "instruction_count")] ==
+            [19,9,5,4,10,50]
+            and [int(pc,16) for pc in wp["instruction_trace"]] ==
+            list(range(0x8002EFBC,0x8002F084,4)),
+            "wait did not execute its complete deadline path")
+    branch = wait["branch_state"]
+    require(branch["exit_path"] == 4 and branch["loop_iterations"] == 1
+            and all(main_word(branch[key],value) for key,value in
+                    (("initial_handle",0x80145678),("deadline",1360),
+                     ("first_poll",0),("second_poll",0),("clock",1361)))
+            and {key:int(value,16) for key,value in wait["memory"].items()} ==
+            {"handle_before":0x80145678,"handle_after":0xFFFFFFFF,
+             "secondary_before":0x80123458,"secondary_after":0},
+            "wait deadline, latched polls, or ordered flag clears drifted")
+    expected_wait_accesses = [
+        (0x8002EFC0,0x80017268,0x80145678,1,1),
+        (0x8002EFCC,0x801EFFFC,0x8002F094,2,2),
+        (0x8002EFD4,0x801EFFF8,0x11223344,3,2),
+        (0x8002F030,0x80017268,0x80145678,10,1),
+        (0x8002F044,0x80017268,0xFFFFFFFF,12,2),
+        (0x8002F05C,0x8002149C,0x80123458,15,1),
+        (0x8002F06C,0x8002149C,0,17,2),
+        (0x8002F070,0x801EFFFC,0x8002F094,18,1),
+        (0x8002F074,0x801EFFF8,0x11223344,19,1)]
+    require(len(wp["access_journal"]) == 9, "wait access extent drifted")
+    for actual,(pc,address,value,operation,kind) in zip(
+            wp["access_journal"],expected_wait_accesses):
+        require([int(actual[key],16) for key in ("pc","address","value")] ==
+                [pc,address,value] and actual["operation"] == operation
+                and actual["width"] == 4 and actual["known_mask"] == 15
+                and actual["kind"] == kind, "wait memory/access order drifted")
+    expected_wait_calls = [
+        (0x8002EFDC,0x8007B2BC,3),(0x8002EFE4,0x8008DA5C,0),
+        (0x8002EFF0,0x8006B6A0,0),(0x8002F000,0x8006FCF0,0),
+        (0x8002F010,0x80039260,0),(0x8002F018,0x8008DA5C,0),
+        (0x8002F034,0x80092C34,1),(0x8002F048,0x80028C28,0),
+        (0x8002F050,0x8006FAA0,0),(0x8002F060,0x80028CF4,1)]
+    require(len(wp["call_sequence"]) == 10, "wait child extent drifted")
+    expected = [0] + [0x52000000+i*0x101 for i in range(1,32)]
+    expected[4],expected[5],expected[6] = 0x80145678,100,0xFFFFFFFF
+    expected[16],expected[29] = 0x11223344,0x801EFFE8
+    def wait_machine_matches(machine, gpr):
+        return (len(machine["gpr"]) == 32 and
+                all(main_word(word,value) for word,value in zip(machine["gpr"],gpr))
+                and machine["hi"] == fe["final_machine"]["hi"]
+                and machine["lo"] == fe["final_machine"]["lo"])
+    for index,(actual,(pc,target,argc)) in enumerate(zip(
+            wp["call_sequence"],expected_wait_calls)):
+        expected[31] = pc+8
+        expected[2] = 1000 if index == 2 else (1 if index == 6 else 0xFFFFFFFF)
+        if index >= 2:
+            expected[16] = 1360
+        if index >= 7:
+            expected[1] = 0x80010000
+        if index == 9:
+            expected[4] = 0x80123458
+        require([int(actual[key],16) for key in ("pc","delay","target")] ==
+                [pc,pc+4,target] and actual["argument_count"] == argc
+                and actual["invocation"] == 1
+                and wait_machine_matches(actual["machine"],expected),
+                "wait full callback machine or delay-slot arguments drifted")
+    expected[1],expected[16],expected[29],expected[31] = (
+        0x80020000,0x11223344,0x801F0000,0x8002F094)
+    require(wait_machine_matches(wait["final_machine"],expected),
+            "wait did not preserve its full return machine")
+    wait_frames = ["frontend-exit-wait-before","frontend-exit-wait-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in wait_frames), "wait native boundary frames missing")
+    wait_hashes = [ppm_hash(args.frames/f"{name}.ppm") for name in wait_frames]
+    require(wait_hashes[0] == wait_hashes[1] == cleanup_hashes[1],
+            "CPU-only wait probe changed native User Setup pixels")
+    wb = wait["next_unbound_boundary"]
+    require(wait["classification"] == "no direct visual effect"
+            and wait["gameplay_shown"] == "BLOCKED"
+            and "synthetic" in wait["fixture_contract"].lower()
+            and "standalone" in wait["fixture_contract"].lower()
+            and "8007B844" in wb["earliest_production"]
+            and all(pc in wb["next_wait_child"] for pc in ("8002EFDC","8007B2BC")),
+            "wait receipt conceals fixtures or its next unbound child")
+    (args.frames/"frontend_exit_wait_verified.json").write_text(
+        json.dumps({"program":"FEONLY","address":"0x8002EFBC","end":"0x8002F083",
+                    "driver_frame_count":len(states),"source_receipt":wait,
+                    "before_sha256":wait_hashes[0],"after_sha256":wait_hashes[1],
+                    "visual_status":"Gameplay shown: BLOCKED","reason":wb},indent=2)+"\n",
         encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
