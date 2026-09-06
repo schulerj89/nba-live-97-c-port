@@ -792,6 +792,22 @@ def main():
         "classification":"no direct visual effect"
     },indent=2)+chr(10),encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]
+    clock_reads=playback["clock_reads"]
+    require(len(clock_reads)==3,"clock read native coverage missing")
+    for leaf,pc,sample in zip(clock_reads,(0x800801EC,0x80080208,0x80080208),(1000,1240,1241)):
+        require((leaf["program"],leaf["address"],leaf["inclusive_end"],leaf["bytes"],leaf["instructions"]) ==
+                ("GAMEONLY","0x800A5810","0x800A581F",16,4),"clock read provenance drifted")
+        require(leaf["completed"] and leaf["classification"]=="no direct visual effect"
+                and "explicit retained counter fixture" in leaf["scope"] and leaf["call_pc"]==pc
+                and (leaf["operations"],leaf["reads"],leaf["counter_address"],leaf["returned_value"])==(1,1,0x800D7A70,sample)
+                and leaf["returned_sp"]==playback["frame_stack_pointer"] and leaf["returned_ra"]==pc+8,
+                "clock read native CPU fixture drifted")
+    (args.frames / "clock_read_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800A5810","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":clock_reads,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
     pumps = playback["audio_stream_pumps"] + [case["audio_stream_pump"] for case in reset_cases]
     require(len(pumps)==5, "stream pump native parent coverage missing")
     stream_services = [service for pump in pumps for service in pump["stream_services"]]

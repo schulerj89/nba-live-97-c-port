@@ -1,5 +1,6 @@
 #include "game_speech_startup_capture.h"
 #include "game_audio_stream_pump_capture.h"
+#include "game_clock_read_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -10,6 +11,8 @@ struct Fixture {
     const Nba97GameTextMemory* memory;
     std::vector<std::uint32_t> pcs;
     GameAudioStreamPumpCapture stream;
+    std::vector<Nba97GameClockReadProgress> clock_reads;
+    std::vector<std::uint32_t> clock_pcs;
     unsigned clocks=0,ready=0,pumps=0;
     std::uint32_t filename=0,stack_argument=0;
     std::uint32_t get(std::uint32_t a) const {
@@ -17,6 +20,13 @@ struct Fixture {
             if(a<r.base || std::uint64_t(a-r.base)+4>r.size)continue;
             std::uint32_t v=0;for(unsigned i=0;i<4;++i){if(r.known && r.known[a-r.base+i]!=1)throw std::runtime_error("speech startup unknown fixture word");v|=std::uint32_t(r.data[a-r.base+i])<<(8*i);}return v;}
         throw std::runtime_error("speech startup fixture mapping missing");
+    }
+    void putClock(std::uint32_t value) {
+        constexpr std::uint32_t address=0x800d7a70u;
+        for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
+            if(address<r.base || std::uint64_t(address-r.base)+4>r.size)continue;
+            for(unsigned i=0;i<4;++i){r.data[address-r.base+i]=std::uint8_t(value>>(8*i));if(r.known)r.known[address-r.base+i]=1;}return;}
+        throw std::runtime_error("clock read fixture mapping missing");
     }
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameSpeechStartupEvent* e,Nba97GameSpeechStartupRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);f.pcs.push_back(e->pc);
@@ -27,7 +37,13 @@ struct Fixture {
         if(e->entry==0x80029ca0u){f.stack_argument=f.get(r->gpr[29].word+0x10u);if(r->gpr[4].word!=0x80170000u || r->gpr[5].word!=5 || r->gpr[6].word!=10000 || r->gpr[7].word!=0x6000 || f.stack_argument!=1)return 0;}
         if(e->entry==0x80083d38u){if(r->gpr[4].word!=15 || r->gpr[5].word!=0xffffffffu)return 0;result=0x80170100u;}
         if(e->entry==0x800abfbcu && (r->gpr[4].word!=0x80170100u || r->gpr[5].word!=0))return 0;
-        if(e->entry==0x800a5810u){result=f.clocks==0?1000u:(f.clocks==1?1240u:1241u);++f.clocks;}
+        if(e->entry==0x800a5810u){
+            // Explicit fixture time progression outside the read-only PS1 leaf.
+            f.putClock(f.clocks==0?1000u:(f.clocks==1?1240u:1241u));
+            Nba97GameClockReadAdapterContext c{};c.operation_budget=1;Nba97GameClockReadProgress p{};
+            const int status=nba97_game_clock_read_from_speech_startup(f.memory,e,r,&c,&p);
+            ++f.clocks;f.clock_reads.push_back(p);f.clock_pcs.push_back(e->pc);return status==NBA97_TEXT_COMPLETE;
+        }
         if(e->entry==0x8008847cu){result=0;++f.ready;}
         if(e->entry==0x80083eecu){++f.pumps;return f.stream.fromSpeech(f.memory,e,r);}
         if(e->entry==0x8002abb4u && (r->gpr[4].word!=0 || r->gpr[5].word!=0))return 0;
@@ -57,6 +73,18 @@ int GameSpeechStartupCapture::dispatch(const Nba97GameTextMemory* memory,
      <<"],\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
     auto prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"audio_stream_pumps\":[";
     for(std::size_t i=0;i<f.stream.receipts.size();++i){if(i)o<<',';o<<f.stream.receipts[i];}
+    o<<"]}";
+    prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"clock_reads\":[";
+    for(std::size_t i=0;i<f.clock_reads.size();++i){
+        if(i)o<<',';const auto& leaf=f.clock_reads[i];
+        if(!leaf.completed || leaf.operations!=1 || leaf.reads!=1 || leaf.machine.registers.gpr[29].word!=p.frame_stack_pointer ||
+           leaf.machine.registers.gpr[31].word!=f.clock_pcs[i]+8u)throw std::runtime_error("clock read native CPU fixture drifted");
+        o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x800A5810\",\"inclusive_end\":\"0x800A581F\",\"bytes\":16,\"instructions\":4,"
+          "\"classification\":\"no direct visual effect\",\"scope\":\"actual speech-startup event and leaf; explicit retained counter fixture progression\","
+          "\"completed\":true,\"operations\":"<<leaf.operations<<",\"reads\":"<<leaf.reads<<",\"call_pc\":"<<f.clock_pcs[i]
+         <<",\"counter_address\":2148366960,\"returned_value\":"<<leaf.return_v0.word<<",\"returned_sp\":"<<leaf.machine.registers.gpr[29].word
+         <<",\"returned_ra\":"<<leaf.machine.registers.gpr[31].word<<"}";
+    }
     o<<"]}";
     receipt=o.str();return 1;
 }

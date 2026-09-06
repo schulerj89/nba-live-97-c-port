@@ -9656,7 +9656,7 @@ private:
             state.get(0x800d7234u)!=0x8009167cu ||
             state.get(0x800d7a78u)!=0 || state.get(0x800d7a98u)!=35280 ||
             state.get(0x800d7a94u)!=120 || state.get(0x800d7a7cu)!=0 ||
-            state.get(0x800d7a70u)!=0 || state.get(0x800d7b2cu)!=0 ||
+            state.get(0x800d7a70u)!=1241u || state.get(0x800d7b2cu)!=0 ||
             state.get(0x800d7b28u)!=0 ||
             state.clock_events[0].pc!=0x800914ecu ||
             state.clock_events[0].entry!=0x80098394u ||
