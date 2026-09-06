@@ -596,6 +596,25 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":camera,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    selection = camera["camera_select"]
+    require((selection["program"],selection["address"],selection["inclusive_end"],selection["bytes"],selection["instructions"]) ==
+            ("GAMEONLY","0x800799CC","0x80079D37",876,219), "camera selector provenance drifted")
+    require(selection["completed"] and selection["classification"] == "no direct visual effect"
+            and "explicit synthetic" in selection["scope"] and selection["call_pc"] == 0x800796B8
+            and (selection["operations"],selection["reads"],selection["stores"]) == (37,12,21)
+            and selection["call_pcs"] == [0x80079AB4,0x80079B7C,0x80079C8C,0x80079D0C]
+            and (selection["mode"],selection["selected_pointer"],selection["force_flag"],selection["busy"]) ==
+                (12,0x80124000,1,0)
+            and selection["copied_words"] == [0x70000000+i*16 for i in range(5)]+[256]
+            and selection["cleared_words"] == [0]*6
+            and selection["frame_stack_pointer"] == 0x801FFE90 and selection["restored_ra"] == 0x800796C0,
+            "camera selector native CPU fixture drifted")
+    (args.frames / "camera_select_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800799CC","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":selection,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     period = loop["period_startup"]
     require((period["program"], period["address"], period["inclusive_end"], period["bytes"], period["instructions"]) ==
             ("GAMEONLY", "0x80067468", "0x8006754F", 232, 58), "period startup provenance drifted")

@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x800799CC",
+      "original_name": "Game_CameraSelect",
+      "symbol": "nba97_game_camera_select",
+      "source": "src/recovered/game_camera_select.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_camera_select_tests; nba97_game_camera_select_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800800F8",
       "original_name": "Game_SpeechStartup",
       "symbol": "nba97_game_speech_startup",
