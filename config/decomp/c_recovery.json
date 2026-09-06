@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8006817C",
+      "original_name": "Game_CrossHalfRule",
+      "symbol": "nba97_game_cross_half_rule",
+      "source": "src/recovered/game_cross_half_rule.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_cross_half_rule_tests; nba97_game_cross_half_rule_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80032B10",
       "original_name": "Game_FrameUiService",
       "symbol": "nba97_game_frame_ui_service",
