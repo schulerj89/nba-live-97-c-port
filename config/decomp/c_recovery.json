@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80088D0C",
+      "original_name": "Game_StreamReadiness",
+      "symbol": "nba97_game_stream_readiness",
+      "source": "src/recovered/game_stream_readiness.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_stream_readiness_tests; nba97_game_stream_readiness_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x8002A264",
       "original_name": "Game_MatchAudioService",
       "symbol": "nba97_game_match_audio_service",

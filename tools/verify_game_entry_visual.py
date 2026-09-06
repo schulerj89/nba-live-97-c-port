@@ -796,7 +796,7 @@ def main():
     expected_audio=(
         (1,1,98,15,8,6,1,98<<16,0x800FDA0E,[]),
         (2,0,1,15,6,5,4,0x8002A444^0x13572468,1000,[0x8002A424,0x8002A43C,0x8002A444]),
-        (3,0,0xFFEB,20,9,6,5,0x82,0,[0x8002A2EC,0x8002A2FC,0x8002A30C]),
+        (3,0,0xFFEB,20,9,6,5,0x82,0,[0x8002A2FC,0x8002A30C]),
     )
     for service,expected,phase in zip(audio_cases,expected_audio,(0,0x81,0)):
         mode,state,timer,ops,reads,stores,calls,v0,v1,pcs=expected
@@ -820,6 +820,23 @@ def main():
         "program":"GAMEONLY","address":"0x8002A264","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":audio_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
+    require(audio_cases[0]["stream_readiness"] is None and audio_cases[1]["stream_readiness"] is None,
+            "stream readiness executed outside mode3")
+    readiness=audio_cases[2]["stream_readiness"]
+    require((readiness["program"],readiness["address"],readiness["inclusive_end"],readiness["span_bytes"],readiness["span_words"],readiness["body_bytes"],readiness["instructions"]) ==
+            ("GAMEONLY","0x80088D0C","0x80088D7B",112,28,104,26),"stream readiness provenance drifted")
+    require(readiness["completed"] and readiness["classification"]=="no direct visual effect"
+            and "explicit enabled flag" in readiness["scope"] and readiness["call_pc"]==0x8002A2EC
+            and (readiness["operations"],readiness["reads"],readiness["stores"],readiness["flag"],readiness["child_calls"])==(6,3,2,1,1)
+            and (readiness["child_pc"],readiness["child_value"],readiness["returned_value"])==(0x80088D30,1,1)
+            and (readiness["frame_stack_pointer"],readiness["returned_sp"],readiness["restored_ra"])==(0x801FFEB0,0x801FFEC8,0x8002A2F4),
+            "stream readiness native CPU fixture drifted")
+    (args.frames / "stream_readiness_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80088D0C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":readiness,
         "classification":"no direct visual effect"
     },indent=2)+chr(10),encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]

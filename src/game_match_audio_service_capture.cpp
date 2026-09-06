@@ -1,4 +1,5 @@
 #include "game_match_audio_service_capture.h"
+#include "game_stream_readiness_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -8,6 +9,8 @@ namespace {
 struct Fixture {
     const Nba97GameTextMemory* memory;
     std::vector<std::uint32_t> pcs;
+    Nba97GameStreamReadinessProgress readiness{};
+    unsigned readiness_calls=0,readiness_children=0;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
             if(a<r.base || std::uint64_t(a-r.base)+width>r.size)continue;
@@ -20,11 +23,22 @@ struct Fixture {
             std::uint32_t v=0;for(unsigned i=0;i<width;++i){if(r.known && r.known[a-r.base+i]!=1)throw std::runtime_error("match audio unknown fixture");v|=std::uint32_t(r.data[a-r.base+i])<<(8*i);}return v;}
         throw std::runtime_error("match audio fixture mapping missing");
     }
+    static int readinessChild(void* user,const Nba97GameTextMemory*,const Nba97GameStreamReadinessEvent* e,Nba97GameStreamReadinessMachine* m) {
+        auto& f=*static_cast<Fixture*>(user);
+        if(e->pc!=0x80088d30u || e->entry!=0x80084448u || e->argument_count)return 0;
+        ++f.readiness_children;m->registers.gpr[2]={1,15};return 1;
+    }
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameMatchAudioServiceEvent* e,Nba97GameMatchAudioServiceMachine* m) {
-        auto& f=*static_cast<Fixture*>(user);f.pcs.push_back(e->pc);
+        auto& f=*static_cast<Fixture*>(user);
+        if(e->entry==0x80088d0cu){
+            Nba97GameStreamReadinessContext c{};c.operation_budget=6;c.io=readinessChild;c.user=&f;
+            ++f.readiness_calls;
+            return nba97_game_stream_readiness_from_match_audio_service(f.memory,e,m,&c,&f.readiness)==NBA97_TEXT_COMPLETE;
+        }
+        f.pcs.push_back(e->pc);
         // Explicit readiness and backend responses, not audible playback.
         std::uint32_t value=e->pc^0x13572468u;
-        if(e->entry==0x80088d0cu || e->entry==0x8008847cu)value=1;
+        if(e->entry==0x8008847cu)value=1;
         else if(e->entry==0x80084588u || e->entry==0x800ad9fcu)value=0;
         else if(e->entry==0x8009dc10u){if(m->registers.gpr[4].word!=9 || m->registers.gpr[5].word || m->registers.gpr[6].word)return 0;}
         else if(e->entry!=0x8009f8d8u)return 0;
@@ -42,6 +56,7 @@ int GameMatchAudioServiceCapture::dispatch(const Nba97GameTextMemory* memory,
     f.put(0x800e430cu,1000);f.put(0x800d7a70u,1022);
     f.put(0x8002149cu,1);f.put(0x80021ee0u,0x80172000u);f.put(0x80021ee8u,0xffff,2);
     f.put(0x800c43b0u,7,1);f.put(0x800c43b1u,0,1);
+    f.put(0x800f0fdcu,1,2); // Explicit enabled-stream fixture for the readiness owner.
     Nba97GameMatchAudioServiceContext service{};service.operation_budget=100;service.io=Fixture::child;service.user=&f;
     Nba97GameClockReadContext clock{};clock.operation_budget=1;
     Nba97GameAudioStreamStatusContext status{};status.operation_budget=20;
@@ -62,7 +77,19 @@ int GameMatchAudioServiceCapture::dispatch(const Nba97GameTextMemory* memory,
        <<",\"returned_ra\":"<<a.clock_read.machine.registers.gpr[31].word<<"},\"status_calls\":"<<a.stream_status_completions
        <<",\"status_value\":"<<a.stream_status.returned_value.word<<",\"unresolved_call_pcs\":[";
     for(std::size_t i=0;i<f.pcs.size();++i){if(i)o<<',';o<<f.pcs[i];}
-    o<<"],\"returned_v0\":"<<machine->registers.gpr[2].word<<",\"returned_v1\":"<<machine->registers.gpr[3].word
+    o<<"],\"stream_readiness\":";
+    if(!f.readiness_calls)o<<"null";
+    else {
+        const auto& d=f.readiness;
+        if(f.readiness_calls!=1 || !d.completed || f.readiness_children!=1)throw std::runtime_error("stream readiness native CPU fixture drifted");
+        o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x80088D0C\",\"inclusive_end\":\"0x80088D7B\",\"span_bytes\":112,\"span_words\":28,\"body_bytes\":104,\"instructions\":26,"
+            "\"classification\":\"no direct visual effect\",\"scope\":\"actual match-audio event and owner; explicit enabled flag and 84448 child response\","
+            "\"completed\":true,\"call_pc\":2147656428,\"operations\":"<<d.operations<<",\"reads\":"<<d.reads<<",\"stores\":"<<d.stores
+         <<",\"flag\":"<<d.loaded_flag.word<<",\"child_calls\":"<<f.readiness_children<<",\"child_pc\":2148044080,\"child_value\":1"
+         <<",\"returned_value\":"<<d.machine.registers.gpr[2].word<<",\"frame_stack_pointer\":"<<d.frame_stack_pointer
+         <<",\"returned_sp\":"<<d.machine.registers.gpr[29].word<<",\"restored_ra\":"<<d.restored_return_address.word<<"}";
+    }
+    o<<",\"returned_v0\":"<<machine->registers.gpr[2].word<<",\"returned_v1\":"<<machine->registers.gpr[3].word
      <<",\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
     receipt=o.str();return 1;
 }

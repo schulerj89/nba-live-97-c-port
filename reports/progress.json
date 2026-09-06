@@ -42,19 +42,19 @@
     ],
     "discovered_functions": 3701,
     "analyzed_code_bytes": 1044056,
-    "evidence_tracked_functions": 97,
-    "evidence_tracked_bytes": 50400,
-    "evidence_coverage_percent": 2.62,
-    "evidence_byte_coverage_percent": 4.83,
-    "complete_functions": 37,
+    "evidence_tracked_functions": 98,
+    "evidence_tracked_bytes": 50504,
+    "evidence_coverage_percent": 2.65,
+    "evidence_byte_coverage_percent": 4.84,
+    "complete_functions": 38,
     "matching_functions": 0,
     "status_counts": {
-      "behavior_verified": 83,
+      "behavior_verified": 84,
       "implemented": 3,
       "researched": 11
     },
     "scope_counts": {
-      "complete": 37,
+      "complete": 38,
       "full": 1,
       "partial": 59
     },
@@ -65,9 +65,9 @@
         "verified": 0
       },
       "audio": {
-        "functions": 15,
-        "bytes": 4644,
-        "verified": 14
+        "functions": 16,
+        "bytes": 4748,
+        "verified": 15
       },
       "boot": {
         "functions": 8,
