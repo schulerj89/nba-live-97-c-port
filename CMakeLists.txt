@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_controller_frame_reset_tests tests/game_controller_frame_reset_tests.cpp src/recovered/game_controller_frame_reset.c)
+    target_compile_features(nba97_game_controller_frame_reset_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_controller_frame_reset_tests PRIVATE src src/recovered)
+    add_test(NAME game_controller_frame_reset COMMAND nba97_game_controller_frame_reset_tests)
+    add_executable(nba97_game_controller_frame_reset_integration_tests tests/game_controller_frame_reset_integration_tests.cpp
+        src/recovered/game_controller_frame_reset.c src/game_controller_frame_reset_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_controller_frame_reset_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_controller_frame_reset_integration_tests PRIVATE src)
+    add_test(NAME game_controller_frame_reset_integration COMMAND nba97_game_controller_frame_reset_integration_tests)
     add_executable(nba97_game_tipoff_announcement_tests tests/game_tipoff_announcement_tests.cpp src/recovered/game_tipoff_announcement.c)
     target_compile_features(nba97_game_tipoff_announcement_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_tipoff_announcement_tests PRIVATE src src/recovered)
@@ -1552,3 +1561,7 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_select.c src/
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_late_period_limits.c src/game_late_period_limits_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_tipoff_announcement.c src/game_tipoff_announcement_adapter.cpp src/game_tipoff_announcement_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_controller_frame_reset.c src/game_controller_frame_reset_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/game_controller_frame_reset_capture.cpp)

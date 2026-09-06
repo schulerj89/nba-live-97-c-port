@@ -627,7 +627,7 @@ def main():
                 (0xFFFF8000, 0x80123400, 0x4321, 0x8765)
             and period["frame_stack_pointer"] == 0x801FFEE8 and period["restored_ra"] == 0x80068C54
             and (period["next_pc"], period["next_entry"], period["simulation_steps"], period["frame_pumps"]) ==
-                (0x80068CF4, 0x800675E4, 0, 0), "period startup native CPU fixture drifted")
+                (0x80068D58, 0x80067A60, 0, 0), "period startup native CPU fixture drifted")
     (args.frames / "period_startup_verified.json").write_text(json.dumps({
         "program": "GAMEONLY", "address": "0x80067468", "driver_frame_count": len(states),
         "input_transition_frames": {name: states.index(by_id[name]) for name in required},
@@ -649,7 +649,7 @@ def main():
                 and first["frame_stack_pointer"] == 0x801FFED0 and first["restored_ra"] == 0x8006749C
                 and case["signed_selector"] == 0 and case["call_pcs"][2] == 0x80067494
                 and (case["next_pc"],case["next_entry"],case["simulation_steps"],case["frame_pumps"]) ==
-                    (0x80068CF4,0x800675E4,0,0), "first-period native CPU fixture drifted")
+                    (0x80068D58,0x80067A60,0,0), "first-period native CPU fixture drifted")
     (args.frames / "first_period_startup_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800673F0","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
@@ -691,6 +691,24 @@ def main():
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json",
         "state":[case["late_period_limits"] for case in limit_cases],
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
+    reset_cases = [case["controller_frame_reset"] for case in limit_cases]
+    for reset in reset_cases:
+        require((reset["program"],reset["address"],reset["inclusive_end"],reset["bytes"],reset["instructions"]) ==
+                ("GAMEONLY","0x800675E4","0x80067663",128,32), "controller reset provenance drifted")
+        require(reset["completed"] and reset["classification"] == "no direct visual effect"
+                and "explicit root" in reset["scope"] and reset["call_pc"] == 0x80068CF4
+                and (reset["operations"],reset["reads"],reset["stores"],reset["calls"]) == (23,11,11,1)
+                and reset["child_pc"] == 0x8006764C
+                and (reset["timer_before"],reset["delta"],reset["timer_after"],reset["cleared_slots"]) == (1,2,0,8)
+                and reset["controller_fields"] == [0]*8
+                and reset["frame_stack_pointer"] == 0x801FFEE0 and reset["restored_ra"] == 0x80068CFC,
+                "controller reset native CPU fixture drifted")
+    (args.frames / "controller_frame_reset_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800675E4","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":reset_cases,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     playback = scene["random_warmup"]["speech_startup"]
