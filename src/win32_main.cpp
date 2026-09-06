@@ -1,3 +1,4 @@
+#include "frontend_exit_cleanup_capture.h"
 #include "frontend_main_capture.h"
 #include "frontend_dispatch_entry_capture.h"
 #include "frontend_dispatch_capture.h"
@@ -1176,6 +1177,9 @@ private:
         frame("frontend-main-before");
         std::ofstream(output/"frontend_main_trace.json")<<nba97::captureFrontendMain();
         frame("frontend-main-after");
+        frame("frontend-exit-cleanup-before");
+        std::ofstream(output/"frontend_exit_cleanup_trace.json")<<nba97::captureFrontendExitCleanup();
+        frame("frontend-exit-cleanup-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");

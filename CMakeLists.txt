@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_exit_cleanup_tests tests/frontend_exit_cleanup_tests.cpp src/recovered/frontend_exit_cleanup.c)
+    target_compile_features(nba97_frontend_exit_cleanup_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_exit_cleanup_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_exit_cleanup COMMAND nba97_frontend_exit_cleanup_tests)
+    add_executable(nba97_frontend_exit_cleanup_integration_tests tests/frontend_exit_cleanup_integration_tests.cpp src/frontend_exit_cleanup_capture.cpp src/recovered/frontend_exit_cleanup.c src/frontend_exit_cleanup_adapter.cpp src/recovered/frontend_main.c src/frontend_main_adapter.cpp src/recovered/frontend_dispatch_entry.c src/frontend_dispatch_entry_adapter.cpp src/recovered/frontend_dispatch.c src/frontend_dispatch_adapter.cpp src/user_setup_session.cpp src/user_profiles.cpp src/recovered/user_setup.c src/recovered/frontend_help.c src/recovered/roster_reset.c src/recovered/roster_reorder.c src/recovered/roster_lists.c src/recovered/semantic_trace.c)
+    target_compile_features(nba97_frontend_exit_cleanup_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_exit_cleanup_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_exit_cleanup_integration COMMAND nba97_frontend_exit_cleanup_integration_tests)
     add_executable(nba97_frontend_main_tests tests/frontend_main_tests.cpp src/recovered/frontend_main.c)
     target_compile_features(nba97_frontend_main_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_frontend_main_tests PRIVATE src src/recovered)
@@ -2432,3 +2440,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_dispatch.c src/f
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_dispatch_entry.c src/frontend_dispatch_entry_adapter.cpp src/frontend_dispatch_entry_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_main.c src/frontend_main_adapter.cpp src/frontend_main_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_exit_cleanup.c src/frontend_exit_cleanup_adapter.cpp src/frontend_exit_cleanup_capture.cpp)

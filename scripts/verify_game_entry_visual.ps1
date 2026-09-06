@@ -217,6 +217,7 @@ try {
         'nba97_game_text_submission_tests','nba97_game_text_submission_integration_tests',
         'nba97_game_rectangle_normalize_tests','nba97_game_rectangle_normalize_integration_tests',
         'nba97_game_team_tactics_update_tests','nba97_game_team_tactics_update_integration_tests',
+        'nba97_frontend_exit_cleanup_tests','nba97_frontend_exit_cleanup_integration_tests',
         'nba97_frontend_main_tests','nba97_frontend_main_integration_tests',
         'nba97_frontend_dispatch_entry_tests','nba97_frontend_dispatch_entry_integration_tests',
         'nba97_frontend_dispatch_tests','nba97_frontend_dispatch_integration_tests',

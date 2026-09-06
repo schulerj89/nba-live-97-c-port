@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 104, "native click-through frame count drifted")
+    require(len(states) == 106, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -415,6 +415,106 @@ def main():
                     "after_sha256": fm_hashes[1],
                     "visual_status": "Gameplay shown: BLOCKED",
                     "reason": boundary}, indent=2) + "\n", encoding="utf-8")
+
+    cleanup = read_json(args.frames / "frontend_exit_cleanup_trace.json")
+    require([cleanup[key] for key in ("program", "address", "inclusive_end",
+             "bytes", "instructions", "source_sha256")] ==
+            ["FEONLY", "0x8002f084", "0x8002f0e7", 100, 25,
+             "38b3b7e879958bf82f3c214dea99f4b4bdb0c69f77eae68ae32692c7c9da29ec"],
+            "frontend exit cleanup provenance drifted")
+    require(cleanup["completed"] == cleanup["accepted"] == cleanup["result"] == 1
+            and cleanup["contract_failure"] == 0,
+            "frontend exit cleanup failed its explicit source-boundary probe")
+    parent = cleanup["parent_call"]
+    require([int(parent[key],16) for key in ("pc", "delay", "entry", "ra")] ==
+            [0x80028AA8,0x80028AAC,0x8002F084,0x80028AB0]
+            and parent["argument_count"] == 0 and parent["program"] == 1,
+            "frontend exit cleanup caller contract drifted")
+    cp = cleanup["cleanup"]
+    require([cp[key] for key in ("operations", "accesses", "reads", "stores",
+                                 "callbacks", "instruction_count")] ==
+            [10,5,3,2,5,25]
+            and [int(pc,16) for pc in cp["instruction_trace"]] ==
+            list(range(0x8002F084,0x8002F0E8,4)),
+            "frontend exit cleanup did not execute its full nonzero-release path")
+    require(main_word(cp["loaded_cleanup_selector"],0xFFFFFFFF)
+            and main_word(cp["loaded_release_flag"],0x80145678)
+            and {key:int(value,16) for key,value in cleanup["memory"].items()} ==
+            {"cleanup_selector":0xFFFFFFFF,"release_before":0x80145678,
+             "release_after":0},
+            "frontend exit cleanup selector/release publication drifted")
+    expected_cleanup_accesses = [
+        (0x8002F088,0x801EFFF8,0x80028AB0,1,2),
+        (0x8002F0A0,0x80021D6C,0xFFFFFFFF,4,1),
+        (0x8002F0B0,0x8001502C,0x80145678,6,1),
+        (0x8002F0CC,0x8001502C,0,8,2),
+        (0x8002F0D8,0x801EFFF8,0x80028AB0,10,1)]
+    require(len(cp["access_journal"]) == 5, "cleanup access journal extent drifted")
+    for actual,(pc,address,value,operation,kind) in zip(
+            cp["access_journal"],expected_cleanup_accesses):
+        require([int(actual[key],16) for key in ("pc","address","value")] ==
+                [pc,address,value] and actual["operation"] == operation
+                and actual["width"] == 4 and actual["known_mask"] == 15
+                and actual["kind"] == kind,
+                "cleanup ordered stack/global accesses or delay prefix drifted")
+    expected_cleanup_calls = [
+        (0x8002F08C,0x8002EFBC,0,0x63000404),
+        (0x8002F094,0x800394D4,0,0x63000404),
+        (0x8002F0A4,0x80028C90,1,0xFFFFFFFF),
+        (0x8002F0C0,0x8007760C,1,0x80145678),
+        (0x8002F0D0,0x80076540,0,0x80145678)]
+    require(len(cp["call_sequence"]) == 5, "cleanup callback journal extent drifted")
+    initial_cleanup_gpr = [0] + [0x63000000+i*0x101 for i in range(1,32)]
+    for index,(actual,(pc,target,argc,a0)) in enumerate(zip(
+            cp["call_sequence"],expected_cleanup_calls)):
+        require([int(actual[key],16) for key in ("pc","delay","target")] ==
+                [pc,pc+4,target] and actual["argument_count"] == argc
+                and actual["invocation"] == 1
+                and main_word(actual["a0"],a0)
+                and main_word(actual["sp"],0x801EFFE8)
+                and main_word(actual["ra"],pc+8),
+                "cleanup exact child contract or forwarded selector/pointer drifted")
+        expected = initial_cleanup_gpr.copy()
+        expected[4],expected[29],expected[31] = a0,0x801EFFE8,pc+8
+        if index == 4:
+            expected[1] = 0x80010000
+        actual_machine = actual["machine"]
+        require(len(actual_machine["gpr"]) == 32
+                and all(main_word(word,value) for word,value in
+                        zip(actual_machine["gpr"],expected))
+                and actual_machine["hi"] == fe["final_machine"]["hi"]
+                and actual_machine["lo"] == fe["final_machine"]["lo"],
+                "cleanup full observed callback machine disagrees with fixture contract")
+    expected_final = initial_cleanup_gpr.copy()
+    expected_final[1],expected_final[4] = 0x80010000,0x80145678
+    expected_final[29],expected_final[31] = 0x801F0000,0x80028AB0
+    require(len(cleanup["final_machine"]["gpr"]) == 32
+            and all(main_word(word,value) for word,value in
+                    zip(cleanup["final_machine"]["gpr"],expected_final))
+            and cleanup["final_machine"]["hi"] == fe["final_machine"]["hi"]
+            and cleanup["final_machine"]["lo"] == fe["final_machine"]["lo"],
+            "cleanup lost the live return machine or restored stack/RA")
+    cleanup_frames = ["frontend-exit-cleanup-before","frontend-exit-cleanup-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in cleanup_frames), "cleanup native boundary frames missing")
+    cleanup_hashes = [ppm_hash(args.frames/f"{name}.ppm") for name in cleanup_frames]
+    require(cleanup_hashes[0] == cleanup_hashes[1] == fm_hashes[1],
+            "CPU-only cleanup probe changed native User Setup pixels")
+    cb = cleanup["next_unbound_boundary"]
+    require(cleanup["classification"] == "no direct visual effect"
+            and cleanup["gameplay_shown"] == "BLOCKED"
+            and "synthetic" in cleanup["fixture_contract"].lower()
+            and "standalone" in cleanup["fixture_contract"].lower()
+            and "8007B844" in cb["earliest_production"]
+            and all(pc in cb["next_cleanup_child"] for pc in ("8002F08C","8002EFBC"))
+            and "GAMELOAD" in cb["remaining_main_chain"],
+            "cleanup receipt conceals standalone fixtures or next unbound child")
+    (args.frames/"frontend_exit_cleanup_verified.json").write_text(
+        json.dumps({"program":"FEONLY","address":"0x8002F084","end":"0x8002F0E7",
+                    "driver_frame_count":len(states),"source_receipt":cleanup,
+                    "before_sha256":cleanup_hashes[0],"after_sha256":cleanup_hashes[1],
+                    "visual_status":"Gameplay shown: BLOCKED","reason":cb},indent=2)+"\n",
+        encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

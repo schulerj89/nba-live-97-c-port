@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x8002F084",
+      "original_name": "Frontend_ExitCleanup",
+      "symbol": "nba97_frontend_exit_cleanup",
+      "source": "src/recovered/frontend_exit_cleanup.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_exit_cleanup_tests; nba97_frontend_exit_cleanup_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x80028800",
       "original_name": "Frontend_Main",
       "symbol": "nba97_frontend_main",
