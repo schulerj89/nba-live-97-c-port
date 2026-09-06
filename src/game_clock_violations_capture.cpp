@@ -1,4 +1,5 @@
 #include "game_clock_violations_capture.h"
+#include "game_rule_delay_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -8,6 +9,8 @@ namespace {
 struct Fixture {
     const Nba97GameTextMemory* memory;
     std::vector<std::uint32_t> pcs,args;
+    std::vector<Nba97GameRuleDelayProgress> delays;
+    std::vector<std::uint32_t> delay_pcs;
     void put(std::uint32_t a,std::uint32_t v,unsigned width=4) {
         for(std::size_t n=0;n<memory->count;++n){const auto& r=memory->region[n];
             if(a<r.base || std::uint64_t(a-r.base)+width>r.size)continue;
@@ -22,6 +25,15 @@ struct Fixture {
     }
     static int child(void* user,const Nba97GameTextMemory*,const Nba97GameClockViolationsEvent* e,Nba97GameClockViolationsMachine* m) {
         auto& f=*static_cast<Fixture*>(user);f.pcs.push_back(e->pc);f.args.push_back(e->argument_count?m->registers.gpr[4].word:0u);
+        if(e->entry==0x800295c8u){
+            const auto before=*m;Nba97GameRuleDelayProgress p{};
+            if(nba97_game_rule_delay_from_clock_violations(e,m,&p)!=NBA97_TEXT_COMPLETE)return 0;
+            for(unsigned i=0;i<32;++i)if(m->registers.gpr[i].word!=before.registers.gpr[i].word ||
+                m->registers.gpr[i].known_mask!=before.registers.gpr[i].known_mask)return 0;
+            if(m->hi.word!=before.hi.word || m->hi.known_mask!=before.hi.known_mask ||
+               m->lo.word!=before.lo.word || m->lo.known_mask!=before.lo.known_mask)return 0;
+            f.delays.push_back(p);f.delay_pcs.push_back(e->pc);return 1;
+        }
         // Explicit remaining effect services, including the narrow legacy
         // audio owner's unavailable full-machine return contract.
         m->registers.gpr[2]={e->pc^0x13572468u,15};return 1;
@@ -53,6 +65,15 @@ int GameClockViolationsCapture::dispatch(const Nba97GameTextMemory* memory,const
     o<<"],\"timer_before\":[1,1],\"timer_after\":["<<f.get(0x800fdba8u,2)<<','<<f.get(0x800fdbaau,2)<<"],\"violation_state\":"<<f.get(0x800fe882u,2)
      <<",\"triggers\":["<<unsigned(p.first_violation_triggered)<<','<<unsigned(p.phase_82_violation_triggered)<<','<<unsigned(p.final_violation_triggered)
      <<"],\"frame_stack_pointer\":"<<p.frame_stack_pointer<<",\"restored_ra\":"<<p.restored_return_address.word<<"}";
-    progress=p;receipt=o.str();return result;
+    auto prefix=o.str();prefix.pop_back();o.str("");o.clear();o<<prefix<<",\"rule_delays\":[";
+    for(std::size_t i=0;i<f.delays.size();++i){
+        if(i)o<<',';const auto& leaf=f.delays[i];
+        o<<"{\"program\":\"GAMEONLY\",\"address\":\"0x800295C8\",\"inclusive_end\":\"0x800295CF\",\"bytes\":8,\"instructions\":2,"
+            "\"classification\":\"no direct visual effect\",\"scope\":\"actual clock-violation event; source JR/NOP leaves full machine unchanged\","
+            "\"completed\":"<<unsigned(leaf.completed)<<",\"operations\":"<<leaf.operations<<",\"reads\":"<<leaf.reads<<",\"stores\":"<<leaf.stores
+         <<",\"call_pc\":"<<f.delay_pcs[i]<<",\"ignored_duration\":"<<leaf.machine.registers.gpr[4].word
+         <<",\"machine_unchanged\":true,\"returned_sp\":"<<leaf.machine.registers.gpr[29].word<<",\"returned_ra\":"<<leaf.return_address.word<<"}";
+    }
+    o<<"]}";progress=p;receipt=o.str();return result;
 }
 }

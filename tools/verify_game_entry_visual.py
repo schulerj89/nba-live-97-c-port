@@ -757,6 +757,23 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":violation_cases,
         "classification":"no direct visual effect"
     },indent=2)+chr(10),encoding="utf-8")
+    delay_cases=[case["rule_delays"] for case in violation_cases]
+    for leaves,pcs,duration in zip(delay_cases,([0x80067FDC],[],[0x80067EF0,0x80067FDC]),(5000,0,20000)):
+        require([leaf["call_pc"] for leaf in leaves]==pcs,"rule delay native call coverage drifted")
+        for leaf in leaves:
+            require((leaf["program"],leaf["address"],leaf["inclusive_end"],leaf["bytes"],leaf["instructions"]) ==
+                    ("GAMEONLY","0x800295C8","0x800295CF",8,2),"rule delay provenance drifted")
+            require(leaf["completed"] and leaf["classification"]=="no direct visual effect"
+                    and "actual clock-violation event" in leaf["scope"] and leaf["machine_unchanged"]
+                    and (leaf["operations"],leaf["reads"],leaf["stores"],leaf["ignored_duration"])==(0,0,0,duration)
+                    and leaf["returned_sp"]==0x801FFEE8 and leaf["returned_ra"]==leaf["call_pc"]+8,
+                    "rule delay native CPU fixture drifted")
+    (args.frames / "rule_delay_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x800295C8","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":delay_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+chr(10),encoding="utf-8")
     expiry_cases = [case["period_expiry"] for case in limit_cases]
     for expiry in expiry_cases:
         require((expiry["program"],expiry["address"],expiry["inclusive_end"],expiry["bytes"],expiry["instructions"]) ==
