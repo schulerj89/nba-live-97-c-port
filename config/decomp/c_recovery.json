@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80048FF4",
+      "original_name": "Game_FrameInterruptDisable",
+      "symbol": "nba97_game_frame_interrupt_disable",
+      "source": "src/recovered/game_frame_interrupt_disable.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_frame_interrupt_disable_tests; nba97_game_frame_interrupt_disable_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80051098",
       "original_name": "Game_CameraFrameTransform",
       "symbol": "nba97_game_camera_frame_transform",

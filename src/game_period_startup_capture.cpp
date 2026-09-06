@@ -1,3 +1,4 @@
+#include "game_frame_interrupt_disable_capture.h"
 #include "game_camera_frame_transform_capture.h"
 #include "game_period_startup_capture.h"
 #include "game_actor_resume_capture.h"
@@ -148,6 +149,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"contact_dispatch_probe\":"<<captureGameContactDispatch()
             <<",\"actor_contact_gate_probe\":"<<captureGameActorContactGate()
             <<",\"camera_frame_transform_probe\":"<<captureGameCameraFrameTransform()
+            <<",\"frame_interrupt_disable_probe\":"<<captureGameFrameInterruptDisable()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
             <<",\"actor_contact_eligibility_probe\":"<<captureGameActorContactEligibility()

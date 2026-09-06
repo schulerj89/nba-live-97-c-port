@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_frame_interrupt_disable_tests tests/game_frame_interrupt_disable_tests.cpp src/recovered/game_frame_interrupt_disable.c)
+    target_compile_features(nba97_game_frame_interrupt_disable_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_frame_interrupt_disable_tests PRIVATE src src/recovered)
+    add_test(NAME game_frame_interrupt_disable COMMAND nba97_game_frame_interrupt_disable_tests)
+    add_executable(nba97_game_frame_interrupt_disable_integration_tests tests/game_frame_interrupt_disable_integration_tests.cpp
+        src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp src/recovered/game_match_frame.c)
+    target_compile_features(nba97_game_frame_interrupt_disable_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_frame_interrupt_disable_integration_tests PRIVATE src)
+    add_test(NAME game_frame_interrupt_disable_integration COMMAND nba97_game_frame_interrupt_disable_integration_tests)
     add_executable(nba97_game_camera_frame_transform_tests tests/game_camera_frame_transform_tests.cpp src/recovered/game_camera_frame_transform.c)
     target_compile_features(nba97_game_camera_frame_transform_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_camera_frame_transform_tests PRIVATE src src/recovered)
@@ -1831,3 +1840,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_override_end.
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_opponent_contact.c src/game_opponent_contact_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_frame_transform.c src/game_camera_frame_transform_adapter.cpp src/game_camera_frame_transform_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_frame_interrupt_disable.c src/game_frame_interrupt_disable_adapter.cpp src/game_frame_interrupt_disable_capture.cpp)

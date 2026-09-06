@@ -163,6 +163,7 @@ try {
         'nba97_game_camera_override_end_tests','nba97_game_camera_override_end_integration_tests',
         'nba97_game_opponent_contact_tests','nba97_game_opponent_contact_integration_tests',
         'nba97_game_camera_frame_transform_tests','nba97_game_camera_frame_transform_integration_tests',
+        'nba97_game_frame_interrupt_disable_tests','nba97_game_frame_interrupt_disable_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',
