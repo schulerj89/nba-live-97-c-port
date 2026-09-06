@@ -180,6 +180,7 @@ try {
         'nba97_game_draw_environment_tests','nba97_game_draw_environment_integration_tests',
         'nba97_game_draw_packet_tests','nba97_game_draw_packet_integration_tests',
         'nba97_game_draw_area_start_tests','nba97_game_draw_area_start_integration_tests',
+        'nba97_game_draw_area_end_tests','nba97_game_draw_area_end_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

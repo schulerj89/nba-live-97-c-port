@@ -793,6 +793,21 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_area_start,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    draw_area_end = period["draw_area_end_probe"]
+    require((draw_area_end["program"],draw_area_end["address"],draw_area_end["inclusive_end"],draw_area_end["bytes"],draw_area_end["instructions"]) == ("GAMEONLY","0x8009A710","0x8009A7DB",204,51), "Draw-area end provenance drifted")
+    require(draw_area_end["completed"] and draw_area_end["parent_completed"] and draw_area_end["classification"] == "no direct visual effect"
+            and "three synthetic packet-word helpers" in draw_area_end["scope"]
+            and (draw_area_end["area_calls"],draw_area_end["packet_calls"],draw_area_end["submit_calls"],draw_area_end["copy_calls"]) == (2,2,2,4)
+            and draw_area_end["cache_matches_last_environment"]
+            and draw_area_end["commands"] == [0xE4017C7F,0xE4017C7F], "Draw-area end native state drifted")
+    for item,hi in zip(draw_area_end["areas"],[0x80048F4C,0x80048FA0]):
+        require((item["operations"],item["reads"],item["return_v0"],item["return_address"],item["hi"]) == (3,3,0xE4017C7F,0x8009A3A4,hi), "Draw-area end machine drifted")
+    (args.frames / "draw_area_end_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009A710","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_area_end,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     draw_packet = period["draw_packet_probe"]
     require((draw_packet["program"],draw_packet["address"],draw_packet["inclusive_end"],draw_packet["bytes"],draw_packet["instructions"]) == ("GAMEONLY","0x8009A344","0x8009A5E7",676,169), "Draw packet provenance drifted")
     require(draw_packet["completed"] and draw_packet["parent_completed"] and draw_packet["classification"] == "no direct visual effect"
