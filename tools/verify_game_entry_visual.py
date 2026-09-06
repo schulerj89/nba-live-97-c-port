@@ -778,6 +778,22 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    gte_reference = period["gte_reference_transform_probe"]
+    require((gte_reference["program"],gte_reference["address"],gte_reference["inclusive_end"],gte_reference["bytes"],gte_reference["instructions"]) == ("GAMEONLY","0x80056650","0x80056677",40,10), "GTE reference provenance drifted")
+    require(gte_reference["completed"] and gte_reference["parent_completed"] and gte_reference["classification"] == "no direct visual effect"
+            and "production GTE hardware; synthetic packed table" in gte_reference["scope"]
+            and (gte_reference["operations"],gte_reference["reads"],gte_reference["stores"],gte_reference["hardware_calls"]) == (7,2,4,1)
+            and gte_reference["output_before"] == [100,200,300] and gte_reference["output_after"] == [3,0xFFFFFFFF,7]
+            and gte_reference["mac"] == [3,0xFFFFFFFF,7] and gte_reference["ir"] == [3,0xFFFFFFFF,7]
+            and gte_reference["camera_tail"] == [7,4,13] and gte_reference["controls"] == [0xE6671999,0x20001999,0xF0000000,0x20000000,0x1000,0,0,0]
+            and gte_reference["flag"] == 0 and gte_reference["unrelated_gte_preserved"]
+            and (gte_reference["returned_sp"],gte_reference["return_address"]) == (0x801FEFD0,0x80051230), "GTE reference native state drifted")
+    (args.frames / "gte_reference_transform_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80056650","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gte_reference,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     gte_translation = period["gte_translation_install_probe"]
     require((gte_translation["program"], gte_translation["address"], gte_translation["inclusive_end"],
              gte_translation["bytes"], gte_translation["instructions"]) ==

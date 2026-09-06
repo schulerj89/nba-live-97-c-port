@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80056650",
+      "original_name": "Game_GteReferenceTransform",
+      "symbol": "nba97_game_gte_reference_transform",
+      "source": "src/recovered/game_gte_reference_transform.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_gte_reference_transform_tests; nba97_game_gte_reference_transform_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80055F44",
       "original_name": "Game_GteTranslationInstall",
       "symbol": "nba97_game_gte_translation_install",
