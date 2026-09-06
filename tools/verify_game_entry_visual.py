@@ -1325,6 +1325,22 @@ def main():
         "frame_sha256":loop_hashes, "cpu_receipt":"loop_entry_trace.json", "state":upload,
         "classification":"BLOCKED"
     }, indent=2)+"\n", encoding="utf-8")
+    text_submission = upload["text_submission"]
+    require((text_submission["program"],text_submission["address"],text_submission["inclusive_end"],text_submission["bytes"],text_submission["instructions"])
+            == ("GAMEONLY","0x80030D18","0x80031523",2060,515), "Text submission provenance drifted")
+    require(text_submission["classification"] == "BLOCKED" and text_submission["completed"] and text_submission["same_parent_memory"]
+            and (text_submission["call_pc"],text_submission["callbacks"],text_submission["record"],text_submission["sp"],text_submission["ra"],text_submission["clear_owners"],text_submission["clear_backend_calls"],text_submission["head_before"],text_submission["head_after"],text_submission["record_slot"])
+            == (0x800329E8,4,0x80120000,0x801FEFC0,0x800329F0,2,2,65535,0,201)
+            and (text_submission["instruction_count"],text_submission["operations"],text_submission["reads"],text_submission["stores"]) == (162,72,35,33)
+            and text_submission["record_heads"] == [0xC567C,0xC567C]
+            and text_submission["blocked_children"] == ["0x8002EB50","0x8002EF88","0x8002ECD4","0x800AA468","0x80056914"]
+            and text_submission["blocked_clear_backend"] == "0x8009A97C", "Text submission natural state drifted")
+    (args.frames / "text_submission_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80030D18","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":text_submission,
+        "classification":"BLOCKED"
+    },indent=2)+"\n",encoding="utf-8")
     submit = upload["rectangle_upload_submit"]
     require((submit["program"],submit["address"],submit["inclusive_end"],submit["bytes"],submit["instructions"])
             == ("GAMEONLY","0x800944F4","0x8009453F",76,19), "Rectangle submit provenance drifted")

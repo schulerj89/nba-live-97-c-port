@@ -4,6 +4,7 @@
 #include "game_text_chain_clear_adapter.h"
 #include "game_image_record_upload_adapter.h"
 #include "game_rectangle_upload_submit_adapter.h"
+#include "game_text_submission_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -268,6 +269,8 @@ std::size_t traceIndex(const Fixture &f, unsigned kind, U pc) {
 }
 
 struct UploadFixture : Fixture {
+  Nba97GameTextSubmissionBinding textSubmit{};
+  unsigned measurementCalls = 0, allocationCalls = 0, clearBackendCalls = 0;
   Nba97GameImageRecordUploadBinding upload{};
   Nba97GameRectangleUploadSubmitBinding submit{};
   std::vector<U> submitCalls;
@@ -287,6 +290,35 @@ struct UploadFixture : Fixture {
     submit.io = submitChild;
     submit.user = this;
     put(0x800d7b14, 0, 4);
+    // Runtime-generated empty-string font fixture. Every prerequisite service
+    // below has an explicit typed contract; this is not retail text rendering.
+    put(0x800b2048, 0x80110000, 4);
+    put(0x80110008, 0x80130000, 4);
+    put(0x8011000c, 0x80140000, 4);
+    put(0x80110010, 0x80120000, 4);
+    put(0x80110014, 0x80160000, 4);
+    put(0x80110022, 1, 2);
+    put(0x80110026, 0, 2);
+    put(0x80110028, 0x33, 2);
+    put(0x8011002a, 0, 2);
+    for (U offset = 0x2c; offset <= 0x3e; offset += 2)
+      put(0x80110000 + offset, 0xffff, 2);
+    put(0x80110040, 0, 2);
+    put(0x80110042, 4, 1);
+    put(0x8011004a, 1, 1);
+    put(0x80110052, 10, 1);
+    put(0x80120012, 0xffff, 2);
+    put(0x80160192, 0xffff, 2);
+    put(0x800249fc, 0, 1);
+    put(0x800c55c2, 0, 1);
+    put(0x800c55b8, 0x80170000, 4);
+    put(0x8017002c, 0x8009a97c, 4);
+    textSubmit.operation_budget = 1024;
+    textSubmit.io = textService;
+    textSubmit.user = this;
+    textSubmit.clear_operation_budget = 64;
+    textSubmit.clear_io = clearService;
+    textSubmit.clear_user = this;
     upload.operation_budget = 128;
     upload.io = uploadChild;
     upload.user = this;
@@ -297,15 +329,46 @@ struct UploadFixture : Fixture {
       value |= U(bytes[at(address + i, 1)]) << (i * 8u);
     return value;
   }
-  static int textChild(void *opaque, const Nba97GameTextMemory *,
+  static int textChild(void *opaque, const Nba97GameTextMemory *memory,
                        const Nba97GameCountdownUiUpdateEvent *event,
                        Nba97GameCountdownUiUpdateMachine *machine) {
     auto &f = *static_cast<UploadFixture *>(opaque);
     check(event->pc == 0x800329e8 && event->entry == 0x80030d18 &&
           event->delay_slot_pc == 0x800329ec && event->argument_count == 5);
     ++f.textCalls;
-    // Explicit synthetic prerequisite; no glyph allocation or rendering claim.
-    machine->registers.gpr[2] = {0, 15};
+    return nba97_game_text_submission_from_countdown_ui_update(
+        &f.textSubmit, memory, event, machine);
+  }
+  static int textService(void *opaque, const Nba97GameTextMemory *,
+                         const Nba97GameTextSubmissionEvent *event,
+                         Nba97GameTextSubmissionMachine *machine) {
+    auto &f = *static_cast<UploadFixture *>(opaque);
+    if (event->pc == 0x80030e14 && event->entry == 0x8002eb50 &&
+        event->delay_slot_pc == 0x80030e18 && event->argument_count == 4) {
+      ++f.measurementCalls;
+      check(machine->registers.gpr[4].word == 0x800249fc);
+      f.put(machine->registers.gpr[5].word, 8, 2);
+      f.put(machine->registers.gpr[6].word, 0, 2);
+      f.put(machine->registers.gpr[7].word, 4, 2);
+      return 1;
+    }
+    if (event->pc == 0x80030e20 && event->entry == 0x8002ef88 &&
+        event->delay_slot_pc == 0x80030e24 && event->argument_count == 1) {
+      ++f.allocationCalls;
+      check(machine->registers.gpr[4].word == 0);
+      machine->registers.gpr[2] = {0x80150000, 15};
+      return 1;
+    }
+    return 0;
+  }
+  static int clearService(void *opaque, const Nba97GameTextMemory *,
+                          const Nba97GameClearOrderingTableEvent *event,
+                          Nba97GameClearOrderingTableMachine *) {
+    auto &f = *static_cast<UploadFixture *>(opaque);
+    ++f.clearBackendCalls;
+    check(event->kind == NBA97_GAME_CLEAR_ORDERING_TABLE_BACKEND &&
+          event->pc == 0x800999bc && event->delay_slot_pc == 0x800999c0 &&
+          event->target == 0x8009a97c && event->argument_count == 2);
     return 1;
   }
   static int uploadChild(void *opaque, const Nba97GameTextMemory *memory,
@@ -356,6 +419,15 @@ std::string captureImageRecordUpload() {
         f.upload.completions == 1 && f.textCalls == 1 && f.uploadCalls == 1 &&
         f.get(0x800fb5c0, 1) == 0x2b && f.get(0x800fea2e, 2) == 2 &&
         f.rectangle == (std::array<std::uint16_t, 4>{0x340, 0xf0, 0x10, 1}));
+  const auto &t = f.textSubmit.progress;
+  check(t.completed && f.textSubmit.completions == 1 &&
+        f.textSubmit.clear_completions == 2 && f.measurementCalls == 1 &&
+        f.allocationCalls == 1 && f.clearBackendCalls == 2 &&
+        t.return_v0.word == 0x80120000 &&
+        t.machine.registers.gpr[29].word == 0x801fefc0 &&
+        t.machine.registers.gpr[31].word == 0x800329f0 &&
+        f.get(0x80160192, 2) == 0 && f.get(0x80120014, 2) == 201 &&
+        f.get(0x80120000, 4) == 0x000c567c && f.get(0x80120004, 4) == 0x000c567c);
   const auto &q = f.submit.progress;
   check(q.completed && f.submit.completions == 1 && q.instruction_count == 19 &&
         q.operations == 9 && q.reads == 3 && q.stores == 4 &&
@@ -367,7 +439,7 @@ std::string captureImageRecordUpload() {
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80094540\","
        "\"inclusive_end\":\"0x800946A3\",\"bytes\":356,\"instructions\":89,"
        "\"classification\":\"BLOCKED\",\"scope\":\"independent synthetic active countdown caller; "
-       "explicit full entry machine; rectangle submit owner composed; typed text and GPU services; no rendered match frame\","
+       "explicit full entry machine; text submission, clear-table and rectangle submit owners composed; typed measurement, allocation and GPU services; no rendered match frame\","
        "\"completed\":true,\"parent_completed\":true,\"same_parent_memory\":true,"
        "\"call_pc\":" << f.upload.event.pc << ",\"instruction_count\":" << p.instruction_count
     << ",\"operations\":" << p.operations << ",\"reads\":" << p.reads
@@ -383,7 +455,19 @@ std::string captureImageRecordUpload() {
     << ",\"reads\":" << q.reads << ",\"stores\":" << q.stores
     << ",\"callbacks\":" << q.callbacks_completed << ",\"sp\":" << q.machine.registers.gpr[29].word
     << ",\"ra\":" << q.machine.registers.gpr[31].word
-    << ",\"pending_before\":0,\"pending_after\":1,\"blocked_children\":[\"0x80094440\",\"0x8009971C\"]}}";
+    << ",\"pending_before\":0,\"pending_after\":1,\"blocked_children\":[\"0x80094440\",\"0x8009971C\"]},"
+       "\"text_submission\":{\"program\":\"GAMEONLY\",\"address\":\"0x80030D18\","
+       "\"inclusive_end\":\"0x80031523\",\"bytes\":2060,\"instructions\":515,"
+       "\"classification\":\"BLOCKED\",\"completed\":true,\"same_parent_memory\":true,"
+       "\"call_pc\":" << f.textSubmit.event.pc << ",\"instruction_count\":" << t.instruction_count
+    << ",\"operations\":" << t.operations << ",\"reads\":" << t.reads << ",\"stores\":" << t.stores
+    << ",\"callbacks\":" << t.callbacks_completed << ",\"record\":" << t.return_v0.word
+    << ",\"sp\":" << t.machine.registers.gpr[29].word << ",\"ra\":" << t.machine.registers.gpr[31].word
+    << ",\"clear_owners\":" << f.textSubmit.clear_completions
+    << ",\"clear_backend_calls\":" << f.clearBackendCalls
+    << ",\"head_before\":65535,\"head_after\":0,\"record_slot\":201,\"record_heads\":[808572,808572],"
+       "\"blocked_children\":[\"0x8002EB50\",\"0x8002EF88\",\"0x8002ECD4\",\"0x800AA468\",\"0x80056914\"],"
+       "\"blocked_clear_backend\":\"0x8009A97C\"}}";
   return o.str();
 }
 
