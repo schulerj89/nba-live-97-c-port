@@ -615,6 +615,32 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": period,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    speech = initialize["speech_initialize"]
+    require((speech["program"], speech["address"], speech["inclusive_end"], speech["bytes"], speech["instructions"]) ==
+            ("GAMEONLY", "0x8007FD40", "0x800800F7", 952, 238), "speech initializer provenance drifted")
+    speech_destinations = [0x80103220+i*12 for i in range(4)]
+    for i in range(12):
+        speech_destinations.extend(base+i*12 for base in (0x80102FE0,0x80103070,0x80103100,0x80103190))
+    speech_destinations.extend(0x80103250+i*12 for i in range(48))
+    speech_packed, speech_size = [], 0
+    for i in range(0,100,3):
+        speech_packed.append(0x80160000+speech_size)
+        speech_size += (i%4+1)*4
+    require(speech["completed"] and "recovered retry loaders" in speech["scope"]
+            and speech["classification"] == "no direct visual effect" and speech["call_pc"] == 0x8002DBD8
+            and speech["languages"] == [1,1] and speech["aux_pointers"] == [0x80137B28,0x80137B34]
+            and (speech["lookups"], speech["copies"], speech["conversions"], speech["sentinels"]) == (100,34,34,10)
+            and speech["lookup_destinations"] == speech_destinations and speech["packed_pointers"] == speech_packed
+            and (speech["allocation_size"],speech["allocation_pointer"],speech["released_pointer"]) == (speech_size,0x80160000,0x80137B78)
+            and speech["restored_ra"] == 0x8002DBE0
+            and speech["loaders"] == [{"operations":8,"attempts":2,"null_results":1}]*3,
+            "speech native CPU fixture drifted")
+    (args.frames / "speech_initialize_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8007FD40","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":initialize_hashes,"cpu_receipt":"match_initialize_trace.json","state":speech,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     roster = initialize["roster_bindings"]
     require((roster["program"], roster["address"], roster["inclusive_end"],
              roster["bytes"], roster["instructions"], roster["call_pc"]) ==

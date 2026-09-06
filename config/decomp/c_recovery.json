@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8007FD40",
+      "original_name": "Game_SpeechInitialize",
+      "symbol": "nba97_game_speech_initialize",
+      "source": "src/recovered/game_speech_initialize.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_speech_initialize_tests; nba97_game_speech_initialize_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80079664",
       "original_name": "Game_CameraStartup",
       "symbol": "nba97_game_camera_startup",
