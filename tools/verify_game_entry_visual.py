@@ -1337,6 +1337,18 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": period,
         "classification": "no direct visual effect"
     }, indent=2) + "\n", encoding="utf-8")
+    pending_cases = [case["match_buffer_pending"] for case in [period]+period["zero_period_cases"]]
+    for pending in pending_cases:
+        require((pending["program"],pending["address"],pending["inclusive_end"],pending["bytes"],pending["instructions"]) == ("GAMEONLY","0x80076B28","0x80076B3B",20,5), "Match-buffer pending provenance drifted")
+        require(pending["completed"] and pending["same_parent_memory"] and pending["classification"] == "no direct visual effect" and len(pending["calls"]) == 2, "Match-buffer pending composition drifted")
+        for item, pc in zip(pending["calls"], (0x800674F0,0x80067500)):
+            require((item["call_pc"],item["operations"],item["stores"],item["address"],item["value"],item["return_v0"],item["at"],item["return_address"],item["sp"]) == (pc,1,1,0x800FE864,1,1,0x80100000,pc+8,0x801FFEE8) and item["hilo_known_masks"] == [0,0], "Match-buffer pending state drifted")
+    (args.frames / "match_buffer_pending_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80076B28","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":pending_cases,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     first_cases = period["zero_period_cases"]
     require(len(first_cases) == 2, "first-period capture cases missing")
     for case, flag in zip(first_cases, (0,255)):

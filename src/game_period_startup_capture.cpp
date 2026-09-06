@@ -1,3 +1,4 @@
+#include "game_match_buffer_pending_capture.h"
 #include "game_texture_window_command_capture.h"
 #include "game_draw_mode_command_capture.h"
 #include "game_draw_offset_command_capture.h"
@@ -52,6 +53,7 @@ struct Fixture {
     GameTipoffAnnouncementCapture announcement;
     GameControllerFrameResetCapture reset;
     GameMatchClocksCapture clocks;
+    GameMatchBufferPendingCapture pending;
     GameClockViolationsCapture violations;
     GamePeriodExpiryCapture expiry;
     GameMatchServicePublishCapture publication;
@@ -73,6 +75,7 @@ struct Fixture {
     }
     static int child(void* user,const Nba97GameTextMemory* m,const Nba97GamePeriodStartupEvent* e,Nba97GamePeriodStartupRegisters* r) {
         auto& f=*static_cast<Fixture*>(user);f.pcs.push_back(e->pc);
+        if(e->entry==0x80076b28u)return f.pending.dispatch(m,e,r);
         if(e->pc==0x80067494u)return nba97_game_first_period_startup_from_period_startup(&f.first,m,e,r);
         if(e->pc==0x800674a4u && r->gpr[4].word!=1)return 0;
         if(e->pc==0x800674b8u && (r->gpr[4].word!=1 || r->gpr[5].word!=0xffffffffu))return 0;
@@ -152,6 +155,7 @@ static std::string capturePeriodFixture(int first_flag) {
       "\"completed\":true,\"call_pc\":2147912940,\"operations\":"<<f.limits.progress.operations<<",\"reads\":"<<f.limits.progress.reads<<",\"stores\":"<<f.limits.progress.stores
      <<",\"clock\":"<<f.limits.progress.clock.word<<",\"period\":"<<f.limits.progress.period.word<<",\"limit_before\":48879,\"limit_after\":"<<f.get(0x8010606cu,2)
      <<",\"returned_ra\":"<<f.limits.progress.registers.gpr[31].word<<"}";
+    o<<",\"match_buffer_pending\":"<<f.pending.receipt();
     o<<",\"controller_frame_reset\":"<<f.reset.receipt;
     o<<",\"match_clocks\":"<<f.clocks.receipt;
     o<<",\"clock_violations\":"<<f.violations.receipt;

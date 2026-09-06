@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_match_buffer_pending_tests tests/game_match_buffer_pending_tests.cpp src/recovered/game_match_buffer_pending.c src/game_match_buffer_pending_adapter.cpp src/recovered/game_period_startup.c)
+    target_compile_features(nba97_game_match_buffer_pending_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_buffer_pending_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_buffer_pending COMMAND nba97_game_match_buffer_pending_tests)
+    add_executable(nba97_game_match_buffer_pending_integration_tests tests/game_match_buffer_pending_integration_tests.cpp src/recovered/game_match_buffer_pending.c src/game_match_buffer_pending_adapter.cpp src/recovered/game_period_startup.c)
+    target_compile_features(nba97_game_match_buffer_pending_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_match_buffer_pending_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_match_buffer_pending_integration COMMAND nba97_game_match_buffer_pending_integration_tests)
     add_executable(nba97_game_substitution_candidate_select_tests tests/game_substitution_candidate_select_tests.cpp src/recovered/game_substitution_candidate_select.c src/game_substitution_candidate_select_adapter.cpp src/recovered/game_team_strategy_apply.c)
     target_compile_features(nba97_game_substitution_candidate_select_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_substitution_candidate_select_tests PRIVATE src src/recovered)
@@ -2162,3 +2170,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_initial
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_rewind.c src/game_match_buffer_rewind_adapter.cpp src/game_match_buffer_rewind_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_substitution_candidate_select.c src/game_substitution_candidate_select_adapter.cpp src/game_substitution_candidate_select_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_match_buffer_pending.c src/game_match_buffer_pending_adapter.cpp src/game_match_buffer_pending_capture.cpp)
