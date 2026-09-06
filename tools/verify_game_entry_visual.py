@@ -633,6 +633,22 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":contact,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    gate = contact["coordinate_gate"]
+    require((gate["program"],gate["address"],gate["inclusive_end"],gate["bytes"],gate["instructions"]) ==
+            ("GAMEONLY","0x80060E8C","0x80060EF7",108,27), "coordinate gate provenance drifted")
+    require(gate["completed"] and gate["classification"] == "no direct visual effect"
+            and gate["scope"] == "actual complete contact child; independent CPU fixture"
+            and (gate["operations"],gate["reads"],gate["stores"],gate["callbacks"]) == (6,4,1,1)
+            and gate["returned_value"] == 1 and gate["call_pc"] == 0x80060ED4
+            and gate["child_arguments"] == [0x80001000,0x80002000,0]
+            and (gate["frame_stack_pointer"],gate["returned_sp"],gate["restored_ra"]) ==
+                (0x801FF000,0x801FF018,0x80061078), "coordinate gate actual child composition drifted")
+    (args.frames / "ball_contact_gate_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80060E8C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gate,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

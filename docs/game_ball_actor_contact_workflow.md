@@ -4,9 +4,10 @@
 3008 bytes and 752 instructions. The source is the fresh Ghidra listing
 `game_800602cc.txt`, instruction SHA-256
 `df9074d4240d6e16e099c0d3c5d2a45941355872521ad92d25123f29b30b7ac7`.
-Its sole known caller is the still-unowned wrapper at `0x80060E8C`, call PC
-`0x80060ED4`; consequently this recovery does not claim natural caller
-composition or a live tip-off.
+Its sole known caller is the now-owned wrapper at `0x80060E8C`, call PC
+`0x80060ED4`. The [coordinate gate](game_ball_contact_gate_workflow.md) composes
+this complete owner in integration tests and the native CPU probe; this does
+not yet establish a live tip-off.
 
 The owner retains all 32 GPRs, HI/LO, per-byte knownness, uint32 guest address
 wrapping, mapped stack and retained memory, exact branch/JAL delay slots, and

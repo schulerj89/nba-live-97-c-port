@@ -1,5 +1,6 @@
 #include "game_ball_actor_contact_capture.h"
 #include "game_ball_actor_contact_adapter.h"
+#include "game_ball_contact_gate_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -108,7 +109,25 @@ std::string captureGameBallActorContact() {
   f.put32(0x80020bec, Fixture::actor);
   f.put32(0x80020c00, Fixture::actor);
   f.put16(Fixture::actor + 0x46, 0x27);
-  const int result = f.run();
+  // The gate now supplies the real contact entry, including the ID10 swap.
+  f.put32(Fixture::ball, 10);
+  Nba97GameBallContactGateContext gate{};
+  gate.memory = f.context.memory;
+  gate.machine = f.context.machine;
+  gate.machine.registers.gpr[4] = {Fixture::actor,15};
+  gate.machine.registers.gpr[5] = {Fixture::ball,15};
+  gate.machine.registers.gpr[29] = {0x801ff018,15};
+  gate.machine.registers.gpr[31] = {0x80061078,15};
+  gate.operation_budget = 32;
+  Nba97GameBallContactGateBinding binding{};
+  binding.child_operation_budget = f.context.operation_budget;
+  binding.io = Fixture::unresolved;
+  binding.user = &f;
+  binding.contact_binding = f.binding;
+  Nba97GameBallContactGateProgress g{};
+  const int result = nba97_game_ball_contact_gate_run(&gate,&g,&binding);
+  f.progress = binding.contact_progress;
+  f.binding = binding.contact_binding;
   const auto& p = f.progress;
   if (result != NBA97_TEXT_COMPLETE || !p.completed ||
       f.get16(0x800fdb90) != 0x82 || f.get16(0x800fe884) != 3 ||
@@ -126,7 +145,16 @@ std::string captureGameBallActorContact() {
     << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
     << ",\"restored_ra\":" << p.restored_return_address.word << ",\"typed_call_pcs\":[";
   for (size_t i=0;i<f.calls.size();++i) { if(i)o<<',';o<<f.calls[i]; }
-  o << "]}";
+  o << "],\"coordinate_gate\":{\"program\":\"GAMEONLY\",\"address\":\"0x80060E8C\","
+       "\"inclusive_end\":\"0x80060EF7\",\"bytes\":108,\"instructions\":27,"
+       "\"classification\":\"no direct visual effect\",\"scope\":\"actual complete contact child; independent CPU fixture\","
+       "\"completed\":" << (g.completed?"true":"false") << ",\"operations\":" << g.operations
+    << ",\"reads\":" << g.reads << ",\"stores\":" << g.stores << ",\"callbacks\":" << g.callbacks_completed
+    << ",\"returned_value\":" << g.returned_value.word << ",\"call_pc\":" << binding.event.pc
+    << ",\"child_arguments\":[" << binding.entry_machine.registers.gpr[4].word << ','
+    << binding.entry_machine.registers.gpr[5].word << ',' << binding.entry_machine.registers.gpr[6].word
+    << "],\"frame_stack_pointer\":" << g.frame_stack_pointer << ",\"returned_sp\":" << g.machine.registers.gpr[29].word
+    << ",\"restored_ra\":" << g.restored_return_address.word << "}}";
   return o.str();
 }
 }
