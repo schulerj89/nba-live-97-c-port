@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_draw_area_start_tests tests/game_draw_area_start_tests.cpp src/recovered/game_draw_area_start.c)
+    target_compile_features(nba97_game_draw_area_start_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_draw_area_start_tests PRIVATE src src/recovered)
+    add_test(NAME game_draw_area_start COMMAND nba97_game_draw_area_start_tests)
+    add_executable(nba97_game_draw_area_start_integration_tests tests/game_draw_area_start_integration_tests.cpp
+        src/recovered/game_draw_area_start.c src/game_draw_area_start_adapter.cpp src/recovered/game_draw_packet.c)
+    target_compile_features(nba97_game_draw_area_start_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_draw_area_start_integration_tests PRIVATE src)
+    add_test(NAME game_draw_area_start_integration COMMAND nba97_game_draw_area_start_integration_tests)
     add_executable(nba97_game_draw_packet_tests tests/game_draw_packet_tests.cpp src/recovered/game_draw_packet.c)
     target_compile_features(nba97_game_draw_packet_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_draw_packet_tests PRIVATE src src/recovered)
@@ -2014,3 +2023,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gpu_control_command.
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_environment.c src/game_draw_environment_adapter.cpp src/game_draw_environment_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_packet.c src/game_draw_packet_adapter.cpp src/game_draw_packet_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_draw_area_start.c src/game_draw_area_start_adapter.cpp src/game_draw_area_start_capture.cpp)

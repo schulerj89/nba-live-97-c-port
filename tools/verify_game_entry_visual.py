@@ -778,6 +778,21 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    draw_area_start = period["draw_area_start_probe"]
+    require((draw_area_start["program"],draw_area_start["address"],draw_area_start["inclusive_end"],draw_area_start["bytes"],draw_area_start["instructions"]) == ("GAMEONLY","0x8009A644","0x8009A70F",204,51), "Draw-area start provenance drifted")
+    require(draw_area_start["completed"] and draw_area_start["parent_completed"] and draw_area_start["classification"] == "no direct visual effect"
+            and "four synthetic packet-word helpers" in draw_area_start["scope"]
+            and (draw_area_start["area_calls"],draw_area_start["packet_calls"],draw_area_start["submit_calls"],draw_area_start["copy_calls"]) == (2,2,2,4)
+            and draw_area_start["cache_matches_last_environment"]
+            and draw_area_start["commands"] == [0xE3008040,0xE3008040], "Draw-area start native state drifted")
+    for item,hi in zip(draw_area_start["areas"],[0x80048F4C,0x80048FA0]):
+        require((item["operations"],item["reads"],item["return_v0"],item["return_address"],item["hi"]) == (3,3,0xE3008040,0x8009A36C,hi), "Draw-area start machine drifted")
+    (args.frames / "draw_area_start_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009A644","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":draw_area_start,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     draw_packet = period["draw_packet_probe"]
     require((draw_packet["program"],draw_packet["address"],draw_packet["inclusive_end"],draw_packet["bytes"],draw_packet["instructions"]) == ("GAMEONLY","0x8009A344","0x8009A5E7",676,169), "Draw packet provenance drifted")
     require(draw_packet["completed"] and draw_packet["parent_completed"] and draw_packet["classification"] == "no direct visual effect"
