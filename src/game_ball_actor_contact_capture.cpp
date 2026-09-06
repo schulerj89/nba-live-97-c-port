@@ -4,6 +4,7 @@
 #include "game_contact_dispatch_adapter.h"
 #include "game_actor_contact_gate_adapter.h"
 #include "game_ball_acquire_adapter.h"
+#include "game_actor_contact_eligibility_adapter.h"
 #include <cstdint>
 #include <sstream>
 #include <stdexcept>
@@ -280,6 +281,53 @@ std::string captureGameBallAcquire() {
     << ",\"owner_before\":" << owner_before << ",\"owner_after\":" << f.get16(0x800fdbcc)
     << ",\"published_actor\":" << f.get32(0x800fdc34) << ",\"published_team\":" << f.get32(0x800fdc38)
     << ",\"phase_before\":129,\"phase_after\":" << f.get16(0x800fdb90) << ",\"phase_delay\":" << f.get16(0x800fe884)
+    << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
+    << ",\"restored_ra\":" << p.restored_return_address.word << "}";
+  return o.str();
+}
+
+std::string captureGameActorContactEligibility() {
+  Fixture f;
+  const uint32_t first=0x80010000,second=0x80010200;
+  f.put32(first,100);f.put32(second,200);
+  f.put32(first+8,0);f.put32(second+8,3u<<8);
+  f.put32(first+12,0);f.put32(second+12,4u<<8);
+  f.put8(first+0xd9,1);f.put8(second+0xd9,2);
+  Nba97GameActorContactEligibilityGeometryBinding geometry{};
+  size_t actions=0;
+  nba97_game_actor_contact_eligibility_geometry_binding_init(&geometry,
+    [](void* user,const Nba97GameTextMemory*,const Nba97GameActorContactEligibilityEvent* e,
+       Nba97GameActorContactEligibilityMachine* m) {
+      if(e->pc!=0x8005fa2c || e->entry!=0x8005f888 ||
+         m->registers.gpr[4].word!=0x80010000 || m->registers.gpr[5].word!=0x80010200) return 0;
+      ++*static_cast<size_t*>(user);
+      // Explicit unresolved action result; only the existing geometry is composed.
+      m->registers.gpr[2]={0x123456cd,15};return 1;
+    },&actions);
+  Nba97GameActorContactEligibilityBinding binding{};
+  nba97_game_actor_contact_eligibility_binding_init(&binding,1000,
+    nba97_game_actor_contact_eligibility_geometry_child,&geometry,nullptr,0);
+  Nba97GameActorContactGateContext c{};
+  c.memory=f.context.memory;c.machine=f.context.machine;c.operation_budget=1000;
+  c.machine.registers.gpr[4]={first,15};c.machine.registers.gpr[5]={second,15};
+  c.machine.registers.gpr[31]={0x80061054,15};
+  c.io=nba97_game_actor_contact_eligibility_from_actor_contact_gate;c.user=&binding;
+  Nba97GameActorContactGateProgress parent{};
+  const int rc=nba97_game_actor_contact_gate(&c,&parent);
+  const auto& p=binding.progress;
+  if(rc!=NBA97_TEXT_COMPLETE || !parent.completed || !p.completed ||
+     geometry.geometry_invocations!=1 || actions!=1 || p.machine.registers.gpr[2].word!=0xcd ||
+     parent.machine.registers.gpr[2].word!=1)
+    throw std::runtime_error("actor contact eligibility native CPU composition failed");
+  std::ostringstream o;
+  o << "{\"program\":\"GAMEONLY\",\"address\":\"0x8005F948\",\"inclusive_end\":\"0x8005FAA7\","
+       "\"bytes\":352,\"instructions\":88,\"classification\":\"no direct visual effect\","
+       "\"scope\":\"independent CPU fixture; actual coordinate gate and distance owner; typed action\","
+       "\"completed\":true,\"parent_completed\":true,\"geometry_calls\":" << geometry.geometry_invocations
+    << ",\"action_calls\":" << actions << ",\"operations\":" << p.operations
+    << ",\"reads\":" << p.reads << ",\"stores\":" << p.stores << ",\"callbacks\":" << p.callbacks_completed
+    << ",\"normalized_x\":3,\"normalized_y\":4,\"action_raw_return\":305419981,\"returned_value\":" << p.machine.registers.gpr[2].word
+    << ",\"parent_returned_value\":" << parent.machine.registers.gpr[2].word
     << ",\"frame_stack_pointer\":" << p.frame_stack_pointer << ",\"returned_sp\":" << p.machine.registers.gpr[29].word
     << ",\"restored_ra\":" << p.restored_return_address.word << "}";
   return o.str();

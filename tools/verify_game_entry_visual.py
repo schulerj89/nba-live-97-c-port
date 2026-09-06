@@ -719,6 +719,26 @@ def main():
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":actor_input,
         "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
+    eligibility = period["actor_contact_eligibility_probe"]
+    require((eligibility["program"], eligibility["address"], eligibility["inclusive_end"],
+             eligibility["bytes"], eligibility["instructions"]) ==
+            ("GAMEONLY", "0x8005F948", "0x8005FAA7", 352, 88), "eligibility provenance drifted")
+    require(eligibility["completed"] and eligibility["parent_completed"]
+            and eligibility["classification"] == "no direct visual effect"
+            and "independent CPU fixture" in eligibility["scope"]
+            and "typed action" in eligibility["scope"]
+            and (eligibility["geometry_calls"], eligibility["action_calls"]) == (1, 1)
+            and (eligibility["operations"], eligibility["reads"], eligibility["stores"], eligibility["callbacks"]) == (15, 10, 3, 2)
+            and (eligibility["normalized_x"], eligibility["normalized_y"], eligibility["action_raw_return"],
+                 eligibility["returned_value"], eligibility["parent_returned_value"]) == (3, 4, 0x123456CD, 0xCD, 1)
+            and (eligibility["frame_stack_pointer"], eligibility["returned_sp"], eligibility["restored_ra"]) ==
+                (0x801FEFC8, 0x801FEFE8, 0x8005FAD4), "eligibility natural caller CPU fixture drifted")
+    (args.frames / "actor_contact_eligibility_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x8005F948", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": eligibility,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     actor_resume = period["actor_resume_period_probe"]
     require((actor_resume["program"], actor_resume["address"], actor_resume["inclusive_end"],
              actor_resume["bytes"], actor_resume["instructions"]) ==

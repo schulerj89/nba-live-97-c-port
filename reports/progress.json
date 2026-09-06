@@ -42,19 +42,19 @@
     ],
     "discovered_functions": 3701,
     "analyzed_code_bytes": 1044056,
-    "evidence_tracked_functions": 107,
-    "evidence_tracked_bytes": 58188,
-    "evidence_coverage_percent": 2.89,
-    "evidence_byte_coverage_percent": 5.57,
-    "complete_functions": 47,
+    "evidence_tracked_functions": 108,
+    "evidence_tracked_bytes": 58540,
+    "evidence_coverage_percent": 2.92,
+    "evidence_byte_coverage_percent": 5.61,
+    "complete_functions": 48,
     "matching_functions": 0,
     "status_counts": {
-      "behavior_verified": 93,
+      "behavior_verified": 94,
       "implemented": 3,
       "researched": 11
     },
     "scope_counts": {
-      "complete": 47,
+      "complete": 48,
       "full": 1,
       "partial": 59
     },
@@ -90,9 +90,9 @@
         "verified": 2
       },
       "gameplay": {
-        "functions": 27,
-        "bytes": 14072,
-        "verified": 27
+        "functions": 28,
+        "bytes": 14424,
+        "verified": 28
       },
       "graphics": {
         "functions": 7,
