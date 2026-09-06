@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80056080",
+      "original_name": "Game_RotationMatrix",
+      "symbol": "nba97_game_rotation_matrix",
+      "source": "src/recovered/game_rotation_matrix.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_rotation_matrix_tests; nba97_game_rotation_matrix_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80075D40",
       "original_name": "Game_CameraOverlayPackets",
       "symbol": "nba97_game_camera_overlay_packets",

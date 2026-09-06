@@ -778,6 +778,26 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    rotation = period["rotation_matrix_probe"]
+    require((rotation["program"], rotation["address"], rotation["inclusive_end"], rotation["bytes"], rotation["instructions"]) ==
+            ("GAMEONLY", "0x80056080", "0x800562CB", 588, 147), "rotation matrix provenance drifted")
+    require(rotation["completed"] and rotation["parent_completed"]
+            and rotation["classification"] == "no direct visual effect"
+            and "synthetic packed table" in rotation["scope"] and "typed GTE services" in rotation["scope"]
+            and (rotation["operations"], rotation["reads"], rotation["stores"], rotation["multiplies"]) == (15, 6, 9, 14)
+            and rotation["angles"] == [1, 1, 1]
+            and rotation["matrix_before"] == [1, 65535, 32767, 0, 0, 0, 0, 0, 0]
+            and rotation["matrix_return"] == [4096, 61440, 4096, 8192, 0, 61440, 0, 8192, 4096]
+            and rotation["matrix_after"] == [6553, 58983, 6553, 8192, 0, 61440, 0, 8192, 4096]
+            and (rotation["entry_pc"], rotation["returned_value"], rotation["returned_sp"], rotation["return_address"]) ==
+                (0x80051168, 0x800F9FD8, 0x801FEFD0, 0x80051170)
+            and (rotation["hi"], rotation["lo"]) == (0, 16777216), "rotation matrix native state drifted")
+    (args.frames / "rotation_matrix_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80056080", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": rotation,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     overlay = period["camera_overlay_packets_probe"]
     require((overlay["program"], overlay["address"], overlay["inclusive_end"], overlay["bytes"], overlay["instructions"]) ==
             ("GAMEONLY", "0x80075D40", "0x80076273", 1332, 333), "camera overlay provenance drifted")

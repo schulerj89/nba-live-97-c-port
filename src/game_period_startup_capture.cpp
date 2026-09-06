@@ -1,3 +1,4 @@
+#include "game_rotation_matrix_capture.h"
 #include "game_camera_overlay_packets_capture.h"
 #include "game_clear_ordering_table_capture.h"
 #include "game_actor_collision_response_capture.h"
@@ -158,6 +159,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"actor_collision_response_probe\":"<<captureGameActorCollisionResponse()
             <<",\"clear_ordering_table_probe\":"<<captureGameClearOrderingTable()
             <<",\"camera_overlay_packets_probe\":"<<captureGameCameraOverlayPackets()
+            <<",\"rotation_matrix_probe\":"<<captureGameRotationMatrix()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
             <<",\"actor_contact_eligibility_probe\":"<<captureGameActorContactEligibility()
