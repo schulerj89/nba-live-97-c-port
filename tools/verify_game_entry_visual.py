@@ -778,6 +778,27 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    gte_translation = period["gte_translation_install_probe"]
+    require((gte_translation["program"], gte_translation["address"], gte_translation["inclusive_end"],
+             gte_translation["bytes"], gte_translation["instructions"]) ==
+            ("GAMEONLY", "0x80055F44", "0x80055F5F", 28, 7), "GTE translation provenance drifted")
+    require(gte_translation["completed"] and gte_translation["parent_completed"] and gte_translation["matrix_completed"]
+            and gte_translation["rotation_completed"] and gte_translation["classification"] == "no direct visual effect"
+            and "synthetic packed table" in gte_translation["scope"] and "typed reference service" in gte_translation["scope"]
+            and (gte_translation["operations"], gte_translation["reads"], gte_translation["control_writes"]) == (6, 3, 3)
+            and gte_translation["controls_before"] == [0xA5000005,0xA5000006,0xA5000007]
+            and gte_translation["controls_before_masks"] == [5,6,7]
+            and gte_translation["controls_after"] == [0xE6671999,0x20001999,0xF0000000,0x20000000,0x1000,0,0,0]
+            and gte_translation["controls_after_masks"] == [15]*8 and gte_translation["raw_loads"] == [0]*3
+            and gte_translation["untouched_controls_preserved"]
+            and (gte_translation["returned_sp"],gte_translation["return_address"]) == (0x801FEFD0,0x80051214),
+            "GTE translation native state drifted")
+    (args.frames / "gte_translation_install_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x80055F44", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": gte_translation,
+        "classification": "no direct visual effect"
+    }, indent=2)+"\n", encoding="utf-8")
     gte_rotation = period["gte_rotation_install_probe"]
     require((gte_rotation["program"], gte_rotation["address"], gte_rotation["inclusive_end"],
              gte_rotation["bytes"], gte_rotation["instructions"]) ==

@@ -3,6 +3,17 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_gte_translation_install_tests tests/game_gte_translation_install_tests.cpp src/recovered/game_gte_translation_install.c)
+    target_compile_features(nba97_game_gte_translation_install_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gte_translation_install_tests PRIVATE src src/recovered)
+    add_test(NAME game_gte_translation_install COMMAND nba97_game_gte_translation_install_tests)
+    add_executable(nba97_game_gte_translation_install_integration_tests tests/game_gte_translation_install_integration_tests.cpp
+        src/recovered/game_gte_translation_install.c src/game_gte_translation_install_adapter.cpp src/recovered/game_camera_frame_transform.c
+        src/recovered/game_rotation_matrix.c src/game_rotation_matrix_adapter.cpp
+        src/recovered/game_gte_rotation_install.c src/game_gte_rotation_install_adapter.cpp)
+    target_compile_features(nba97_game_gte_translation_install_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gte_translation_install_integration_tests PRIVATE src)
+    add_test(NAME game_gte_translation_install_integration COMMAND nba97_game_gte_translation_install_integration_tests)
     add_executable(nba97_game_gte_rotation_install_tests tests/game_gte_rotation_install_tests.cpp src/recovered/game_gte_rotation_install.c)
     target_compile_features(nba97_game_gte_rotation_install_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_gte_rotation_install_tests PRIVATE src src/recovered)
@@ -1922,3 +1933,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_rotation_matrix.c sr
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_ordering_table_dma.c src/game_ordering_table_dma_adapter.cpp src/game_ordering_table_dma_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gte_rotation_install.c src/game_gte_rotation_install_adapter.cpp src/game_gte_rotation_install_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gte_translation_install.c src/game_gte_translation_install_adapter.cpp src/game_gte_translation_install_capture.cpp)

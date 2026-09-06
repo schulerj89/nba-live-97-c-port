@@ -171,6 +171,7 @@ try {
         'nba97_game_rotation_matrix_tests','nba97_game_rotation_matrix_integration_tests',
         'nba97_game_ordering_table_dma_tests','nba97_game_ordering_table_dma_integration_tests',
         'nba97_game_gte_rotation_install_tests','nba97_game_gte_rotation_install_integration_tests',
+        'nba97_game_gte_translation_install_tests','nba97_game_gte_translation_install_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',
