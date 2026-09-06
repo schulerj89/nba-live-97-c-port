@@ -5,6 +5,7 @@
 #include "game_image_record_upload_adapter.h"
 #include "game_rectangle_upload_submit_adapter.h"
 #include "game_text_submission_adapter.h"
+#include "game_rectangle_normalize_adapter.h"
 #include <sstream>
 
 #include <array>
@@ -273,6 +274,7 @@ struct UploadFixture : Fixture {
   unsigned measurementCalls = 0, allocationCalls = 0, clearBackendCalls = 0;
   Nba97GameImageRecordUploadBinding upload{};
   Nba97GameRectangleUploadSubmitBinding submit{};
+  Nba97GameRectangleNormalizeBinding normalize{};
   std::vector<U> submitCalls;
   Nba97GameCountdownUiUpdateProgress active{};
   std::array<std::uint16_t, 4> rectangle{};
@@ -286,6 +288,7 @@ struct UploadFixture : Fixture {
     put(0x80021d92, 1, 1);
     put(0x800fea2e, 0xffff, 2);
     put(0x800249e8, 0x1555, 2);
+    normalize.operation_budget = 3;
     submit.operation_budget = 32;
     submit.io = submitChild;
     submit.user = this;
@@ -383,7 +386,7 @@ struct UploadFixture : Fixture {
     return nba97_game_rectangle_upload_submit_from_image_record_upload(
         &f.submit, memory, event, machine);
   }
-  static int submitChild(void *opaque, const Nba97GameTextMemory *,
+  static int submitChild(void *opaque, const Nba97GameTextMemory *memory,
                          const Nba97GameRectangleUploadSubmitEvent *event,
                          Nba97GameRectangleUploadSubmitMachine *machine) {
     auto &f = *static_cast<UploadFixture *>(opaque);
@@ -399,7 +402,10 @@ struct UploadFixture : Fixture {
     if (!first)
       check(machine->registers.gpr[5].word == 0x800fb5d0u);
     f.submitCalls.push_back(event->entry);
-    // Explicit typed prerequisites; no GPU upload or rendered-frame claim.
+    if (first)
+      return nba97_game_rectangle_normalize_from_rectangle_upload_submit(
+          &f.normalize, memory, event, machine);
+    // Explicit typed GPU prerequisite; no upload or rendered-frame claim.
     return 1;
   }
 };
@@ -435,6 +441,41 @@ std::string captureImageRecordUpload() {
         q.machine.registers.gpr[29].word == 0x801fef90 &&
         q.machine.registers.gpr[31].word == 0x80094654 &&
         f.submitCalls == (std::vector<U>{0x80094440, 0x8009971c}));
+  const auto &n = f.normalize.progress;
+  check(n.completed && f.normalize.completions == 1 && n.instruction_count == 7 &&
+        n.operations == 1 && n.reads == 1 && n.stores == 0 &&
+        n.machine.registers.gpr[29].word == 0x801fef70 &&
+        n.machine.registers.gpr[31].word == 0x80094510);
+  // A second explicitly generated CQ invocation proves the odd-width store.
+  // It is a CPU diagnostic, independent of the completed countdown invocation.
+  Nba97GameRectangleUploadSubmitContext oddContext{};
+  Nba97GameRectangleUploadSubmitProgress oddParent{};
+  Nba97GameRectangleNormalizeBinding odd{};
+  odd.operation_budget = 3;
+  oddContext.memory = {&f.region, 1};
+  oddContext.operation_budget = 32;
+  oddContext.machine = f.caller;
+  oddContext.machine.registers.gpr[4] = {0x80180000, 15};
+  oddContext.machine.registers.gpr[5] = {0x80180100, 15};
+  oddContext.user = &f;
+  oddContext.io = [](void *opaque, const Nba97GameTextMemory *,
+                     const Nba97GameRectangleUploadSubmitEvent *event,
+                     Nba97GameRectangleUploadSubmitMachine *machine) {
+    auto &fixture = *static_cast<UploadFixture *>(opaque);
+    check(event->pc == 0x80094514 && event->entry == 0x8009971c &&
+          event->argument_count == 2 && machine->registers.gpr[4].word == 0x80180000 &&
+          machine->registers.gpr[5].word == 0x80180100 &&
+          fixture.get(0x80180006, 2) == 3 && fixture.get(0x800d7b14, 4) == 0);
+    return 1;
+  };
+  f.put(0x80180004, 17, 2);
+  f.put(0x80180006, 2, 2);
+  f.put(0x800d7b14, 0, 4);
+  check(nba97_game_rectangle_upload_submit_with_rectangle_normalize(
+            &oddContext, &odd, &oddParent) == NBA97_TEXT_COMPLETE &&
+        oddParent.completed && odd.progress.completed && odd.progress.instruction_count == 11 &&
+        odd.progress.operations == 3 && odd.progress.reads == 2 && odd.progress.stores == 1 &&
+        f.get(0x80180006, 2) == 3 && f.get(0x800d7b14, 4) == 1);
   std::ostringstream o;
   o << "{\"program\":\"GAMEONLY\",\"address\":\"0x80094540\","
        "\"inclusive_end\":\"0x800946A3\",\"bytes\":356,\"instructions\":89,"
@@ -455,7 +496,18 @@ std::string captureImageRecordUpload() {
     << ",\"reads\":" << q.reads << ",\"stores\":" << q.stores
     << ",\"callbacks\":" << q.callbacks_completed << ",\"sp\":" << q.machine.registers.gpr[29].word
     << ",\"ra\":" << q.machine.registers.gpr[31].word
-    << ",\"pending_before\":0,\"pending_after\":1,\"blocked_children\":[\"0x80094440\",\"0x8009971C\"]},"
+    << ",\"pending_before\":0,\"pending_after\":1,\"blocked_children\":[\"0x8009971C\"],"
+       "\"rectangle_normalize\":{\"program\":\"GAMEONLY\",\"address\":\"0x80094440\","
+       "\"inclusive_end\":\"0x8009446B\",\"bytes\":44,\"instructions\":11,"
+       "\"classification\":\"no direct visual effect\",\"completed\":true,\"same_parent_memory\":true,"
+       "\"call_pc\":" << f.normalize.event.pc << ",\"instruction_count\":" << n.instruction_count
+    << ",\"operations\":" << n.operations << ",\"reads\":" << n.reads << ",\"stores\":" << n.stores
+    << ",\"sp\":" << n.machine.registers.gpr[29].word << ",\"ra\":" << n.machine.registers.gpr[31].word
+    << ",\"even_rectangle\":[16,1],\"odd_before\":[17,2],\"odd_after\":[17,3],"
+       "\"odd_scope\":\"independent synthetic CQ invocation on the same RAM; no match advancement\","
+       "\"odd_instruction_count\":" << odd.progress.instruction_count
+    << ",\"odd_operations\":" << odd.progress.operations << ",\"odd_reads\":" << odd.progress.reads
+    << ",\"odd_stores\":" << odd.progress.stores << "}},"
        "\"text_submission\":{\"program\":\"GAMEONLY\",\"address\":\"0x80030D18\","
        "\"inclusive_end\":\"0x80031523\",\"bytes\":2060,\"instructions\":515,"
        "\"classification\":\"BLOCKED\",\"completed\":true,\"same_parent_memory\":true,"

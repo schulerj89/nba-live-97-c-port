@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x80094440",
+      "original_name": "Game_RectangleNormalize",
+      "symbol": "nba97_game_rectangle_normalize",
+      "source": "src/recovered/game_rectangle_normalize.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_rectangle_normalize_tests; nba97_game_rectangle_normalize_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x80030D18",
       "original_name": "Game_TextSubmission",
       "symbol": "nba97_game_text_submission",

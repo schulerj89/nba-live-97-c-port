@@ -1347,12 +1347,27 @@ def main():
     require(submit["classification"] == "BLOCKED" and submit["completed"] and submit["same_parent_memory"]
             and (submit["call_pc"],submit["instruction_count"],submit["operations"],submit["reads"],submit["stores"],submit["callbacks"],submit["sp"],submit["ra"],submit["pending_before"],submit["pending_after"])
             == (0x8009464C,19,9,3,4,2,0x801FEF90,0x80094654,0,1)
-            and submit["blocked_children"] == ["0x80094440","0x8009971C"], "Rectangle submit state drifted")
+            and submit["blocked_children"] == ["0x8009971C"], "Rectangle submit state drifted")
     (args.frames / "rectangle_upload_submit_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x800944F4","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},
         "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":submit,
         "classification":"BLOCKED"
+    },indent=2)+"\n",encoding="utf-8")
+    normalized = submit["rectangle_normalize"]
+    require((normalized["program"],normalized["address"],normalized["inclusive_end"],normalized["bytes"],normalized["instructions"])
+            == ("GAMEONLY","0x80094440","0x8009446B",44,11), "Rectangle normalization provenance drifted")
+    require(normalized["classification"] == "no direct visual effect" and normalized["completed"] and normalized["same_parent_memory"]
+            and (normalized["call_pc"],normalized["instruction_count"],normalized["operations"],normalized["reads"],normalized["stores"],normalized["sp"],normalized["ra"])
+            == (0x80094508,7,1,1,0,0x801FEF70,0x80094510)
+            and normalized["even_rectangle"] == [16,1] and normalized["odd_before"] == [17,2] and normalized["odd_after"] == [17,3]
+            and (normalized["odd_instruction_count"],normalized["odd_operations"],normalized["odd_reads"],normalized["odd_stores"]) == (11,3,2,1)
+            and "independent synthetic CQ invocation" in normalized["odd_scope"], "Rectangle normalization state drifted")
+    (args.frames / "rectangle_normalize_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x80094440","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":normalized,
+        "classification":"no direct visual effect"
     },indent=2)+"\n",encoding="utf-8")
     require((countdown["program"], countdown["address"], countdown["inclusive_end"], countdown["bytes"], countdown["instructions"])
             == ("GAMEONLY", "0x8003287C", "0x80032B0F", 660, 165), "Countdown provenance drifted")
