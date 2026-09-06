@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 108, "native click-through frame count drifted")
+    require(len(states) == 110, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -616,6 +616,96 @@ def main():
                     "driver_frame_count":len(states),"source_receipt":wait,
                     "before_sha256":wait_hashes[0],"after_sha256":wait_hashes[1],
                     "visual_status":"Gameplay shown: BLOCKED","reason":wb},indent=2)+"\n",
+        encoding="utf-8")
+
+    drain = read_json(args.frames / "frontend_exit_drain_trace.json")
+    require([drain[key] for key in ("program", "address", "inclusive_end",
+             "bytes", "instructions", "source_sha256")] ==
+            ["FEONLY", "0x800394d4", "0x80039573", 160, 40,
+             "5b71620fae4987715d545936b770ac78df30d0b8501120fd3ae5e3abb1a61617"],
+            "frontend exit drain provenance drifted")
+    require(drain["completed"] == drain["accepted"] == drain["result"] == 1
+            and drain["contract_failure"] == 0,
+            "frontend exit drain source-boundary probe failed")
+    parent = drain["parent_call"]
+    require([int(parent[key],16) for key in ("pc", "delay", "entry", "ra")] ==
+            [0x8002F094,0x8002F098,0x800394D4,0x8002F09C]
+            and parent["argument_count"] == 0 and parent["program"] == 1,
+            "drain natural-caller boundary contract drifted")
+    dp = drain["drain"]
+    expected_drain_trace = (list(range(0x800394D4,0x80039510,4)) +
+                            list(range(0x800394F0,0x80039500,4)) +
+                            list(range(0x80039510,0x80039574,4)))
+    require([dp[key] for key in ("operations", "accesses", "reads", "stores",
+                                "callbacks", "instruction_count",
+                                "poll_attempts", "zero_poll_results")] ==
+            [15,7,4,3,8,44,2,1]
+            and [int(pc,16) for pc in dp["instruction_trace"]] == expected_drain_trace
+            and all(main_word(dp[key],value) for key,value in
+                    (("initial_active_flag",1),("first_mode_flag",0x80145678),
+                     ("second_mode_flag",0x80145678))),
+            "drain poll loop or independent mode snapshots drifted")
+    require({key:int(value,16) for key,value in drain["memory"].items()} ==
+            {"active_before":1,"active_after":0,"busy_before":0xABCDEF01,
+             "busy_after":0,"mode":0x80145678},
+            "drain did not clear the retained active and busy flags")
+    expected_drain_accesses = [
+        (0x800394D8,0x800F84C4,1,1,1),
+        (0x800394E4,0x801EFFF8,0x8002F09C,2,2),
+        (0x80039514,0x8002149C,0x80145678,7,1),
+        (0x8003951C,0x800F43B0,0,8,2),
+        (0x80039524,0x800F84C4,0,9,2),
+        (0x80039544,0x8002149C,0x80145678,12,1),
+        (0x80039564,0x801EFFF8,0x8002F09C,15,1)]
+    require(len(dp["access_journal"]) == 7, "drain access extent drifted")
+    for actual,(pc,address,value,operation,kind) in zip(
+            dp["access_journal"],expected_drain_accesses):
+        require([int(actual[key],16) for key in ("pc","address","value")] ==
+                [pc,address,value] and actual["operation"] == operation
+                and actual["width"] == 4 and actual["known_mask"] == 15
+                and actual["kind"] == kind, "drain ordered memory accesses drifted")
+    expected_drain_calls = [
+        (0x800394E8,0x800393F0,0,1),(0x800394F0,0x800392A0,0,1),
+        (0x80039500,0x80038E84,0,1),(0x800394F0,0x800392A0,0,2),
+        (0x80039530,0x80029B64,2,1),(0x80039538,0x8008C274,0,1),
+        (0x80039554,0x8006CDE4,1,1),(0x8003955C,0x8006AE60,0,1)]
+    require(len(dp["call_sequence"]) == 8, "drain call extent drifted")
+    expected = [0] + [0x63000000+i*0x101 for i in range(1,32)]
+    expected[29] = 0x801EFFE8
+    for index,(actual,(pc,target,argc,invocation)) in enumerate(zip(
+            dp["call_sequence"],expected_drain_calls)):
+        expected[31] = pc+8
+        expected[2] = 1 if index < 2 else (0 if index < 4 else 0x80145678)
+        if index >= 4:
+            expected[1],expected[4],expected[5] = 0x80100000,0,0
+        if index >= 6:
+            expected[4] = 0x80145678
+        require([int(actual[key],16) for key in ("pc","delay","target")] ==
+                [pc,pc+4,target] and actual["argument_count"] == argc
+                and actual["invocation"] == invocation
+                and wait_machine_matches(actual["machine"],expected),
+                "drain full callback machine or delay-slot argument contract drifted")
+    expected[29],expected[31] = 0x801F0000,0x8002F09C
+    require(wait_machine_matches(drain["final_machine"],expected),
+            "drain did not preserve its full return machine")
+    drain_frames = ["frontend-exit-drain-before","frontend-exit-drain-after"]
+    require(all(name in by_id and by_id[name]["page"] == "User Setup"
+                for name in drain_frames), "drain native boundary frames missing")
+    drain_hashes = [ppm_hash(args.frames/f"{name}.ppm") for name in drain_frames]
+    require(drain_hashes[0] == drain_hashes[1] == wait_hashes[1],
+            "CPU-only drain probe changed native User Setup pixels")
+    db = drain["next_unbound_boundary"]
+    require(drain["classification"] == "no direct visual effect"
+            and drain["gameplay_shown"] == "BLOCKED"
+            and "synthetic" in drain["fixture_contract"].lower()
+            and "8007B844" in db["earliest_production"]
+            and all(pc in db["first_drain_child"] for pc in ("800394E8","800393F0")),
+            "drain receipt conceals fixtures or its next unbound child")
+    (args.frames/"frontend_exit_drain_verified.json").write_text(
+        json.dumps({"program":"FEONLY","address":"0x800394D4","end":"0x80039573",
+                    "driver_frame_count":len(states),"source_receipt":drain,
+                    "before_sha256":drain_hashes[0],"after_sha256":drain_hashes[1],
+                    "visual_status":"Gameplay shown: BLOCKED","reason":db},indent=2)+"\n",
         encoding="utf-8")
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]

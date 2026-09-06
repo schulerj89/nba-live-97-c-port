@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "feonly",
+      "address": "0x800394D4",
+      "original_name": "Frontend_ExitDrain",
+      "symbol": "nba97_frontend_exit_drain",
+      "source": "src/recovered/frontend_exit_drain.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_exit_drain_tests; nba97_frontend_exit_drain_integration_tests"
+    },
+    {
+      "binary": "feonly",
       "address": "0x8002EFBC",
       "original_name": "Frontend_ExitWait",
       "symbol": "nba97_frontend_exit_wait",
