@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_camera_phase_select_tests tests/game_camera_phase_select_tests.cpp src/recovered/game_camera_phase_select.c src/game_camera_phase_select_adapter.cpp src/recovered/game_camera_select.c)
+    target_compile_features(nba97_game_camera_phase_select_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_phase_select_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_phase_select COMMAND nba97_game_camera_phase_select_tests)
+    add_executable(nba97_game_camera_phase_select_integration_tests tests/game_camera_phase_select_integration_tests.cpp src/recovered/game_camera_phase_select.c src/game_camera_phase_select_adapter.cpp src/recovered/game_camera_select.c)
+    target_compile_features(nba97_game_camera_phase_select_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_phase_select_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_phase_select_integration COMMAND nba97_game_camera_phase_select_integration_tests)
     add_executable(nba97_game_pregame_selection_screen_tests tests/game_pregame_selection_screen_tests.cpp src/recovered/game_pregame_selection_screen.c src/game_pregame_selection_screen_adapter.cpp src/recovered/game_period_presentation_finish.c)
     target_compile_features(nba97_game_pregame_selection_screen_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_pregame_selection_screen_tests PRIVATE src src/recovered)
@@ -2252,3 +2260,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_period_audio_noop.c 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_pregame_match_card.c src/game_pregame_match_card_adapter.cpp src/game_pregame_match_card_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_pregame_selection_screen.c src/game_pregame_selection_screen_adapter.cpp src/game_pregame_selection_screen_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_phase_select.c src/game_camera_phase_select_adapter.cpp src/game_camera_phase_select_capture.cpp)

@@ -1,4 +1,5 @@
 #include "game_period_audio_noop_capture.h"
+#include "game_camera_phase_select_capture.h"
 #include "game_period_audio_flag_clear_capture.h"
 #include "game_period_presentation_finish_capture.h"
 #include "game_period_music_start_capture.h"
@@ -214,6 +215,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"draw_mode_command_probe\":"<<captureGameDrawModeCommand()
             <<",\"draw_offset_command_probe\":"<<captureGameDrawOffsetCommand()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
+            <<",\"camera_phase_select_probe\":"<<captureGameCameraPhaseSelect()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()
             <<",\"actor_contact_eligibility_probe\":"<<captureGameActorContactEligibility()
