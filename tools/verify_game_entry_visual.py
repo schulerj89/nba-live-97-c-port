@@ -778,6 +778,22 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": interrupt_disable,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    gpu_command = period["gpu_control_command_probe"]
+    require((gpu_command["program"],gpu_command["address"],gpu_command["inclusive_end"],gpu_command["bytes"],gpu_command["instructions"]) == ("GAMEONLY","0x8009B16C","0x8009B193",40,10), "GPU command provenance drifted")
+    require(gpu_command["completed"] and gpu_command["parent_completed"] and gpu_command["classification"] == "no direct visual effect"
+            and "mapped synthetic MMIO and BIOS service" in gpu_command["scope"]
+            and (gpu_command["gpu_calls"],gpu_command["video_calls"],gpu_command["copy_calls"]) == (5,2,2)
+            and (gpu_command["port_address"],gpu_command["port_before"],gpu_command["port_after"]) == (0x1F801814,0,0x0800002E)
+            and gpu_command["cache_bytes"] == [0x64,0x28,0x31,0x2E]
+            and gpu_command["commands"] == [0x0500500A,0x0503C064,0x06CDA328,0x07048431,0x0800002E], "GPU command native state drifted")
+    for item,command,pc in zip(gpu_command["leaves"],gpu_command["commands"],[0x80099D6C,0x80099D6C,0x80099F78,0x80099FA4,0x8009A114]):
+        require((item["operations"],item["reads"],item["stores"],item["return_v0"],item["at"],item["return_address"]) == (3,1,2,command>>24,0x800E0000+(command>>24),pc+8), "GPU command machine drifted")
+    (args.frames / "gpu_control_command_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8009B16C","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json","state":gpu_command,
+        "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     video_mode = period["video_mode_probe"]
     require((video_mode["program"],video_mode["address"],video_mode["inclusive_end"],video_mode["bytes"],video_mode["instructions"]) == ("GAMEONLY","0x800985CC","0x800985DB",16,4), "Video query provenance drifted")
     require(video_mode["completed"] and video_mode["parent_completed"] and video_mode["classification"] == "no direct visual effect"

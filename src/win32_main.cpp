@@ -1,3 +1,4 @@
+#include "game_gpu_control_command_adapter.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
@@ -6258,7 +6259,9 @@ private:
             std::array<std::uint8_t,0x100> stack{},stack_known{};
             std::vector<std::uint8_t> ram=std::vector<std::uint8_t>(0x200000);
             std::vector<std::uint8_t> ram_known=std::vector<std::uint8_t>(0x200000,1);
-            std::array<Nba97GameTextRegion,2> regions{};
+            std::array<std::uint8_t,4> gpu_control_port{},gpu_control_known{{1,1,1,1}};
+            Nba97GameGpuControlCommandProgress gpu_control_progress{};
+            std::array<Nba97GameTextRegion,3> regions{};
             std::vector<Nba97GameMainEvent> calls;
             Nba97GameStaticInitializersProgress static_progress{};
             Nba97GameGlobalPointerSaveProgress global_pointer_progress{};
@@ -6548,7 +6551,9 @@ private:
             State() {
                 stack_known.fill(1);
                 regions={Nba97GameTextRegion{0x807fff00u,stack.data(),stack_known.data(),stack.size()},
-                    Nba97GameTextRegion{0x80000000u,ram.data(),ram_known.data(),ram.size()}};
+                    Nba97GameTextRegion{0x80000000u,ram.data(),ram_known.data(),ram.size()},
+                    Nba97GameTextRegion{0x1f801814u,gpu_control_port.data(),gpu_control_known.data(),gpu_control_port.size()}};
+                put(0x800c5694u,0x1f801814u);
                 putText(0x800247e4u,"cdrom:");
                 putText(0x800247ecu,"feload.bin");
                 putText(0x800247f8u,"zloadscr.psh");
@@ -7931,7 +7936,7 @@ private:
                 ++fixture.display_mask_calls;
                 fixture.captureDisplay(fixture.display_mask_before);
                 const auto display=[](void* user,
-                    const Nba97GameTextMemory*,
+                    const Nba97GameTextMemory* display_memory,
                     const Nba97GameDisplayMaskSetEvent* display_event,
                     Nba97GameDisplayMaskSetValue* display_value)->int {
                     auto& state=*static_cast<State*>(user);
@@ -7957,14 +7962,14 @@ private:
                        display_event->entry!=0x8009b16cu ||
                        display_event->argument_count!=1 ||
                        (display_event->argument[0]>>24u)!=3u)return 0;
-                    /* Concrete retained 0x8009B16C service semantics: GP1(03h)
-                       is active-low, and the leaf leaves command id 3 in v0. */
-                    state.display_control_word=display_event->argument[0];
+                    if(nba97_game_gpu_control_command_from_display_mask(
+                           display_memory,display_event,3,
+                           &state.gpu_control_progress,display_value)!=
+                               NBA97_TEXT_COMPLETE)return 0;
+                    // Host scanout consumes the completed mapped GP1 write.
+                    state.display_control_word=state.gpu_control_progress.machine.
+                        registers.gpr[NBA97_MATCH_INITIALIZE_A0].word;
                     state.display_visible=(state.display_control_word&1u)==0;
-                    state.putByte(0x800d8d94u+
-                        (state.display_control_word>>24u),
-                        static_cast<std::uint8_t>(state.display_control_word));
-                    *display_value={3,1};
                     return 1;
                 };
                 Nba97GameDisplayMaskSetContext display_context{*memory,30,

@@ -1,3 +1,4 @@
+#include "game_gpu_control_command_capture.h"
 #include "game_video_mode_capture.h"
 #include "game_display_environment_capture.h"
 #include "game_bios_memory_copy_capture.h"
@@ -173,6 +174,7 @@ static std::string capturePeriodFixture(int first_flag) {
             <<",\"bios_memory_copy_probe\":"<<captureGameBiosMemoryCopy()
             <<",\"display_environment_probe\":"<<captureGameDisplayEnvironment()
             <<",\"video_mode_probe\":"<<captureGameVideoMode()
+            <<",\"gpu_control_command_probe\":"<<captureGameGpuControlCommand()
             <<",\"ordering_table_dma_probe\":"<<captureGameOrderingTableDma()
             <<",\"camera_override_end_probe\":"<<captureGameCameraOverrideEnd()
             <<",\"opponent_contact_probe\":"<<captureGameOpponentContact()

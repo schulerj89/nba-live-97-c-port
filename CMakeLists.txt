@@ -3,6 +3,15 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_gpu_control_command_tests tests/game_gpu_control_command_tests.cpp src/recovered/game_gpu_control_command.c)
+    target_compile_features(nba97_game_gpu_control_command_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gpu_control_command_tests PRIVATE src src/recovered)
+    add_test(NAME game_gpu_control_command COMMAND nba97_game_gpu_control_command_tests)
+    add_executable(nba97_game_gpu_control_command_integration_tests tests/game_gpu_control_command_integration_tests.cpp
+        src/recovered/game_gpu_control_command.c src/game_gpu_control_command_adapter.cpp src/recovered/game_display_environment.c src/recovered/game_display_mask_set.c)
+    target_compile_features(nba97_game_gpu_control_command_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_gpu_control_command_integration_tests PRIVATE src)
+    add_test(NAME game_gpu_control_command_integration COMMAND nba97_game_gpu_control_command_integration_tests)
     add_executable(nba97_game_video_mode_tests tests/game_video_mode_tests.cpp src/recovered/game_video_mode.c)
     target_compile_features(nba97_game_video_mode_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_video_mode_tests PRIVATE src src/recovered)
@@ -1981,3 +1990,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_bios_memory_copy.c s
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_display_environment.c src/game_display_environment_adapter.cpp src/game_display_environment_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_video_mode.c src/game_video_mode_adapter.cpp src/game_video_mode_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_gpu_control_command.c src/game_gpu_control_command_adapter.cpp src/game_gpu_control_command_capture.cpp)

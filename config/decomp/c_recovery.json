@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameonly",
+      "address": "0x8009B16C",
+      "original_name": "Game_GpuControlCommand",
+      "symbol": "nba97_game_gpu_control_command",
+      "source": "src/recovered/game_gpu_control_command.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_game_gpu_control_command_tests; nba97_game_gpu_control_command_integration_tests"
+    },
+    {
+      "binary": "gameonly",
       "address": "0x800985CC",
       "original_name": "Game_VideoMode",
       "symbol": "nba97_game_video_mode",
