@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_team_tactics_update_tests tests/game_team_tactics_update_tests.cpp src/recovered/game_team_tactics_update.c src/game_team_tactics_update_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_team_tactics_update_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_team_tactics_update_tests PRIVATE src src/recovered)
+    add_test(NAME game_team_tactics_update COMMAND nba97_game_team_tactics_update_tests)
+    add_executable(nba97_game_team_tactics_update_integration_tests tests/game_team_tactics_update_integration_tests.cpp src/recovered/game_team_tactics_update.c src/game_team_tactics_update_adapter.cpp src/recovered/game_match_tick.c)
+    target_compile_features(nba97_game_team_tactics_update_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_team_tactics_update_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_team_tactics_update_integration COMMAND nba97_game_team_tactics_update_integration_tests)
     add_executable(nba97_game_rectangle_normalize_tests tests/game_rectangle_normalize_tests.cpp src/recovered/game_rectangle_normalize.c src/game_rectangle_normalize_adapter.cpp src/recovered/game_rectangle_upload_submit.c)
     target_compile_features(nba97_game_rectangle_normalize_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_rectangle_normalize_tests PRIVATE src src/recovered)
@@ -2392,3 +2400,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_rectangle_upload_sub
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_text_submission.c src/game_text_submission_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_rectangle_normalize.c src/game_rectangle_normalize_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_team_tactics_update.c src/game_team_tactics_update_adapter.cpp src/game_team_tactics_update_capture.cpp)

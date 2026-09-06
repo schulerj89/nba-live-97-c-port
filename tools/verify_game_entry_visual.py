@@ -1257,6 +1257,29 @@ def main():
         "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": collision,
         "classification": "no direct visual effect"
     }, indent=2)+"\n", encoding="utf-8")
+    tactics = period["team_tactics_probe"]
+    require((tactics["program"], tactics["address"], tactics["end"], tactics["bytes"], tactics["instructions"])
+            == ("GAMEONLY", "0x800747B0", "0x80075D3F", 5520, 1380), "Team tactics provenance drifted")
+    require(tactics["classification"] == "no direct visual effect" and tactics["completed"]
+            and tactics["same_parent_memory"] and tactics["actual_call_pc"] == "0x80068E28"
+            and "independent full-machine snapshot" in tactics["entry_machine"]
+            and (tactics["operations"], tactics["reads"], tactics["stores"], tactics["callbacks"],
+                 tactics["actor_iterations"], tactics["opposing_actor_iterations"])
+            == (342, 223, 96, 23, 5, 5), "Team tactics execution drifted")
+    require(tactics["before"] == {"defense_timer": 10}
+            and tactics["after"] == {"defense_timer": 9, "actor0_possession_distance": 100,
+                                      "actor0_basket_distance": 100, "opposing_minimum": 100}
+            and (tactics["output_sp"], tactics["output_ra"], tactics["parent_stop_pc"], tactics["parent_stop_entry"])
+            == ("0x801FF000", "0x80068E30", "0x80068E30", "0x8006817C"), "Team tactics state drifted")
+    require(tactics["child_call_sites"] == ["0x800749CC", "0x800749F0"] * 5 + ["0x80074AE8"]
+            + ["0x80074C1C", "0x80074C44"] * 5 + ["0x80074D30", "0x80075458"],
+            "Team tactics typed child order drifted")
+    (args.frames / "team_tactics_verified.json").write_text(json.dumps({
+        "program": "GAMEONLY", "address": "0x800747B0", "driver_frame_count": len(states),
+        "input_transition_frames": {name: states.index(by_id[name]) for name in required},
+        "frame_sha256": loop_hashes, "cpu_receipt": "loop_entry_trace.json", "state": tactics,
+        "classification": "no direct visual effect"
+    }, indent=2) + "\n", encoding="utf-8")
     cross_half = period["cross_half_rule_probe"]
     require((cross_half["program"],cross_half["address"],cross_half["inclusive_end"],cross_half["bytes"],cross_half["instructions"]) == ("GAMEONLY","0x8006817C","0x8006830B",400,100), "Crossing rule provenance drifted")
     require(cross_half["classification"]=="no direct visual effect" and "independent synthetic actual match-tick caller" in cross_half["scope"] and "no advancing match" in cross_half["scope"], "Crossing rule scope drifted")
