@@ -190,6 +190,7 @@ try {
         'nba97_game_controller_profile_reset_tests','nba97_game_controller_profile_reset_integration_tests',
         'nba97_game_team_header_initialize_tests','nba97_game_team_header_initialize_integration_tests',
         'nba97_game_team_strategy_apply_tests','nba97_game_team_strategy_apply_integration_tests',
+        'nba97_game_match_buffer_initialize_tests','nba97_game_match_buffer_initialize_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',
