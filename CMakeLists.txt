@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_frontend_resource_info_tests tests/frontend_resource_info_tests.cpp src/recovered/frontend_resource_info.c src/frontend_resource_info_adapter.cpp src/recovered/frontend_resource_load.c)
+    target_compile_features(nba97_frontend_resource_info_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_info_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_resource_info COMMAND nba97_frontend_resource_info_tests)
+    add_executable(nba97_frontend_resource_info_integration_tests tests/frontend_resource_info_integration_tests.cpp src/recovered/frontend_resource_info.c src/frontend_resource_info_adapter.cpp src/recovered/frontend_resource_load.c src/frontend_resource_info_capture.cpp)
+    target_compile_features(nba97_frontend_resource_info_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_frontend_resource_info_integration_tests PRIVATE src src/recovered)
+    add_test(NAME frontend_resource_info_integration COMMAND nba97_frontend_resource_info_integration_tests)
     add_executable(nba97_gameload_bios_heap_tests tests/gameload_bios_heap_tests.cpp src/recovered/gameload_bios_heap.c src/gameload_bios_heap_adapter.cpp src/recovered/gameload_entry.c)
     target_compile_features(nba97_gameload_bios_heap_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_gameload_bios_heap_tests PRIVATE src src/recovered)
@@ -2572,3 +2580,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_lookup.
 target_sources(nba97_boot_decomp PRIVATE src/recovered/gameload_main.c src/gameload_main_adapter.cpp src/gameload_main_capture.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/gameload_bios_heap.c src/gameload_bios_heap_adapter.cpp src/gameload_bios_heap_capture.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/frontend_resource_info.c src/frontend_resource_info_adapter.cpp src/frontend_resource_info_capture.cpp)

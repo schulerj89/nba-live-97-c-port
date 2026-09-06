@@ -3,6 +3,16 @@
   "candidate_directory": ".local/build/ps1/functions",
   "functions": [
     {
+      "binary": "feonly",
+      "address": "0x8008A594",
+      "original_name": "Frontend_ResourceInfo",
+      "symbol": "nba97_frontend_resource_info",
+      "source": "src/recovered/frontend_resource_info.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_frontend_resource_info_tests; nba97_frontend_resource_info_integration_tests"
+    },
+    {
       "binary": "gameload",
       "address": "0x801E1590",
       "original_name": "Gameload_BiosHeap",

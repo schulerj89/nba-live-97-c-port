@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 132, "native click-through frame count drifted")
+    require(len(states) == 134, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1325,6 +1325,47 @@ def main():
     bhhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in bhframes]
     require(bhhashes[0] == bhhashes[1] == gmhashes[1], "GAMELOAD BIOS heap CPU probe changed native pixels")
     (args.frames/"gameload_bios_heap_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E1590",end="0x801E159B",driver_frame_count=len(states),source_receipt=bh,before_sha256=bhhashes[0],after_sha256=bhhashes[1],gameplay_shown="BLOCKED"),indent=2))
+
+    info=json.loads((args.frames/"frontend_resource_info_trace.json").read_text())
+    require(info["program"] == "FEONLY" and info["address"] == "0x8008a594" and info["inclusive_end"] == "0x8008a6eb"
+            and info["bytes"] == 344 and info["instructions"] == 86 and info["source_sha256"] == "494529aeb56f769fbc5f40e3792f83492ad9368f40e6672ce2f4359a6d0a887a", "Resource info identity drifted")
+    require(info["result"] == 1 and info["completed"] == 1 and info["contract_failure"] == 0 and info["gameplay_shown"] == "BLOCKED", "Resource info outcome drifted")
+    ri=info["owner"]
+    require([ri[n] for n in ("operations","accesses","reads","stores","callbacks","attempts")] == [30,25,11,14,5,1], "Resource info counts drifted")
+    require(ri["instruction_trace"] == [f"0x{pc:08x}" for pc in list(range(0x8008a594,0x8008a5f8,4))+list(range(0x8008a620,0x8008a688,4))+list(range(0x8008a6ac,0x8008a6ec,4))], "Resource info exact PC trace drifted")
+    riregs=[lp_word(0x57000000+i*0x101,(i%15)+1) for i in range(32)]
+    for i,v in {0:0,5:0x801e0000,6:0x801e0004,7:0x801e0008,29:0x801f0000,31:0x8007b21c}.items():riregs[i]=lp_word(v)
+    riregs[4]=lp_word(0x80024854,5)
+    rientry=[w.copy() for w in riregs];riframe=0x801efea0
+    risaves=[(0x8008a598,332,21,1),(0x8008a5a0,312,16,2),(0x8008a5a8,336,22,3),(0x8008a5b0,328,20,4),(0x8008a5b8,316,17,5),(0x8008a5c0,320,18,6),(0x8008a5c8,340,23,7)]
+    riaccess=[lp_access(pc,riframe+offset,int(rientry[reg]["word"],16),op,2,rientry[reg]["known_mask"]) for pc,offset,reg,op in risaves]
+    riaccess += [lp_access(0x8008a5cc,0x801f0010,0x2468ace0,8,1,9),lp_access(0x8008a5e4,riframe+344,0x8007b21c,9,2),lp_access(0x8008a5ec,riframe+324,int(rientry[19]["word"],16),10,2,rientry[19]["known_mask"])]
+    riaccess += [lp_access(0x8008a634,0x801e0000,0,12,2),lp_access(0x8008a638,0x801e0004,0,13,2),lp_access(0x8008a640,0x801e0008,0,14,2),lp_access(0x8008a654,0x801e0000,0x44,17,2),lp_access(0x8008a660,0x801e0000,0x44,19,1),lp_access(0x8008a6b8,0x801e0008,0x1200,21,2)]
+    rirestores=[(31,344),(23,340),(22,336),(21,332),(20,328),(19,324),(18,320),(17,316),(16,312)]
+    riaccess += [lp_access(0x8008a6bc+i*4,riframe+off,int(rientry[reg]["word"],16),22+i,1,rientry[reg]["known_mask"]) for i,(reg,off) in enumerate(rirestores)]
+    require(ri["access_journal"] == riaccess,"Resource info exact access/knownness journal drifted")
+    def ri_machine():return dict(gpr=[w.copy() for w in riregs],hi=lp_word(0x12345678,5),lo=lp_word(0x9abcdef0,10))
+    ricalls=[]
+    def ri_call(pc,target,op,argc):
+        ricalls.append(dict(pc=f"0x{pc:08x}",delay=f"0x{pc+4:08x}",target=f"0x{target:08x}",operation=op,invocation=1,program=1,argument_count=argc,machine=ri_machine()))
+    for i,v in {4:0x800d96a8,5:0x800d9a58,6:6,16:0x801e0000,17:0,18:10,20:0x801e0008,22:0x801e0004,29:riframe,31:0x8008a5f0}.items():riregs[i]=lp_word(v)
+    riregs[21]=rientry[4].copy();riregs[23]=lp_word(0x2468ace0,9)
+    ri_call(0x8008a5e8,0x80084910,11,3)
+    for i,v in {2:1,4:riframe+24,5:0x800d9a60,6:0x800d96a8,31:0x8008a644}.items():riregs[i]=lp_word(v)
+    riregs[7]=rientry[4].copy();ri_call(0x8008a63c,0x80083b70,15,4)
+    riregs[5]=lp_word(1);riregs[31]=lp_word(0x8008a650);ri_call(0x8008a648,0x8007f588,16,2)
+    riregs[2]=lp_word(0x44);riregs[4]=lp_word(0x44);riregs[31]=lp_word(0x8008a660);ri_call(0x8008a658,0x8008a408,18,1)
+    for i,v in {2:0x1200,5:0,6:0,17:0x1200,31:0x8008a674}.items():riregs[i]=lp_word(v)
+    ri_call(0x8008a66c,0x8007f318,20,3)
+    require(ri["calls"] == ricalls,"Resource info complete child CPU contracts drifted")
+    riregs[2]=lp_word(0);riregs[4]=lp_word(riframe+24)
+    for i in list(range(16,24))+[29,31]:riregs[i]=rientry[i].copy()
+    require(info["final_machine"] == ri_machine() and "Synthetic standalone" in info["fixture_contract"] and "0x80084910" in info["next_unbound_boundaries"],"Resource info full return/fixture contract drifted")
+    riframes=["frontend-resource-info-before","frontend-resource-info-after"]
+    require(all(n in by_id for n in riframes),"Resource info native frames missing")
+    rihashes=[ppm_hash(args.frames/f"{n}.ppm") for n in riframes]
+    require(rihashes[0] == rihashes[1] == bhhashes[1],"Resource info CPU probe changed native pixels")
+    (args.frames/"frontend_resource_info_verified.json").write_text(json.dumps(dict(program="FEONLY",address="0x8008A594",end="0x8008A6EB",driver_frame_count=len(states),source_receipt=info,before_sha256=rihashes[0],after_sha256=rihashes[1],gameplay_shown="BLOCKED"),indent=2))
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")

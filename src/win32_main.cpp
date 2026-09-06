@@ -1,3 +1,4 @@
+#include "frontend_resource_info_capture.h"
 #include "gameload_bios_heap_capture.h"
 #include "gameload_main_capture.h"
 #include "frontend_resource_lookup_capture.h"
@@ -1232,6 +1233,9 @@ private:
         frame("gameload-bios-heap-before");
         std::ofstream(output/"gameload_bios_heap_trace.json")<<nba97::captureGameloadBiosHeap();
         frame("gameload-bios-heap-after");
+        frame("frontend-resource-info-before");
+        std::ofstream(output/"frontend_resource_info_trace.json")<<nba97::captureFrontendResourceInfo();
+        frame("frontend-resource-info-after");
         captureGameEntryDiagnostic(output/"game_entry_trace.json");
         userKey('F');userTicks(20);
         require(user_setup_.help().phase==NBA97_HELP_READY,"User Help ready");frame("user-help");
