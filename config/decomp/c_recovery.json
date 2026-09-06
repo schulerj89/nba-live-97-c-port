@@ -4,6 +4,16 @@
   "functions": [
     {
       "binary": "gameload",
+      "address": "0x801E1590",
+      "original_name": "Gameload_BiosHeap",
+      "symbol": "nba97_gameload_bios_heap",
+      "source": "src/recovered/gameload_bios_heap.c",
+      "scope": "full",
+      "match_eligible": false,
+      "native_test": "nba97_gameload_bios_heap_tests; nba97_gameload_bios_heap_integration_tests"
+    },
+    {
+      "binary": "gameload",
       "address": "0x801E136C",
       "original_name": "Gameload_Main",
       "symbol": "nba97_gameload_main",

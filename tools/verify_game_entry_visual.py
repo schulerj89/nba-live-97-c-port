@@ -60,7 +60,7 @@ def main():
     args = parser.parse_args()
 
     states = read_json(args.frames / "states.json")
-    require(len(states) == 130, "native click-through frame count drifted")
+    require(len(states) == 132, "native click-through frame count drifted")
     by_id = {state["id"]: state for state in states}
     require(len(by_id) == len(states), "duplicate captured frame id")
     frontend_dispatch = read_json(args.frames / "frontend_dispatch_trace.json")
@@ -1302,6 +1302,29 @@ def main():
     gmhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in gmframes]
     require(gmhashes[0] == gmhashes[1] == lkhashes[1], "GAMELOAD main CPU probe changed native pixels")
     (args.frames/"gameload_main_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E136C",end="0x801E140F",driver_frame_count=len(states),source_receipt=gm,before_sha256=gmhashes[0],after_sha256=gmhashes[1],gameplay_shown="BLOCKED"),indent=2))
+
+    bh=json.loads((args.frames/"gameload_bios_heap_trace.json").read_text())
+    require(bh["program"] == "GAMELOAD" and bh["address"] == "0x801E1590" and bh["inclusive_end"] == "0x801E159B" and bh["bytes"] == 12 and bh["instructions"] == 3 and bh["source_sha256"] == "4487ee3019aae533a71d191483e6876aa40c2530923670ec0e012a78204fb863", "GAMELOAD BIOS heap source identity drifted")
+    bh_expected=dict(operations=1,callbacks_completed=1,parent_result=-5,parent_completed=0,parent_transferred=0,parent_stopped_pc=0x801e14ac,parent_stopped_target=0x801e136c,pc_sequence=[0x801e1590,0x801e1594,0x801e1598],call_pc=0x801e1594,delay_pc=0x801e1598,bios_vector=0xa0,service=0x39,argument_count=2,callback_machine_words=34,final_machine_words=34,stack_pointer=0x807ffff8,synthetic_raster=False,gameplay_shown="BLOCKED")
+    require(all(bh[k] == v for k,v in bh_expected.items()), "GAMELOAD BIOS heap exact tail transfer/refusal prefix drifted")
+    bh_machine=[dict(word=0x47000000+i*0x10113,known_mask=i*5&15) for i in range(32)]
+    for i,value in {0:0,1:0x801f0000,2:0x7ffff8,3:0x8000,4:0x801eb0a4,5:0x60cf58,8:0x80000000,9:0x39,10:0xa0,28:0x801e903c,29:0x807ffff8,30:0x807ffff8,31:0x801e14a0}.items():bh_machine[i]=dict(word=value,known_mask=15)
+    bh_machine += [dict(word=0x12345678,known_mask=5),dict(word=0x9abcdef0,known_mask=10)]
+    require(bh["callback_machine"] == bh_machine, "GAMELOAD BIOS full callback CPU drifted")
+    bh_machine[31]=dict(word=0x801e14b4,known_mask=15)
+    require(bh["final_machine"] == bh_machine, "GAMELOAD BIOS full stopped CPU drifted")
+    bh_memory=bytearray(0x200000)
+    for address,value in {0x801e8b70:0x800000,0x801e8b6c:0x8000,0x801e8b50:0x60cf58,0x801e8b4c:0x801eb0a0,0x801e903c:0x80028b70}.items():bh_memory[address-0x80000000:address-0x80000000+4]=fc_le(value)
+    bh_hash=2166136261
+    for byte in bh_memory:
+        bh_hash=((bh_hash^byte)*16777619)&0xffffffff
+        bh_hash=((bh_hash^1)*16777619)&0xffffffff
+    require(bh["callback_memory_before"] == bh["callback_memory_after"] == bh_hash and "Synthetic BIOS" in bh["fixture_contract"] and "refuses" in bh["fixture_contract"] and "BIOS A0:39" in bh["next_unbound_boundary"], "GAMELOAD BIOS retained memory/fixture boundary drifted")
+    bhframes=["gameload-bios-heap-before","gameload-bios-heap-after"]
+    require(all(n in by_id for n in bhframes), "GAMELOAD BIOS heap native frames missing")
+    bhhashes=[ppm_hash(args.frames/f"{n}.ppm") for n in bhframes]
+    require(bhhashes[0] == bhhashes[1] == gmhashes[1], "GAMELOAD BIOS heap CPU probe changed native pixels")
+    (args.frames/"gameload_bios_heap_verified.json").write_text(json.dumps(dict(program="GAMELOAD",address="0x801E1590",end="0x801E159B",driver_frame_count=len(states),source_receipt=bh,before_sha256=bhhashes[0],after_sha256=bhhashes[1],gameplay_shown="BLOCKED"),indent=2))
 
     required = ["setup", "entry", "user-setup-entry", "match-handoff-pending"]
     require(all(frame in by_id for frame in required), "screen-driving path is incomplete")
