@@ -212,6 +212,7 @@ try {
         'nba97_game_text_chain_clear_tests','nba97_game_text_chain_clear_integration_tests',
         'nba97_game_image_record_upload_tests','nba97_game_image_record_upload_integration_tests',
         'nba97_game_stamina_handicap_tests','nba97_game_stamina_handicap_integration_tests',
+        'nba97_game_camera_remainder_gate_tests','nba97_game_camera_remainder_gate_integration_tests',
         'nba97_game_period_startup_tests','nba97_game_period_startup_integration_tests',
         'nba97_game_random_seed_tests','nba97_game_random_seed_integration_tests',
         'nba97_game_camera_startup_tests','nba97_game_camera_startup_integration_tests',

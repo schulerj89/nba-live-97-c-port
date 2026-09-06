@@ -1388,6 +1388,17 @@ def main():
                 and (elapsed["elapsed_after"],elapsed["cache_before"],elapsed["cache_after"],elapsed["publication_after"],elapsed["child_pc"]) == (0,0xFFFFFFFF,42,42,0x8007999C)
                 and elapsed["sp"] == [0x801FFE90,0x801FEF38][i] and elapsed["hilo_known_masks"]==[0,0],"Camera elapsed native state drifted")
         lookup = elapsed["state_lookup"]
+        gate = elapsed["remainder_gate"]
+        require((gate["program"],gate["address"],gate["inclusive_end"],gate["bytes"],gate["instructions"])
+                == ("GAMEONLY","0x8007A468","0x8007A497",48,12), "Camera remainder provenance drifted")
+        require(gate["classification"] == "no direct visual effect" and gate["completed"]
+                and gate["parent_completed"] and gate["same_parent_memory"]
+                and "explicit second elapsed dispatch" in gate["scope"]
+                and (gate["call_pc"],gate["operations"],gate["reads"],gate["ra"],gate["cache_after"],gate["publication_after"],gate["elapsed_after"])
+                == (0x80079978,1,1,0x80079980,42,42,0)
+                and (gate["source"],gate["remainder"],gate["returned_value"],gate["instruction_count"],gate["lookup_completions"])
+                == [(0,0,1,11,0),(0xFFFFFF00,0xFFFFFF00,0,12,1)][i]
+                and gate["sp"] == [0x801FFE78,0x801FEF20][i], "Camera remainder native state drifted")
         require((lookup["program"],lookup["address"],lookup["inclusive_end"],lookup["bytes"],lookup["instructions"])
                 == ("GAMEONLY","0x8007A410","0x8007A467",88,22), "Camera lookup provenance drifted")
         require(lookup["classification"] == "no direct visual effect" and lookup["completed"] and lookup["same_parent_memory"]
@@ -1396,6 +1407,12 @@ def main():
                 and (lookup["source"],lookup["signed_index"],lookup["negative_table"],lookup["lookup_address"],lookup["instruction_count"])
                 == [(0,0,0,0x800BC204,16),(0xFFFFFF00,7,1,0x800BC240,15)][i]
                 and lookup["sp"] == [0x801FFE78,0x801FEF20][i], "Camera lookup signed path drifted")
+    (args.frames / "camera_remainder_gate_verified.json").write_text(json.dumps({
+        "program":"GAMEONLY","address":"0x8007A468","driver_frame_count":len(states),
+        "input_transition_frames":{name:states.index(by_id[name]) for name in required},
+        "frame_sha256":loop_hashes,"cpu_receipt":"loop_entry_trace.json",
+        "cases":[case["remainder_gate"] for case in elapsed_cases], "classification":"no direct visual effect"
+    },indent=2)+"\n",encoding="utf-8")
     (args.frames / "camera_state_lookup_verified.json").write_text(json.dumps({
         "program":"GAMEONLY","address":"0x8007A410","driver_frame_count":len(states),
         "input_transition_frames":{name:states.index(by_id[name]) for name in required},

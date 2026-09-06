@@ -3,6 +3,14 @@ project(nba_live_97_decomp LANGUAGES C CXX)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(nba97_game_camera_remainder_gate_tests tests/game_camera_remainder_gate_tests.cpp src/recovered/game_camera_remainder_gate.c src/game_camera_remainder_gate_adapter.cpp src/recovered/game_camera_elapsed_dispatch.c src/recovered/game_camera_state_lookup.c src/game_camera_state_lookup_adapter.cpp)
+    target_compile_features(nba97_game_camera_remainder_gate_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_remainder_gate_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_remainder_gate COMMAND nba97_game_camera_remainder_gate_tests)
+    add_executable(nba97_game_camera_remainder_gate_integration_tests tests/game_camera_remainder_gate_integration_tests.cpp src/recovered/game_camera_remainder_gate.c src/game_camera_remainder_gate_adapter.cpp src/recovered/game_camera_elapsed_dispatch.c src/recovered/game_camera_state_lookup.c src/game_camera_state_lookup_adapter.cpp)
+    target_compile_features(nba97_game_camera_remainder_gate_integration_tests PRIVATE c_std_99 cxx_std_17)
+    target_include_directories(nba97_game_camera_remainder_gate_integration_tests PRIVATE src src/recovered)
+    add_test(NAME game_camera_remainder_gate_integration COMMAND nba97_game_camera_remainder_gate_integration_tests)
     add_executable(nba97_game_stamina_handicap_tests tests/game_stamina_handicap_tests.cpp src/recovered/game_stamina_handicap.c src/game_stamina_handicap_adapter.cpp src/recovered/game_match_tick.c src/recovered/game_actor_timers.c src/game_actor_timers_adapter.cpp)
     target_compile_features(nba97_game_stamina_handicap_tests PRIVATE c_std_99 cxx_std_17)
     target_include_directories(nba97_game_stamina_handicap_tests PRIVATE src src/recovered)
@@ -2352,3 +2360,5 @@ target_sources(nba97_boot_decomp PRIVATE src/recovered/game_text_chain_clear.c s
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_image_record_upload.c src/game_image_record_upload_adapter.cpp)
 
 target_sources(nba97_boot_decomp PRIVATE src/recovered/game_stamina_handicap.c src/game_stamina_handicap_adapter.cpp)
+
+target_sources(nba97_boot_decomp PRIVATE src/recovered/game_camera_remainder_gate.c src/game_camera_remainder_gate_adapter.cpp)
